@@ -1,0 +1,10 @@
+node_modules/
+.vercel/
+.env
+.env.*
+dist/
+build/
+coverage/
+*.log
+Thumbs.db
+.DS_Store

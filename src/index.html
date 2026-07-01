@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIMGURU</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/heroicons/2.0.18/outline.min.css" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              iosBlue: '#007AFF',
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+  </head>
+  <body class="min-h-screen bg-[#F2F2F7] text-slate-900 antialiased">
+    <div id="app" class="min-h-screen"></div>
+    <script type="module" src="./firebase/firebase-config.js"></script>
+    <script type="module" src="./utils/router.js"></script>
+  </body>
+</html>
