@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Safe baseline for public hosting while the app still relies on localStorage auth.
+    // Deploying this prevents public data exposure, but it will also block live Firestore use
+    // until the app is migrated to Firebase Authentication and role-based rules.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
