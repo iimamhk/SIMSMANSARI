@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getStoredContext } from '../../utils/helpers.js';
+import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
 import { getDocumentsWhere } from '../../firebase/data-service.js';
 
 const ALPA_ALERT_THRESHOLD = 3;
@@ -8,7 +8,7 @@ export async function renderSiswaDashboardPage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
   const userName = session?.user?.nama || 'Siswa';
-  const siswaId = session?.user?.username || '';
+  const siswaKeys = getSessionUserKeys(session, context);
   const shortName = userName.split(' ')[0] || 'Siswa';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 18 ? 'Selamat sore' : 'Selamat malam';
@@ -16,9 +16,9 @@ export async function renderSiswaDashboardPage(container) {
   const absensiDocs = await getDocumentsWhere('absensi', [
     { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
     { field: 'semester_id', operator: '==', value: context.semester_aktif },
-    { field: 'siswa_id', operator: '==', value: siswaId },
   ]);
-  const totalAlpa = absensiDocs.filter((item) => item.status === 'A').length;
+  const currentStudentAbsensi = absensiDocs.filter((item) => siswaKeys.includes(normalizeUserKey(item.siswa_id)));
+  const totalAlpa = currentStudentAbsensi.filter((item) => item.status === 'A').length;
   const hasAlpaWarning = totalAlpa >= ALPA_ALERT_THRESHOLD;
 
   const html = renderLayout('Dashboard Siswa', `

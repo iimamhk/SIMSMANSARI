@@ -43,3 +43,19 @@ export function getStoredContext() {
     return getDefaultContext();
   }
 }
+
+export function normalizeUserKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+export function getSessionUserKeys(session = {}, context = {}) {
+  const keys = [
+    session?.user?.username,
+    session?.user?.id,
+    context?.user_logged_in,
+  ]
+    .map((value) => normalizeUserKey(value))
+    .filter(Boolean);
+
+  return Array.from(new Set(keys));
+}

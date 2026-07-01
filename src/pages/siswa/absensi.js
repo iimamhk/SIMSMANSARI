@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getStoredContext } from '../../utils/helpers.js';
+import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
 import { getDocumentsWhere } from '../../firebase/data-service.js';
 
 const statusStyles = {
@@ -25,15 +25,16 @@ function formatDate(dateString) {
 export async function renderSiswaAbsensiPage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
-  const siswaId = session?.user?.username || '';
+  const siswaKeys = getSessionUserKeys(session, context);
 
   const docs = await getDocumentsWhere('absensi', [
     { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
     { field: 'semester_id', operator: '==', value: context.semester_aktif },
-    { field: 'siswa_id', operator: '==', value: siswaId },
   ]);
 
-  const records = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+  const records = docs
+    .filter((item) => siswaKeys.includes(normalizeUserKey(item.siswa_id)))
+    .sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
   const summary = {
     H: records.filter((item) => item.status === 'H').length,
     S: records.filter((item) => item.status === 'S').length,

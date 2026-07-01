@@ -757,13 +757,18 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
     return '<div class="text-center py-8 text-slate-500 text-sm">Belum ada tugas di BAB ini. Tambah tugas terlebih dahulu.</div>';
   }
 
+  const noColumnClass = 'sticky left-0 z-30 w-9 min-w-9 bg-slate-100';
+  const siswaColumnClass = 'sticky left-9 z-30 min-w-[110px] bg-slate-100';
+  const noCellClass = 'sticky left-0 z-20 w-9 min-w-9 bg-white';
+  const siswaCellClass = 'sticky left-9 z-20 min-w-[110px] bg-white';
+
   let html = `
-    <table class="w-full text-xs border-collapse">
+    <table class="w-full border-collapse text-[11px] sm:text-xs">
       <thead>
         <tr class="bg-gradient-to-r from-slate-100 to-slate-200">
-          <th class="border border-slate-300 px-2 py-2 text-left font-semibold text-slate-700">No</th>
-          <th class="border border-slate-300 px-2 py-2 text-left font-semibold text-slate-700">Siswa</th>
-          ${tugasBab.map(t => `<th class="border border-slate-300 px-2 py-2 text-center font-semibold text-slate-700 whitespace-nowrap" title="${t.nama}">
+          <th class="${noColumnClass} border border-slate-300 px-1.5 py-1.5 text-left font-semibold text-slate-700 sm:px-2 sm:py-2">No</th>
+          <th class="${siswaColumnClass} border border-slate-300 px-1.5 py-1.5 text-left font-semibold text-slate-700 sm:px-2 sm:py-2">Siswa</th>
+          ${tugasBab.map(t => `<th class="sticky top-0 z-10 border border-slate-300 bg-slate-100 px-1.5 py-1.5 text-center font-semibold text-slate-700 whitespace-nowrap sm:px-2 sm:py-2" title="${t.nama}">
             <div class="flex items-center justify-center gap-1 group">
               <span>${t.nama}</span>
               <button class="btn-edit-tugas text-slate-400 hover:text-sky-500 opacity-0 group-hover:opacity-100 transition-opacity" data-bab="${selectedBab.id}" data-tugas="${t.id}" title="Edit tugas">
@@ -771,7 +776,7 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
               </button>
             </div>
           </th>`).join('')}
-          <th class="border border-slate-300 px-2 py-2 text-center font-semibold bg-gradient-to-r from-emerald-400 to-teal-400 text-white">Rata-rata</th>
+          <th class="sticky top-0 z-10 border border-slate-300 bg-gradient-to-r from-emerald-400 to-teal-400 px-1.5 py-1.5 text-center font-semibold text-white sm:px-2 sm:py-2">Rata-rata</th>
         </tr>
       </thead>
       <tbody>
@@ -785,17 +790,17 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
 
           return `
             <tr class="hover:bg-slate-50 transition" data-student-id="${studentId}">
-              <td class="border border-slate-300 px-2 py-1 text-slate-700 font-medium">${idx + 1}</td>
-              <td class="border border-slate-300 px-2 py-1 text-slate-700 font-medium">${member.siswa_nama || member.nama}</td>
+              <td class="${noCellClass} border border-slate-300 px-1.5 py-1 text-slate-700 font-medium sm:px-2">${idx + 1}</td>
+              <td class="${siswaCellClass} border border-slate-300 px-1.5 py-1 text-slate-700 font-medium whitespace-nowrap sm:px-2">${member.siswa_nama || member.nama}</td>
               ${tugasBab.map(t => {
                 const val = nilai[`${selectedBab.id}_${t.id}_${studentId}`];
                 return `
-                  <td class="border border-slate-300 px-2 py-1 bg-slate-50">
+                  <td class="border border-slate-300 px-1 py-1 bg-slate-50 sm:px-2">
                     <input 
                       type="number" 
                       min="0" 
                       max="100" 
-                      class="nilai-input h-10 w-20 md:w-24 text-center border border-slate-200 rounded-lg px-2 text-sm bg-white focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                      class="nilai-input h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] bg-white focus:ring-2 focus:ring-emerald-400 focus:border-transparent sm:h-10 sm:w-20 sm:rounded-lg sm:px-2 sm:text-sm md:w-24"
                       data-bab="${selectedBab.id}" 
                       data-tugas="${t.id}" 
                       data-siswa="${studentId}" 
@@ -804,7 +809,7 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
                   </td>
                 `;
               }).join('')}
-              <td class="border border-slate-300 px-2 py-1 text-center font-bold bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 nilai-rata-rata" data-student-id="${studentId}">${average}</td>
+              <td class="border border-slate-300 px-1.5 py-1 text-center font-bold bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-800 nilai-rata-rata sm:px-2" data-student-id="${studentId}">${average}</td>
             </tr>
           `;
         }).join('')}
@@ -1282,15 +1287,15 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full text-xs">
+          <table class="w-full text-[11px] sm:text-xs">
             <thead>
               <tr class="bg-slate-200">
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold" rowspan="2">No</th>
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold" rowspan="2">Siswa</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-left font-semibold sm:px-2" rowspan="2">No</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-left font-semibold sm:px-2" rowspan="2">Siswa</th>
                 ${uhColumns
-                  .map((col) => `<th class="border border-slate-300 px-2 py-1 text-center font-semibold bg-blue-100" colspan="3">${col.nama}</th>`)
+                  .map((col) => `<th class="border border-slate-300 px-1.5 py-1 text-center font-semibold bg-blue-100 sm:px-2" colspan="3">${col.nama}</th>`)
                   .join('')}
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold bg-[#10B981] text-white" rowspan="2">Rata-rata UH</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold bg-[#10B981] text-white sm:px-2" rowspan="2">Rata-rata UH</th>
               </tr>
               <tr class="bg-slate-100 text-xs">
                 ${uhColumns.map(() => `
@@ -1331,8 +1336,8 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
 
                   return `
                     <tr class="hover:bg-slate-100">
-                      <td class="border border-slate-300 px-2 py-1">${idx + 1}</td>
-                      <td class="border border-slate-300 px-2 py-1">${member.siswa_nama || member.nama}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 sm:px-2">${idx + 1}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 whitespace-nowrap sm:px-2">${member.siswa_nama || member.nama}</td>
                       ${uhColumns
                         .map((col) => {
                           const murniRaw = nilaiUH[`${siswa}_${col.id}_murni`];
@@ -1350,13 +1355,13 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
                           }
                           
                           return `
-                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-uh h-10 w-16 md:w-20 text-center border border-slate-200 rounded-md px-2 text-sm" data-siswa="${siswa}" data-uh="${col.id}_murni" value="${murniVal}" /></td>
-                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-uh h-10 w-16 md:w-20 text-center border border-slate-200 rounded-md px-2 text-sm" data-siswa="${siswa}" data-uh="${col.id}_remidi" value="${remidiVal}" /></td>
+                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-uh h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-uh="${col.id}_murni" value="${murniVal}" /></td>
+                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-uh h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-uh="${col.id}_remidi" value="${remidiVal}" /></td>
                             <td class="border border-slate-300 px-1 py-1 text-center font-bold text-slate-500 bg-slate-50" data-max-uh="${col.id}">${maxVal}</td>
                           `;
                         })
                         .join('')}
-                      <td class="border border-slate-300 px-2 py-1 text-center font-semibold bg-emerald-100 text-emerald-800" data-avg-uh="true">${avg}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center font-semibold bg-emerald-100 text-emerald-800 sm:px-2" data-avg-uh="true">${avg}</td>
                     </tr>
                   `;
                 })
@@ -1535,6 +1540,7 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
 
 async function renderTabPTSPAS(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
+  const activeExamTab = container.dataset.examTab === 'pas' ? 'pas' : 'pts';
   
   // ALWAYS load fresh from Firestore
   const firestoreNilaiPTS = await loadNilaiPTSFromFirestore(context, assignment);
@@ -1546,104 +1552,87 @@ async function renderTabPTSPAS(context, assignment, members, container) {
   const nilaiPAS = firestoreNilaiPAS || {};
   const sortedMembers = sortMembersByName(members);
 
+  const renderExamRows = (nilaiMap, type) => sortedMembers
+    .map((member, idx) => {
+      const siswa = member.siswa_id || member.id;
+      const legacyScore = nilaiMap[siswa];
+      const murniVal = nilaiMap[`${siswa}_murni`] !== undefined ? nilaiMap[`${siswa}_murni`] : (legacyScore !== undefined ? legacyScore : '');
+      const remidiVal = nilaiMap[`${siswa}_remidi`] !== undefined ? nilaiMap[`${siswa}_remidi`] : '';
+
+      const murni = murniVal !== '' ? Number(murniVal) : null;
+      const remidi = remidiVal !== '' ? Number(remidiVal) : null;
+      let maxScore = '-';
+      if (murni !== null || remidi !== null) maxScore = Math.max(murni || 0, remidi || 0);
+
+      return `
+        <tr class="hover:bg-slate-100">
+          <td class="border border-slate-300 px-1.5 py-1 sm:px-2">${idx + 1}</td>
+          <td class="border border-slate-300 px-1.5 py-1 whitespace-nowrap sm:px-2">${member.siswa_nama || member.nama}</td>
+          <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-${type} h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-tipe="murni" value="${murniVal}" /></td>
+          <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-${type} h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-tipe="remidi" value="${remidiVal}" /></td>
+          <td class="border border-slate-300 px-1.5 py-1 text-center font-bold text-slate-500 bg-slate-50 sm:px-2">${maxScore}</td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  const examPanels = {
+    pts: {
+      title: 'Penilaian Tengah Semester (PTS)',
+      iconClass: 'text-purple-600',
+      headerClass: 'bg-gradient-to-r from-purple-100 to-purple-200',
+      subHeaderClass: 'bg-purple-50 text-xs',
+      maxHeaderClass: 'text-purple-700',
+      tableLabel: 'Nilai PTS',
+      saveLabel: 'Simpan PTS',
+      buttonClass: 'border-b-[#7C3AED] text-[#7C3AED] bg-white shadow-sm',
+      idleButtonClass: 'border-transparent text-slate-600 hover:text-slate-800',
+      rows: renderExamRows(nilaiPTS, 'pts'),
+    },
+    pas: {
+      title: 'Penilaian Akhir Semester (PAS)',
+      iconClass: 'text-orange-600',
+      headerClass: 'bg-gradient-to-r from-orange-100 to-orange-200',
+      subHeaderClass: 'bg-orange-50 text-xs',
+      maxHeaderClass: 'text-orange-700',
+      tableLabel: 'Nilai PAS',
+      saveLabel: 'Simpan PAS',
+      buttonClass: 'border-b-[#EA580C] text-[#EA580C] bg-white shadow-sm',
+      idleButtonClass: 'border-transparent text-slate-600 hover:text-slate-800',
+      rows: renderExamRows(nilaiPAS, 'pas'),
+    },
+  };
+
+  const activePanel = examPanels[activeExamTab];
+
   let html = `
-    <div class="space-y-4">
-      <div class="grid gap-4 xl:grid-cols-2 xl:items-start">
-      <!-- PTS -->
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 class="mb-4 text-sm font-bold text-slate-700 flex items-center gap-2"><svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Penilaian Tengah Semester (PTS)</h3>
-        <div class="overflow-x-auto mb-4">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="bg-gradient-to-r from-purple-100 to-purple-200">
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold" rowspan="2">No</th>
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold" rowspan="2">Siswa</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold" colspan="3">Nilai PTS</th>
-              </tr>
-              <tr class="bg-purple-50 text-xs">
-                <th class="border border-slate-300 px-1 py-1 text-center text-slate-600 font-medium">Murni</th>
-                <th class="border border-slate-300 px-1 py-1 text-center text-slate-600 font-medium">Remidi</th>
-                <th class="border border-slate-300 px-1 py-1 text-center text-purple-700 font-medium tracking-tighter">Tertinggi</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${sortedMembers
-                .map(
-                  (member, idx) => {
-                    const siswa = member.siswa_id || member.id;
-                    const legacyPTS = nilaiPTS[siswa];
-                    const ptsMurniVal = nilaiPTS[`${siswa}_murni`] !== undefined ? nilaiPTS[`${siswa}_murni`] : (legacyPTS !== undefined ? legacyPTS : '');
-                    const ptsRemidiVal = nilaiPTS[`${siswa}_remidi`] !== undefined ? nilaiPTS[`${siswa}_remidi`] : '';
-                    
-                    let ptsMurni = ptsMurniVal !== '' ? Number(ptsMurniVal) : null;
-                    let ptsRemidi = ptsRemidiVal !== '' ? Number(ptsRemidiVal) : null;
-                    let maxPTS = '-';
-                    if (ptsMurni !== null || ptsRemidi !== null) maxPTS = Math.max(ptsMurni || 0, ptsRemidi || 0);
-
-                    return `
-                    <tr class="hover:bg-slate-100">
-                      <td class="border border-slate-300 px-2 py-1">${idx + 1}</td>
-                      <td class="border border-slate-300 px-2 py-1">${member.siswa_nama || member.nama}</td>
-                      <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-pts h-10 w-16 md:w-20 text-center border border-slate-200 rounded-md px-2 text-sm" data-siswa="${siswa}" data-tipe="murni" value="${ptsMurniVal}" /></td>
-                      <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-pts h-10 w-16 md:w-20 text-center border border-slate-200 rounded-md px-2 text-sm" data-siswa="${siswa}" data-tipe="remidi" value="${ptsRemidiVal}" /></td>
-                      <td class="border border-slate-300 px-2 py-1 text-center font-bold text-slate-500 bg-slate-50">${maxPTS}</td>
-                    </tr>
-                    `;
-                  }
-                )
-                .join('')}
-            </tbody>
-          </table>
+    <div class="space-y-4 min-w-0">
+      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm">
+        <div class="flex gap-2 overflow-x-auto">
+          <button type="button" class="btn-exam-subtab whitespace-nowrap rounded-xl border-b-2 px-4 py-2 text-sm font-semibold transition ${activeExamTab === 'pts' ? examPanels.pts.buttonClass : examPanels.pts.idleButtonClass}" data-exam-tab="pts">PTS</button>
+          <button type="button" class="btn-exam-subtab whitespace-nowrap rounded-xl border-b-2 px-4 py-2 text-sm font-semibold transition ${activeExamTab === 'pas' ? examPanels.pas.buttonClass : examPanels.pas.idleButtonClass}" data-exam-tab="pas">PAS</button>
         </div>
       </div>
 
-      <!-- PAS -->
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 class="mb-4 text-sm font-bold text-slate-700 flex items-center gap-2"><svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Penilaian Akhir Semester (PAS)</h3>
+      <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h3 class="mb-4 flex items-center gap-2 text-sm font-bold text-slate-700"><svg class="w-5 h-5 ${activePanel.iconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> ${activePanel.title}</h3>
         <div class="overflow-x-auto mb-4">
-          <table class="w-full text-xs">
+          <table class="min-w-[500px] w-full text-[11px] sm:min-w-[560px] sm:text-xs">
             <thead>
-              <tr class="bg-gradient-to-r from-orange-100 to-orange-200">
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold" rowspan="2">No</th>
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold" rowspan="2">Siswa</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold" colspan="3">Nilai PAS</th>
+              <tr class="${activePanel.headerClass}">
+                <th class="border border-slate-300 px-1.5 py-1 text-left font-semibold sm:px-2" rowspan="2">No</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-left font-semibold sm:px-2" rowspan="2">Siswa</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2" colspan="3">${activePanel.tableLabel}</th>
               </tr>
-              <tr class="bg-orange-50 text-xs">
+              <tr class="${activePanel.subHeaderClass}">
                 <th class="border border-slate-300 px-1 py-1 text-center text-slate-600 font-medium">Murni</th>
                 <th class="border border-slate-300 px-1 py-1 text-center text-slate-600 font-medium">Remidi</th>
-                <th class="border border-slate-300 px-1 py-1 text-center text-orange-700 font-medium tracking-tighter">Tertinggi</th>
+                <th class="border border-slate-300 px-1 py-1 text-center font-medium tracking-tighter ${activePanel.maxHeaderClass}">Tertinggi</th>
               </tr>
             </thead>
-            <tbody>
-              ${sortedMembers
-                .map(
-                  (member, idx) => {
-                    const siswa = member.siswa_id || member.id;
-                    const legacyPAS = nilaiPAS[siswa];
-                    const pasMurniVal = nilaiPAS[`${siswa}_murni`] !== undefined ? nilaiPAS[`${siswa}_murni`] : (legacyPAS !== undefined ? legacyPAS : '');
-                    const pasRemidiVal = nilaiPAS[`${siswa}_remidi`] !== undefined ? nilaiPAS[`${siswa}_remidi`] : '';
-                    
-                    let pasMurni = pasMurniVal !== '' ? Number(pasMurniVal) : null;
-                    let pasRemidi = pasRemidiVal !== '' ? Number(pasRemidiVal) : null;
-                    let maxPAS = '-';
-                    if (pasMurni !== null || pasRemidi !== null) maxPAS = Math.max(pasMurni || 0, pasRemidi || 0);
-
-                    return `
-                    <tr class="hover:bg-slate-100">
-                      <td class="border border-slate-300 px-2 py-1">${idx + 1}</td>
-                      <td class="border border-slate-300 px-2 py-1">${member.siswa_nama || member.nama}</td>
-                      <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-pas h-10 w-16 md:w-20 text-center border border-slate-200 rounded-md px-2 text-sm" data-siswa="${siswa}" data-tipe="murni" value="${pasMurniVal}" /></td>
-                      <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-pas h-10 w-16 md:w-20 text-center border border-slate-200 rounded-md px-2 text-sm" data-siswa="${siswa}" data-tipe="remidi" value="${pasRemidiVal}" /></td>
-                      <td class="border border-slate-300 px-2 py-1 text-center font-bold text-slate-500 bg-slate-50">${maxPAS}</td>
-                    </tr>
-                  `;
-                  }
-                )
-                .join('')}
-            </tbody>
+            <tbody>${activePanel.rows}</tbody>
           </table>
         </div>
-      </div>
       </div>
 
       <button id="btn-simpan-pts-pas" class="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition">
@@ -1653,10 +1642,23 @@ async function renderTabPTSPAS(context, assignment, members, container) {
   `;
 
   container.innerHTML = html;
+  container.dataset.examTab = activeExamTab;
 
   // Event Listeners
   const session = getSession();
   let saveTimeout;
+
+  container.querySelectorAll('.btn-exam-subtab')?.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const nextTab = button.getAttribute('data-exam-tab');
+      if (!nextTab || nextTab === container.dataset.examTab) {
+        return;
+      }
+
+      container.dataset.examTab = nextTab;
+      await renderTabPTSPAS(context, assignment, members, container);
+    });
+  });
 
   container.querySelectorAll('.nilai-pts')?.forEach((input) => {
     input.addEventListener('change', () => {
@@ -1989,7 +1991,7 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
   const konversiHeader = convertFinalScore(100).header;
 
   let html = `
-    <div class="space-y-4">
+    <div class="space-y-4 min-w-0">
       <div class="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)] xl:items-start">
       <div class="space-y-4">
       <!-- Pengaturan Bobot -->
@@ -2103,20 +2105,20 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
       </div>
 
       <!-- Tabel Nilai Akhir -->
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h3 class="mb-4 text-sm font-bold text-slate-700 flex items-center gap-2"><svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg> Nilai Akhir Siswa</h3>
         <div class="overflow-x-auto">
-          <table class="w-full text-xs">
+          <table class="min-w-[660px] w-full text-[11px] sm:min-w-[760px] sm:text-xs">
             <thead>
               <tr class="bg-gradient-to-r from-slate-100 to-slate-200">
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold">No</th>
-                <th class="border border-slate-300 px-2 py-1 text-left font-semibold">Siswa</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold">Tugas</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold">UH</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold">PTS</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold">PAS</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold bg-gradient-to-r from-[#10B981] to-[#06B6D4] text-white font-bold">${konversiHeader}</th>
-                <th class="border border-slate-300 px-2 py-1 text-center font-semibold">Grade</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-left font-semibold sm:px-2">No</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-left font-semibold sm:px-2">Siswa</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2">Tugas</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2">UH</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2">PTS</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2">PAS</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold bg-gradient-to-r from-[#10B981] to-[#06B6D4] text-white font-bold sm:px-2">${konversiHeader}</th>
+                <th class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2">Grade</th>
               </tr>
             </thead>
             <tbody>
@@ -2141,14 +2143,14 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
 
                   return `
                     <tr class="hover:bg-slate-100">
-                      <td class="border border-slate-300 px-2 py-1">${idx + 1}</td>
-                      <td class="border border-slate-300 px-2 py-1">${member.siswa_nama || member.nama}</td>
-                      <td class="border border-slate-300 px-2 py-1 text-center">${scoreData.avgTugas.toFixed(1)}</td>
-                      <td class="border border-slate-300 px-2 py-1 text-center">${scoreData.avgUH.toFixed(1)}</td>
-                      <td class="border border-slate-300 px-2 py-1 text-center">${scoreData.avgPTS.toFixed(1)}</td>
-                      <td class="border border-slate-300 px-2 py-1 text-center">${scoreData.avgPAS.toFixed(1)}</td>
-                      <td class="border border-slate-300 px-2 py-1 text-center font-bold text-lg bg-gradient-to-r from-emerald-100 to-cyan-100">${konversiNilaiAkhir.nilaiDisplay}</td>
-                      <td class="border border-slate-300 px-2 py-1 text-center font-semibold"><span class="px-2 py-1 rounded ${gradeColor}">${grade}</span></td>
+                      <td class="border border-slate-300 px-1.5 py-1 sm:px-2">${idx + 1}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 whitespace-nowrap sm:px-2">${member.siswa_nama || member.nama}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center sm:px-2">${scoreData.avgTugas.toFixed(1)}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center sm:px-2">${scoreData.avgUH.toFixed(1)}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center sm:px-2">${scoreData.avgPTS.toFixed(1)}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center sm:px-2">${scoreData.avgPAS.toFixed(1)}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center font-bold bg-gradient-to-r from-emerald-100 to-cyan-100 sm:px-2 sm:text-lg">${konversiNilaiAkhir.nilaiDisplay}</td>
+                      <td class="border border-slate-300 px-1.5 py-1 text-center font-semibold sm:px-2"><span class="rounded px-1.5 py-0.5 sm:px-2 sm:py-1 ${gradeColor}">${grade}</span></td>
                     </tr>
                   `;
                 })
@@ -2768,13 +2770,13 @@ export async function renderGuruPenilaianPage(container) {
 
       <!-- Tabs -->
       <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div class="flex gap-0 border-b border-slate-200 bg-slate-50 overflow-x-auto">
-          <button id="tab-tugas" class="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-700 border-b-2 border-transparent hover:bg-slate-100 whitespace-nowrap active transition" data-tab="tugas"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Nilai Tugas</button>
-          <button id="tab-uh" class="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-700 border-b-2 border-transparent hover:bg-slate-100 whitespace-nowrap transition" data-tab="uh"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg> Ulangan Harian</button>
-          <button id="tab-pts" class="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-700 border-b-2 border-transparent hover:bg-slate-100 whitespace-nowrap transition" data-tab="pts"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> PTS & PAS</button>
-          <button id="tab-akhir" class="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-700 border-b-2 border-transparent hover:bg-slate-100 whitespace-nowrap transition" data-tab="akhir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg> Nilai Akhir</button>
-          <button id="tab-backup" class="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-700 border-b-2 border-transparent hover:bg-slate-100 whitespace-nowrap transition" data-tab="backup"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg> Backup Nilai</button>
-          <button id="tab-laporan" class="flex items-center gap-2 px-4 py-3 text-xs font-semibold text-slate-700 border-b-2 border-transparent hover:bg-slate-100 whitespace-nowrap transition" data-tab="laporan"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg> Laporan</button>
+        <div class="grid grid-cols-2 gap-2 border-b border-slate-200 bg-slate-50 p-2 sm:flex sm:flex-wrap sm:gap-0 sm:p-0">
+          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap active" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
+          <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
+          <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
+          <button id="tab-akhir" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="akhir"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><span>Nilai Akhir</span></button>
+          <button id="tab-backup" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="backup"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg><span>Backup Nilai</span></button>
+          <button id="tab-laporan" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="laporan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Laporan</span></button>
         </div>
 
         <div id="tab-content" class="p-4">

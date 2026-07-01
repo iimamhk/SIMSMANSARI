@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getStoredContext } from '../../utils/helpers.js';
+import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
 import { getActiveTeachingAssignments, getDocumentsWhere } from '../../firebase/data-service.js';
 
 function average(values = []) {
@@ -81,12 +81,11 @@ function renderDetailItems(items, colorClass, withBab = false) {
 export async function renderSiswaNilaiPage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
-  const siswaId = session?.user?.username || '';
+  const siswaKeys = getSessionUserKeys(session, context);
 
   const filtersBase = [
     { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
     { field: 'semester_id', operator: '==', value: context.semester_aktif },
-    { field: 'siswa_id', operator: '==', value: siswaId },
   ];
 
   const [nilaiTugasDocs, nilaiUjianDocs, assignmentDocs, babDocs, tugasDocs, uhColumnsDocs] = await Promise.all([
@@ -106,6 +105,9 @@ export async function renderSiswaNilaiPage(container) {
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
     ]),
   ]);
+
+  const filteredNilaiTugasDocs = nilaiTugasDocs.filter((doc) => siswaKeys.includes(normalizeUserKey(doc.siswa_id)));
+  const filteredNilaiUjianDocs = nilaiUjianDocs.filter((doc) => siswaKeys.includes(normalizeUserKey(doc.siswa_id)));
 
   const mapelNameMap = new Map(
     assignmentDocs.map((item) => [String(item.mapel_id || ''), item.mapel_nama || item.mapel_id || '-'])
@@ -158,7 +160,7 @@ export async function renderSiswaNilaiPage(container) {
   }
 
   const tugasCountByMapel = {};
-  nilaiTugasDocs.forEach((doc) => {
+  filteredNilaiTugasDocs.forEach((doc) => {
     const bucket = ensureBucket(doc.mapel_id);
     const score = Number(doc.nilai || 0);
     bucket.tugas.push(score);
@@ -181,7 +183,7 @@ export async function renderSiswaNilaiPage(container) {
   const uhCountByMapel = {};
   const ptsCountByMapel = {};
   const pasCountByMapel = {};
-  nilaiUjianDocs.forEach((doc) => {
+  filteredNilaiUjianDocs.forEach((doc) => {
     const bucket = ensureBucket(doc.mapel_id);
     const mapelKey = String(doc.mapel_id || '-');
     const score = Number(doc.nilai || 0);
