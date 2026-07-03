@@ -9,26 +9,8 @@ const statusClasses = {
   I: 'border-[#0EA5E9] bg-[#DBEAFE] text-[#0C4A6E]',
   A: 'border-[#EF4444] bg-[#FECACA] text-[#991B1B]',
 };
-const activityIndicators = [
-  { key: 'bertanya', label: 'Bertanya' },
-  { key: 'menjawab', label: 'Menjawab' },
-  { key: 'diskusi', label: 'Diskusi' },
-  { key: 'presentasi', label: 'Presentasi' },
-  { key: 'tugas_kelas', label: 'Tugas Kelas' },
-];
-
-function scoreToGrade(score) {
-  const value = Number(score || 0);
-  if (value >= 3.5) return 'A';
-  if (value >= 2.5) return 'B';
-  return 'C';
-}
-
-function gradeBadgeClass(grade) {
-  if (grade === 'A') return 'bg-emerald-100 text-emerald-700';
-  if (grade === 'B') return 'bg-amber-100 text-amber-700';
-  return 'bg-rose-100 text-rose-700';
-}
+const attendanceTabActiveClass = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_14px_30px_-18px_rgba(14,165,233,0.95)]';
+const attendanceTabIdleClass = 'bg-white/80 text-slate-700 hover:bg-white hover:text-slate-900';
 
 function getWeekStart(dateString) {
   const date = new Date(dateString);
@@ -183,263 +165,113 @@ export async function renderGuruInputAbsenPage(container) {
     .join('');
 
   const html = renderLayout('Input Absensi', `
-    <div class="space-y-6">
-      <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="mb-3">
-          <div>
-            <h2 class="text-xl font-semibold text-slate-900">Input Absensi Harian</h2>
-            <p class="mt-2 text-sm text-slate-500">Pilih relasi mengajar dan tanggal kerja, kemudian rekam kehadiran siswa.</p>
+    <div class="space-y-5">
+      <div class="relative overflow-hidden rounded-[28px] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-cyan-50 p-4 shadow-[0_24px_70px_-42px_rgba(14,165,233,0.55)] sm:p-5">
+        <div class="absolute -left-10 top-0 h-24 w-24 rounded-full bg-sky-200/50 blur-3xl"></div>
+        <div class="absolute bottom-0 right-6 h-20 w-20 rounded-full bg-cyan-200/50 blur-3xl"></div>
+        <div class="relative">
+          <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700 backdrop-blur-sm">
+            <span class="inline-block h-2 w-2 rounded-full bg-sky-500"></span>
+            Workspace Absensi
           </div>
-        </div>
-        <div class="overflow-x-auto md:sticky md:top-4 md:z-20 md:rounded-2xl md:bg-white/90 md:p-1 md:shadow-sm md:backdrop-blur">
-          <div class="inline-flex min-w-full gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 sm:min-w-0">
-            <button data-tab="input" type="button" class="tab-btn inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-[#007AFF] px-4 py-2 text-sm font-semibold text-white shadow-sm">
+          <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Input Absensi Harian</h2>
+          <div class="mt-4 md:sticky md:top-4 md:z-20 md:rounded-2xl md:bg-white/70 md:p-1 md:backdrop-blur">
+            <div class="grid grid-cols-2 gap-2 rounded-[24px] border border-white/80 bg-white/70 p-1 shadow-[0_14px_32px_-24px_rgba(15,23,42,0.5)] sm:flex sm:flex-wrap sm:rounded-full">
+            <button data-tab="input" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition sm:w-auto ${attendanceTabActiveClass}">
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8"/>
                 <path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
               </svg>
               Absensi
             </button>
-            <button data-tab="keaktifan" type="button" class="tab-btn inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                <circle cx="5" cy="19" r="1.2" fill="currentColor"/>
-                <circle cx="12" cy="6" r="1.2" fill="currentColor"/>
-                <circle cx="19" cy="13" r="1.2" fill="currentColor"/>
-              </svg>
-              Keaktifan
-            </button>
-            <button data-tab="rekap" type="button" class="tab-btn inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+            <button data-tab="rekap" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition sm:w-auto ${attendanceTabIdleClass}">
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M4 6h16M8 11h8M8 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
               </svg>
               Rekap
             </button>
-            <button data-tab="pencapaian" type="button" class="tab-btn inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">
+            <button data-tab="pencapaian" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition sm:w-auto ${attendanceTabIdleClass}">
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 4l2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7L12 4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
               </svg>
               Pencapaian
             </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <section id="tab-input" class="space-y-6">
-        <div class="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p class="text-sm font-medium text-slate-700">Relasi & Tanggal</p>
-                <p class="mt-1 text-sm text-slate-500">Tentukan kelas dan tanggal absensi yang akan dicatat.</p>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <button id="check-all-btn" type="button" class="rounded-xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Hadir Semua</button>
-                <button id="reset-status-btn" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Reset Status</button>
-              </div>
+      <section id="tab-input" class="space-y-4">
+        <div class="rounded-[24px] border border-amber-100 bg-gradient-to-r from-amber-50 via-white to-rose-50 p-1 shadow-[0_12px_30px_-24px_rgba(120,53,15,0.22)]">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-absensi-subtab="absensi" class="absensi-subtab-btn rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-sm">Absensi</button>
+            <button type="button" data-absensi-subtab="keluar-kelas" class="absensi-subtab-btn rounded-full border border-transparent bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white">Siswa Keluar Kelas</button>
+          </div>
+        </div>
+
+        <section id="absensi-subtab-absensi" class="grid max-w-full gap-3 xl:grid-cols-[1.6fr_1fr]">
+          <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-4">
+            <div class="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid gap-3 sm:grid-cols-2">
               <div>
                 <label class="text-sm font-medium text-slate-700">Relasi Mengajar</label>
-                <select id="assignment-select" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none">
+                <select id="assignment-select" class="mt-1.5 w-full rounded-2xl border border-sky-100 bg-gradient-to-r from-white to-sky-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
                   ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
                 </select>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Tanggal Absensi</label>
-                <input id="attendance-date" type="date" value="${attendanceDate}" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
-                <p id="date-hint" class="mt-2 text-xs text-slate-500">Hanya hari kerja Senin–Jumat bisa dipilih.</p>
+                <input id="attendance-date" type="date" value="${attendanceDate}" class="mt-1.5 w-full rounded-2xl border border-sky-100 bg-gradient-to-r from-white to-sky-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
               </div>
             </div>
 
-            <div class="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-4">
-              <div class="mb-3 flex items-center justify-between">
+            <div class="mt-4 rounded-[26px] border border-slate-100 bg-gradient-to-b from-slate-50 to-white p-3 shadow-inner sm:p-3.5">
+              <div class="mb-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p class="text-sm font-medium text-slate-700">Daftar Siswa</p>
+                  <p class="text-sm font-semibold text-slate-800">Daftar Siswa</p>
                   <p id="attendance-summary" class="mt-1 text-xs text-slate-500">Pilih kelas dan tanggal untuk melihat status.</p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                  <button id="mark-selected-absent-btn" type="button" class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700">Tandai baris terpilih sebagai Alpa</button>
-                  <button id="save-absen-btn" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0063CC]">Simpan Absensi</button>
+                  <button id="save-absen-btn" class="rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(14,165,233,0.95)] transition hover:-translate-y-0.5 hover:from-sky-600 hover:to-cyan-600">Simpan Absensi</button>
+                  <button id="reset-status-btn" type="button" class="rounded-full border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50">Reset</button>
                 </div>
               </div>
-              <div class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                <label class="inline-flex items-center gap-2 font-medium text-slate-700">
-                  <input id="member-select-all" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-[#007AFF]" />
-                  Pilih semua siswa di daftar
-                </label>
-                <span id="selected-student-count" class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">0 siswa dipilih</span>
-              </div>
-              <ul id="member-list" class="space-y-3 text-sm text-slate-600"></ul>
+              <ul id="member-list" class="max-w-full space-y-2 text-sm text-slate-600"></ul>
             </div>
           </div>
 
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="mb-4">
-              <h2 class="text-xl font-semibold text-slate-900">Ringkasan Hari Ini</h2>
-              <p class="mt-2 text-sm text-slate-500">Sekilas status absensi untuk tanggal yang dipilih.</p>
+          <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-4">
+            <div class="mb-3">
+              <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Ringkasan Hari Ini</h2>
             </div>
-            <div class="space-y-4">
-              <div class="grid gap-3 sm:grid-cols-2">
-                <div class="rounded-2xl bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Hadir</p>
-                  <p id="today-summary-present" class="mt-3 text-3xl font-semibold text-slate-900">0</p>
+            <div class="space-y-3">
+              <div class="grid gap-2.5 sm:grid-cols-2">
+                <div class="rounded-[24px] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Hadir</p>
+                  <p id="today-summary-present" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
                 </div>
-                <div class="rounded-2xl bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Sakit / Izin</p>
-                  <p id="today-summary-excused" class="mt-3 text-3xl font-semibold text-slate-900">0</p>
-                </div>
-              </div>
-              <div class="rounded-2xl bg-slate-50 p-4 text-center">
-                <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Alpa</p>
-                <p id="today-summary-absent" class="mt-3 text-3xl font-semibold text-slate-900">0</p>
-              </div>
-            </div>
-
-            <div class="mt-6 rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <h3 class="text-sm font-semibold text-slate-800">Catatan Khusus</h3>
-              <p class="mt-1 text-xs text-slate-500">Catat kejadian khusus siswa (mis. tidak masuk kelas, membolos ke kantin) untuk tindak lanjut wali kelas/BK.</p>
-              <div class="mt-3 grid gap-3">
-                <div>
-                  <label class="text-xs font-medium text-slate-700">Siswa</label>
-                  <select id="special-note-student" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"></select>
-                </div>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    <label class="text-xs font-medium text-slate-700">Jenis Catatan</label>
-                    <select id="special-note-type" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
-                      <option value="Tidak Masuk Kelas">Tidak Masuk Kelas</option>
-                      <option value="Membolos ke Kantin">Membolos ke Kantin</option>
-                      <option value="Keluar Kelas Tanpa Izin">Keluar Kelas Tanpa Izin</option>
-                      <option value="Lainnya">Lainnya</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label class="text-xs font-medium text-slate-700">Jam Kejadian</label>
-                    <input id="special-note-time" type="time" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" />
-                  </div>
-                </div>
-                <div>
-                  <label class="text-xs font-medium text-slate-700">Catatan</label>
-                  <textarea id="special-note-text" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" placeholder="Tuliskan kronologi singkat..."></textarea>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button id="save-special-note-btn" type="button" class="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800">Simpan Catatan</button>
-                  <p id="special-note-message" class="text-xs text-slate-500"></p>
-                </div>
-                <label class="inline-flex items-center gap-2 text-xs text-slate-600">
-                  <input id="special-note-use-selected" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-[#007AFF]" />
-                  Gunakan siswa terpilih (batch)
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="tab-keaktifan" class="hidden space-y-6">
-        <div class="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 class="text-xl font-semibold text-slate-900">Catatan Keaktifan Siswa</h2>
-                <p class="mt-2 text-sm text-slate-500">Input cepat berbasis dropdown siswa aktif saat pembelajaran berlangsung.</p>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                <button id="save-activity-btn" type="button" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#0063CC]">Simpan Entri</button>
-                <button id="reset-activity-form-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Reset Form</button>
-              </div>
-            </div>
-
-            <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-3">
-              <div class="rounded-xl border border-slate-200 bg-white p-3">
-                <p class="font-semibold text-slate-700">Skor 1-4</p>
-                <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
-              </div>
-              <div class="rounded-xl border border-slate-200 bg-white p-3">
-                <p class="font-semibold text-slate-700">Predikat Otomatis</p>
-                <p class="mt-1">A (>=3.5), B (>=2.5), C (&lt;2.5).</p>
-              </div>
-              <div class="rounded-xl border border-slate-200 bg-white p-3">
-                <p class="font-semibold text-slate-700">Poin Indikator</p>
-                <p class="mt-1">Setiap checklist bernilai +1 (maksimal 5 poin).</p>
-              </div>
-            </div>
-
-            <div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div class="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
-                <div>
-                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
-                  <select id="activity-student-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none"></select>
-                </div>
-                <div>
-                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Skor</label>
-                  <select id="activity-score-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3" selected>3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                  <p>Poin indikator: <span id="activity-point-preview" class="font-semibold text-blue-700">0/5</span></p>
-                  <p class="mt-1">Predikat: <span id="activity-grade-preview" class="font-semibold text-slate-900">B</span></p>
+                <div class="rounded-[24px] border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Sakit / Izin</p>
+                  <p id="today-summary-excused" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
                 </div>
               </div>
-
-              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                ${activityIndicators.map((item) => `
-                  <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
-                    <input type="checkbox" class="activity-form-indicator h-4 w-4 rounded border-slate-300 text-[#007AFF]" data-indicator="${item.key}" />
-                    ${item.label}
-                  </label>
-                `).join('')}
+              <div class="rounded-[24px] border border-rose-100 bg-gradient-to-br from-rose-50 to-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">Alpa</p>
+                <p id="today-summary-absent" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
               </div>
-
-              <div>
-                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Catatan Singkat (opsional)</label>
-                <input id="activity-note-input" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" placeholder="Contoh: aktif bertanya dan menolong diskusi kelompok" />
-              </div>
-            </div>
-
-            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Entri Keaktifan Hari Ini</p>
-              <div id="activity-today-list" class="mt-2 space-y-2"></div>
-            </div>
-          </div>
-
-          <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="mb-4">
-              <h2 class="text-xl font-semibold text-slate-900">Siswa Teraktif (Global)</h2>
-              <p class="mt-2 text-sm text-slate-500">Peringkat berdasarkan akumulasi poin indikator pada relasi mengajar ini.</p>
-            </div>
-
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <div class="flex items-center justify-between gap-3">
-                <label for="activity-top-limit" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Siswa Ditampilkan</label>
-                <input id="activity-top-limit" type="number" min="3" max="50" value="10" class="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none" />
-              </div>
-              <div id="activity-top-list" class="mt-3 space-y-2"></div>
-            </div>
-
-            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Siswa Perlu Dorongan</p>
-                <span id="activity-needs-count" class="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">0</span>
-              </div>
-              <div id="activity-needs-list" class="mt-2 space-y-2"></div>
             </div>
           </div>
         </div>
       </section>
 
       <section id="tab-rekap" class="hidden space-y-6">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
           <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 class="text-xl font-semibold text-slate-900">Rekap Kehadiran Profesional</h2>
-              <p class="mt-2 text-sm text-slate-500">Tampilan lengkap status absensi siswa berdasarkan filter periode.</p>
             </div>
           </div>
 
@@ -486,8 +318,9 @@ export async function renderGuruInputAbsenPage(container) {
             </div>
           </div>
 
-          <div class="mt-6 overflow-x-auto rounded-2xl border border-slate-100 bg-white p-3">
-            <table class="min-w-full text-xs text-slate-700">
+          <div class="mt-6 max-w-full overflow-hidden rounded-[24px] border border-slate-100 bg-gradient-to-b from-white to-slate-50 shadow-inner">
+            <div class="max-w-full overflow-x-auto p-3">
+            <table class="min-w-max text-xs text-slate-700">
               <thead id="rekap-table-head">
                 <tr class="border-b border-slate-300 bg-slate-50">
                   <th class="sticky left-0 z-10 w-28 bg-slate-50 px-2 py-2 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
@@ -495,89 +328,53 @@ export async function renderGuruInputAbsenPage(container) {
               </thead>
               <tbody id="rekap-table-body"></tbody>
             </table>
+            </div>
           </div>
 
-          <div class="mt-6 grid gap-3 sm:grid-cols-6">
-            <div class="rounded-xl bg-blue-50 p-3 text-center">
+          <div class="mt-6 grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
+            <div class="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
               <p class="text-xs font-medium text-slate-600">H</p>
               <p id="rekap-summary-present" class="mt-2 text-lg font-bold text-blue-600">0</p>
             </div>
-            <div class="rounded-xl bg-orange-50 p-3 text-center">
+            <div class="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
               <p class="text-xs font-medium text-slate-600">S</p>
               <p id="rekap-summary-sick" class="mt-2 text-lg font-bold text-orange-600">0</p>
             </div>
-            <div class="rounded-xl bg-cyan-50 p-3 text-center">
+            <div class="rounded-2xl border border-cyan-100 bg-cyan-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
               <p class="text-xs font-medium text-slate-600">I</p>
               <p id="rekap-summary-permission" class="mt-2 text-lg font-bold text-cyan-600">0</p>
             </div>
-            <div class="rounded-xl bg-red-50 p-3 text-center">
+            <div class="rounded-2xl border border-red-100 bg-red-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
               <p class="text-xs font-medium text-slate-600">A</p>
               <p id="rekap-summary-absent" class="mt-2 text-lg font-bold text-red-600">0</p>
             </div>
-            <div class="rounded-xl bg-slate-100 p-3 text-center">
+            <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
               <p class="text-xs font-medium text-slate-600">Total Data</p>
               <p id="summary-total-records" class="mt-2 text-lg font-bold text-slate-900">0</p>
             </div>
-            <div class="rounded-xl bg-slate-100 p-3 text-center">
-              <p class="text-xs font-medium text-slate-600">Siswa</p>
+            <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+              <p class="text-xs font-medium text-slate-600">Jumlah Siswa</p>
               <p id="summary-total-students" class="mt-2 text-lg font-bold text-slate-900">0</p>
             </div>
           </div>
         </div>
-      </section>
 
       <section id="tab-pencapaian" class="hidden space-y-6">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
           <div class="mb-4">
             <h2 class="text-xl font-semibold text-slate-900">Pencapaian Kehadiran</h2>
-            <p class="mt-2 text-sm text-slate-500">Lihat siswa yang paling disiplin dan yang membutuhkan dorongan motivasi.</p>
           </div>
           <div class="grid gap-4 lg:grid-cols-2">
-            <div class="rounded-3xl bg-slate-50 p-5">
+            <div class="rounded-[24px] bg-gradient-to-b from-slate-50 to-white p-5 shadow-inner">
               <p class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Sering Hadir</p>
-              <ol id="top-present-list" class="mt-4 space-y-3 text-sm text-slate-700"></ol>
-            </div>
-            <div class="rounded-3xl bg-slate-50 p-5">
               <p class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Sering Tidak Hadir</p>
               <ol id="top-absent-list" class="mt-4 space-y-3 text-sm text-slate-700"></ol>
             </div>
           </div>
         </div>
-        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+        <div class="rounded-[28px] border border-slate-200/80 bg-gradient-to-br from-slate-50 to-white p-5 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)]">
           <p class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Motivasi</p>
           <p id="motivation-text" class="mt-4 text-base leading-7 text-slate-700"></p>
-        </div>
-
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Riwayat Catatan Siswa</p>
-          <p class="mt-2 text-sm text-slate-500">Menampilkan catatan khusus siswa untuk relasi mengajar aktif.</p>
-          <div class="mt-4 grid gap-3 md:grid-cols-4">
-            <div>
-              <label class="text-xs font-medium text-slate-700">Filter Siswa</label>
-              <select id="special-note-history-student" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none">
-                <option value="all">Semua siswa</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs font-medium text-slate-700">Filter Jenis</label>
-              <select id="special-note-history-type" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none">
-                <option value="all">Semua jenis</option>
-                <option value="Tidak Masuk Kelas">Tidak Masuk Kelas</option>
-                <option value="Membolos ke Kantin">Membolos ke Kantin</option>
-                <option value="Keluar Kelas Tanpa Izin">Keluar Kelas Tanpa Izin</option>
-                <option value="Lainnya">Lainnya</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-xs font-medium text-slate-700">Tanggal Mulai</label>
-              <input id="special-note-history-start" type="date" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none" />
-            </div>
-            <div>
-              <label class="text-xs font-medium text-slate-700">Tanggal Akhir</label>
-              <input id="special-note-history-end" type="date" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none" />
-            </div>
-          </div>
-          <div id="special-note-history" class="mt-4 space-y-2"></div>
         </div>
       </section>
     </div>
@@ -590,11 +387,8 @@ export async function renderGuruInputAbsenPage(container) {
   const checkAllBtn = container.querySelector('#check-all-btn');
   const resetStatusBtn = container.querySelector('#reset-status-btn');
   const saveAbsenBtn = container.querySelector('#save-absen-btn');
-  const markSelectedAbsentBtn = container.querySelector('#mark-selected-absent-btn');
   const attendanceSummary = container.querySelector('#attendance-summary');
   const memberListEl = container.querySelector('#member-list');
-  const memberSelectAll = container.querySelector('#member-select-all');
-  const selectedStudentCount = container.querySelector('#selected-student-count');
   const rekapFilterType = container.querySelector('#rekap-filter-type');
   const rekapMonth = container.querySelector('#rekap-month');
   const rekapYear = container.querySelector('#rekap-year');
@@ -610,22 +404,12 @@ export async function renderGuruInputAbsenPage(container) {
   const rekapSummaryAbsent = container.querySelector('#rekap-summary-absent');
   const rekapTableBody = container.querySelector('#rekap-table-body');
   const tabButtons = Array.from(container.querySelectorAll('.tab-btn'));
+  const absensiSubtabButtons = Array.from(container.querySelectorAll('.absensi-subtab-btn'));
   const tabInput = container.querySelector('#tab-input');
-  const tabKeaktifan = container.querySelector('#tab-keaktifan');
+  const absensiSubtabAbsensi = container.querySelector('#absensi-subtab-absensi');
+  const absensiSubtabKeluarKelas = container.querySelector('#absensi-subtab-keluar-kelas');
   const tabRekap = container.querySelector('#tab-rekap');
   const tabPencapaian = container.querySelector('#tab-pencapaian');
-  const saveActivityBtn = container.querySelector('#save-activity-btn');
-  const resetActivityFormBtn = container.querySelector('#reset-activity-form-btn');
-  const activityStudentSelect = container.querySelector('#activity-student-select');
-  const activityScoreSelect = container.querySelector('#activity-score-select');
-  const activityNoteInput = container.querySelector('#activity-note-input');
-  const activityPointPreview = container.querySelector('#activity-point-preview');
-  const activityGradePreview = container.querySelector('#activity-grade-preview');
-  const activityTodayList = container.querySelector('#activity-today-list');
-  const activityTopLimitInput = container.querySelector('#activity-top-limit');
-  const activityTopList = container.querySelector('#activity-top-list');
-  const activityNeedsCount = container.querySelector('#activity-needs-count');
-  const activityNeedsList = container.querySelector('#activity-needs-list');
   const topPresentList = container.querySelector('#top-present-list');
   const topAbsentList = container.querySelector('#top-absent-list');
   const motivationText = container.querySelector('#motivation-text');
@@ -635,7 +419,6 @@ export async function renderGuruInputAbsenPage(container) {
   const specialNoteText = container.querySelector('#special-note-text');
   const saveSpecialNoteBtn = container.querySelector('#save-special-note-btn');
   const specialNoteMessage = container.querySelector('#special-note-message');
-  const specialNoteUseSelected = container.querySelector('#special-note-use-selected');
   const specialNoteHistory = container.querySelector('#special-note-history');
   const specialNoteHistoryStudent = container.querySelector('#special-note-history-student');
   const specialNoteHistoryType = container.querySelector('#special-note-history-type');
@@ -648,7 +431,7 @@ export async function renderGuruInputAbsenPage(container) {
   let currentMembers = members;
   let currentAttendance = attendanceRecords;
   let currentSpecialNotes = [];
-  let currentActivityRecords = [];
+  let activeAbsensiSubtab = 'absensi';
 
   function getCurrentAssignment() {
     return currentAssignments.find((item) => item.id === selectedAssignmentId) || currentAssignments[0] || null;
@@ -683,323 +466,12 @@ export async function renderGuruInputAbsenPage(container) {
     }
   }
 
-  async function refreshActivityRecords() {
-    const assignment = getCurrentAssignment();
-    if (!assignment) {
-      currentActivityRecords = [];
-      return;
-    }
-
-    try {
-      const docs = await getDocumentsWhere('keaktifan_siswa', [
-        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-        { field: 'semester_id', operator: '==', value: context.semester_aktif },
-        { field: 'pengajaran_id', operator: '==', value: assignment.id },
-      ]);
-      currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
-    } catch (error) {
-      console.error('Gagal memuat data keaktifan:', error);
-      currentActivityRecords = [];
-    }
-  }
-
-  function getActivityForDate(date) {
-    return currentActivityRecords.filter((record) => record.tanggal === date);
-  }
-
-  function getActivityRecord(studentId, date) {
-    return getActivityForDate(date).find((item) => String(item.siswa_id) === String(studentId));
-  }
-
   function getSortedMembers() {
     return [...currentMembers].sort((a, b) => {
       const nameA = (a.siswa_nama || a.nama || '').toLowerCase();
       const nameB = (b.siswa_nama || b.nama || '').toLowerCase();
       return nameA.localeCompare(nameB);
     });
-  }
-
-  function getActivityFormIndicators() {
-    const indicators = {};
-    container.querySelectorAll('.activity-form-indicator').forEach((input) => {
-      const key = input.getAttribute('data-indicator');
-      if (key) {
-        indicators[key] = input.checked;
-      }
-    });
-    return indicators;
-  }
-
-  function getActivityPointCount(indicators = {}) {
-    return activityIndicators.filter((item) => indicators[item.key]).length;
-  }
-
-  function updateActivityFormPreview() {
-    const indicators = getActivityFormIndicators();
-    const points = getActivityPointCount(indicators);
-    const score = Number(activityScoreSelect?.value || 3);
-    const grade = scoreToGrade(score);
-
-    if (activityPointPreview) {
-      activityPointPreview.textContent = `${points}/5`;
-    }
-
-    if (activityGradePreview) {
-      activityGradePreview.textContent = grade;
-      activityGradePreview.className = `font-semibold ${grade === 'A' ? 'text-emerald-700' : grade === 'B' ? 'text-amber-700' : 'text-rose-700'}`;
-    }
-  }
-
-  function fillActivityForm(record) {
-    const indicators = record?.indikator || {};
-    container.querySelectorAll('.activity-form-indicator').forEach((input) => {
-      const key = input.getAttribute('data-indicator');
-      input.checked = Boolean(indicators[key]);
-    });
-    if (activityScoreSelect) {
-      activityScoreSelect.value = String(Number(record?.skor || 3));
-    }
-    if (activityNoteInput) {
-      activityNoteInput.value = record?.catatan || '';
-    }
-    updateActivityFormPreview();
-  }
-
-  function resetActivityForm() {
-    container.querySelectorAll('.activity-form-indicator').forEach((input) => {
-      input.checked = false;
-    });
-    if (activityScoreSelect) {
-      activityScoreSelect.value = '3';
-    }
-    if (activityNoteInput) {
-      activityNoteInput.value = '';
-    }
-    updateActivityFormPreview();
-  }
-
-  function renderActivityStudentOptions() {
-    if (!activityStudentSelect) {
-      return;
-    }
-
-    const sortedMembers = getSortedMembers();
-    if (!sortedMembers.length) {
-      activityStudentSelect.innerHTML = '<option value="">Belum ada siswa</option>';
-      resetActivityForm();
-      return;
-    }
-
-    const currentSelected = activityStudentSelect.value;
-    activityStudentSelect.innerHTML = sortedMembers
-      .map((member) => {
-        const id = member.siswa_id || member.id;
-        const name = member.siswa_nama || member.nama || '-';
-        return `<option value="${id}">${name}</option>`;
-      })
-      .join('');
-
-    const selectedId = sortedMembers.some((member) => String(member.siswa_id || member.id) === String(currentSelected))
-      ? currentSelected
-      : String(sortedMembers[0].siswa_id || sortedMembers[0].id);
-
-    activityStudentSelect.value = selectedId;
-    const record = getActivityRecord(selectedId, selectedDate);
-    fillActivityForm(record);
-  }
-
-  function renderActivityTodayList() {
-    if (!activityTodayList) {
-      return;
-    }
-
-    const todayRecords = getActivityForDate(selectedDate)
-      .sort((a, b) => String(a.siswa_nama || '').localeCompare(String(b.siswa_nama || ''), 'id'));
-
-    activityTodayList.innerHTML = todayRecords.length
-      ? todayRecords.map((item, index) => {
-          const points = Number.isFinite(Number(item.poin_indikator))
-            ? Number(item.poin_indikator)
-            : getActivityPointCount(item.indikator || {});
-          const grade = item.predikat || scoreToGrade(item.skor);
-          return `
-            <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
-              <div class="flex items-center justify-between gap-2">
-                <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.siswa_nama || '-'}</p>
-                <span class="rounded-full px-2 py-1 text-xs font-semibold ${gradeBadgeClass(grade)}">${grade}</span>
-              </div>
-              <p class="mt-1 text-xs text-slate-500">Poin ${points}/5 • Skor ${Number(item.skor || 0).toFixed(1)}${item.catatan ? ` • ${item.catatan}` : ''}</p>
-            </div>
-          `;
-        }).join('')
-      : '<p class="text-sm text-slate-500">Belum ada entri keaktifan untuk tanggal ini.</p>';
-  }
-
-  function renderActivityRecap() {
-    if (!activityTopList || !activityNeedsCount || !activityNeedsList || !activityTopLimitInput) {
-      return;
-    }
-
-    if (!currentMembers.length) {
-      activityTopList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
-      activityNeedsCount.textContent = '0';
-      activityNeedsList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
-      return;
-    }
-
-    const memberMap = new Map(currentMembers.map((m) => [String(m.siswa_id || m.id), m.siswa_nama || m.nama || '-']));
-
-    const groupedByStudent = {};
-    currentActivityRecords.forEach((item) => {
-      const key = String(item.siswa_id || '');
-      if (!groupedByStudent[key]) {
-        groupedByStudent[key] = [];
-      }
-      groupedByStudent[key].push(item);
-    });
-
-    const totals = Object.entries(groupedByStudent)
-      .map(([studentId, items]) => {
-        const totalPoints = items.reduce((sum, it) => {
-          if (Number.isFinite(Number(it.poin_indikator))) {
-            return sum + Number(it.poin_indikator);
-          }
-          return sum + getActivityPointCount(it.indikator || {});
-        }, 0);
-        const avgScore = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
-        return {
-          studentId,
-          studentName: memberMap.get(studentId) || '-',
-          totalPoints,
-          avgScore,
-          totalMeetings: items.length,
-        };
-      })
-      .sort((a, b) => b.totalPoints - a.totalPoints || b.avgScore - a.avgScore || a.studentName.localeCompare(b.studentName));
-
-    const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
-    activityTopLimitInput.value = String(displayLimit);
-    const medalStyles = [
-      {
-        bgClass: 'bg-gradient-to-r from-amber-100 to-yellow-100 border-amber-300',
-        iconClass: 'text-amber-500',
-      },
-      {
-        bgClass: 'bg-gradient-to-r from-slate-100 to-gray-100 border-slate-300',
-        iconClass: 'text-slate-500',
-      },
-      {
-        bgClass: 'bg-gradient-to-r from-orange-100 to-amber-100 border-orange-300',
-        iconClass: 'text-orange-500',
-      },
-    ];
-
-    activityTopList.innerHTML = totals.length
-      ? totals
-          .slice(0, displayLimit)
-          .map((item, index) => {
-            const medal = medalStyles[index] || { bgClass: 'bg-white border-slate-200', iconClass: 'text-slate-300' };
-            return `
-              <div class="rounded-xl border px-3 py-2 ${medal.bgClass}">
-                <div class="flex items-center justify-between gap-2">
-                  <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
-                  <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/80 ${medal.iconClass}">
-                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4 18h16l-1-9-4 3-3-5-3 5-4-3-1 9z"/>
-                    </svg>
-                  </span>
-                </div>
-                <p class="mt-1 text-xs text-slate-600">Total poin ${item.totalPoints} • ${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
-              </div>
-            `;
-          })
-          .join('')
-      : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
-
-    const needsFollowUp = Object.entries(groupedByStudent)
-      .map(([studentId, items]) => {
-        const avg = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
-        const indicatorAvg = items.length
-          ? items.reduce((sum, it) => sum + getActivityPointCount(it.indikator || {}), 0) / items.length
-          : 0;
-        return {
-          studentId,
-          studentName: memberMap.get(studentId) || '-',
-          avg,
-          indicatorAvg,
-        };
-      })
-      .filter((item) => item.avg < 2 || item.indicatorAvg < 2)
-      .sort((a, b) => a.avg - b.avg || a.studentName.localeCompare(b.studentName));
-
-    activityNeedsCount.textContent = String(needsFollowUp.length);
-    activityNeedsList.innerHTML = needsFollowUp.length
-      ? needsFollowUp
-          .slice(0, 10)
-          .map((item) => `
-            <div class="rounded-xl border border-rose-200 bg-white px-3 py-2">
-              <p class="text-sm font-semibold text-slate-800">${item.studentName}</p>
-              <p class="mt-1 text-xs text-slate-500">Rata skor ${item.avg.toFixed(2)} • Rata indikator ${item.indicatorAvg.toFixed(2)}/5</p>
-            </div>
-          `)
-          .join('')
-      : '<p class="text-sm text-slate-500">Belum ada siswa yang perlu tindak lanjut.</p>';
-  }
-
-  async function saveActivityRecords() {
-    const assignment = getCurrentAssignment();
-    if (!assignment) {
-      alert('Tidak ada relasi mengajar yang dipilih.');
-      return;
-    }
-
-    if (!selectedDate || !isWeekday(selectedDate)) {
-      alert('Pilih tanggal hari kerja Senin-Jumat.');
-      return;
-    }
-
-    const studentId = activityStudentSelect?.value || '';
-    if (!studentId) {
-      alert('Pilih siswa terlebih dahulu.');
-      return;
-    }
-
-    const studentName = activityStudentSelect.options[activityStudentSelect.selectedIndex]?.text || '-';
-    const indikator = getActivityFormIndicators();
-    const points = getActivityPointCount(indikator);
-    const score = Number(activityScoreSelect?.value || 3);
-    const grade = scoreToGrade(score);
-    const note = String(activityNoteInput?.value || '').trim();
-    const docId = `${assignment.id}_${studentId}_${selectedDate}`;
-
-    const payload = {
-      id: docId,
-      tahun_ajaran_id: context.tahun_ajaran_aktif,
-      semester_id: context.semester_aktif,
-      pengajaran_id: assignment.id,
-      guru_id: assignment.guru_id,
-      guru_nama: assignment.guru_nama,
-      kelas_id: assignment.kelas_id,
-      kelas_nama: assignment.kelas_nama,
-      mapel_id: assignment.mapel_id,
-      mapel_nama: assignment.mapel_nama,
-      siswa_id: studentId,
-      siswa_nama: studentName,
-      tanggal: selectedDate,
-      hari: getDayName(selectedDate),
-      indikator,
-      poin_indikator: points,
-      skor: score,
-      predikat: grade,
-      catatan: note,
-      updated_at: new Date().toISOString(),
-    };
-
-    await saveDocument('keaktifan_siswa', payload, payload.id);
-    await refreshActivityRecords();
-    renderActivityTodayList();
-    renderActivityRecap();
-    alert(`Keaktifan ${studentName} tanggal ${formatAttendanceDate(selectedDate)} berhasil disimpan.`);
   }
 
   function renderSpecialNoteStudentOptions() {
@@ -1088,13 +560,16 @@ export async function renderGuruInputAbsenPage(container) {
       .join('');
   }
 
-  function getSelectedStudentRows() {
-    return Array.from(memberListEl.querySelectorAll('.member-select-checkbox:checked'));
-  }
+  function setAbsensiSubtab(nextTab) {
+    activeAbsensiSubtab = nextTab === 'keluar-kelas' ? 'keluar-kelas' : 'absensi';
 
-  function updateSelectedStudentCount() {
-    const count = getSelectedStudentRows().length;
-    selectedStudentCount.textContent = `${count} siswa dipilih`;
+    absensiSubtabButtons.forEach((button) => {
+      const isActive = button.getAttribute('data-absensi-subtab') === activeAbsensiSubtab;
+      button.className = `absensi-subtab-btn rounded-full border px-4 py-2 text-xs font-semibold transition ${isActive ? 'border-amber-400 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_22px_-14px_rgba(245,158,11,0.9)]' : 'border-transparent bg-white/90 text-slate-700 hover:bg-white hover:border-amber-100'}`;
+    });
+
+    absensiSubtabAbsensi?.classList.toggle('hidden', activeAbsensiSubtab !== 'absensi');
+    absensiSubtabKeluarKelas?.classList.toggle('hidden', activeAbsensiSubtab !== 'keluar-kelas');
   }
 
   function setRowStatus(row, targetStatus) {
@@ -1103,7 +578,7 @@ export async function renderGuruInputAbsenPage(container) {
       const status = btn.getAttribute('data-status');
       const isActive = status === targetStatus;
       btn.dataset.active = isActive ? 'true' : 'false';
-      btn.className = `status-btn rounded-xl border px-3 py-2 text-xs font-semibold ${isActive ? statusClasses[status] : 'border-slate-200 bg-white text-slate-600'}`;
+      btn.className = `status-btn rounded-full border px-3 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${isActive ? statusClasses[status] : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`;
     });
   }
 
@@ -1129,18 +604,18 @@ export async function renderGuruInputAbsenPage(container) {
         const studentId = member.siswa_id || member.id;
         const status = getStatusForStudent(studentId) || 'H';
         return `
-          <li class="grid gap-3 rounded-3xl border border-slate-100 bg-slate-50 p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center">
-            <label class="inline-flex items-center justify-center">
-              <input type="checkbox" class="member-select-checkbox h-4 w-4 rounded border-slate-300 text-[#007AFF]" data-student-id="${studentId}" data-student-name="${member.siswa_nama || member.nama || '-'}" />
-            </label>
-            <div>
-              <div class="student-name text-sm font-medium text-slate-900">${index + 1}. ${member.siswa_nama || member.nama || '-'}</div>
-              <div class="mt-1 text-xs text-slate-500">Nomor absen: ${member.nomor_absen || '-'}</div>
+          <li class="max-w-full rounded-[22px] border border-slate-200/80 bg-white px-3 py-2.5 shadow-[0_16px_40px_-34px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_24px_48px_-34px_rgba(14,165,233,0.35)] sm:px-3.5 sm:py-3">
+            <div class="flex min-w-0 items-start gap-2 sm:items-center sm:justify-between">
+              <div class="flex min-w-0 items-center gap-2">
+                <div class="min-w-0">
+                  <div class="student-name truncate text-sm font-semibold text-slate-900">${index + 1}. ${member.siswa_nama || member.nama || '-'}</div>
+                </div>
+              </div>
             </div>
-            <div class="flex flex-wrap gap-2">
+            <div class="mt-2.5 flex flex-wrap gap-1.5 sm:justify-end">
               ${statusLabels
                 .map((value) => `
-                  <button type="button" class="status-btn rounded-xl border px-3 py-2 text-xs font-semibold ${value === status ? statusClasses[value] : 'border-slate-200 bg-white text-slate-600'}" data-student-id="${studentId}" data-status="${value}" data-active="${value === status}">${value}</button>
+                  <button type="button" class="status-btn rounded-full border px-2.5 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5 ${value === status ? statusClasses[value] : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}" data-student-id="${studentId}" data-status="${value}" data-active="${value === status}">${value}</button>
                 `)
                 .join('')}
             </div>
@@ -1151,10 +626,6 @@ export async function renderGuruInputAbsenPage(container) {
 
     const recordsForDay = getAttendanceForDate(selectedDate);
     attendanceSummary.textContent = `${recordsForDay.length} catatan ditemukan untuk tanggal ${formatAttendanceDate(selectedDate)} (${getDayName(selectedDate)}).`;
-    if (memberSelectAll) {
-      memberSelectAll.checked = false;
-    }
-    updateSelectedStudentCount();
     renderTodaySummary();
   }
 
@@ -1250,21 +721,21 @@ export async function renderGuruInputAbsenPage(container) {
         const isWeekend = day === 0 || day === 6;
         const dayLabel = new Date(date).toLocaleDateString('id-ID', { weekday: 'short' });
         const dateLabel = new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
-        const weekendClass = isWeekend ? 'bg-rose-100 text-rose-700' : 'text-slate-600';
-        return `<th class="px-1 py-2 text-center font-semibold text-xs ${weekendClass}">${dateLabel}<br/><span class="text-[10px]">${dayLabel}</span></th>`;
+        const weekendClass = isWeekend ? 'bg-rose-50 text-rose-700' : 'bg-white text-slate-600';
+        return `<th class="px-2 py-2 text-center font-semibold text-xs ${weekendClass}">${dateLabel}<br/><span class="text-[10px]">${dayLabel}</span></th>`;
       })
       .join('');
     
     tableHead.innerHTML = `
-      <tr class="border-b border-slate-300 bg-slate-50">
-        <th class="sticky left-0 z-10 w-12 bg-slate-50 px-2 py-2 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">No</th>
-        <th class="sticky left-12 z-10 w-44 bg-slate-50 px-2 py-2 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
+      <tr class="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60">
+        <th class="sticky left-0 z-10 w-12 bg-slate-50 px-2 py-3 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">No</th>
+        <th class="sticky left-12 z-10 w-44 bg-slate-50 px-2 py-3 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
         ${dateHeaderCells}
-        <th class="px-2 py-2 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-blue-50">H</th>
-        <th class="px-2 py-2 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-orange-50">S</th>
-        <th class="px-2 py-2 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-cyan-50">I</th>
-        <th class="px-2 py-2 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-red-50">A</th>
-        <th class="px-2 py-2 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Total</th>
+        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-blue-50">H</th>
+        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-orange-50">S</th>
+        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-cyan-50">I</th>
+        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-red-50">A</th>
+        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Total</th>
       </tr>
     `;
 
@@ -1289,7 +760,7 @@ export async function renderGuruInputAbsenPage(container) {
             const day = new Date(date).getDay();
             const isWeekend = day === 0 || day === 6;
             if (isWeekend) {
-              return '<td class="px-1 py-2 text-center text-[11px] font-semibold text-rose-600 bg-rose-50">Libur</td>';
+              return '<td class="px-2 py-2 text-center text-[11px] font-semibold text-rose-600 bg-rose-50">Libur</td>';
             }
             const record = records.find((r) => r.siswa_id === memberId && r.tanggal === date);
             const status = record?.status || '-';
@@ -1298,20 +769,20 @@ export async function renderGuruInputAbsenPage(container) {
               status === 'I' ? 'text-cyan-700' :
               status === 'A' ? 'text-red-700' :
               'text-slate-400';
-            return `<td class="px-1 py-2 text-center text-xs font-semibold ${textClass}">${status}</td>`;
+            return `<td class="px-2 py-2 text-center text-xs font-semibold ${textClass}">${status}</td>`;
           })
           .join('');
 
         return `
-          <tr class="border-b border-slate-200 hover:bg-slate-50 text-xs">
-            <td class="sticky left-0 z-10 bg-white px-2 py-2 font-medium text-slate-700">${index + 1}</td>
-            <td class="sticky left-12 z-10 bg-white px-2 py-2 font-medium text-slate-900 w-44 truncate">${member.siswa_nama || member.nama || '-'}</td>
+          <tr class="border-b border-slate-100 text-xs transition hover:bg-sky-50/60">
+            <td class="sticky left-0 z-10 bg-white px-2 py-3 font-medium text-slate-700">${index + 1}</td>
+            <td class="sticky left-12 z-10 max-w-44 truncate bg-white px-2 py-3 font-medium text-slate-900 w-44">${member.siswa_nama || member.nama || '-'}</td>
             ${cells}
-            <td class="px-2 py-2 text-center font-bold text-blue-600 bg-blue-50">${countH}</td>
-            <td class="px-2 py-2 text-center font-bold text-orange-600 bg-orange-50">${countS}</td>
-            <td class="px-2 py-2 text-center font-bold text-cyan-600 bg-cyan-50">${countI}</td>
-            <td class="px-2 py-2 text-center font-bold text-red-600 bg-red-50">${countA}</td>
-            <td class="px-2 py-2 text-center font-bold text-slate-900">${totalRecords}</td>
+            <td class="px-2 py-3 text-center font-bold text-blue-600 bg-blue-50">${countH}</td>
+            <td class="px-2 py-3 text-center font-bold text-orange-600 bg-orange-50">${countS}</td>
+            <td class="px-2 py-3 text-center font-bold text-cyan-600 bg-cyan-50">${countI}</td>
+            <td class="px-2 py-3 text-center font-bold text-red-600 bg-red-50">${countA}</td>
+            <td class="px-2 py-3 text-center font-bold text-slate-900">${totalRecords}</td>
           </tr>
         `;
       })
@@ -1336,14 +807,10 @@ export async function renderGuruInputAbsenPage(container) {
     currentMembers = nextMembers;
     currentAttendance = nextAttendance;
     await refreshSpecialNotes();
-    await refreshActivityRecords();
     renderSpecialNoteStudentOptions();
     renderSpecialNoteHistoryStudentOptions();
     renderSpecialNoteHistory();
     renderMemberRows();
-    renderActivityStudentOptions();
-    renderActivityTodayList();
-    renderActivityRecap();
     renderRecap();
   }
 
@@ -1354,24 +821,17 @@ export async function renderGuruInputAbsenPage(container) {
       return;
     }
 
-    const useSelected = Boolean(specialNoteUseSelected?.checked);
-    const selectedRows = useSelected ? getSelectedStudentRows() : [];
     const jenis = specialNoteType.value;
     const jam = specialNoteTime.value || '-';
     const catatan = specialNoteText.value.trim();
 
-    const targets = useSelected
-      ? selectedRows.map((input) => ({
-          siswaId: input.getAttribute('data-student-id') || '',
-          siswaName: input.getAttribute('data-student-name') || '-',
-        }))
-      : [{
-          siswaId: specialNoteStudent.value,
-          siswaName: specialNoteStudent.options[specialNoteStudent.selectedIndex]?.text || '-',
-        }];
+    const target = {
+      siswaId: specialNoteStudent.value,
+      siswaName: specialNoteStudent.options[specialNoteStudent.selectedIndex]?.text || '-',
+    };
 
-    if (!targets.length || !targets[0].siswaId) {
-      setSpecialNoteMessage(useSelected ? 'Pilih minimal 1 siswa pada daftar absensi.' : 'Pilih siswa terlebih dahulu.', true);
+    if (!target.siswaId) {
+      setSpecialNoteMessage('Pilih siswa terlebih dahulu.', true);
       return;
     }
 
@@ -1382,30 +842,28 @@ export async function renderGuruInputAbsenPage(container) {
 
     try {
       const now = Date.now();
-      await Promise.all(targets.map((target, index) => {
-        const docId = `${assignment.id}_${target.siswaId}_${selectedDate}_${now + index}`;
-        return saveDocument('catatan_khusus', {
-          tahun_ajaran_id: context.tahun_ajaran_aktif,
-          semester_id: context.semester_aktif,
-          pengajaran_id: assignment.id,
-          kelas_id: assignment.kelas_id,
-          kelas_nama: assignment.kelas_nama,
-          mapel_id: assignment.mapel_id,
-          mapel_nama: assignment.mapel_nama,
-          guru_id: assignment.guru_id,
-          guru_nama: assignment.guru_nama,
-          siswa_id: target.siswaId,
-          siswa_nama: target.siswaName,
-          tanggal: selectedDate,
-          jam,
-          jenis,
-          catatan,
-          created_at: new Date().toISOString(),
-        }, docId);
-      }));
+      const docId = `${assignment.id}_${target.siswaId}_${selectedDate}_${now}`;
+      await saveDocument('catatan_khusus', {
+        tahun_ajaran_id: context.tahun_ajaran_aktif,
+        semester_id: context.semester_aktif,
+        pengajaran_id: assignment.id,
+        kelas_id: assignment.kelas_id,
+        kelas_nama: assignment.kelas_nama,
+        mapel_id: assignment.mapel_id,
+        mapel_nama: assignment.mapel_nama,
+        guru_id: assignment.guru_id,
+        guru_nama: assignment.guru_nama,
+        siswa_id: target.siswaId,
+        siswa_nama: target.siswaName,
+        tanggal: selectedDate,
+        jam,
+        jenis,
+        catatan,
+        created_at: new Date().toISOString(),
+      }, docId);
 
       specialNoteText.value = '';
-      setSpecialNoteMessage(`Catatan khusus berhasil disimpan untuk ${targets.length} siswa.`);
+      setSpecialNoteMessage('Catatan khusus berhasil disimpan.');
       await refreshSpecialNotes();
       renderSpecialNoteHistory();
     } catch (error) {
@@ -1551,17 +1009,14 @@ export async function renderGuruInputAbsenPage(container) {
     if (tabButton) {
       tabButtons.forEach((btn) => {
         const isActive = btn === tabButton;
-        btn.className = `tab-btn inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold ${isActive ? 'bg-[#007AFF] text-white shadow-sm' : 'bg-slate-100 text-slate-700'}`;
+        btn.className = `tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition sm:w-auto ${isActive ? attendanceTabActiveClass : attendanceTabIdleClass}`;
       });
       const target = tabButton.getAttribute('data-tab');
       tabInput.classList.toggle('hidden', target !== 'input');
-      tabKeaktifan.classList.toggle('hidden', target !== 'keaktifan');
       tabRekap.classList.toggle('hidden', target !== 'rekap');
       tabPencapaian.classList.toggle('hidden', target !== 'pencapaian');
-      if (target === 'keaktifan') {
-        renderActivityStudentOptions();
-        renderActivityTodayList();
-        renderActivityRecap();
+      if (target === 'input') {
+        setAbsensiSubtab(activeAbsensiSubtab);
       }
       if (target === 'rekap') {
         renderRecap();
@@ -1583,33 +1038,16 @@ export async function renderGuruInputAbsenPage(container) {
       renderTodaySummary();
       return;
     }
-
-    const selectCheckbox = event.target.closest('.member-select-checkbox');
-    if (selectCheckbox) {
-      const allCheckboxes = Array.from(memberListEl.querySelectorAll('.member-select-checkbox'));
-      if (memberSelectAll) {
-        memberSelectAll.checked = allCheckboxes.length > 0 && allCheckboxes.every((item) => item.checked);
-      }
-      updateSelectedStudentCount();
-    }
-
-    const activityIndicator = event.target.closest('.activity-form-indicator');
-    if (activityIndicator) {
-      updateActivityFormPreview();
-    }
   });
 
-  container.addEventListener('change', (event) => {
-    const scoreInput = event.target.closest('#activity-score-select');
-    if (scoreInput) {
-      updateActivityFormPreview();
-    }
-
-    const studentSelect = event.target.closest('#activity-student-select');
-    if (studentSelect) {
-      const record = getActivityRecord(studentSelect.value, selectedDate);
-      fillActivityForm(record);
-    }
+  absensiSubtabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextTab = button.getAttribute('data-absensi-subtab') || 'absensi';
+      setAbsensiSubtab(nextTab);
+      if (nextTab === 'keluar-kelas') {
+        renderSpecialNoteHistory();
+      }
+    });
   });
 
   checkAllBtn?.addEventListener('click', () => {
@@ -1619,7 +1057,7 @@ export async function renderGuruInputAbsenPage(container) {
         const status = btn.getAttribute('data-status');
         const isActive = status === 'H';
         btn.dataset.active = isActive ? 'true' : 'false';
-        btn.className = `status-btn rounded-xl border px-3 py-2 text-xs font-semibold ${isActive ? statusClasses.H : 'border-slate-200 bg-white text-slate-600'}`;
+        btn.className = `status-btn rounded-full border px-3 py-2 text-xs font-semibold transition hover:-translate-y-0.5 ${isActive ? statusClasses.H : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`;
       });
     });
     renderTodaySummary();
@@ -1627,31 +1065,6 @@ export async function renderGuruInputAbsenPage(container) {
 
   resetStatusBtn?.addEventListener('click', () => {
     renderMemberRows();
-  });
-
-  memberSelectAll?.addEventListener('change', (event) => {
-    const checked = Boolean(event.target.checked);
-    memberListEl.querySelectorAll('.member-select-checkbox').forEach((checkbox) => {
-      checkbox.checked = checked;
-    });
-    updateSelectedStudentCount();
-  });
-
-  markSelectedAbsentBtn?.addEventListener('click', () => {
-    const selectedRows = getSelectedStudentRows();
-    if (!selectedRows.length) {
-      alert('Pilih minimal satu siswa terlebih dahulu.');
-      return;
-    }
-
-    selectedRows.forEach((checkbox) => {
-      const row = checkbox.closest('li');
-      if (row) {
-        setRowStatus(row, 'A');
-      }
-    });
-
-    renderTodaySummary();
   });
 
   assignmentSelect?.addEventListener('change', async (event) => {
@@ -1665,9 +1078,6 @@ export async function renderGuruInputAbsenPage(container) {
       validateDate(selectedDate);
     }
     renderMemberRows();
-    renderActivityStudentOptions();
-    renderActivityTodayList();
-    renderActivityRecap();
   });
 
   rekapFilterType?.addEventListener('change', (event) => {
@@ -1696,31 +1106,18 @@ export async function renderGuruInputAbsenPage(container) {
     renderRecap();
     renderPencapaian();
   });
-
-  activityTopLimitInput?.addEventListener('change', () => {
-    renderActivityRecap();
-  });
-
-  resetActivityFormBtn?.addEventListener('click', () => {
-    resetActivityForm();
-  });
-
   saveAbsenBtn?.addEventListener('click', saveAttendance);
-  saveActivityBtn?.addEventListener('click', saveActivityRecords);
   saveSpecialNoteBtn?.addEventListener('click', saveSpecialNote);
   [specialNoteHistoryStudent, specialNoteHistoryType, specialNoteHistoryStart, specialNoteHistoryEnd].forEach((el) => {
     el?.addEventListener('change', renderSpecialNoteHistory);
   });
 
   await refreshSpecialNotes();
-  await refreshActivityRecords();
   renderSpecialNoteStudentOptions();
   renderSpecialNoteHistoryStudentOptions();
   renderSpecialNoteHistory();
   renderMemberRows();
-  renderActivityStudentOptions();
-  renderActivityTodayList();
-  renderActivityRecap();
   renderRecap();
   renderPencapaian();
+  setAbsensiSubtab('absensi');
 }

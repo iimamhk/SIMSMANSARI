@@ -1,4 +1,4 @@
-import { renderLayout } from '../../layouts/dashboard-layout.js';
+﻿import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import {
   getTeachingAssignmentsForUser,
@@ -147,6 +147,55 @@ function loadScriptOnce(src) {
     script.addEventListener('error', () => reject(new Error(`Gagal memuat script: ${src}`)), { once: true });
     document.head.appendChild(script);
   });
+}
+
+const activityIndicators = [
+  { key: 'bertanya', label: 'Bertanya' },
+  { key: 'menjawab', label: 'Menjawab' },
+  { key: 'diskusi', label: 'Diskusi' },
+  { key: 'presentasi', label: 'Presentasi' },
+  { key: 'tugas_kelas', label: 'Tugas Kelas' },
+];
+
+function scoreToGrade(score) {
+  const value = Number(score || 0);
+  if (value >= 3.5) return 'A';
+  if (value >= 2.5) return 'B';
+  return 'C';
+}
+
+function gradeBadgeClass(grade) {
+  if (grade === 'A') return 'bg-emerald-100 text-emerald-700';
+  if (grade === 'B') return 'bg-amber-100 text-amber-700';
+  return 'bg-rose-100 text-rose-700';
+}
+
+function getDefaultSchoolDate() {
+  const today = new Date();
+  const day = today.getDay();
+  if (day === 0) today.setDate(today.getDate() + 1);
+  if (day === 6) today.setDate(today.getDate() + 2);
+  return today.toISOString().slice(0, 10);
+}
+
+function getSchoolDayName(dateString) {
+  const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  return dayNames[new Date(dateString).getDay()] || '-';
+}
+
+function isSchoolWeekday(dateString) {
+  const day = new Date(dateString).getDay();
+  return day >= 1 && day <= 5;
+}
+
+function formatSchoolDate(dateString) {
+  return dateString
+    ? new Date(dateString).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : '-';
+}
+
+function getActivityPointCount(indicators = {}) {
+  return activityIndicators.filter((item) => indicators[item.key]).length;
 }
 
 async function ensureXlsxLoaded() {
@@ -1247,8 +1296,6 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
 
 async function renderTabUlanganHarian(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
-
-  await cleanupInvalidUlanganHarianEntries(context, assignment);
   
   // ALWAYS load fresh from Firestore
   const firestoreNilaiUH = await loadNilaiUHFromFirestore(context, assignment);
@@ -1384,6 +1431,50 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
   const session = getSession();
   let saveTimeout;
 
+  const persistNilaiUH = async (siswaId, uhKey, rawValue) => {
+    try {
+      const docId = `${assignment.id}_${siswaId}_ulangan_harian_${uhKey}`;
+
+      if (rawValue === '' || rawValue === null || rawValue === undefined) {
+        await deleteDocument('nilai_ujian', docId);
+        return;
+      }
+
+      await saveDocument('nilai_ujian', {
+        tahun_ajaran_id: context.tahun_ajaran_aktif,
+        semester_id: context.semester_aktif,
+        pengajaran_id: assignment.id,
+        guru_id: context.user_logged_in || session.user?.username,
+        kelas_id: assignment.kelas_id,
+        mapel_id: assignment.mapel_id,
+        siswa_id: siswaId,
+        jenis_nilai: 'ulangan_harian',
+        tipe: uhKey,
+        nilai: Number(rawValue),
+        updated_at: new Date().toISOString(),
+      }, docId);
+    } catch (e) {
+      console.error('Error saving nilai UH:', e);
+    }
+  };
+
+  const syncNilaiUHInput = (inputEl) => {
+    const siswaId = inputEl.getAttribute('data-siswa');
+    const uhKey = inputEl.getAttribute('data-uh');
+    const rawValue = inputEl.value === '' ? '' : Number(inputEl.value);
+
+    cached_.nilaiUH = cached_.nilaiUH || {};
+    cached_.nilaiUH[`${siswaId}_${uhKey}`] = rawValue;
+    saveToCache(cacheKey, cached_);
+
+    updateUlanganHarianRow(inputEl);
+
+    inputEl.classList.add('bg-green-100');
+    setTimeout(() => inputEl.classList.remove('bg-green-100'), 500);
+
+    return { siswaId, uhKey, rawValue };
+  };
+
   const updateUlanganHarianRow = (inputEl) => {
     const row = inputEl.closest('tr');
     if (!row) return;
@@ -1480,44 +1571,19 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
   });
 
   container.querySelectorAll('.nilai-uh')?.forEach((input) => {
-    input.addEventListener('change', () => {
+    input.addEventListener('input', () => {
       clearTimeout(saveTimeout);
-      
-      const siswa = input.getAttribute('data-siswa');
-      const uh = input.getAttribute('data-uh'); // e.g. uh1_murni or uh1_remidi
-      const val = Number(input.value) || 0;
+      const { siswaId, uhKey, rawValue } = syncNilaiUHInput(input);
 
-      cached_.nilaiUH = cached_.nilaiUH || {};
-      cached_.nilaiUH[`${siswa}_${uh}`] = val;
-      saveToCache(cacheKey, cached_);
-
-      // Update max/rata-rata locally without full tab rerender.
-      updateUlanganHarianRow(input);
-
-      input.classList.add('bg-green-100');
-      setTimeout(() => input.classList.remove('bg-green-100'), 500);
-
-      // Debounced real-time Firestore save
       saveTimeout = setTimeout(async () => {
-        try {
-          const docId = `${assignment.id}_${siswa}_ulangan_harian_${uh}`;
-          await saveDocument('nilai_ujian', {
-            tahun_ajaran_id: context.tahun_ajaran_aktif,
-            semester_id: context.semester_aktif,
-            pengajaran_id: assignment.id,
-            guru_id: context.user_logged_in || session.user?.username,
-            kelas_id: assignment.kelas_id,
-            mapel_id: assignment.mapel_id,
-            siswa_id: siswa,
-            jenis_nilai: 'ulangan_harian',
-            tipe: uh, // e.g. uh1_murni or uh1_remidi
-            nilai: val,
-            updated_at: new Date().toISOString(),
-          }, docId);
-        } catch (e) {
-          console.error('Error saving nilai UH:', e);
-        }
-      }, 1000);
+        await persistNilaiUH(siswaId, uhKey, rawValue);
+      }, 300);
+    });
+
+    input.addEventListener('change', async () => {
+      clearTimeout(saveTimeout);
+      const { siswaId, uhKey, rawValue } = syncNilaiUHInput(input);
+      await persistNilaiUH(siswaId, uhKey, rawValue);
     });
   });
 
@@ -1542,6 +1608,376 @@ async function renderTabPTSPAS(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
   const activeExamTab = container.dataset.examTab === 'pas' ? 'pas' : 'pts';
   
+
+  async function renderTabKeaktifanPenilaian(context, assignment, members, container) {
+    const selectedDate = container.dataset.activityDate || getDefaultSchoolDate();
+    let currentActivityRecords = [];
+
+    const refreshActivityRecords = async () => {
+      try {
+        const docs = await getDocumentsWhere('keaktifan_siswa', [
+          { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+          { field: 'semester_id', operator: '==', value: context.semester_aktif },
+          { field: 'pengajaran_id', operator: '==', value: assignment.id },
+        ]);
+        currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+      } catch (error) {
+        console.error('Gagal memuat data keaktifan:', error);
+        currentActivityRecords = [];
+      }
+    };
+
+    const sortedMembers = sortMembersByName(members);
+
+    const getActivityForDate = (date) => currentActivityRecords.filter((record) => record.tanggal === date);
+    const getActivityRecord = (studentId, date) => getActivityForDate(date).find((item) => String(item.siswa_id) === String(studentId));
+
+    await refreshActivityRecords();
+
+    container.innerHTML = `
+      <section class="space-y-5">
+        <div class="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-xl font-semibold text-slate-900">Penilaian Keaktifan Siswa</h2>
+                <p class="mt-2 text-sm text-slate-500">Catat keaktifan belajar harian per siswa tanpa keluar dari modul penilaian.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button id="save-activity-btn" type="button" class="rounded-2xl bg-[#10B981] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#059669]">Simpan Entri</button>
+                <button id="reset-activity-form-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Reset Form</button>
+              </div>
+            </div>
+
+            <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-[1.2fr_0.8fr_1fr_1fr]">
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Skor 1-4</p>
+                <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Predikat Otomatis</p>
+                <p class="mt-1">A (&gt;=3.5), B (&gt;=2.5), C (&lt;2.5).</p>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Poin Indikator</p>
+                <p class="mt-1">Setiap checklist bernilai +1, maksimal 5 poin.</p>
+              </div>
+              <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                <label for="activity-date" class="font-semibold text-emerald-700">Tanggal Penilaian</label>
+                <input id="activity-date" type="date" value="${selectedDate}" class="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+              </div>
+            </div>
+
+            <div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div class="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
+                <div>
+                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
+                  <select id="activity-student-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                    ${sortedMembers.length ? sortedMembers.map((member) => {
+                      const id = member.siswa_id || member.id;
+                      const name = member.siswa_nama || member.nama || '-';
+                      return `<option value="${id}">${name}</option>`;
+                    }).join('') : '<option value="">Belum ada siswa</option>'}
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Skor</label>
+                  <select id="activity-score-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <p>Poin indikator: <span id="activity-point-preview" class="font-semibold text-emerald-700">0/5</span></p>
+                  <p class="mt-1">Predikat: <span id="activity-grade-preview" class="font-semibold text-slate-900">B</span></p>
+                </div>
+              </div>
+
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                ${activityIndicators.map((item) => `
+                  <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
+                    <input type="checkbox" class="activity-form-indicator h-4 w-4 rounded border-slate-300 text-[#10B981]" data-indicator="${item.key}" />
+                    ${item.label}
+                  </label>
+                `).join('')}
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Catatan Singkat</label>
+                <input id="activity-note-input" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" placeholder="Contoh: aktif bertanya dan menolong diskusi kelompok" />
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Entri Keaktifan Hari Ini</p>
+              <div id="activity-today-list" class="mt-2 space-y-2"></div>
+            </div>
+          </div>
+
+          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+            <div class="mb-4">
+              <h2 class="text-xl font-semibold text-slate-900">Ringkasan Keaktifan</h2>
+              <p class="mt-2 text-sm text-slate-500">Peringkat dan siswa yang perlu dorongan pada relasi mengajar aktif.</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <label for="activity-top-limit" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Siswa</label>
+                <input id="activity-top-limit" type="number" min="3" max="50" value="10" class="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none" />
+              </div>
+              <div id="activity-top-list" class="mt-3 space-y-2"></div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Siswa Perlu Dorongan</p>
+                <span id="activity-needs-count" class="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">0</span>
+              </div>
+              <div id="activity-needs-list" class="mt-2 space-y-2"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+
+    const activityDateInput = container.querySelector('#activity-date');
+    const activityStudentSelect = container.querySelector('#activity-student-select');
+    const activityScoreSelect = container.querySelector('#activity-score-select');
+    const activityNoteInput = container.querySelector('#activity-note-input');
+    const activityPointPreview = container.querySelector('#activity-point-preview');
+    const activityGradePreview = container.querySelector('#activity-grade-preview');
+    const activityTodayList = container.querySelector('#activity-today-list');
+    const activityTopLimitInput = container.querySelector('#activity-top-limit');
+    const activityTopList = container.querySelector('#activity-top-list');
+    const activityNeedsCount = container.querySelector('#activity-needs-count');
+    const activityNeedsList = container.querySelector('#activity-needs-list');
+
+    const getActivityFormIndicators = () => {
+      const indicators = {};
+      container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+        const key = input.getAttribute('data-indicator');
+        if (key) indicators[key] = input.checked;
+      });
+      return indicators;
+    };
+
+    const updateActivityFormPreview = () => {
+      const indicators = getActivityFormIndicators();
+      const points = getActivityPointCount(indicators);
+      const score = Number(activityScoreSelect?.value || 3);
+      const grade = scoreToGrade(score);
+      activityPointPreview.textContent = `${points}/5`;
+      activityGradePreview.textContent = grade;
+      activityGradePreview.className = `font-semibold ${grade === 'A' ? 'text-emerald-700' : grade === 'B' ? 'text-amber-700' : 'text-rose-700'}`;
+    };
+
+    const fillActivityForm = (record) => {
+      const indicators = record?.indikator || {};
+      container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+        const key = input.getAttribute('data-indicator');
+        input.checked = Boolean(indicators[key]);
+      });
+      if (activityScoreSelect) activityScoreSelect.value = String(Number(record?.skor || 3));
+      if (activityNoteInput) activityNoteInput.value = record?.catatan || '';
+      updateActivityFormPreview();
+    };
+
+    const resetActivityForm = () => {
+      container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+        input.checked = false;
+      });
+      if (activityScoreSelect) activityScoreSelect.value = '3';
+      if (activityNoteInput) activityNoteInput.value = '';
+      updateActivityFormPreview();
+    };
+
+    const syncActivityStudentSelection = () => {
+      if (!sortedMembers.length) {
+        resetActivityForm();
+        return;
+      }
+      const selectedStudentId = activityStudentSelect?.value || String(sortedMembers[0].siswa_id || sortedMembers[0].id);
+      if (activityStudentSelect) activityStudentSelect.value = selectedStudentId;
+      fillActivityForm(getActivityRecord(selectedStudentId, container.dataset.activityDate || selectedDate));
+    };
+
+    const renderActivityTodayList = () => {
+      const date = container.dataset.activityDate || selectedDate;
+      const todayRecords = getActivityForDate(date)
+        .sort((a, b) => String(a.siswa_nama || '').localeCompare(String(b.siswa_nama || ''), 'id'));
+
+      activityTodayList.innerHTML = todayRecords.length
+        ? todayRecords.map((item, index) => {
+            const points = Number.isFinite(Number(item.poin_indikator)) ? Number(item.poin_indikator) : getActivityPointCount(item.indikator || {});
+            const grade = item.predikat || scoreToGrade(item.skor);
+            return `
+              <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.siswa_nama || '-'}</p>
+                  <span class="rounded-full px-2 py-1 text-xs font-semibold ${gradeBadgeClass(grade)}">${grade}</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-500">${formatSchoolDate(item.tanggal)} • Poin ${points}/5 • Skor ${Number(item.skor || 0).toFixed(1)}${item.catatan ? ` • ${item.catatan}` : ''}</p>
+              </div>
+            `;
+          }).join('')
+        : '<p class="text-sm text-slate-500">Belum ada entri keaktifan untuk tanggal ini.</p>';
+    };
+
+    const renderActivityRecap = () => {
+      if (!sortedMembers.length) {
+        activityTopList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
+        activityNeedsCount.textContent = '0';
+        activityNeedsList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
+        return;
+      }
+
+      const memberMap = new Map(sortedMembers.map((m) => [String(m.siswa_id || m.id), m.siswa_nama || m.nama || '-']));
+      const groupedByStudent = {};
+      currentActivityRecords.forEach((item) => {
+        const key = String(item.siswa_id || '');
+        if (!groupedByStudent[key]) groupedByStudent[key] = [];
+        groupedByStudent[key].push(item);
+      });
+
+      const totals = Object.entries(groupedByStudent)
+        .map(([studentId, items]) => {
+          const totalPoints = items.reduce((sum, it) => sum + (Number.isFinite(Number(it.poin_indikator)) ? Number(it.poin_indikator) : getActivityPointCount(it.indikator || {})), 0);
+          const avgScore = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
+          return {
+            studentId,
+            studentName: memberMap.get(studentId) || '-',
+            totalPoints,
+            avgScore,
+            totalMeetings: items.length,
+          };
+        })
+        .sort((a, b) => b.totalPoints - a.totalPoints || b.avgScore - a.avgScore || a.studentName.localeCompare(b.studentName));
+
+      const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
+      activityTopLimitInput.value = String(displayLimit);
+      activityTopList.innerHTML = totals.length
+        ? totals.slice(0, displayLimit).map((item, index) => `
+            <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
+                <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+              </div>
+              <p class="mt-1 text-xs text-slate-500">${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
+            </div>
+          `).join('')
+        : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
+
+      const needsFollowUp = Object.entries(groupedByStudent)
+        .map(([studentId, items]) => {
+          const avg = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
+          const indicatorAvg = items.length ? items.reduce((sum, it) => sum + getActivityPointCount(it.indikator || {}), 0) / items.length : 0;
+          return { studentId, studentName: memberMap.get(studentId) || '-', avg, indicatorAvg };
+        })
+        .filter((item) => item.avg < 2 || item.indicatorAvg < 2)
+        .sort((a, b) => a.avg - b.avg || a.studentName.localeCompare(b.studentName));
+
+      activityNeedsCount.textContent = String(needsFollowUp.length);
+      activityNeedsList.innerHTML = needsFollowUp.length
+        ? needsFollowUp.slice(0, 10).map((item) => `
+            <div class="rounded-xl border border-rose-200 bg-white px-3 py-2">
+              <p class="text-sm font-semibold text-slate-800">${item.studentName}</p>
+              <p class="mt-1 text-xs text-slate-500">Rata skor ${item.avg.toFixed(2)} • Rata indikator ${item.indicatorAvg.toFixed(2)}/5</p>
+            </div>
+          `).join('')
+        : '<p class="text-sm text-slate-500">Belum ada siswa yang perlu tindak lanjut.</p>';
+    };
+
+    container.querySelector('#save-activity-btn')?.addEventListener('click', async () => {
+      const activeDate = activityDateInput?.value || selectedDate;
+      if (!activeDate || !isSchoolWeekday(activeDate)) {
+        alert('Pilih tanggal hari kerja Senin-Jumat.');
+        return;
+      }
+
+      const studentId = activityStudentSelect?.value || '';
+      if (!studentId) {
+        alert('Pilih siswa terlebih dahulu.');
+        return;
+      }
+
+      const studentName = activityStudentSelect.options[activityStudentSelect.selectedIndex]?.text || '-';
+      const indikator = getActivityFormIndicators();
+      const points = getActivityPointCount(indikator);
+      const score = Number(activityScoreSelect?.value || 3);
+      const grade = scoreToGrade(score);
+      const note = String(activityNoteInput?.value || '').trim();
+      const docId = `${assignment.id}_${studentId}_${activeDate}`;
+
+      await saveDocument('keaktifan_siswa', {
+        id: docId,
+        tahun_ajaran_id: context.tahun_ajaran_aktif,
+        semester_id: context.semester_aktif,
+        pengajaran_id: assignment.id,
+        guru_id: assignment.guru_id,
+        guru_nama: assignment.guru_nama,
+        kelas_id: assignment.kelas_id,
+        kelas_nama: assignment.kelas_nama,
+        mapel_id: assignment.mapel_id,
+        mapel_nama: assignment.mapel_nama,
+        siswa_id: studentId,
+        siswa_nama: studentName,
+        tanggal: activeDate,
+        hari: getSchoolDayName(activeDate),
+        indikator,
+        poin_indikator: points,
+        skor: score,
+        predikat: grade,
+        catatan: note,
+        updated_at: new Date().toISOString(),
+      }, docId);
+
+      container.dataset.activityDate = activeDate;
+      await refreshActivityRecords();
+      renderActivityTodayList();
+      renderActivityRecap();
+      showNotification(`Keaktifan ${studentName} tanggal ${formatSchoolDate(activeDate)} berhasil disimpan!`, 'success');
+    });
+
+    container.querySelector('#reset-activity-form-btn')?.addEventListener('click', () => {
+      resetActivityForm();
+    });
+
+    container.addEventListener('change', async (event) => {
+      if (event.target.closest('#activity-date')) {
+        const nextDate = event.target.value || getDefaultSchoolDate();
+        container.dataset.activityDate = nextDate;
+        syncActivityStudentSelection();
+        renderActivityTodayList();
+        return;
+      }
+
+      if (event.target.closest('#activity-student-select')) {
+        syncActivityStudentSelection();
+        return;
+      }
+
+      if (event.target.closest('#activity-score-select')) {
+        updateActivityFormPreview();
+        return;
+      }
+
+      if (event.target.closest('#activity-top-limit')) {
+        renderActivityRecap();
+        return;
+      }
+
+      if (event.target.closest('.activity-form-indicator')) {
+        updateActivityFormPreview();
+      }
+    });
+
+    syncActivityStudentSelection();
+    renderActivityTodayList();
+    renderActivityRecap();
+    updateActivityFormPreview();
+  }
   // ALWAYS load fresh from Firestore
   const firestoreNilaiPTS = await loadNilaiPTSFromFirestore(context, assignment);
   const firestoreNilaiPAS = await loadNilaiPASFromFirestore(context, assignment);
@@ -1585,8 +2021,8 @@ async function renderTabPTSPAS(context, assignment, members, container) {
       maxHeaderClass: 'text-purple-700',
       tableLabel: 'Nilai PTS',
       saveLabel: 'Simpan PTS',
-      buttonClass: 'border-b-[#7C3AED] text-[#7C3AED] bg-white shadow-sm',
-      idleButtonClass: 'border-transparent text-slate-600 hover:text-slate-800',
+      buttonClass: 'border-b-[#7C3AED] text-white bg-gradient-to-r from-purple-500 to-violet-500 shadow-sm',
+      idleButtonClass: 'border-transparent bg-white text-slate-600 hover:text-slate-800 hover:bg-slate-100',
       rows: renderExamRows(nilaiPTS, 'pts'),
     },
     pas: {
@@ -1597,8 +2033,8 @@ async function renderTabPTSPAS(context, assignment, members, container) {
       maxHeaderClass: 'text-orange-700',
       tableLabel: 'Nilai PAS',
       saveLabel: 'Simpan PAS',
-      buttonClass: 'border-b-[#EA580C] text-[#EA580C] bg-white shadow-sm',
-      idleButtonClass: 'border-transparent text-slate-600 hover:text-slate-800',
+      buttonClass: 'border-b-[#EA580C] text-white bg-gradient-to-r from-orange-400 to-amber-500 shadow-sm',
+      idleButtonClass: 'border-transparent bg-white text-slate-600 hover:text-slate-800 hover:bg-slate-100',
       rows: renderExamRows(nilaiPAS, 'pas'),
     },
   };
@@ -1762,9 +2198,748 @@ async function renderTabPTSPAS(context, assignment, members, container) {
 // RENDER TAB: NILAI AKHIR
 // ============================================================================
 
+async function renderTabKeaktifanWorkspace(context, assignment, members, container) {
+  const selectedDate = container.dataset.activityDate || getDefaultSchoolDate();
+  let currentActivityRecords = [];
+
+  const refreshActivityRecords = async () => {
+    try {
+      const docs = await getDocumentsWhere('keaktifan_siswa', [
+        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+        { field: 'semester_id', operator: '==', value: context.semester_aktif },
+        { field: 'pengajaran_id', operator: '==', value: assignment.id },
+      ]);
+      currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+    } catch (error) {
+      console.error('Gagal memuat data keaktifan:', error);
+      currentActivityRecords = [];
+    }
+  };
+
+  const sortedMembers = sortMembersByName(members);
+  const getActivityForDate = (date) => currentActivityRecords.filter((record) => record.tanggal === date);
+  const getActivityRecord = (studentId, date) => getActivityForDate(date).find((item) => String(item.siswa_id) === String(studentId));
+
+  await refreshActivityRecords();
+
+  container.innerHTML = `
+    <section class="space-y-5">
+      <div class="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 class="text-xl font-semibold text-slate-900">Penilaian Keaktifan Siswa</h2>
+              <p class="mt-2 text-sm text-slate-500">Catat keaktifan belajar harian per siswa tanpa keluar dari modul penilaian.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="save-activity-btn" type="button" class="rounded-2xl bg-[#10B981] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#059669]">Simpan Entri</button>
+              <button id="reset-activity-form-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Reset Form</button>
+            </div>
+          </div>
+
+          <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-[1.2fr_0.8fr_1fr_1fr]">
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <p class="font-semibold text-slate-700">Skor 1-4</p>
+              <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <p class="font-semibold text-slate-700">Predikat Otomatis</p>
+              <p class="mt-1">A (&gt;=3.5), B (&gt;=2.5), C (&lt;2.5).</p>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-3">
+              <p class="font-semibold text-slate-700">Poin Indikator</p>
+              <p class="mt-1">Setiap checklist bernilai +1, maksimal 5 poin.</p>
+            </div>
+            <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+              <label for="activity-date" class="font-semibold text-emerald-700">Tanggal Penilaian</label>
+              <input id="activity-date" type="date" value="${selectedDate}" class="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+            </div>
+          </div>
+
+          <div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
+                <select id="activity-student-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                  ${sortedMembers.length ? sortedMembers.map((member) => {
+                    const id = member.siswa_id || member.id;
+                    const name = member.siswa_nama || member.nama || '-';
+                    return `<option value="${id}">${name}</option>`;
+                  }).join('') : '<option value="">Belum ada siswa</option>'}
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Skor</label>
+                <select id="activity-score-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                </select>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <p>Poin indikator: <span id="activity-point-preview" class="font-semibold text-emerald-700">0/5</span></p>
+                <p class="mt-1">Predikat: <span id="activity-grade-preview" class="font-semibold text-slate-900">B</span></p>
+              </div>
+            </div>
+
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              ${activityIndicators.map((item) => `
+                <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
+                  <input type="checkbox" class="activity-form-indicator h-4 w-4 rounded border-slate-300 text-[#10B981]" data-indicator="${item.key}" />
+                  ${item.label}
+                </label>
+              `).join('')}
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Catatan Singkat</label>
+              <input id="activity-note-input" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" placeholder="Contoh: aktif bertanya dan menolong diskusi kelompok" />
+            </div>
+          </div>
+
+          <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Entri Keaktifan Hari Ini</p>
+            <div id="activity-today-list" class="mt-2 space-y-2"></div>
+          </div>
+        </div>
+
+        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+          <div class="mb-4">
+            <h2 class="text-xl font-semibold text-slate-900">Ringkasan Keaktifan</h2>
+            <p class="mt-2 text-sm text-slate-500">Peringkat dan siswa yang perlu dorongan pada relasi mengajar aktif.</p>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div class="flex items-center justify-between gap-3">
+              <label for="activity-top-limit" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Siswa</label>
+              <input id="activity-top-limit" type="number" min="3" max="50" value="10" class="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none" />
+            </div>
+            <div id="activity-top-list" class="mt-3 space-y-2"></div>
+          </div>
+
+          <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Siswa Perlu Dorongan</p>
+              <span id="activity-needs-count" class="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">0</span>
+            </div>
+            <div id="activity-needs-list" class="mt-2 space-y-2"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+
+  const activityDateInput = container.querySelector('#activity-date');
+  const activityStudentSelect = container.querySelector('#activity-student-select');
+  const activityScoreSelect = container.querySelector('#activity-score-select');
+  const activityNoteInput = container.querySelector('#activity-note-input');
+  const activityPointPreview = container.querySelector('#activity-point-preview');
+  const activityGradePreview = container.querySelector('#activity-grade-preview');
+  const activityTodayList = container.querySelector('#activity-today-list');
+  const activityTopLimitInput = container.querySelector('#activity-top-limit');
+  const activityTopList = container.querySelector('#activity-top-list');
+  const activityNeedsCount = container.querySelector('#activity-needs-count');
+  const activityNeedsList = container.querySelector('#activity-needs-list');
+
+  const getActivityFormIndicators = () => {
+    const indicators = {};
+    container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+      const key = input.getAttribute('data-indicator');
+      if (key) indicators[key] = input.checked;
+    });
+    return indicators;
+  };
+
+  const updateActivityFormPreview = () => {
+    const indicators = getActivityFormIndicators();
+    const points = getActivityPointCount(indicators);
+    const score = Number(activityScoreSelect?.value || 3);
+    const grade = scoreToGrade(score);
+    activityPointPreview.textContent = `${points}/5`;
+    activityGradePreview.textContent = grade;
+    activityGradePreview.className = `font-semibold ${grade === 'A' ? 'text-emerald-700' : grade === 'B' ? 'text-amber-700' : 'text-rose-700'}`;
+  };
+
+  const fillActivityForm = (record) => {
+    const indicators = record?.indikator || {};
+    container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+      const key = input.getAttribute('data-indicator');
+      input.checked = Boolean(indicators[key]);
+    });
+    if (activityScoreSelect) activityScoreSelect.value = String(Number(record?.skor || 3));
+    if (activityNoteInput) activityNoteInput.value = record?.catatan || '';
+    updateActivityFormPreview();
+  };
+
+  const resetActivityForm = () => {
+    container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+      input.checked = false;
+    });
+    if (activityScoreSelect) activityScoreSelect.value = '3';
+    if (activityNoteInput) activityNoteInput.value = '';
+    updateActivityFormPreview();
+  };
+
+  const syncActivityStudentSelection = () => {
+    if (!sortedMembers.length) {
+      resetActivityForm();
+      return;
+    }
+    const selectedStudentId = activityStudentSelect?.value || String(sortedMembers[0].siswa_id || sortedMembers[0].id);
+    if (activityStudentSelect) activityStudentSelect.value = selectedStudentId;
+    fillActivityForm(getActivityRecord(selectedStudentId, container.dataset.activityDate || selectedDate));
+  };
+
+  const renderActivityTodayList = () => {
+    const date = container.dataset.activityDate || selectedDate;
+    const todayRecords = getActivityForDate(date)
+      .sort((a, b) => String(a.siswa_nama || '').localeCompare(String(b.siswa_nama || ''), 'id'));
+
+    activityTodayList.innerHTML = todayRecords.length
+      ? todayRecords.map((item, index) => {
+          const points = Number.isFinite(Number(item.poin_indikator)) ? Number(item.poin_indikator) : getActivityPointCount(item.indikator || {});
+          const grade = item.predikat || scoreToGrade(item.skor);
+          return `
+            <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.siswa_nama || '-'}</p>
+                <span class="rounded-full px-2 py-1 text-xs font-semibold ${gradeBadgeClass(grade)}">${grade}</span>
+              </div>
+              <p class="mt-1 text-xs text-slate-500">${formatSchoolDate(item.tanggal)} • Poin ${points}/5 • Skor ${Number(item.skor || 0).toFixed(1)}${item.catatan ? ` • ${item.catatan}` : ''}</p>
+            </div>
+          `;
+        }).join('')
+      : '<p class="text-sm text-slate-500">Belum ada entri keaktifan untuk tanggal ini.</p>';
+  };
+
+  const renderActivityRecap = () => {
+    if (!sortedMembers.length) {
+      activityTopList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
+      activityNeedsCount.textContent = '0';
+      activityNeedsList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
+      return;
+    }
+
+    const memberMap = new Map(sortedMembers.map((m) => [String(m.siswa_id || m.id), m.siswa_nama || m.nama || '-']));
+    const groupedByStudent = {};
+    currentActivityRecords.forEach((item) => {
+      const key = String(item.siswa_id || '');
+      if (!groupedByStudent[key]) groupedByStudent[key] = [];
+      groupedByStudent[key].push(item);
+    });
+
+    const totals = Object.entries(groupedByStudent)
+      .map(([studentId, items]) => {
+        const totalPoints = items.reduce((sum, it) => sum + (Number.isFinite(Number(it.poin_indikator)) ? Number(it.poin_indikator) : getActivityPointCount(it.indikator || {})), 0);
+        const avgScore = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
+        return {
+          studentId,
+          studentName: memberMap.get(studentId) || '-',
+          totalPoints,
+          avgScore,
+          totalMeetings: items.length,
+        };
+      })
+      .sort((a, b) => b.totalPoints - a.totalPoints || b.avgScore - a.avgScore || a.studentName.localeCompare(b.studentName));
+
+    const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
+    activityTopLimitInput.value = String(displayLimit);
+    activityTopList.innerHTML = totals.length
+      ? totals.slice(0, displayLimit).map((item, index) => `
+          <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
+              <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
+          </div>
+        `).join('')
+      : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
+
+    const needsFollowUp = Object.entries(groupedByStudent)
+      .map(([studentId, items]) => {
+        const avg = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
+        const indicatorAvg = items.length ? items.reduce((sum, it) => sum + getActivityPointCount(it.indikator || {}), 0) / items.length : 0;
+        return { studentId, studentName: memberMap.get(studentId) || '-', avg, indicatorAvg };
+      })
+      .filter((item) => item.avg < 2 || item.indicatorAvg < 2)
+      .sort((a, b) => a.avg - b.avg || a.studentName.localeCompare(b.studentName));
+
+    activityNeedsCount.textContent = String(needsFollowUp.length);
+    activityNeedsList.innerHTML = needsFollowUp.length
+      ? needsFollowUp.slice(0, 10).map((item) => `
+          <div class="rounded-xl border border-rose-200 bg-white px-3 py-2">
+            <p class="text-sm font-semibold text-slate-800">${item.studentName}</p>
+            <p class="mt-1 text-xs text-slate-500">Rata skor ${item.avg.toFixed(2)} • Rata indikator ${item.indicatorAvg.toFixed(2)}/5</p>
+          </div>
+        `).join('')
+      : '<p class="text-sm text-slate-500">Belum ada siswa yang perlu tindak lanjut.</p>';
+  };
+
+  container.querySelector('#save-activity-btn')?.addEventListener('click', async () => {
+    const activeDate = activityDateInput?.value || selectedDate;
+    if (!activeDate || !isSchoolWeekday(activeDate)) {
+      alert('Pilih tanggal hari kerja Senin-Jumat.');
+      return;
+    }
+
+    const studentId = activityStudentSelect?.value || '';
+    if (!studentId) {
+      alert('Pilih siswa terlebih dahulu.');
+      return;
+    }
+
+    const studentName = activityStudentSelect.options[activityStudentSelect.selectedIndex]?.text || '-';
+    const indikator = getActivityFormIndicators();
+    const points = getActivityPointCount(indikator);
+    const score = Number(activityScoreSelect?.value || 3);
+    const grade = scoreToGrade(score);
+    const note = String(activityNoteInput?.value || '').trim();
+    const docId = `${assignment.id}_${studentId}_${activeDate}`;
+
+    await saveDocument('keaktifan_siswa', {
+      id: docId,
+      tahun_ajaran_id: context.tahun_ajaran_aktif,
+      semester_id: context.semester_aktif,
+      pengajaran_id: assignment.id,
+      guru_id: assignment.guru_id,
+      guru_nama: assignment.guru_nama,
+      kelas_id: assignment.kelas_id,
+      kelas_nama: assignment.kelas_nama,
+      mapel_id: assignment.mapel_id,
+      mapel_nama: assignment.mapel_nama,
+      siswa_id: studentId,
+      siswa_nama: studentName,
+      tanggal: activeDate,
+      hari: getSchoolDayName(activeDate),
+      indikator,
+      poin_indikator: points,
+      skor: score,
+      predikat: grade,
+      catatan: note,
+      updated_at: new Date().toISOString(),
+    }, docId);
+
+    container.dataset.activityDate = activeDate;
+    await refreshActivityRecords();
+    renderActivityTodayList();
+    renderActivityRecap();
+    showNotification(`Keaktifan ${studentName} tanggal ${formatSchoolDate(activeDate)} berhasil disimpan!`, 'success');
+  });
+
+  container.querySelector('#reset-activity-form-btn')?.addEventListener('click', () => {
+    resetActivityForm();
+  });
+
+  container.addEventListener('change', async (event) => {
+    if (event.target.closest('#activity-date')) {
+      const nextDate = event.target.value || getDefaultSchoolDate();
+      container.dataset.activityDate = nextDate;
+      syncActivityStudentSelection();
+      renderActivityTodayList();
+      return;
+    }
+
+    if (event.target.closest('#activity-student-select')) {
+      syncActivityStudentSelection();
+      return;
+    }
+
+    if (event.target.closest('#activity-score-select')) {
+      updateActivityFormPreview();
+      return;
+    }
+
+    if (event.target.closest('#activity-top-limit')) {
+      renderActivityRecap();
+      return;
+    }
+
+    if (event.target.closest('.activity-form-indicator')) {
+      updateActivityFormPreview();
+    }
+  });
+
+  syncActivityStudentSelection();
+  renderActivityTodayList();
+  renderActivityRecap();
+  updateActivityFormPreview();
+}
+
 async function renderTabNilaiAkhir(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
   
+
+  async function renderTabKeaktifan(context, assignment, members, container) {
+    const selectedDate = container.dataset.activityDate || getDefaultSchoolDate();
+    let currentActivityRecords = [];
+
+    const refreshActivityRecords = async () => {
+      try {
+        const docs = await getDocumentsWhere('keaktifan_siswa', [
+          { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+          { field: 'semester_id', operator: '==', value: context.semester_aktif },
+          { field: 'pengajaran_id', operator: '==', value: assignment.id },
+        ]);
+        currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+      } catch (error) {
+        console.error('Gagal memuat data keaktifan:', error);
+        currentActivityRecords = [];
+      }
+    };
+
+    const sortedMembers = sortMembersByName(members);
+
+    const getActivityForDate = (date) => currentActivityRecords.filter((record) => record.tanggal === date);
+    const getActivityRecord = (studentId, date) => getActivityForDate(date).find((item) => String(item.siswa_id) === String(studentId));
+
+    await refreshActivityRecords();
+
+    container.innerHTML = `
+      <section class="space-y-5">
+        <div class="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-xl font-semibold text-slate-900">Penilaian Keaktifan Siswa</h2>
+                <p class="mt-2 text-sm text-slate-500">Catat keaktifan belajar harian per siswa tanpa keluar dari modul penilaian.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button id="save-activity-btn" type="button" class="rounded-2xl bg-[#10B981] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#059669]">Simpan Entri</button>
+                <button id="reset-activity-form-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Reset Form</button>
+              </div>
+            </div>
+
+            <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-[1.2fr_0.8fr_1fr_1fr]">
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Skor 1-4</p>
+                <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Predikat Otomatis</p>
+                <p class="mt-1">A (&gt;=3.5), B (&gt;=2.5), C (&lt;2.5).</p>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Poin Indikator</p>
+                <p class="mt-1">Setiap checklist bernilai +1, maksimal 5 poin.</p>
+              </div>
+              <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                <label for="activity-date" class="font-semibold text-emerald-700">Tanggal Penilaian</label>
+                <input id="activity-date" type="date" value="${selectedDate}" class="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+              </div>
+            </div>
+
+            <div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div class="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
+                <div>
+                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
+                  <select id="activity-student-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                    ${sortedMembers.length ? sortedMembers.map((member) => {
+                      const id = member.siswa_id || member.id;
+                      const name = member.siswa_nama || member.nama || '-';
+                      return `<option value="${id}">${name}</option>`;
+                    }).join('') : '<option value="">Belum ada siswa</option>'}
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Skor</label>
+                  <select id="activity-score-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                  </select>
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  <p>Poin indikator: <span id="activity-point-preview" class="font-semibold text-emerald-700">0/5</span></p>
+                  <p class="mt-1">Predikat: <span id="activity-grade-preview" class="font-semibold text-slate-900">B</span></p>
+                </div>
+              </div>
+
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                ${activityIndicators.map((item) => `
+                  <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700">
+                    <input type="checkbox" class="activity-form-indicator h-4 w-4 rounded border-slate-300 text-[#10B981]" data-indicator="${item.key}" />
+                    ${item.label}
+                  </label>
+                `).join('')}
+              </div>
+
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Catatan Singkat</label>
+                <input id="activity-note-input" type="text" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none" placeholder="Contoh: aktif bertanya dan menolong diskusi kelompok" />
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Entri Keaktifan Hari Ini</p>
+              <div id="activity-today-list" class="mt-2 space-y-2"></div>
+            </div>
+          </div>
+
+          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+            <div class="mb-4">
+              <h2 class="text-xl font-semibold text-slate-900">Ringkasan Keaktifan</h2>
+              <p class="mt-2 text-sm text-slate-500">Peringkat dan siswa yang perlu dorongan pada relasi mengajar aktif.</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <label for="activity-top-limit" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Siswa</label>
+                <input id="activity-top-limit" type="number" min="3" max="50" value="10" class="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none" />
+              </div>
+              <div id="activity-top-list" class="mt-3 space-y-2"></div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Siswa Perlu Dorongan</p>
+                <span id="activity-needs-count" class="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">0</span>
+              </div>
+              <div id="activity-needs-list" class="mt-2 space-y-2"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+
+    const activityDateInput = container.querySelector('#activity-date');
+    const activityStudentSelect = container.querySelector('#activity-student-select');
+    const activityScoreSelect = container.querySelector('#activity-score-select');
+    const activityNoteInput = container.querySelector('#activity-note-input');
+    const activityPointPreview = container.querySelector('#activity-point-preview');
+    const activityGradePreview = container.querySelector('#activity-grade-preview');
+    const activityTodayList = container.querySelector('#activity-today-list');
+    const activityTopLimitInput = container.querySelector('#activity-top-limit');
+    const activityTopList = container.querySelector('#activity-top-list');
+    const activityNeedsCount = container.querySelector('#activity-needs-count');
+    const activityNeedsList = container.querySelector('#activity-needs-list');
+
+    const getActivityFormIndicators = () => {
+      const indicators = {};
+      container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+        const key = input.getAttribute('data-indicator');
+        if (key) indicators[key] = input.checked;
+      });
+      return indicators;
+    };
+
+    const updateActivityFormPreview = () => {
+      const indicators = getActivityFormIndicators();
+      const points = getActivityPointCount(indicators);
+      const score = Number(activityScoreSelect?.value || 3);
+      const grade = scoreToGrade(score);
+      activityPointPreview.textContent = `${points}/5`;
+      activityGradePreview.textContent = grade;
+      activityGradePreview.className = `font-semibold ${grade === 'A' ? 'text-emerald-700' : grade === 'B' ? 'text-amber-700' : 'text-rose-700'}`;
+    };
+
+    const fillActivityForm = (record) => {
+      const indicators = record?.indikator || {};
+      container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+        const key = input.getAttribute('data-indicator');
+        input.checked = Boolean(indicators[key]);
+      });
+      if (activityScoreSelect) activityScoreSelect.value = String(Number(record?.skor || 3));
+      if (activityNoteInput) activityNoteInput.value = record?.catatan || '';
+      updateActivityFormPreview();
+    };
+
+    const resetActivityForm = () => {
+      container.querySelectorAll('.activity-form-indicator').forEach((input) => {
+        input.checked = false;
+      });
+      if (activityScoreSelect) activityScoreSelect.value = '3';
+      if (activityNoteInput) activityNoteInput.value = '';
+      updateActivityFormPreview();
+    };
+
+    const syncActivityStudentSelection = () => {
+      if (!sortedMembers.length) {
+        resetActivityForm();
+        return;
+      }
+      const selectedStudentId = activityStudentSelect?.value || String(sortedMembers[0].siswa_id || sortedMembers[0].id);
+      if (activityStudentSelect) activityStudentSelect.value = selectedStudentId;
+      fillActivityForm(getActivityRecord(selectedStudentId, container.dataset.activityDate || selectedDate));
+    };
+
+    const renderActivityTodayList = () => {
+      const date = container.dataset.activityDate || selectedDate;
+      const todayRecords = getActivityForDate(date)
+        .sort((a, b) => String(a.siswa_nama || '').localeCompare(String(b.siswa_nama || ''), 'id'));
+
+      activityTodayList.innerHTML = todayRecords.length
+        ? todayRecords.map((item, index) => {
+            const points = Number.isFinite(Number(item.poin_indikator)) ? Number(item.poin_indikator) : getActivityPointCount(item.indikator || {});
+            const grade = item.predikat || scoreToGrade(item.skor);
+            return `
+              <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.siswa_nama || '-'}</p>
+                  <span class="rounded-full px-2 py-1 text-xs font-semibold ${gradeBadgeClass(grade)}">${grade}</span>
+                </div>
+                <p class="mt-1 text-xs text-slate-500">${formatSchoolDate(item.tanggal)} • Poin ${points}/5 • Skor ${Number(item.skor || 0).toFixed(1)}${item.catatan ? ` • ${item.catatan}` : ''}</p>
+              </div>
+            `;
+          }).join('')
+        : '<p class="text-sm text-slate-500">Belum ada entri keaktifan untuk tanggal ini.</p>';
+    };
+
+    const renderActivityRecap = () => {
+      if (!sortedMembers.length) {
+        activityTopList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
+        activityNeedsCount.textContent = '0';
+        activityNeedsList.innerHTML = '<p class="text-sm text-slate-500">Belum ada data siswa.</p>';
+        return;
+      }
+
+      const memberMap = new Map(sortedMembers.map((m) => [String(m.siswa_id || m.id), m.siswa_nama || m.nama || '-']));
+      const groupedByStudent = {};
+      currentActivityRecords.forEach((item) => {
+        const key = String(item.siswa_id || '');
+        if (!groupedByStudent[key]) groupedByStudent[key] = [];
+        groupedByStudent[key].push(item);
+      });
+
+      const totals = Object.entries(groupedByStudent)
+        .map(([studentId, items]) => {
+          const totalPoints = items.reduce((sum, it) => sum + (Number.isFinite(Number(it.poin_indikator)) ? Number(it.poin_indikator) : getActivityPointCount(it.indikator || {})), 0);
+          const avgScore = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
+          return {
+            studentId,
+            studentName: memberMap.get(studentId) || '-',
+            totalPoints,
+            avgScore,
+            totalMeetings: items.length,
+          };
+        })
+        .sort((a, b) => b.totalPoints - a.totalPoints || b.avgScore - a.avgScore || a.studentName.localeCompare(b.studentName));
+
+      const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
+      activityTopLimitInput.value = String(displayLimit);
+      activityTopList.innerHTML = totals.length
+        ? totals.slice(0, displayLimit).map((item, index) => `
+            <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
+                <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+              </div>
+              <p class="mt-1 text-xs text-slate-500">${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
+            </div>
+          `).join('')
+        : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
+
+      const needsFollowUp = Object.entries(groupedByStudent)
+        .map(([studentId, items]) => {
+          const avg = items.length ? items.reduce((sum, it) => sum + Number(it.skor || 0), 0) / items.length : 0;
+          const indicatorAvg = items.length ? items.reduce((sum, it) => sum + getActivityPointCount(it.indikator || {}), 0) / items.length : 0;
+          return { studentId, studentName: memberMap.get(studentId) || '-', avg, indicatorAvg };
+        })
+        .filter((item) => item.avg < 2 || item.indicatorAvg < 2)
+        .sort((a, b) => a.avg - b.avg || a.studentName.localeCompare(b.studentName));
+
+      activityNeedsCount.textContent = String(needsFollowUp.length);
+      activityNeedsList.innerHTML = needsFollowUp.length
+        ? needsFollowUp.slice(0, 10).map((item) => `
+            <div class="rounded-xl border border-rose-200 bg-white px-3 py-2">
+              <p class="text-sm font-semibold text-slate-800">${item.studentName}</p>
+              <p class="mt-1 text-xs text-slate-500">Rata skor ${item.avg.toFixed(2)} • Rata indikator ${item.indicatorAvg.toFixed(2)}/5</p>
+            </div>
+          `).join('')
+        : '<p class="text-sm text-slate-500">Belum ada siswa yang perlu tindak lanjut.</p>';
+    };
+
+    container.querySelector('#save-activity-btn')?.addEventListener('click', async () => {
+      const activeDate = activityDateInput?.value || selectedDate;
+      if (!activeDate || !isSchoolWeekday(activeDate)) {
+        alert('Pilih tanggal hari kerja Senin-Jumat.');
+        return;
+      }
+
+      const studentId = activityStudentSelect?.value || '';
+      if (!studentId) {
+        alert('Pilih siswa terlebih dahulu.');
+        return;
+      }
+
+      const studentName = activityStudentSelect.options[activityStudentSelect.selectedIndex]?.text || '-';
+      const indikator = getActivityFormIndicators();
+      const points = getActivityPointCount(indikator);
+      const score = Number(activityScoreSelect?.value || 3);
+      const grade = scoreToGrade(score);
+      const note = String(activityNoteInput?.value || '').trim();
+      const docId = `${assignment.id}_${studentId}_${activeDate}`;
+
+      await saveDocument('keaktifan_siswa', {
+        id: docId,
+        tahun_ajaran_id: context.tahun_ajaran_aktif,
+        semester_id: context.semester_aktif,
+        pengajaran_id: assignment.id,
+        guru_id: assignment.guru_id,
+        guru_nama: assignment.guru_nama,
+        kelas_id: assignment.kelas_id,
+        kelas_nama: assignment.kelas_nama,
+        mapel_id: assignment.mapel_id,
+        mapel_nama: assignment.mapel_nama,
+        siswa_id: studentId,
+        siswa_nama: studentName,
+        tanggal: activeDate,
+        hari: getSchoolDayName(activeDate),
+        indikator,
+        poin_indikator: points,
+        skor: score,
+        predikat: grade,
+        catatan: note,
+        updated_at: new Date().toISOString(),
+      }, docId);
+
+      container.dataset.activityDate = activeDate;
+      await refreshActivityRecords();
+      renderActivityTodayList();
+      renderActivityRecap();
+      showNotification(`Keaktifan ${studentName} tanggal ${formatSchoolDate(activeDate)} berhasil disimpan!`, 'success');
+    });
+
+    container.querySelector('#reset-activity-form-btn')?.addEventListener('click', () => {
+      resetActivityForm();
+    });
+
+    container.addEventListener('change', async (event) => {
+      if (event.target.closest('#activity-date')) {
+        const nextDate = event.target.value || getDefaultSchoolDate();
+        container.dataset.activityDate = nextDate;
+        syncActivityStudentSelection();
+        renderActivityTodayList();
+        return;
+      }
+
+      if (event.target.closest('#activity-student-select')) {
+        syncActivityStudentSelection();
+        return;
+      }
+
+      if (event.target.closest('#activity-score-select')) {
+        updateActivityFormPreview();
+        return;
+      }
+
+      if (event.target.closest('#activity-top-limit')) {
+        renderActivityRecap();
+        return;
+      }
+
+      if (event.target.closest('.activity-form-indicator')) {
+        updateActivityFormPreview();
+      }
+    });
+
+    syncActivityStudentSelection();
+    renderActivityTodayList();
+    renderActivityRecap();
+    updateActivityFormPreview();
+  }
   // ALWAYS load fresh from Firestore
   const firestoreBabs = await loadBabsFromFirestore(context, assignment);
   const firestoreTugas = await loadTugasFromFirestore(context, assignment);
@@ -2761,25 +3936,58 @@ export async function renderGuruPenilaianPage(container) {
   const html = renderLayout('Penilaian', `
     <div class="space-y-4">
       <!-- Assignment Selector -->
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <label class="text-sm font-semibold text-slate-700">Pilih Kelas & Mata Pelajaran</label>
-        <select id="assignment-select" class="mt-2 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm">
-          ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
-        </select>
+      <div class="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-sky-50 to-white p-4 shadow-sm sm:p-5">
+        <div class="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-white/70 to-transparent"></div>
+        <div class="absolute -left-10 top-0 h-24 w-24 rounded-full bg-emerald-200/40 blur-2xl"></div>
+        <div class="absolute bottom-0 right-6 h-20 w-20 rounded-full bg-sky-200/40 blur-2xl"></div>
+        <div class="relative">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div class="max-w-2xl">
+              <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700 backdrop-blur-sm">
+                <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
+                Area Aktif Penilaian
+              </div>
+              <label for="assignment-select" class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <span class="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100">
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </span>
+                <span>Pilih Kelas & Mata Pelajaran</span>
+              </label>
+              <p class="mt-2 text-xs leading-5 text-slate-600 sm:text-sm sm:max-w-2xl">Pilih relasi mengajar yang sedang dinilai agar tabel nilai, ulangan harian, dan rekap akhir tetap fokus pada kelas aktif.</p>
+            </div>
+            <div class="w-full lg:max-w-xl">
+              <div class="rounded-2xl border border-white/80 bg-white/85 p-2 shadow-[0_12px_30px_-20px_rgba(16,185,129,0.65)] backdrop-blur-sm">
+                <select id="assignment-select" class="w-full rounded-xl border border-emerald-200 bg-gradient-to-r from-orange-100 via-lime-50 to-emerald-100 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-300 focus:ring-4 focus:ring-emerald-100">
+                  ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
+                </select>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       <!-- Tabs -->
-      <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div class="grid grid-cols-2 gap-2 border-b border-slate-200 bg-slate-50 p-2 sm:flex sm:flex-wrap sm:gap-0 sm:p-0">
-          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap active" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
-          <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
-          <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
-          <button id="tab-akhir" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="akhir"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><span>Nilai Akhir</span></button>
-          <button id="tab-backup" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="backup"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg><span>Backup Nilai</span></button>
-          <button id="tab-laporan" class="flex min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="laporan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Laporan</span></button>
+      <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.35)] ring-1 ring-white/60 backdrop-blur-sm">
+        <div class="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-emerald-50/60 px-3 py-3 sm:px-4">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Workspace Penilaian</p>
+            </div>
+            <div class="hidden rounded-full border border-emerald-100 bg-white/90 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm sm:block">Sinkron ke kelas aktif</div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-1">
+          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap active border-b-[#10B981] bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
+          <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
+          <button id="tab-keaktifan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="keaktifan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"></path><circle cx="5" cy="19" r="1.2" fill="currentColor"></circle><circle cx="12" cy="6" r="1.2" fill="currentColor"></circle><circle cx="19" cy="13" r="1.2" fill="currentColor"></circle></svg><span>Keaktifan</span></button>
+          <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
+          <button id="tab-akhir" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="akhir"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><span>Nilai Akhir</span></button>
+          <button id="tab-backup" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="backup"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg><span>Backup Nilai</span></button>
+          <button id="tab-laporan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="laporan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Laporan</span></button>
+          </div>
         </div>
 
-        <div id="tab-content" class="p-4">
+        <div id="tab-content" class="bg-gradient-to-b from-white to-slate-50/70 p-4 sm:p-5">
           <!-- Konten tab akan diisi di sini -->
         </div>
       </div>
@@ -2800,6 +4008,8 @@ export async function renderGuruPenilaianPage(container) {
       await renderTabNilaiTugas(context, activeAssignment, activeMembers, tabContent);
     } else if (tabName === 'uh') {
       await renderTabUlanganHarian(context, activeAssignment, activeMembers, tabContent);
+    } else if (tabName === 'keaktifan') {
+      await renderTabKeaktifanWorkspace(context, activeAssignment, activeMembers, tabContent);
     } else if (tabName === 'pts') {
       await renderTabPTSPAS(context, activeAssignment, activeMembers, tabContent);
     } else if (tabName === 'akhir') {
@@ -2815,13 +4025,13 @@ export async function renderGuruPenilaianPage(container) {
     btn.addEventListener('click', async () => {
       // Remove active state dari semua button
       tabButtons.forEach((b) => {
-        b.classList.remove('border-b-[#10B981]', 'text-[#10B981]');
-        b.classList.add('border-transparent', 'text-slate-700');
+        b.classList.remove('border-b-[#10B981]', 'text-[#10B981]', 'bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'text-white', 'shadow-sm');
+        b.classList.add('border-transparent', 'text-slate-700', 'bg-white/70');
       });
 
       // Add active state ke button yang diklik
-      btn.classList.remove('border-transparent', 'text-slate-700');
-      btn.classList.add('border-b-[#10B981]', 'text-[#10B981]');
+      btn.classList.remove('border-transparent', 'text-slate-700', 'bg-white/70');
+      btn.classList.add('border-b-[#10B981]', 'text-white', 'bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'shadow-sm');
 
       const tabName = btn.getAttribute('data-tab');
       await renderTabByName(tabName);

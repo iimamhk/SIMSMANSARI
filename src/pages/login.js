@@ -111,7 +111,7 @@ export function renderLoginPage(container) {
           </div>
         </div>
 
-        <p class="text-center text-sm text-white/75 lg:col-span-2">© 2024 SIM SMANSARI | SMAN 1 Wanasari</p>
+          <p class="text-center text-sm text-white/75 lg:col-span-2">© 2026 SIM SMANSARI | SMAN 1 Wanasari | ihk</p>
       </div>
     </div>
   `;
