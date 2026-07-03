@@ -1,5 +1,8 @@
 import { renderLoginPage } from '../pages/login.js';
+import { renderPublicHomePage } from '../pages/public-home.js';
+import { renderPublicLobbyDetailPage } from '../pages/public-lobby-detail.js';
 import { renderAdminDashboard } from '../pages/admin/dashboard.js';
+import { renderAdminLobbySchoolPage } from '../pages/admin/lobi-sekolah.js';
 import { renderSystemSettingsPage } from '../pages/admin/pengatur-sistem.js';
 import { renderGuruDashboard } from '../pages/guru/dashboard.js';
 import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
@@ -33,11 +36,11 @@ function getDefaultRouteByRole(role) {
   if (role === 'siswa') {
     return '#siswa/dashboard';
   }
-  return '#login';
+  return '#home';
 }
 
 function resolveRoute(hash) {
-  const normalized = hash || '#login';
+  const normalized = hash || '#home';
   const session = getSession();
   const role = session?.user?.role || 'guest';
 
@@ -65,6 +68,16 @@ function renderRoute() {
   const container = document.getElementById('app');
 
   if (!container) {
+    return;
+  }
+
+  if (route === '#home') {
+    renderPublicHomePage(container);
+    return;
+  }
+
+  if (route.startsWith('#lobi/')) {
+    renderPublicLobbyDetailPage(container, route.replace('#lobi/', ''));
     return;
   }
 
@@ -105,6 +118,11 @@ function renderRoute() {
 
   if (route === '#admin/master-pembelajaran') {
     renderMasterPembelajaranPage(container);
+    return;
+  }
+
+  if (route === '#admin/lobi-sekolah' || route.startsWith('#admin/lobi-sekolah/')) {
+    renderAdminLobbySchoolPage(container);
     return;
   }
 

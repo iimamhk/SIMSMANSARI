@@ -36,6 +36,12 @@ function buildContext(user, baseContext) {
 export function renderLoginPage(container) {
   const html = `
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+      .login-page {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+
       @keyframes float {
         0%, 100% { transform: translateY(0px); }
         50% { transform: translateY(-20px); }
@@ -52,25 +58,33 @@ export function renderLoginPage(container) {
       }
     </style>
 
-    <div class="min-h-screen bg-gradient-to-br from-[#10B981] via-[#06B6D4] to-[#0EA5E9] flex items-center justify-center px-4 py-8 relative overflow-hidden">
-      <!-- Decorative animated elements -->
+    <div class="login-page min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(255,255,255,0.45),_transparent_36%),linear-gradient(145deg,_#10b981_0%,_#5eead4_28%,_#67e8f9_56%,_#93c5fd_76%,_#c4b5fd_100%)] flex items-center justify-center px-4 py-8 relative overflow-hidden">
       <div class="absolute top-20 right-20 w-72 h-72 bg-white/5 rounded-full blur-3xl float-animation"></div>
       <div class="absolute bottom-20 left-20 w-80 h-80 bg-white/5 rounded-full blur-3xl float-animation" style="animation-delay: 2s;"></div>
       <div class="absolute top-1/2 left-1/3 w-64 h-64 bg-white/5 rounded-full blur-3xl float-animation" style="animation-delay: 4s;"></div>
       
-      <div class="relative w-full max-w-md">
-        <div class="rounded-3xl bg-white/95 backdrop-blur-sm p-8 shadow-2xl border border-white/20">
-          <!-- Header -->
+      <div class="relative grid w-full max-w-6xl gap-6 lg:grid-cols-[1fr_440px] lg:items-center">
+        <div class="rounded-[34px] border border-white/30 bg-white/32 p-6 text-white shadow-[0_22px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8 lg:p-10">
+          <p class="text-xs font-bold uppercase tracking-[0.34em] text-white/90">Akses Sistem</p>
+          <h1 class="mt-4 max-w-2xl text-4xl font-extrabold tracking-tight text-white sm:text-5xl">Masuk ke ruang kerja digital SIM SMANSARI.</h1>
+          <p class="mt-5 max-w-2xl text-sm leading-7 text-white/90 sm:text-base">Silakan masuk menggunakan akun admin, guru, atau siswa.</p>
+          <div class="mt-8 flex flex-wrap gap-3 text-sm font-semibold text-white/85">
+            <span class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-white">Akses Cepat</span>
+            <span class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-white">Login Terpusat</span>
+          </div>
+          <a href="#home" class="mt-8 inline-flex items-center justify-center rounded-2xl border border-white/20 bg-white/12 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/18">Kembali ke Lobby Publik</a>
+        </div>
+
+        <div class="rounded-[34px] bg-white/95 backdrop-blur-sm p-8 shadow-[0_24px_90px_rgba(15,23,42,0.18)] border border-white/25">
           <div class="mb-8 text-center">
             <div class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-[#10B981] to-[#06B6D4] text-2xl font-bold text-white shadow-lg pulse-glow">
               S
             </div>
             <h1 class="text-3xl font-bold text-slate-900">SIM SMANSARI</h1>
-            <p class="mt-2 text-base font-semibold text-emerald-600">SMAN 1 WANASARI</p>
-            <p class="mt-3 text-sm text-slate-400">Masuk ke akun Anda</p>
+            <p class="mt-2 text-base font-semibold text-slate-700">SMAN 1 WANASARI</p>
+            <p class="mt-3 text-sm text-slate-500">Masuk ke akun Anda</p>
           </div>
 
-          <!-- Form -->
           <form id="login-form" class="space-y-4">
             <div class="relative">
               <input id="username" name="username" class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50/50 px-5 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/30" placeholder="Username" required />
@@ -91,10 +105,13 @@ export function renderLoginPage(container) {
               <span id="btn-loader" class="hidden">⏳</span>
             </button>
           </form>
+
+          <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm text-slate-600">
+            Setelah login, Anda akan diarahkan ke dashboard sesuai peran.
+          </div>
         </div>
 
-        <!-- Footer -->
-        <p class="text-center mt-6 text-sm text-white/70">© 2024 SIM SMANSARI | SMAN 1 Wanasari</p>
+        <p class="text-center text-sm text-white/75 lg:col-span-2">© 2024 SIM SMANSARI | SMAN 1 Wanasari</p>
       </div>
     </div>
   `;

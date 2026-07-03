@@ -7,7 +7,7 @@ export function renderLayout(title, content) {
   const isSiswa = role === 'siswa';
   const currentHash = typeof window !== 'undefined' ? (window.location.hash || '') : '';
 
-  const isRouteActive = (routes) => routes.includes(currentHash);
+  const isRouteActive = (routes) => routes.some((route) => currentHash === route || currentHash.startsWith(`${route}/`));
   const activeItemClass = 'text-[#4F46E5]';
   const inactiveItemClass = 'text-slate-500';
 
@@ -223,6 +223,7 @@ export function renderLayout(title, content) {
         { label: 'Akademik', href: '#admin/master-akademik', routes: ['#admin/master-akademik'], icon: iconBook },
         { label: 'Guru', href: '#admin/master-guru', routes: ['#admin/master-guru'], icon: iconUser },
         { label: 'Siswa', href: '#admin/master-siswa', routes: ['#admin/master-siswa'], icon: iconUser },
+        { label: 'Lobi Sekolah', href: '#admin/lobi-sekolah', routes: ['#admin/lobi-sekolah'], icon: iconLink },
         { label: 'Mapping', href: '#admin/plotting-jadwal', routes: ['#admin/plotting-jadwal'], icon: iconLink },
         { label: 'Pembelajaran', href: '#admin/master-pembelajaran', routes: ['#admin/master-pembelajaran'], icon: iconClassroom },
         { label: 'Akun', href: '#admin/pengatur-sistem', routes: ['#admin/pengatur-sistem'], icon: iconSettings },
