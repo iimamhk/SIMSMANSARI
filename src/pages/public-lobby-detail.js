@@ -8,10 +8,6 @@ function getSession() {
   }
 }
 
-function getAccessKey(slug) {
-  return `simguru_lobby_access_${slug}`;
-}
-
 function getAccentClass(section) {
   return section?.accent || 'from-emerald-400 via-cyan-400 to-sky-400';
 }
@@ -79,7 +75,7 @@ function renderSectionLinks(section, sectionLinks) {
   `).join('');
 }
 
-export async function renderPublicLobbyDetailPage(container, slug) {
+export async function renderPublicLobbyDetailPage(container, slug, forceAccess = false) {
   const { settings, sections, links } = await getLobbyPayload();
   const section = getLobbySectionBySlug(sections, slug);
 
@@ -104,9 +100,7 @@ export async function renderPublicLobbyDetailPage(container, slug) {
       : session?.user?.role === 'siswa'
         ? '#siswa/dashboard'
         : '#login';
-  const accessKey = getAccessKey(slug);
-  const grantedToken = sessionStorage.getItem(accessKey) || '';
-  const hasAccess = isLobbyTokenValid(section, grantedToken);
+  const hasAccess = !section.requires_token || forceAccess;
   const sectionLinks = getLobbySectionLinks(links, section.id);
 
   container.innerHTML = `
@@ -161,7 +155,6 @@ export async function renderPublicLobbyDetailPage(container, slug) {
       }
       return;
     }
-    sessionStorage.setItem(accessKey, tokenValue);
-    await renderPublicLobbyDetailPage(container, slug);
+    await renderPublicLobbyDetailPage(container, slug, true);
   });
 }
