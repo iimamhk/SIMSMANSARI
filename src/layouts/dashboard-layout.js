@@ -47,7 +47,7 @@ export function renderLayout(title, content) {
       `,
     },
     {
-      label: 'Game',
+      label: 'Game Center',
       href: '#guru/game',
       routes: ['#guru/game'],
       icon: (active) => `
@@ -74,9 +74,9 @@ export function renderLayout(title, content) {
     .map((item) => {
       const active = isRouteActive(item.routes);
       return `
-        <a href="${item.href}" class="flex min-w-[78px] flex-col items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50">
-          <span class="transition">${item.icon(active)}</span>
-          <span>${item.label}</span>
+        <a href="${item.href}" class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50 sm:px-3 sm:text-[11px]">
+          <span class="flex h-6 w-6 items-center justify-center transition">${item.icon(active)}</span>
+          <span class="w-full text-center leading-tight break-words">${item.label}</span>
         </a>
       `;
     })
@@ -118,7 +118,7 @@ export function renderLayout(title, content) {
       `,
     },
     {
-      label: 'Game',
+      label: 'Game Center',
       href: '#siswa/game',
       routes: ['#siswa/game'],
       icon: (active) => `
@@ -145,9 +145,9 @@ export function renderLayout(title, content) {
     .map((item) => {
       const active = isRouteActive(item.routes);
       return `
-        <a href="${item.href}" class="flex min-w-[92px] flex-col items-center gap-1 rounded-2xl px-3 py-2 text-xs font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50">
-          <span class="transition">${item.icon(active)}</span>
-          <span>${item.label}</span>
+        <a href="${item.href}" class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50 sm:px-3 sm:text-[11px]">
+          <span class="flex h-6 w-6 items-center justify-center transition">${item.icon(active)}</span>
+          <span class="w-full text-center leading-tight break-words">${item.label}</span>
         </a>
       `;
     })
@@ -232,7 +232,7 @@ export function renderLayout(title, content) {
           { label: 'Dashboard', href: '#guru/dashboard', routes: ['#guru/dashboard'], icon: iconHome },
           { label: 'Input Absensi', href: '#guru/input-absen', routes: ['#guru/input-absen'], icon: iconCalendar },
           { label: 'Input Nilai', href: '#guru/penilaian', routes: ['#guru/penilaian', '#guru/input-nilai'], icon: iconChart },
-          { label: 'Game', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
+          { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
       : isSiswa
@@ -240,7 +240,7 @@ export function renderLayout(title, content) {
             { label: 'Dashboard', href: '#siswa/dashboard', routes: ['#siswa/dashboard'], icon: iconHome },
             { label: 'Nilai', href: '#siswa/nilai', routes: ['#siswa/nilai'], icon: iconChart },
             { label: 'Absensi', href: '#siswa/absensi', routes: ['#siswa/absensi'], icon: iconCalendar },
-            { label: 'Game', href: '#siswa/game', routes: ['#siswa/game'], icon: iconGame },
+            { label: 'Game Center', href: '#siswa/game', routes: ['#siswa/game'], icon: iconGame },
             { label: 'Akun', href: '#siswa/pengatur-sistem', routes: ['#siswa/pengatur-sistem'], icon: iconSettings },
           ]
         : [];
@@ -329,7 +329,7 @@ export function renderLayout(title, content) {
 
         ${isGuru || isSiswa ? `
           <nav class="md:hidden fixed bottom-3 left-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-[26px] border border-slate-200 bg-white/95 px-2 py-2 shadow-[0_14px_40px_rgba(15,23,42,0.18)] backdrop-blur supports-[backdrop-filter]:bg-white/80" style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));">
-            <div class="flex items-center justify-center ${(isGuru || isSiswa) ? 'justify-between' : ''}">
+            <div class="flex w-full items-start justify-between gap-1 overflow-hidden">
               ${isGuru ? guruBottomNav : siswaBottomNav}
             </div>
           </nav>

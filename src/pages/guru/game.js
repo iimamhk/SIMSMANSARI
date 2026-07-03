@@ -2,9 +2,11 @@ import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getDocumentsWhere, saveDocument } from '../../firebase/data-service.js';
 import { getOperationCatalog, quizTypes, normalizeGameSettings } from '../../utils/math-game.js';
+import { getVocabularyThemeCatalog, getVocabularyThemeLabel, getVocabularyThemeOptions, vocabularyQuizTypes, normalizeVocabularySettings, getVocabularyWordList } from '../../utils/vocab-game.js';
 
 const LOCAL_CONFIG_KEY = 'simguru_game_configs_local';
 const LOCAL_SESSION_KEY = 'simguru_game_sessions_local';
+const VOCAB_TEMPLATE_FILE_NAME = 'template-english-vocabulary.xlsx';
 
 function readLocalList(key) {
   try {
@@ -37,6 +39,33 @@ function getOperationLabel(operation) {
   return getOperationCatalog()[operation]?.label || operation;
 }
 
+function getVocabularyQuizTypeLabel(type) {
+  return vocabularyQuizTypes[type] || type;
+}
+
+function slugifyText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function getSessionTimestamp(session) {
+  const source = session.finished_at || session.updated_at || session.started_at || '';
+  const timestamp = new Date(source).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getWeekStart(date = new Date()) {
+  const result = new Date(date);
+  const day = result.getDay() || 7;
+  if (day !== 1) {
+    result.setHours(-24 * (day - 1));
+  }
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
 export async function renderGuruGamePage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -46,147 +75,726 @@ export async function renderGuruGamePage(container) {
   const fallbackAssignments = userAssignments.length ? userAssignments : await getActiveTeachingAssignments(context);
   const assignments = fallbackAssignments;
   const selectedAssignment = assignments[0] || null;
+  const classOptions = assignments.reduce((result, item) => {
+    if (!item?.kelas_id) {
+      return result;
+    }
+    if (!result.some((entry) => entry.id === item.kelas_id)) {
+      result.push({ id: item.kelas_id, name: item.kelas_nama || item.kelas_id });
+    }
+    return result;
+  }, []);
+  const classFilterOptions = [
+    '<option value="all">Semua Kelas</option>',
+    ...classOptions.map((item) => `<option value="${item.id}">${item.name}</option>`),
+  ].join('');
+  const availableGameCount = 2;
+  const plannedGameCount = 2;
+  const gameCatalog = [
+    {
+      key: 'math',
+      title: 'Matematika Cepat',
+      description: 'Aktif. Fokus pada operasi hitung, kuis cepat, token kelas, dan monitoring hasil.',
+      status: 'Aktif',
+      badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      accentClass: 'from-emerald-500 to-cyan-500',
+      workspaceTitle: 'Workspace Game Matematika',
+      workspaceCaption: 'Kelola konfigurasi, akses siswa, dan monitoring hasil tanpa meninggalkan satu halaman kerja.',
+      available: true,
+    },
+    {
+      key: 'english_vocab',
+      title: 'English Vocabulary',
+      description: 'Aktif. Perkaya kosakata bahasa Inggris melalui tema kata, kuis arti, dan kalimat sederhana tanpa token.',
+      status: 'Aktif',
+      badgeClass: 'bg-sky-100 text-sky-700 border-sky-200',
+      accentClass: 'from-sky-500 to-blue-500',
+      workspaceTitle: 'Workspace English Vocabulary',
+      workspaceCaption: 'Atur tema kosakata, mode latihan, publish langsung ke siswa, dan pantau hasil kelas tanpa token.',
+      available: true,
+    },
+    {
+      key: 'matching',
+      title: 'Matching Quiz',
+      description: 'Siapkan pasangan istilah, definisi, gambar, atau rumus untuk latihan cepat lintas mapel.',
+      status: 'Roadmap',
+      badgeClass: 'bg-amber-100 text-amber-700 border-amber-200',
+      accentClass: 'from-amber-500 to-orange-500',
+      workspaceTitle: 'Matching Quiz',
+      workspaceCaption: 'Cocok untuk Bahasa Indonesia, Inggris, IPA, dan hafalan konsep.',
+      available: false,
+      bullets: ['Bank pasangan per mapel dan bab', 'Mode latihan dan turnamen kelas', 'Skor berdasarkan kecepatan dan akurasi'],
+    },
+    {
+      key: 'battle',
+      title: 'Quiz Battle Kelas',
+      description: 'Siswa bertanding menjawab soal yang sama dalam room dengan papan peringkat langsung.',
+      status: 'Roadmap',
+      badgeClass: 'bg-violet-100 text-violet-700 border-violet-200',
+      accentClass: 'from-violet-500 to-fuchsia-500',
+      workspaceTitle: 'Quiz Battle Kelas',
+      workspaceCaption: 'Model kompetisi ringan yang kuat untuk memacu motivasi belajar siswa.',
+      available: false,
+      bullets: ['Room battle berbasis token guru', 'Leaderboard per ronde dan per kelas', 'Riwayat battle untuk evaluasi guru'],
+    },
+    {
+      key: 'daily',
+      title: 'Mission Harian',
+      description: 'Tantangan singkat harian untuk membangun kebiasaan belajar yang konsisten.',
+      status: 'Roadmap',
+      badgeClass: 'bg-sky-100 text-sky-700 border-sky-200',
+      accentClass: 'from-sky-500 to-blue-500',
+      workspaceTitle: 'Mission Harian',
+      workspaceCaption: 'Ideal untuk target kecil yang berulang dan mudah dimonitor guru.',
+      available: false,
+      bullets: ['Target harian per mapel', 'Streak dan badge pencapaian', 'Monitoring kepatuhan siswa per kelas'],
+    },
+  ];
 
   const options = assignments
     .map((item) => `<option value="${item.id}">${item.kelas_nama || '-'} • ${item.mapel_nama || '-'}</option>`)
     .join('');
 
-  const html = renderLayout('Game Matematika', `
-    <div class="space-y-5">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Pengaturan Game Matematika</h3>
-        <p class="mt-1 text-sm text-slate-500">Atur konfigurasi game untuk kelas aktif. Tipe kuis: isian singkat, pilihan ganda, mencocokkan (opsional).</p>
-      </div>
-
-      <form id="game-config-form" class="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 md:grid-cols-2">
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Relasi Mengajar</label>
-            <select id="game-assignment" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
+  const html = renderLayout('Game Center Guru', `
+    <div class="space-y-6">
+      <section class="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-900 via-emerald-900 to-cyan-900 p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+        <div class="grid gap-5 xl:grid-cols-[1.2fr_0.8fr] xl:items-start">
+          <div class="space-y-4">
+            <p class="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-200">Game Center Guru</p>
+            <div>
+              <h2 class="text-3xl font-semibold tracking-tight">Kelola game kelas seperti platform belajar profesional</h2>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-emerald-50/85">Gunakan satu pusat kerja untuk mengatur game aktif, menyiapkan roadmap game baru, mengelola token akses, dan memantau performa siswa per kelas.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs text-emerald-50/90">
+              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">${availableGameCount} game aktif</span>
+              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">${plannedGameCount} game dalam roadmap</span>
+              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">${assignments.length} relasi mengajar terhubung</span>
+            </div>
           </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status</label>
-            <select id="game-status" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-              <option value="draft">Draft</option>
-              <option value="published">Published (siap dimainkan siswa)</option>
-            </select>
+          <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-2">
+            <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Game Aktif</p>
+              <p class="mt-3 text-3xl font-semibold text-white" id="game-summary-available">${availableGameCount}</p>
+            </div>
+            <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Kelas Terhubung</p>
+              <p class="mt-3 text-3xl font-semibold text-white" id="game-summary-assignments">${assignments.length}</p>
+            </div>
+            <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Sesi Kelas Terpilih</p>
+              <p class="mt-3 text-3xl font-semibold text-white" id="game-summary-sessions">0</p>
+            </div>
           </div>
         </div>
+      </section>
 
+      <section class="space-y-4">
         <div>
-          <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Operasi Matematika</p>
-          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            ${Object.entries(getOperationCatalog()).map(([key, item]) => `
-              <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <input type="checkbox" class="game-operation h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${['add', 'sub', 'mul', 'div'].includes(key) ? 'checked' : ''} />
-                ${item.label}
-              </label>
-            `).join('')}
-          </div>
+          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Katalog Game</p>
+          <h3 class="mt-1 text-2xl font-semibold text-slate-900">Pilih game yang ingin dikelola</h3>
+          <p class="mt-2 text-sm text-slate-500">Game aktif bisa langsung dikelola. Game roadmap menampilkan arah pengembangan agar modul tetap terstruktur sejak awal.</p>
+        </div>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          ${gameCatalog.map((game) => `
+            <button
+              type="button"
+              data-game-card="${game.key}"
+              class="game-card group rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)] ${game.key === 'math' ? 'ring-2 ring-emerald-200' : ''}"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br ${game.accentClass} text-lg font-bold text-white shadow-lg">${game.title.split(' ').map((word) => word[0]).slice(0, 2).join('')}</div>
+                <span class="rounded-full border px-3 py-1 text-[11px] font-semibold ${game.badgeClass}">${game.status}</span>
+              </div>
+              <div class="mt-4">
+                <p class="text-lg font-semibold text-slate-900">${game.title}</p>
+                <p class="mt-2 text-sm leading-6 text-slate-500">${game.description}</p>
+              </div>
+              <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">${game.available ? 'Kelola sekarang' : 'Siap dikembangkan berikutnya'}</p>
+            </button>
+          `).join('')}
+        </div>
+      </section>
+
+      <section class="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <div class="space-y-4">
+          <article id="game-workspace-math" data-game-workspace="math" class="game-workspace space-y-4">
+            <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">Workspace Aktif</p>
+                  <h3 id="workspace-title" class="mt-2 text-2xl font-semibold text-slate-900">Workspace Game Matematika</h3>
+                  <p id="workspace-caption" class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Kelola konfigurasi, akses siswa, dan monitoring hasil tanpa meninggalkan satu halaman kerja.</p>
+                </div>
+                <div id="workspace-status-badge" class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Aktif</div>
+              </div>
+
+              <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Relasi Mengajar</label>
+                  <select id="game-assignment" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status Game</label>
+                  <select id="game-status" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">
+                    <option value="draft">Draft</option>
+                    <option value="published">Published (siap dimainkan siswa)</option>
+                  </select>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Mode Aktif</p>
+                  <p id="workspace-mode-pill" class="mt-2 text-sm font-semibold text-slate-900">Game Matematika</p>
+                  <p class="mt-1 text-xs text-slate-500">Terhubung dengan token dan leaderboard kelas.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
+              <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <button type="button" data-workspace-tab="overview" class="workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition">Overview</button>
+                <button type="button" data-workspace-tab="config" class="workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Konfigurasi</button>
+                <button type="button" data-workspace-tab="access" class="workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Akses & Publish</button>
+                <button type="button" data-workspace-tab="monitoring" class="workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Monitoring</button>
+              </div>
+            </div>
+
+            <div id="game-overview-panel" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan Konfigurasi</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Snapshot game aktif untuk kelas terpilih</h4>
+                </div>
+                <div id="overview-status" class="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Draft</div>
+              </div>
+
+              <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Operasi</p>
+                  <p id="overview-operations" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Penjumlahan, Pengurangan</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Mode Kuis</p>
+                  <p id="overview-quiz-modes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Isian Singkat</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Durasi & Soal</p>
+                  <p id="overview-duration" class="mt-2 text-sm font-semibold leading-6 text-slate-900">10 soal • 180 detik</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Token Aktif</p>
+                  <p id="overview-token" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Belum dibuat</p>
+                </div>
+              </div>
+
+              <div class="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                <p class="text-sm font-semibold text-slate-900">Arah modul game profesional</p>
+                <div class="mt-3 grid gap-3 md:grid-cols-3">
+                  <div class="rounded-2xl bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Konten</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Bank soal dan mode kuis per game</p>
+                  </div>
+                  <div class="rounded-2xl bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Akses</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Token, publish, dan kontrol kelas aktif</p>
+                  </div>
+                  <div class="rounded-2xl bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Analitik</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Skor, akurasi, partisipasi, dan leaderboard</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form id="game-config-form" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div id="game-config-panel" class="space-y-5">
+                <div>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Operasi Matematika</p>
+                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    ${Object.entries(getOperationCatalog()).map(([key, item]) => `
+                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
+                        <input type="checkbox" class="game-operation h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${['add', 'sub', 'mul', 'div'].includes(key) ? 'checked' : ''} />
+                        ${item.label}
+                      </label>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <div>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tipe Kuis</p>
+                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    ${Object.entries(quizTypes).map(([key, label]) => `
+                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
+                        <input type="checkbox" class="game-quiz-mode h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${key === 'short_answer' ? 'checked' : ''} />
+                        ${label}
+                      </label>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Min</label>
+                    <input id="game-number-min" type="number" value="1" min="0" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Max</label>
+                    <input id="game-number-max" type="number" value="20" min="5" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
+                    <input id="game-question-count" type="number" value="10" min="5" max="50" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Durasi (detik)</label>
+                    <input id="game-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Kali Min</label>
+                    <input id="game-mul-min" type="number" value="1" min="0" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Kali Max</label>
+                    <input id="game-mul-max" type="number" value="15" min="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Bagi Min</label>
+                    <input id="game-div-min" type="number" value="1" min="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Bagi Max</label>
+                    <input id="game-div-max" type="number" value="12" min="2" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Maks Pangkat</label>
+                    <input id="game-max-exponent" type="number" value="3" min="2" max="6" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div class="flex items-end">
+                    <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 shadow-sm">
+                      <input id="game-allow-negative" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-[#007AFF]" />
+                      Izinkan hasil negatif
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div id="game-access-panel" class="hidden space-y-4">
+                <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Token Akses Game</p>
+                  <p class="mt-1 text-sm text-slate-600">Guru generate token, lalu siswa memasukkan token ini sebelum mulai bermain. Token otomatis kedaluwarsa dalam 15 menit tanpa mengganggu sesi yang sudah berjalan.</p>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <input id="game-access-token" readonly class="w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold tracking-[0.14em] text-slate-800" placeholder="Belum dibuat" />
+                    <button id="generate-game-token-btn" type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700">Generate Token</button>
+                  </div>
+                  <p id="game-access-token-expiry" class="mt-2 text-xs text-slate-500">Token belum dibuat.</p>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-3">
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akses</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Gunakan token berbeda per kelas</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Publish</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Draft aman untuk uji coba sebelum dibuka ke siswa</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kontrol Guru</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Simpan token dan status dalam satu aksi kerja</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
+                <button type="submit" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0063CC]">Simpan Konfigurasi</button>
+                <button id="publish-now-btn" type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">Publish Sekarang</button>
+                <p id="config-message" class="text-sm text-slate-500"></p>
+              </div>
+            </form>
+
+            <div id="game-monitoring-panel" class="hidden rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Monitoring</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Performa siswa untuk kelas terpilih</h4>
+                  <p class="mt-2 text-sm text-slate-500">Pantau sesi, akurasi, rata-rata skor, dan siswa dengan performa terbaik.</p>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Filter Kelas</label>
+                  <select id="math-monitor-class-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${classFilterOptions}</select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode Monitoring</label>
+                  <select id="math-monitor-range-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                    <option value="week">Minggu Ini</option>
+                    <option value="month">Bulan Ini</option>
+                    <option value="semester" selected>Semester Aktif</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Minggu Ini</p>
+                  <p id="math-recap-week" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Bulan Ini</p>
+                  <p id="math-recap-month" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Semester</p>
+                  <p id="math-recap-semester" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
+                  <p id="monitor-total-sessions" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
+                  <p id="monitor-average-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
+                  <p id="monitor-average-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
+                </div>
+              </div>
+              <div class="mt-5">
+                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Top Siswa</p>
+                <div id="monitor-top-students" class="mt-2 space-y-2"></div>
+              </div>
+            </div>
+          </article>
+
+          <article id="game-workspace-english_vocab" data-game-workspace="english_vocab" class="game-workspace hidden space-y-4">
+            <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Workspace Aktif</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-slate-900">Workspace English Vocabulary</h3>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Buat latihan kosakata berdasarkan tema, publish tanpa token, dan pantau penguasaan vocab siswa per kelas.</p>
+                </div>
+                <div class="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Aktif</div>
+              </div>
+
+              <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Relasi Mengajar</label>
+                  <select id="english-game-assignment" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status Game</label>
+                  <select id="english-game-status" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">
+                    <option value="draft">Draft</option>
+                    <option value="published">Published (langsung bisa dimainkan siswa)</option>
+                  </select>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Akses</p>
+                  <p class="mt-2 text-sm font-semibold text-slate-900">Tanpa Token</p>
+                  <p class="mt-1 text-xs text-slate-500">Siswa cukup masuk ke game yang sudah published.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
+              <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <button type="button" data-english-tab="overview" class="english-workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition">Overview</button>
+                <button type="button" data-english-tab="config" class="english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Konfigurasi</button>
+                <button type="button" data-english-tab="publish" class="english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Publish</button>
+                <button type="button" data-english-tab="monitoring" class="english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Monitoring</button>
+              </div>
+            </div>
+
+            <div id="english-overview-panel" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan Konfigurasi</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Snapshot English Vocabulary untuk kelas terpilih</h4>
+                </div>
+                <div id="english-overview-status" class="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Draft</div>
+              </div>
+
+              <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Tema Aktif</p>
+                  <p id="english-overview-themes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">School Objects</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Mode Kuis</p>
+                  <p id="english-overview-quiz-modes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">English ke Indonesia</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Durasi & Soal</p>
+                  <p id="english-overview-duration" class="mt-2 text-sm font-semibold leading-6 text-slate-900">10 soal • 180 detik</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Akses</p>
+                  <p id="english-overview-access" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Tanpa token</p>
+                </div>
+              </div>
+
+              <div class="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                <p class="text-sm font-semibold text-slate-900">Fokus versi pertama</p>
+                <div class="mt-3 grid gap-3 md:grid-cols-3">
+                  <div class="rounded-2xl bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Tema</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Animals, School, Family, Food, Activities</p>
+                  </div>
+                  <div class="rounded-2xl bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Mode</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Arti kata, reverse vocab, dan isi kalimat</p>
+                  </div>
+                  <div class="rounded-2xl bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Hasil</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Skor, akurasi, mastered words, dan review words</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <form id="english-game-config-form" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div id="english-game-config-panel" class="space-y-5">
+                <div>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tema Kosakata</p>
+                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    ${Object.entries(getVocabularyThemeCatalog()).map(([key, item], index) => `
+                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
+                        <input type="checkbox" class="english-theme h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${index === 0 ? 'checked' : ''} />
+                        ${item.label}
+                      </label>
+                    `).join('')}
+                  </div>
+                  <div id="english-custom-theme-panel" class="mt-3 hidden rounded-2xl border border-dashed border-sky-200 bg-sky-50 px-4 py-3">
+                    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Tema Kustom Import</p>
+                    <div id="english-custom-theme-list" class="mt-2 flex flex-wrap gap-2"></div>
+                  </div>
+                </div>
+
+                <div>
+                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Mode Kuis</p>
+                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    ${Object.entries(vocabularyQuizTypes).map(([key, label], index) => `
+                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
+                        <input type="checkbox" class="english-quiz-mode h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${index < 2 ? 'checked' : ''} />
+                        ${label}
+                      </label>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <div class="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Daftar Kosakata</p>
+                      <p class="mt-1 text-sm text-slate-600">Kelola daftar kata aktif untuk game ini. Anda bisa pakai bank kata default atau ganti dengan impor Excel.</p>
+                    </div>
+                    <span id="english-word-count" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">0 kata</span>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <button id="english-download-template-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100">Download Template Excel</button>
+                    <label class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 cursor-pointer">
+                      Import Excel
+                      <input id="english-import-file" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+                    </label>
+                    <button id="english-reset-word-bank-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100">Kembali ke Bank Default</button>
+                  </div>
+                  <p id="english-import-message" class="text-sm text-slate-500"></p>
+                  <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                    <table class="min-w-full text-sm">
+                      <thead class="bg-slate-50 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
+                        <tr>
+                          <th class="px-4 py-3">Tema</th>
+                          <th class="px-4 py-3">Word</th>
+                          <th class="px-4 py-3">Arti</th>
+                          <th class="px-4 py-3">Contoh Kalimat</th>
+                        </tr>
+                      </thead>
+                      <tbody id="english-word-list" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
+                    <input id="english-question-count" type="number" value="10" min="5" max="30" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Durasi (detik)</label>
+                    <input id="english-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Level</label>
+                    <select id="english-difficulty" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                      <option value="basic">Basic</option>
+                      <option value="intermediate">Intermediate</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div id="english-game-publish-panel" class="hidden space-y-4">
+                <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Publish Tanpa Token</p>
+                  <p class="mt-1 text-sm text-slate-600">Begitu status diubah menjadi published, siswa yang berada di kelas terkait bisa langsung membuka game ini dari Game Center siswa tanpa perlu token tambahan.</p>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-3">
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akses</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Langsung tersedia untuk siswa</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kontrol</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Draft tetap aman sampai guru publish</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Evaluasi</p>
+                    <p class="mt-2 text-sm font-semibold text-slate-900">Hasil masuk ke monitoring seperti game lain</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
+                <button type="submit" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0063CC]">Simpan Konfigurasi</button>
+                <button id="english-publish-now-btn" type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">Publish Sekarang</button>
+                <p id="english-config-message" class="text-sm text-slate-500"></p>
+              </div>
+            </form>
+
+            <div id="english-game-monitoring-panel" class="hidden rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Monitoring</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Performa English Vocabulary untuk kelas terpilih</h4>
+                  <p class="mt-2 text-sm text-slate-500">Lihat sesi, akurasi, rata-rata skor, dan top siswa pada latihan kosakata.</p>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Filter Kelas</label>
+                  <select id="english-monitor-class-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${classFilterOptions}</select>
+                </div>
+                <div>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode Monitoring</label>
+                  <select id="english-monitor-range-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                    <option value="week">Minggu Ini</option>
+                    <option value="month">Bulan Ini</option>
+                    <option value="semester" selected>Semester Aktif</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Minggu Ini</p>
+                  <p id="english-recap-week" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Bulan Ini</p>
+                  <p id="english-recap-month" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Semester</p>
+                  <p id="english-recap-semester" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
+                  <p id="english-monitor-total-sessions" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
+                  <p id="english-monitor-average-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                </div>
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
+                  <p id="english-monitor-average-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
+                </div>
+              </div>
+              <div class="mt-5">
+                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Top Siswa</p>
+                <div id="english-monitor-top-students" class="mt-2 space-y-2"></div>
+              </div>
+            </div>
+          </article>
+
+          ${gameCatalog.filter((game) => !game.available).map((game) => `
+            <article id="game-workspace-${game.key}" data-game-workspace="${game.key}" class="game-workspace hidden rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Roadmap Game</p>
+                  <h3 class="mt-2 text-2xl font-semibold text-slate-900">${game.workspaceTitle}</h3>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">${game.workspaceCaption}</p>
+                </div>
+                <div class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${game.badgeClass}">${game.status}</div>
+              </div>
+
+              <div class="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Peran dalam platform</p>
+                  <p class="mt-2 text-sm leading-6 text-slate-700">${game.description}</p>
+                  <div class="mt-4 space-y-2">
+                    ${game.bullets.map((bullet) => `
+                      <div class="flex items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
+                        <span class="mt-1 h-2.5 w-2.5 rounded-full bg-slate-900"></span>
+                        <p class="text-sm text-slate-700">${bullet}</p>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+                <div class="rounded-[24px] border border-dashed border-slate-200 bg-white p-4">
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Saran implementasi</p>
+                  <div class="mt-4 space-y-3 text-sm text-slate-600">
+                    <p>Gunakan struktur yang sama seperti game matematika: konfigurasi, akses token, monitoring, dan leaderboard.</p>
+                    <p>Pastikan game type baru memakai koleksi konfigurasi yang sama agar guru tidak perlu belajar ulang antarmuka.</p>
+                    <p>Gunakan panel ini sebagai placeholder hingga engine game baru siap diaktifkan.</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+          `).join('')}
         </div>
 
-        <div>
-          <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tipe Kuis</p>
-          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            ${Object.entries(quizTypes).map(([key, label]) => `
-              <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <input type="checkbox" class="game-quiz-mode h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${key === 'short_answer' ? 'checked' : ''} />
-                ${label}
-              </label>
-            `).join('')}
+        <aside class="space-y-4">
+          <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Template Modul</p>
+            <h4 class="mt-1 text-xl font-semibold text-slate-900">Standar game platform</h4>
+            <div class="mt-4 space-y-3 text-sm text-slate-600">
+              <div class="rounded-2xl bg-slate-50 px-4 py-3">1. Pilih game dari katalog.</div>
+              <div class="rounded-2xl bg-slate-50 px-4 py-3">2. Atur konfigurasi per relasi mengajar.</div>
+              <div class="rounded-2xl bg-slate-50 px-4 py-3">3. Kelola token akses dan publish.</div>
+              <div class="rounded-2xl bg-slate-50 px-4 py-3">4. Pantau hasil, akurasi, dan top siswa.</div>
+            </div>
           </div>
-        </div>
 
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Min</label>
-            <input id="game-number-min" type="number" value="1" min="0" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
+          <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Kesiapan Ekspansi</p>
+            <div class="mt-4 space-y-3 text-sm text-slate-600">
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p class="font-semibold text-slate-900">Bank Konten</p>
+                <p class="mt-1">Pisahkan engine game dari bank soal agar satu mapel bisa dipakai di banyak game.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p class="font-semibold text-slate-900">Leaderboard</p>
+                <p class="mt-1">Gunakan format monitoring yang sama untuk semua game agar laporan guru konsisten.</p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p class="font-semibold text-slate-900">Token & Akses</p>
+                <p class="mt-1">Pertahankan pola token guru karena sudah paling cocok dengan alur kelas yang Anda pakai.</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Max</label>
-            <input id="game-number-max" type="number" value="20" min="5" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
-            <input id="game-question-count" type="number" value="10" min="5" max="50" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Durasi (detik)</label>
-            <input id="game-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Kali Min</label>
-            <input id="game-mul-min" type="number" value="1" min="0" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Kali Max</label>
-            <input id="game-mul-max" type="number" value="15" min="1" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Bagi Min</label>
-            <input id="game-div-min" type="number" value="1" min="1" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Bagi Max</label>
-            <input id="game-div-max" type="number" value="12" min="2" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Maks Pangkat</label>
-            <input id="game-max-exponent" type="number" value="3" min="2" max="6" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" />
-          </div>
-          <div class="flex items-end">
-            <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              <input id="game-allow-negative" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-[#007AFF]" />
-              Izinkan hasil negatif
-            </label>
-          </div>
-        </div>
-
-        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Token Akses Game</p>
-          <p class="mt-1 text-xs text-slate-600">Guru generate token, lalu siswa wajib memasukkan token ini sebelum mulai bermain. Token otomatis kedaluwarsa dalam 15 menit.</p>
-          <div class="mt-2 flex flex-wrap items-center gap-2">
-            <input id="game-access-token" readonly class="w-full max-w-[220px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold tracking-[0.14em] text-slate-800" placeholder="Belum dibuat" />
-            <button id="generate-game-token-btn" type="button" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Generate Token</button>
-          </div>
-          <p id="game-access-token-expiry" class="mt-2 text-xs text-slate-500">Token belum dibuat.</p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-2 text-sm font-semibold text-white hover:bg-[#0063CC]">Simpan Konfigurasi</button>
-          <button id="publish-now-btn" type="button" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Publish Sekarang</button>
-          <p id="config-message" class="text-sm text-slate-500"></p>
-        </div>
-      </form>
-
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h4 class="text-base font-semibold text-slate-900">Monitoring Hasil Game</h4>
-        <p class="mt-1 text-sm text-slate-500">Ringkasan sesi siswa untuk konfigurasi kelas yang dipilih.</p>
-        <div class="mt-3 grid gap-3 sm:grid-cols-3">
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-            <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
-            <p id="monitor-total-sessions" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-            <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
-            <p id="monitor-average-score" class="mt-2 text-2xl font-semibold text-slate-900">0</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
-            <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
-            <p id="monitor-average-accuracy" class="mt-2 text-2xl font-semibold text-slate-900">0%</p>
-          </div>
-        </div>
-        <div class="mt-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Top Siswa</p>
-          <div id="monitor-top-students" class="mt-2 space-y-2"></div>
-        </div>
-      </div>
+        </aside>
+      </section>
     </div>
   `);
 
@@ -199,16 +807,216 @@ export async function renderGuruGamePage(container) {
   const accessTokenInput = container.querySelector('#game-access-token');
   const generateTokenBtn = container.querySelector('#generate-game-token-btn');
   const accessTokenExpiryEl = container.querySelector('#game-access-token-expiry');
+  const englishAssignmentSelect = container.querySelector('#english-game-assignment');
+  const englishStatusSelect = container.querySelector('#english-game-status');
+  const englishConfigMessage = container.querySelector('#english-config-message');
+  const englishForm = container.querySelector('#english-game-config-form');
+  const englishWordCountEl = container.querySelector('#english-word-count');
+  const englishWordListEl = container.querySelector('#english-word-list');
+  const englishImportMessageEl = container.querySelector('#english-import-message');
+  const englishImportFileEl = container.querySelector('#english-import-file');
+  const englishDownloadTemplateBtn = container.querySelector('#english-download-template-btn');
+  const englishResetWordBankBtn = container.querySelector('#english-reset-word-bank-btn');
+  const englishCustomThemePanelEl = container.querySelector('#english-custom-theme-panel');
+  const englishCustomThemeListEl = container.querySelector('#english-custom-theme-list');
 
   const totalSessionsEl = container.querySelector('#monitor-total-sessions');
   const averageScoreEl = container.querySelector('#monitor-average-score');
   const averageAccuracyEl = container.querySelector('#monitor-average-accuracy');
   const topStudentsEl = container.querySelector('#monitor-top-students');
+  const mathMonitorClassFilterEl = container.querySelector('#math-monitor-class-filter');
+  const mathMonitorRangeFilterEl = container.querySelector('#math-monitor-range-filter');
+  const mathRecapWeekEl = container.querySelector('#math-recap-week');
+  const mathRecapMonthEl = container.querySelector('#math-recap-month');
+  const mathRecapSemesterEl = container.querySelector('#math-recap-semester');
+  const summarySessionsEl = container.querySelector('#game-summary-sessions');
+  const workspaceTitleEl = container.querySelector('#workspace-title');
+  const workspaceCaptionEl = container.querySelector('#workspace-caption');
+  const workspaceStatusBadgeEl = container.querySelector('#workspace-status-badge');
+  const overviewStatusEl = container.querySelector('#overview-status');
+  const overviewOperationsEl = container.querySelector('#overview-operations');
+  const overviewQuizModesEl = container.querySelector('#overview-quiz-modes');
+  const overviewDurationEl = container.querySelector('#overview-duration');
+  const overviewTokenEl = container.querySelector('#overview-token');
+  const workspaceModePillEl = container.querySelector('#workspace-mode-pill');
+  const gameCards = Array.from(container.querySelectorAll('[data-game-card]'));
+  const gameWorkspaces = Array.from(container.querySelectorAll('[data-game-workspace]'));
+  const workspaceTabs = Array.from(container.querySelectorAll('[data-workspace-tab]'));
+  const overviewPanelEl = container.querySelector('#game-overview-panel');
+  const configPanelEl = container.querySelector('#game-config-panel');
+  const accessPanelEl = container.querySelector('#game-access-panel');
+  const monitoringPanelEl = container.querySelector('#game-monitoring-panel');
+  const englishOverviewStatusEl = container.querySelector('#english-overview-status');
+  const englishOverviewThemesEl = container.querySelector('#english-overview-themes');
+  const englishOverviewQuizModesEl = container.querySelector('#english-overview-quiz-modes');
+  const englishOverviewDurationEl = container.querySelector('#english-overview-duration');
+  const englishOverviewAccessEl = container.querySelector('#english-overview-access');
+  const englishWorkspaceTabs = Array.from(container.querySelectorAll('[data-english-tab]'));
+  const englishOverviewPanelEl = container.querySelector('#english-overview-panel');
+  const englishConfigPanelEl = container.querySelector('#english-game-config-panel');
+  const englishPublishPanelEl = container.querySelector('#english-game-publish-panel');
+  const englishMonitoringPanelEl = container.querySelector('#english-game-monitoring-panel');
+  const englishTotalSessionsEl = container.querySelector('#english-monitor-total-sessions');
+  const englishAverageScoreEl = container.querySelector('#english-monitor-average-score');
+  const englishAverageAccuracyEl = container.querySelector('#english-monitor-average-accuracy');
+  const englishTopStudentsEl = container.querySelector('#english-monitor-top-students');
+  const englishMonitorClassFilterEl = container.querySelector('#english-monitor-class-filter');
+  const englishMonitorRangeFilterEl = container.querySelector('#english-monitor-range-filter');
+  const englishRecapWeekEl = container.querySelector('#english-recap-week');
+  const englishRecapMonthEl = container.querySelector('#english-recap-month');
+  const englishRecapSemesterEl = container.querySelector('#english-recap-semester');
 
   let currentAssignmentId = selectedAssignment?.id || '';
+  let currentEnglishAssignmentId = selectedAssignment?.id || '';
   let currentAccessToken = '';
   let currentAccessTokenIssuedAt = '';
   let currentAccessTokenExpiresAt = '';
+  let currentGameKey = 'math';
+  let currentWorkspaceTab = 'overview';
+  let currentEnglishWorkspaceTab = 'overview';
+  let currentEnglishWordBank = [];
+
+  function updateWorkspaceHeader() {
+    const selectedGame = gameCatalog.find((item) => item.key === currentGameKey) || gameCatalog[0];
+    if (workspaceTitleEl) {
+      workspaceTitleEl.textContent = selectedGame.workspaceTitle;
+    }
+    if (workspaceCaptionEl) {
+      workspaceCaptionEl.textContent = selectedGame.workspaceCaption;
+    }
+    if (workspaceStatusBadgeEl) {
+      workspaceStatusBadgeEl.textContent = selectedGame.status;
+      workspaceStatusBadgeEl.className = `rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${selectedGame.badgeClass}`;
+    }
+    if (workspaceModePillEl) {
+      workspaceModePillEl.textContent = selectedGame.title;
+    }
+  }
+
+  function updateOverviewSnapshot(status = 'draft', settings = normalizeGameSettings({}), token = '') {
+    if (overviewStatusEl) {
+      overviewStatusEl.textContent = status === 'published' ? 'Published' : 'Draft';
+      overviewStatusEl.className = status === 'published'
+        ? 'rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700'
+        : 'rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700';
+    }
+    if (overviewOperationsEl) {
+      overviewOperationsEl.textContent = settings.operations?.length
+        ? settings.operations.map((item) => getOperationLabel(item)).join(', ')
+        : 'Belum dipilih';
+    }
+    if (overviewQuizModesEl) {
+      overviewQuizModesEl.textContent = settings.quiz_modes?.length
+        ? settings.quiz_modes.map((item) => getQuizTypeLabel(item)).join(', ')
+        : 'Belum dipilih';
+    }
+    if (overviewDurationEl) {
+      overviewDurationEl.textContent = `${settings.question_count || 0} soal • ${settings.duration_sec || 0} detik`;
+    }
+    if (overviewTokenEl) {
+      overviewTokenEl.textContent = token || 'Belum dibuat';
+    }
+  }
+
+  function updateEnglishOverviewSnapshot(status = 'draft', settings = normalizeVocabularySettings({})) {
+    if (englishOverviewStatusEl) {
+      englishOverviewStatusEl.textContent = status === 'published' ? 'Published' : 'Draft';
+      englishOverviewStatusEl.className = status === 'published'
+        ? 'rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700'
+        : 'rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700';
+    }
+    if (englishOverviewThemesEl) {
+      englishOverviewThemesEl.textContent = settings.themes?.length
+        ? settings.themes.map((item) => getVocabularyThemeLabel(item, settings.word_bank)).join(', ')
+        : 'Belum dipilih';
+    }
+    if (englishOverviewQuizModesEl) {
+      englishOverviewQuizModesEl.textContent = settings.quiz_modes?.length
+        ? settings.quiz_modes.map((item) => getVocabularyQuizTypeLabel(item)).join(', ')
+        : 'Belum dipilih';
+    }
+    if (englishOverviewDurationEl) {
+      englishOverviewDurationEl.textContent = `${settings.question_count || 0} soal • ${settings.duration_sec || 0} detik`;
+    }
+    if (englishOverviewAccessEl) {
+      englishOverviewAccessEl.textContent = 'Tanpa token';
+    }
+  }
+
+  function setWorkspaceTab(tabKey) {
+    currentWorkspaceTab = tabKey;
+    workspaceTabs.forEach((button) => {
+      const isActive = button.getAttribute('data-workspace-tab') === tabKey;
+      button.className = isActive
+        ? 'workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition'
+        : 'workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50';
+    });
+
+    if (overviewPanelEl) {
+      overviewPanelEl.classList.toggle('hidden', tabKey !== 'overview');
+    }
+    if (form) {
+      form.classList.toggle('hidden', !['config', 'access'].includes(tabKey));
+    }
+    if (configPanelEl) {
+      configPanelEl.classList.toggle('hidden', tabKey !== 'config');
+    }
+    if (accessPanelEl) {
+      accessPanelEl.classList.toggle('hidden', tabKey !== 'access');
+    }
+    if (monitoringPanelEl) {
+      monitoringPanelEl.classList.toggle('hidden', tabKey !== 'monitoring');
+    }
+  }
+
+  function setEnglishWorkspaceTab(tabKey) {
+    currentEnglishWorkspaceTab = tabKey;
+    englishWorkspaceTabs.forEach((button) => {
+      const isActive = button.getAttribute('data-english-tab') === tabKey;
+      button.className = isActive
+        ? 'english-workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition'
+        : 'english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50';
+    });
+
+    if (englishOverviewPanelEl) {
+      englishOverviewPanelEl.classList.toggle('hidden', tabKey !== 'overview');
+    }
+    if (englishForm) {
+      englishForm.classList.toggle('hidden', !['config', 'publish'].includes(tabKey));
+    }
+    if (englishConfigPanelEl) {
+      englishConfigPanelEl.classList.toggle('hidden', tabKey !== 'config');
+    }
+    if (englishPublishPanelEl) {
+      englishPublishPanelEl.classList.toggle('hidden', tabKey !== 'publish');
+    }
+    if (englishMonitoringPanelEl) {
+      englishMonitoringPanelEl.classList.toggle('hidden', tabKey !== 'monitoring');
+    }
+  }
+
+  function setActiveGame(gameKey) {
+    currentGameKey = gameKey;
+    gameCards.forEach((card) => {
+      const isActive = card.getAttribute('data-game-card') === gameKey;
+      card.classList.toggle('ring-2', isActive);
+      card.classList.toggle('ring-emerald-200', isActive);
+    });
+    gameWorkspaces.forEach((panel) => {
+      panel.classList.toggle('hidden', panel.getAttribute('data-game-workspace') !== gameKey);
+    });
+
+    if (gameKey === 'math') {
+      updateWorkspaceHeader();
+      setWorkspaceTab(currentWorkspaceTab);
+      renderMonitoring(currentAssignmentId);
+    }
+
+    if (gameKey === 'english_vocab') {
+      setEnglishWorkspaceTab(currentEnglishWorkspaceTab);
+      renderEnglishMonitoring(currentEnglishAssignmentId);
+    }
+  }
 
   function formatDateTime(dateString) {
     if (!dateString) {
@@ -239,6 +1047,155 @@ export async function renderGuruGamePage(container) {
     configMessage.className = isError ? 'text-sm text-rose-600' : 'text-sm text-slate-500';
   }
 
+  function setEnglishMessage(text, isError = false) {
+    if (!englishConfigMessage) return;
+    englishConfigMessage.textContent = text;
+    englishConfigMessage.className = isError ? 'text-sm text-rose-600' : 'text-sm text-slate-500';
+  }
+
+  function setEnglishImportMessage(text, isError = false) {
+    if (!englishImportMessageEl) return;
+    englishImportMessageEl.textContent = text;
+    englishImportMessageEl.className = isError ? 'text-sm text-rose-600' : 'text-sm text-slate-500';
+  }
+
+  function getActiveEnglishWordBank() {
+    const settings = getSelectedEnglishSettings();
+    const effectiveSettings = {
+      ...settings,
+      word_bank: currentEnglishWordBank,
+    };
+    return getVocabularyWordList(effectiveSettings);
+  }
+
+  function getSelectedEnglishThemeKeys() {
+    const builtInThemes = Array.from(container.querySelectorAll('.english-theme:checked')).map((input) => input.value);
+    const customThemes = getVocabularyThemeOptions(currentEnglishWordBank)
+      .filter((item) => item.is_custom)
+      .map((item) => item.key);
+    return [...new Set([...builtInThemes, ...customThemes])];
+  }
+
+  function renderEnglishCustomThemes() {
+    if (!englishCustomThemePanelEl || !englishCustomThemeListEl) {
+      return;
+    }
+
+    const customThemes = getVocabularyThemeOptions(currentEnglishWordBank).filter((item) => item.is_custom);
+    englishCustomThemePanelEl.classList.toggle('hidden', !customThemes.length);
+    englishCustomThemeListEl.innerHTML = customThemes
+      .map((item) => `<span class="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700">${item.label}</span>`)
+      .join('');
+  }
+
+  function renderEnglishWordList() {
+    if (!englishWordListEl) {
+      return;
+    }
+
+    const words = getActiveEnglishWordBank();
+    if (englishWordCountEl) {
+      englishWordCountEl.textContent = `${words.length} kata`;
+    }
+
+    englishWordListEl.innerHTML = words.length
+      ? words.map((item) => `
+          <tr>
+            <td class="px-4 py-3 text-slate-600">${item.theme_label || getVocabularyThemeLabel(item.theme)}</td>
+            <td class="px-4 py-3 font-semibold text-slate-900">${item.word}</td>
+            <td class="px-4 py-3 text-slate-700">${item.translation}</td>
+            <td class="px-4 py-3 text-slate-600">${item.sentence}</td>
+          </tr>
+        `).join('')
+      : '<tr><td colspan="4" class="px-4 py-4 text-sm text-slate-500">Belum ada kosakata aktif.</td></tr>';
+
+      renderEnglishCustomThemes();
+  }
+
+  function buildVocabularyTemplateRows() {
+    return [
+      { theme: 'animals', word: 'cat', translation: 'kucing', sentence: 'The cat is sleeping on the chair.' },
+      { theme: 'school', word: 'book', translation: 'buku', sentence: 'I read a book in the library.' },
+      { theme: 'family', word: 'mother', translation: 'ibu', sentence: 'My mother cooks delicious soup.' },
+      { theme: 'food', word: 'apple', translation: 'apel', sentence: 'I eat an apple at break time.' },
+      { theme: 'activities', word: 'study', translation: 'belajar', sentence: 'Students study for the test.' },
+    ];
+  }
+
+  function downloadVocabularyTemplate() {
+    if (!window.XLSX) {
+      setEnglishImportMessage('Library Excel belum tersedia di browser.', true);
+      return;
+    }
+
+    const workbook = window.XLSX.utils.book_new();
+    const dataSheet = window.XLSX.utils.json_to_sheet(buildVocabularyTemplateRows());
+    const guideSheet = window.XLSX.utils.json_to_sheet([
+      { field: 'theme', description: 'Gunakan salah satu: animals, school, family, food, activities' },
+      { field: 'word', description: 'Kosakata bahasa Inggris, contoh: cat' },
+      { field: 'translation', description: 'Arti bahasa Indonesia, contoh: kucing' },
+      { field: 'sentence', description: 'Contoh kalimat bahasa Inggris yang memuat kata tersebut' },
+    ]);
+    window.XLSX.utils.book_append_sheet(workbook, dataSheet, 'template_vocab');
+    window.XLSX.utils.book_append_sheet(workbook, guideSheet, 'panduan');
+    window.XLSX.writeFile(workbook, VOCAB_TEMPLATE_FILE_NAME);
+    setEnglishImportMessage('Template Excel berhasil diunduh. Isi sheet template_vocab lalu import kembali.');
+  }
+
+  function sanitizeImportedVocabularyRows(rows = []) {
+    return (Array.isArray(rows) ? rows : [])
+      .map((item) => {
+        const theme = slugifyText(item.theme || item.theme_key || item.tema);
+        const word = String(item.word || item.kata || '').trim().toLowerCase();
+        const translation = String(item.translation || item.arti || item.meaning || '').trim().toLowerCase();
+        const sentence = String(item.sentence || item.kalimat || '').trim();
+
+        if (!theme || !word || !translation) {
+          return null;
+        }
+
+        return {
+          theme,
+          word,
+          translation,
+          sentence,
+        };
+      })
+      .filter(Boolean)
+      .filter((item, index, list) => list.findIndex((entry) => `${entry.theme}:${entry.word}` === `${item.theme}:${item.word}`) === index);
+  }
+
+  function getSessionsByScope(sessions, scope = 'semester') {
+    const now = new Date();
+    const nowTime = now.getTime();
+    const weekStart = getWeekStart(now).getTime();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+    if (scope === 'week') {
+      return sessions.filter((item) => getSessionTimestamp(item) >= weekStart);
+    }
+    if (scope === 'month') {
+      return sessions.filter((item) => getSessionTimestamp(item) >= monthStart);
+    }
+    return sessions.filter((item) => getSessionTimestamp(item) <= nowTime);
+  }
+
+  function getSessionsForClass(sessions, kelasId = 'all') {
+    if (!kelasId || kelasId === 'all') {
+      return sessions;
+    }
+    return sessions.filter((item) => String(item.kelas_id || '') === String(kelasId));
+  }
+
+  function updateRecapCards(sessions, weekEl, monthEl, semesterEl) {
+    const weekCount = getSessionsByScope(sessions, 'week').length;
+    const monthCount = getSessionsByScope(sessions, 'month').length;
+    const semesterCount = getSessionsByScope(sessions, 'semester').length;
+    if (weekEl) weekEl.textContent = `${weekCount} sesi`;
+    if (monthEl) monthEl.textContent = `${monthCount} sesi`;
+    if (semesterEl) semesterEl.textContent = `${semesterCount} sesi`;
+  }
+
   function getSelectedSettings() {
     const operations = Array.from(container.querySelectorAll('.game-operation:checked')).map((input) => input.value);
     const quizModes = Array.from(container.querySelectorAll('.game-quiz-mode:checked')).map((input) => input.value);
@@ -255,6 +1212,19 @@ export async function renderGuruGamePage(container) {
       div_number_max: container.querySelector('#game-div-max')?.value,
       max_exponent: container.querySelector('#game-max-exponent')?.value,
       allow_negative: container.querySelector('#game-allow-negative')?.checked,
+    });
+  }
+
+  function getSelectedEnglishSettings() {
+    const themes = getSelectedEnglishThemeKeys();
+    const quizModes = Array.from(container.querySelectorAll('.english-quiz-mode:checked')).map((input) => input.value);
+    return normalizeVocabularySettings({
+      themes,
+      quiz_modes: quizModes,
+      question_count: container.querySelector('#english-question-count')?.value,
+      duration_sec: container.querySelector('#english-duration')?.value,
+      difficulty: container.querySelector('#english-difficulty')?.value,
+      word_bank: currentEnglishWordBank,
     });
   }
 
@@ -293,10 +1263,39 @@ export async function renderGuruGamePage(container) {
         ? `Berlaku sampai: ${formatDateTime(currentAccessTokenExpiresAt)}`
         : 'Token belum dibuat.';
     }
+    updateOverviewSnapshot(config.status || 'draft', settings, currentAccessToken);
+  }
+
+  function applyEnglishConfigToForm(config) {
+    if (!config) return;
+
+    const settings = normalizeVocabularySettings(config.settings || {});
+    currentEnglishWordBank = Array.isArray(settings.word_bank) ? settings.word_bank : [];
+    if (englishStatusSelect) {
+      englishStatusSelect.value = config.status || 'draft';
+    }
+
+    container.querySelectorAll('.english-theme').forEach((input) => {
+      input.checked = settings.themes.includes(input.value);
+    });
+
+    container.querySelectorAll('.english-quiz-mode').forEach((input) => {
+      input.checked = settings.quiz_modes.includes(input.value);
+    });
+
+    container.querySelector('#english-question-count').value = settings.question_count;
+    container.querySelector('#english-duration').value = settings.duration_sec;
+    container.querySelector('#english-difficulty').value = settings.difficulty;
+    updateEnglishOverviewSnapshot(config.status || 'draft', settings);
+    renderEnglishWordList();
   }
 
   function getLocalConfigForAssignment(assignmentId) {
     return readLocalList(LOCAL_CONFIG_KEY).find((item) => item.pengajaran_id === assignmentId && item.game_type === 'math') || null;
+  }
+
+  function getLocalEnglishConfigForAssignment(assignmentId) {
+    return readLocalList(LOCAL_CONFIG_KEY).find((item) => item.pengajaran_id === assignmentId && item.game_type === 'english_vocab') || null;
   }
 
   async function fetchRemoteConfig(assignmentId) {
@@ -305,6 +1304,16 @@ export async function renderGuruGamePage(container) {
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignmentId },
       { field: 'game_type', operator: '==', value: 'math' },
+    ]);
+    return docs[0] || null;
+  }
+
+  async function fetchRemoteEnglishConfig(assignmentId) {
+    const docs = await getDocumentsWhere('game_configs', [
+      { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+      { field: 'semester_id', operator: '==', value: context.semester_aktif },
+      { field: 'pengajaran_id', operator: '==', value: assignmentId },
+      { field: 'game_type', operator: '==', value: 'english_vocab' },
     ]);
     return docs[0] || null;
   }
@@ -345,24 +1354,56 @@ export async function renderGuruGamePage(container) {
       if (accessTokenExpiryEl) {
         accessTokenExpiryEl.textContent = 'Token belum dibuat.';
       }
+      updateOverviewSnapshot('draft', getSelectedSettings(), '');
       setMessage('Belum ada konfigurasi. Silakan simpan draft baru.');
     }
   }
 
-  async function getSessionsForAssignment(assignmentId) {
+  async function loadEnglishConfig(assignmentId) {
+    if (!assignmentId) {
+      return;
+    }
+
+    const remoteConfig = await fetchRemoteEnglishConfig(assignmentId);
+    const localConfig = getLocalEnglishConfigForAssignment(assignmentId);
+    const config = remoteConfig || localConfig;
+
+    if (config) {
+      applyEnglishConfigToForm(config);
+      setEnglishMessage(`Konfigurasi aktif: ${config.status === 'published' ? 'Published' : 'Draft'}.`);
+      return;
+    }
+
+    englishForm?.reset();
+    currentEnglishWordBank = [];
+    container.querySelector('#english-question-count').value = 10;
+    container.querySelector('#english-duration').value = 180;
+    container.querySelector('#english-difficulty').value = 'basic';
+    container.querySelectorAll('.english-theme').forEach((input, index) => {
+      input.checked = index === 0;
+    });
+    container.querySelectorAll('.english-quiz-mode').forEach((input, index) => {
+      input.checked = index < 2;
+    });
+    updateEnglishOverviewSnapshot('draft', getSelectedEnglishSettings());
+    renderEnglishWordList();
+    setEnglishMessage('Belum ada konfigurasi. Silakan simpan draft baru.');
+  }
+
+  async function getSessionsForAssignment(assignmentId, gameType = 'math') {
     let docs = [];
     try {
       docs = await getDocumentsWhere('game_sessions', [
         { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
         { field: 'semester_id', operator: '==', value: context.semester_aktif },
         { field: 'pengajaran_id', operator: '==', value: assignmentId },
-        { field: 'game_type', operator: '==', value: 'math' },
+        { field: 'game_type', operator: '==', value: gameType },
       ]);
     } catch {
       docs = [];
     }
 
-    const local = readLocalList(LOCAL_SESSION_KEY).filter((item) => item.pengajaran_id === assignmentId && item.game_type === 'math');
+    const local = readLocalList(LOCAL_SESSION_KEY).filter((item) => item.pengajaran_id === assignmentId && item.game_type === gameType);
     const map = new Map();
     [...docs, ...local].forEach((item) => {
       map.set(item.id, item);
@@ -370,16 +1411,30 @@ export async function renderGuruGamePage(container) {
     return [...map.values()];
   }
 
-  async function renderMonitoring(assignmentId) {
-    const sessions = await getSessionsForAssignment(assignmentId);
-    const total = sessions.length;
-    const averageScore = total ? sessions.reduce((sum, item) => sum + Number(item.score || 0), 0) / total : 0;
-    const averageAccuracy = total ? sessions.reduce((sum, item) => sum + Number(item.accuracy || 0), 0) / total : 0;
+  async function getSessionsForGameType(gameType = 'math') {
+    let docs = [];
+    try {
+      docs = await getDocumentsWhere('game_sessions', [
+        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+        { field: 'semester_id', operator: '==', value: context.semester_aktif },
+        { field: 'game_type', operator: '==', value: gameType },
+      ]);
+    } catch {
+      docs = [];
+    }
 
-    totalSessionsEl.textContent = String(total);
-    averageScoreEl.textContent = averageScore.toFixed(1);
-    averageAccuracyEl.textContent = `${averageAccuracy.toFixed(1)}%`;
+    const assignmentIds = new Set(assignments.map((item) => item.id));
+    const local = readLocalList(LOCAL_SESSION_KEY).filter((item) => item.game_type === gameType && assignmentIds.has(item.pengajaran_id));
+    const map = new Map();
+    [...docs, ...local]
+      .filter((item) => assignmentIds.has(item.pengajaran_id))
+      .forEach((item) => {
+        map.set(item.id, item);
+      });
+    return [...map.values()];
+  }
 
+  function renderTopStudentsList(sessions, targetEl) {
     const byStudent = {};
     sessions.forEach((item) => {
       const key = String(item.siswa_id || '-');
@@ -399,7 +1454,7 @@ export async function renderGuruGamePage(container) {
       .sort((a, b) => b.avg - a.avg)
       .slice(0, 5);
 
-    topStudentsEl.innerHTML = top.length
+    targetEl.innerHTML = top.length
       ? top.map((item, index) => `
           <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.name}</p>
@@ -407,6 +1462,54 @@ export async function renderGuruGamePage(container) {
           </div>
         `).join('')
       : '<p class="text-sm text-slate-500">Belum ada sesi game untuk relasi ini.</p>';
+  }
+
+  async function renderMonitoring(assignmentId) {
+    const allSessions = await getSessionsForGameType('math');
+    const classId = mathMonitorClassFilterEl?.value || 'all';
+    const scope = mathMonitorRangeFilterEl?.value || 'semester';
+    const classSessions = getSessionsForClass(allSessions, classId);
+    const sessions = getSessionsByScope(classSessions, scope);
+    const total = sessions.length;
+    const averageScore = total ? sessions.reduce((sum, item) => sum + Number(item.score || 0), 0) / total : 0;
+    const averageAccuracy = total ? sessions.reduce((sum, item) => sum + Number(item.accuracy || 0), 0) / total : 0;
+
+    totalSessionsEl.textContent = String(total);
+    averageScoreEl.textContent = averageScore.toFixed(1);
+    averageAccuracyEl.textContent = `${averageAccuracy.toFixed(1)}%`;
+    if (summarySessionsEl) {
+      summarySessionsEl.textContent = String(total);
+    }
+    updateRecapCards(classSessions, mathRecapWeekEl, mathRecapMonthEl, mathRecapSemesterEl);
+    renderTopStudentsList(sessions, topStudentsEl);
+  }
+
+  async function renderEnglishMonitoring(assignmentId) {
+    const allSessions = await getSessionsForGameType('english_vocab');
+    const classId = englishMonitorClassFilterEl?.value || 'all';
+    const scope = englishMonitorRangeFilterEl?.value || 'semester';
+    const classSessions = getSessionsForClass(allSessions, classId);
+    const sessions = getSessionsByScope(classSessions, scope);
+    const total = sessions.length;
+    const averageScore = total ? sessions.reduce((sum, item) => sum + Number(item.score || 0), 0) / total : 0;
+    const averageAccuracy = total ? sessions.reduce((sum, item) => sum + Number(item.accuracy || 0), 0) / total : 0;
+
+    if (englishTotalSessionsEl) {
+      englishTotalSessionsEl.textContent = String(total);
+    }
+    if (englishAverageScoreEl) {
+      englishAverageScoreEl.textContent = averageScore.toFixed(1);
+    }
+    if (englishAverageAccuracyEl) {
+      englishAverageAccuracyEl.textContent = `${averageAccuracy.toFixed(1)}%`;
+    }
+    if (summarySessionsEl && currentGameKey === 'english_vocab') {
+      summarySessionsEl.textContent = String(total);
+    }
+    updateRecapCards(classSessions, englishRecapWeekEl, englishRecapMonthEl, englishRecapSemesterEl);
+    if (englishTopStudentsEl) {
+      renderTopStudentsList(sessions, englishTopStudentsEl);
+    }
   }
 
   async function saveConfig(forcePublished = false) {
@@ -462,7 +1565,66 @@ export async function renderGuruGamePage(container) {
     const operationNames = settings.operations.map((item) => getOperationLabel(item)).join(', ');
     const quizNames = settings.quiz_modes.map((item) => getQuizTypeLabel(item)).join(', ');
 
+    updateOverviewSnapshot(status, settings, currentAccessToken);
     setMessage(`Konfigurasi ${status === 'published' ? 'published' : 'draft'} tersimpan. Operasi: ${operationNames}. Tipe kuis: ${quizNames}.${currentAccessToken ? ` Token akses: ${currentAccessToken} (berlaku 15 menit)` : ' Token akses belum dibuat.'}`);
+  }
+
+  async function saveEnglishConfig(forcePublished = false) {
+    const assignment = assignments.find((item) => item.id === currentEnglishAssignmentId);
+    if (!assignment) {
+      setEnglishMessage('Relasi mengajar tidak ditemukan.', true);
+      return;
+    }
+
+    const settings = getSelectedEnglishSettings();
+    if (!settings.themes.length) {
+      setEnglishMessage('Pilih minimal satu tema kosakata.', true);
+      return;
+    }
+
+    if (!settings.quiz_modes.length) {
+      setEnglishMessage('Pilih minimal satu mode kuis.', true);
+      return;
+    }
+
+    const status = forcePublished ? 'published' : (englishStatusSelect?.value || 'draft');
+    const configId = `${assignment.id}_english_vocab`;
+
+    const payload = {
+      id: configId,
+      tahun_ajaran_id: context.tahun_ajaran_aktif,
+      semester_id: context.semester_aktif,
+      pengajaran_id: assignment.id,
+      guru_id: assignment.guru_id,
+      guru_nama: assignment.guru_nama,
+      kelas_id: assignment.kelas_id,
+      kelas_nama: assignment.kelas_nama,
+      mapel_id: assignment.mapel_id,
+      mapel_nama: assignment.mapel_nama,
+      game_type: 'english_vocab',
+      status,
+      game_access_token: '',
+      game_access_token_issued_at: '',
+      game_access_token_expires_at: '',
+      settings,
+      updated_at: new Date().toISOString(),
+    };
+
+    try {
+      await saveDocument('game_configs', payload, configId);
+    } catch (error) {
+      console.warn('Simpan Firestore gagal, data English Vocabulary disimpan lokal:', error);
+    }
+
+    upsertLocalById(LOCAL_CONFIG_KEY, payload);
+    if (englishStatusSelect) {
+      englishStatusSelect.value = status;
+    }
+
+    const themeNames = settings.themes.map((item) => getVocabularyThemeLabel(item, settings.word_bank)).join(', ');
+    const quizNames = settings.quiz_modes.map((item) => getVocabularyQuizTypeLabel(item)).join(', ');
+    updateEnglishOverviewSnapshot(status, settings);
+    setEnglishMessage(`Konfigurasi ${status === 'published' ? 'published' : 'draft'} tersimpan. Tema: ${themeNames}. Mode kuis: ${quizNames}. Game ini tidak memerlukan token siswa.`);
   }
 
   generateTokenBtn?.addEventListener('click', () => {
@@ -477,13 +1639,105 @@ export async function renderGuruGamePage(container) {
     if (accessTokenExpiryEl) {
       accessTokenExpiryEl.textContent = `Berlaku sampai: ${formatDateTime(currentAccessTokenExpiresAt)}`;
     }
+    updateOverviewSnapshot(statusSelect?.value || 'draft', getSelectedSettings(), currentAccessToken);
     setMessage(`Token baru dibuat: ${currentAccessToken}. Berlaku 15 menit. Simpan konfigurasi agar token aktif.`);
+  });
+
+  workspaceTabs.forEach((button) => {
+    button.addEventListener('click', () => {
+      setWorkspaceTab(button.getAttribute('data-workspace-tab') || 'overview');
+    });
+  });
+
+  gameCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      const nextKey = card.getAttribute('data-game-card') || 'math';
+      setActiveGame(nextKey);
+    });
   });
 
   assignmentSelect?.addEventListener('change', async (event) => {
     currentAssignmentId = event.target.value;
     await loadConfig(currentAssignmentId);
     await renderMonitoring(currentAssignmentId);
+  });
+
+  englishAssignmentSelect?.addEventListener('change', async (event) => {
+    currentEnglishAssignmentId = event.target.value;
+    await loadEnglishConfig(currentEnglishAssignmentId);
+    await renderEnglishMonitoring(currentEnglishAssignmentId);
+  });
+
+  mathMonitorClassFilterEl?.addEventListener('change', async () => {
+    await renderMonitoring(currentAssignmentId);
+  });
+
+  mathMonitorRangeFilterEl?.addEventListener('change', async () => {
+    await renderMonitoring(currentAssignmentId);
+  });
+
+  englishMonitorClassFilterEl?.addEventListener('change', async () => {
+    await renderEnglishMonitoring(currentEnglishAssignmentId);
+  });
+
+  englishMonitorRangeFilterEl?.addEventListener('change', async () => {
+    await renderEnglishMonitoring(currentEnglishAssignmentId);
+  });
+
+  container.querySelectorAll('.english-theme, .english-quiz-mode, #english-question-count, #english-duration, #english-difficulty').forEach((element) => {
+    element.addEventListener('change', () => {
+      updateEnglishOverviewSnapshot(englishStatusSelect?.value || 'draft', getSelectedEnglishSettings());
+      renderEnglishWordList();
+    });
+  });
+
+  englishDownloadTemplateBtn?.addEventListener('click', () => {
+    downloadVocabularyTemplate();
+  });
+
+  englishResetWordBankBtn?.addEventListener('click', () => {
+    currentEnglishWordBank = [];
+    renderEnglishWordList();
+    updateEnglishOverviewSnapshot(englishStatusSelect?.value || 'draft', getSelectedEnglishSettings());
+    setEnglishImportMessage('Bank kosakata dikembalikan ke daftar default berdasarkan tema yang dipilih.');
+  });
+
+  englishImportFileEl?.addEventListener('change', async (event) => {
+    const [file] = Array.from(event.target.files || []);
+    if (!file) {
+      return;
+    }
+    if (!window.XLSX) {
+      setEnglishImportMessage('Library Excel belum tersedia di browser.', true);
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = window.XLSX.read(buffer, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const rows = window.XLSX.utils.sheet_to_json(workbook.Sheets[firstSheetName], { defval: '' });
+      const importedWords = sanitizeImportedVocabularyRows(rows);
+
+      if (!importedWords.length) {
+        setEnglishImportMessage('File tidak berisi baris kosakata yang valid. Gunakan template yang disediakan.', true);
+        return;
+      }
+
+      currentEnglishWordBank = importedWords;
+      const importedThemes = [...new Set(importedWords.map((item) => item.theme))];
+      container.querySelectorAll('.english-theme').forEach((input) => {
+        input.checked = importedThemes.includes(input.value);
+      });
+      renderEnglishWordList();
+      updateEnglishOverviewSnapshot(englishStatusSelect?.value || 'draft', getSelectedEnglishSettings());
+      setEnglishImportMessage(`${importedWords.length} kosakata berhasil diimport dari file ${file.name}. Simpan konfigurasi untuk menerapkan perubahan.`);
+    } catch (error) {
+      console.warn('Gagal memproses file Excel vocabulary:', error);
+      setEnglishImportMessage('File gagal dibaca. Pastikan format mengikuti template Excel.', true);
+    } finally {
+      event.target.value = '';
+    }
   });
 
   form?.addEventListener('submit', async (event) => {
@@ -497,8 +1751,32 @@ export async function renderGuruGamePage(container) {
     await renderMonitoring(currentAssignmentId);
   });
 
+  englishForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await saveEnglishConfig(false);
+    await renderEnglishMonitoring(currentEnglishAssignmentId);
+  });
+
+  container.querySelector('#english-publish-now-btn')?.addEventListener('click', async () => {
+    await saveEnglishConfig(true);
+    await renderEnglishMonitoring(currentEnglishAssignmentId);
+  });
+
+  englishWorkspaceTabs.forEach((button) => {
+    button.addEventListener('click', () => {
+      setEnglishWorkspaceTab(button.getAttribute('data-english-tab') || 'overview');
+    });
+  });
+
+  updateWorkspaceHeader();
+  setActiveGame('math');
+  setWorkspaceTab('overview');
+  setEnglishWorkspaceTab('overview');
   await loadConfig(currentAssignmentId);
   await renderMonitoring(currentAssignmentId);
+  await loadEnglishConfig(currentEnglishAssignmentId);
+  renderEnglishWordList();
+  await renderEnglishMonitoring(currentEnglishAssignmentId);
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');
