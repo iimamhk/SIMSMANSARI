@@ -265,6 +265,96 @@ export async function renderGuruInputAbsenPage(container) {
             </div>
           </div>
         </div>
+
+        <section id="absensi-subtab-keluar-kelas" class="hidden grid max-w-full gap-3 xl:grid-cols-[1.1fr_0.9fr]">
+          <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-4">
+            <div class="mb-4">
+              <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Catatan Siswa Keluar Kelas</h2>
+              <p class="mt-1 text-sm text-slate-500">Catat alasan siswa keluar kelas seperti izin, ke kantin, ikut organisasi, membolos, atau kebutuhan khusus lain pada jam pelajaran aktif.</p>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label class="text-sm font-medium text-slate-700">Pilih Siswa</label>
+                <select id="special-note-student" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"></select>
+              </div>
+              <div>
+                <label class="text-sm font-medium text-slate-700">Jenis Catatan</label>
+                <select id="special-note-type" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100">
+                  <option value="Izin Keluar">Izin Keluar</option>
+                  <option value="Siswa Membolos">Siswa Membolos</option>
+                  <option value="Siswa ke Kantin">Siswa ke Kantin</option>
+                  <option value="Siswa Ikut Organisasi">Siswa Ikut Organisasi</option>
+                  <option value="Siswa ke Toilet">Siswa ke Toilet</option>
+                  <option value="Siswa ke Perpustakaan">Siswa ke Perpustakaan</option>
+                  <option value="Dipanggil Guru Lain">Dipanggil Guru Lain</option>
+                  <option value="Kembali Terlambat">Kembali Terlambat</option>
+                  <option value="Keperluan UKS">Keperluan UKS</option>
+                  <option value="Catatan Guru">Catatan Guru</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-sm font-medium text-slate-700">Jam</label>
+                <input id="special-note-time" type="time" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100" />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="text-sm font-medium text-slate-700">Catatan</label>
+                <textarea id="special-note-text" rows="4" placeholder="Contoh: izin ke UKS pukul 09:15 dan kembali pukul 09:35." class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"></textarea>
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+              <button id="save-special-note-btn" type="button" class="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(245,158,11,0.95)] transition hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600">Simpan Catatan</button>
+              <p id="special-note-message" class="text-xs text-slate-500">Catatan akan tersimpan pada tanggal absensi yang sedang aktif.</p>
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-4">
+              <div class="mb-4">
+                <h3 class="text-base font-semibold text-slate-900">Filter Riwayat</h3>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="sm:col-span-2">
+                  <label class="text-sm font-medium text-slate-700">Siswa</label>
+                  <select id="special-note-history-student" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100"></select>
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-slate-700">Jenis</label>
+                  <select id="special-note-history-type" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100">
+                    <option value="all">Semua jenis</option>
+                    <option value="Izin Keluar">Izin Keluar</option>
+                    <option value="Siswa Membolos">Siswa Membolos</option>
+                    <option value="Siswa ke Kantin">Siswa ke Kantin</option>
+                    <option value="Siswa Ikut Organisasi">Siswa Ikut Organisasi</option>
+                    <option value="Siswa ke Toilet">Siswa ke Toilet</option>
+                    <option value="Siswa ke Perpustakaan">Siswa ke Perpustakaan</option>
+                    <option value="Dipanggil Guru Lain">Dipanggil Guru Lain</option>
+                    <option value="Kembali Terlambat">Kembali Terlambat</option>
+                    <option value="Keperluan UKS">Keperluan UKS</option>
+                    <option value="Catatan Guru">Catatan Guru</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-slate-700">Mulai</label>
+                  <input id="special-note-history-start" type="date" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100" />
+                </div>
+                <div>
+                  <label class="text-sm font-medium text-slate-700">Sampai</label>
+                  <input id="special-note-history-end" type="date" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-700 outline-none transition focus:border-amber-300 focus:ring-4 focus:ring-amber-100" />
+                </div>
+              </div>
+            </div>
+
+            <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-4">
+              <div class="mb-4 flex items-center justify-between gap-3">
+                <h3 class="text-base font-semibold text-slate-900">Riwayat Catatan</h3>
+                <span class="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">Kelas Aktif</span>
+              </div>
+              <div id="special-note-history" class="space-y-3"></div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section id="tab-rekap" class="hidden space-y-6">
@@ -367,6 +457,9 @@ export async function renderGuruInputAbsenPage(container) {
           <div class="grid gap-4 lg:grid-cols-2">
             <div class="rounded-[24px] bg-gradient-to-b from-slate-50 to-white p-5 shadow-inner">
               <p class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Sering Hadir</p>
+              <ol id="top-present-list" class="mt-4 space-y-3 text-sm text-slate-700"></ol>
+            </div>
+            <div class="rounded-[24px] bg-gradient-to-b from-slate-50 to-white p-5 shadow-inner">
               <p class="text-sm font-semibold uppercase tracking-[0.12em] text-slate-500">Sering Tidak Hadir</p>
               <ol id="top-absent-list" class="mt-4 space-y-3 text-sm text-slate-700"></ol>
             </div>
@@ -442,6 +535,9 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   function setSpecialNoteMessage(text, isError = false) {
+    if (!specialNoteMessage) {
+      return;
+    }
     specialNoteMessage.textContent = text;
     specialNoteMessage.className = isError ? 'text-xs text-rose-600' : 'text-xs text-slate-500';
   }
@@ -475,6 +571,10 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   function renderSpecialNoteStudentOptions() {
+    if (!specialNoteStudent) {
+      return;
+    }
+
     const sortedMembers = [...currentMembers].sort((a, b) => {
       const nameA = (a.siswa_nama || a.nama || '').toLowerCase();
       const nameB = (b.siswa_nama || b.nama || '').toLowerCase();
@@ -496,6 +596,10 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   function renderSpecialNoteHistoryStudentOptions() {
+    if (!specialNoteHistoryStudent) {
+      return;
+    }
+
     const sortedMembers = [...currentMembers].sort((a, b) => {
       const nameA = (a.siswa_nama || a.nama || '').toLowerCase();
       const nameB = (b.siswa_nama || b.nama || '').toLowerCase();
@@ -510,6 +614,10 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   function renderSpecialNoteHistory() {
+    if (!specialNoteHistory) {
+      return;
+    }
+
     let filteredNotes = [...currentSpecialNotes];
 
     const studentFilter = specialNoteHistoryStudent?.value || 'all';
@@ -815,6 +923,10 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   async function saveSpecialNote() {
+    if (!specialNoteStudent || !specialNoteType || !specialNoteTime || !specialNoteText) {
+      return;
+    }
+
     const assignment = getCurrentAssignment();
     if (!assignment) {
       setSpecialNoteMessage('Relasi mengajar belum dipilih.', true);
@@ -957,6 +1069,10 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   function renderPencapaian() {
+    if (!topPresentList || !topAbsentList || !motivationText) {
+      return;
+    }
+
     const period = getRecapPeriod();
     const records = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
     const siswaStats = currentMembers.map((member) => {

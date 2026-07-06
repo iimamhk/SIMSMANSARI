@@ -7,11 +7,13 @@ import { renderSystemSettingsPage } from '../pages/admin/pengatur-sistem.js';
 import { renderGuruDashboard } from '../pages/guru/dashboard.js';
 import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
 import { renderGuruPenilaianPage } from '../pages/guru/penilaian.js';
+import { renderGuruMateriPage } from '../pages/guru/materi.js';
 import { renderGuruSystemSettingsPage } from '../pages/guru/pengatur-sistem.js';
 import { renderGuruGamePage } from '../pages/guru/game.js';
 import { renderSiswaDashboardPage } from '../pages/siswa/dashboard.js';
 import { renderSiswaNilaiPage } from '../pages/siswa/nilai.js';
 import { renderSiswaAbsensiPage } from '../pages/siswa/absensi.js';
+import { renderSiswaMateriPage } from '../pages/siswa/materi.js';
 import { renderSiswaSystemSettingsPage } from '../pages/siswa/pengatur-sistem.js';
 import { renderSiswaGamePage } from '../pages/siswa/game.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
@@ -146,6 +148,11 @@ function renderRoute() {
     return;
   }
 
+  if (route === '#guru/materi') {
+    renderGuruMateriPage(container);
+    return;
+  }
+
   if (route === '#guru/game') {
     renderGuruGamePage(container);
     return;
@@ -168,6 +175,11 @@ function renderRoute() {
 
   if (route === '#siswa/absensi') {
     renderSiswaAbsensiPage(container);
+    return;
+  }
+
+  if (route === '#siswa/materi') {
+    renderSiswaMateriPage(container);
     return;
   }
 

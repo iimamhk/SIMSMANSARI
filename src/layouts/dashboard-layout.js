@@ -118,6 +118,17 @@ export function renderLayout(title, content) {
       `,
     },
     {
+      label: 'Materi',
+      href: '#siswa/materi',
+      routes: ['#siswa/materi'],
+      icon: (active) => `
+        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      `,
+    },
+    {
       label: 'Game Center',
       href: '#siswa/game',
       routes: ['#siswa/game'],
@@ -216,6 +227,14 @@ export function renderLayout(title, content) {
     </svg>
   `;
 
+  const iconBookSpark = (active) => `
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+    </svg>
+  `;
+
   const desktopNavItems = isAdmin
     ? [
         { label: 'Dashboard', href: '#admin/dashboard', routes: ['#admin/dashboard'], icon: iconHome },
@@ -233,6 +252,7 @@ export function renderLayout(title, content) {
           { label: 'Dashboard', href: '#guru/dashboard', routes: ['#guru/dashboard'], icon: iconHome },
           { label: 'Input Absensi', href: '#guru/input-absen', routes: ['#guru/input-absen'], icon: iconCalendar },
           { label: 'Input Nilai', href: '#guru/penilaian', routes: ['#guru/penilaian', '#guru/input-nilai'], icon: iconChart },
+          { label: 'Materi', href: '#guru/materi', routes: ['#guru/materi'], icon: iconBookSpark },
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
@@ -241,6 +261,7 @@ export function renderLayout(title, content) {
             { label: 'Dashboard', href: '#siswa/dashboard', routes: ['#siswa/dashboard'], icon: iconHome },
             { label: 'Nilai', href: '#siswa/nilai', routes: ['#siswa/nilai'], icon: iconChart },
             { label: 'Absensi', href: '#siswa/absensi', routes: ['#siswa/absensi'], icon: iconCalendar },
+            { label: 'Materi', href: '#siswa/materi', routes: ['#siswa/materi'], icon: iconBookSpark },
             { label: 'Game Center', href: '#siswa/game', routes: ['#siswa/game'], icon: iconGame },
             { label: 'Akun', href: '#siswa/pengatur-sistem', routes: ['#siswa/pengatur-sistem'], icon: iconSettings },
           ]

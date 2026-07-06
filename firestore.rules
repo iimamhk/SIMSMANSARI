@@ -1,9 +1,104 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Safe baseline for public hosting while the app still relies on localStorage auth.
-    // Deploying this prevents public data exposure, but it will also block live Firestore use
-    // until the app is migrated to Firebase Authentication and role-based rules.
+    match /materi_publish/{materialId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly([
+        'id',
+        'pengajaran_id',
+        'kelas_id',
+        'kelas_nama',
+        'kelas_token',
+        'mapel_id',
+        'mapel_nama',
+        'guru_id',
+        'guru_nama',
+        'title',
+        'level',
+        'chapter',
+        'meetings',
+        'note',
+        'html_source',
+        'updated_at',
+        'tahun_ajaran_id',
+        'semester_id',
+        'status',
+        'visible_to_students',
+        'published_at'
+      ])
+      && request.resource.data.id is string
+      && request.resource.data.id.size() > 0
+      && request.resource.data.kelas_id is string
+      && request.resource.data.mapel_nama is string
+      && request.resource.data.guru_id is string
+      && request.resource.data.title is string
+      && request.resource.data.html_source is string
+      && request.resource.data.html_source.size() <= 200000
+      && request.resource.data.visible_to_students is bool;
+
+      allow delete: if true;
+    }
+
+    match /materi_reads/{readId} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasOnly([
+        'id',
+        'material_id',
+        'siswa_id',
+        'siswa_nama',
+        'kelas_id',
+        'kelas_nama',
+        'guru_id',
+        'guru_nama',
+        'mapel_nama',
+        'material_title',
+        'event_type',
+        'read_count',
+        'first_read_at',
+        'last_read_at',
+        'last_duration_seconds',
+        'total_duration_seconds',
+        'completed_at',
+        'completion_status',
+        'tahun_ajaran_id',
+        'semester_id'
+      ])
+      && request.resource.data.id is string
+      && request.resource.data.material_id is string
+      && request.resource.data.siswa_id is string
+      && request.resource.data.material_title is string
+      && request.resource.data.read_count is int
+      && request.resource.data.read_count >= 1;
+      allow delete: if true;
+    }
+
+    match /{collectionName}/{documentId} {
+      allow read, write: if collectionName in [
+        'settings',
+        'users',
+        'mata_pelajaran',
+        'kelas',
+        'tahun_ajaran',
+        'pengajaran',
+        'pembelajaran',
+        'anggota_kelas',
+        'absensi',
+        'catatan_khusus',
+        'nilai_tugas',
+        'nilai_ujian',
+        'bab',
+        'tugas_bab',
+        'ulangan_harian_kolom',
+        'keaktifan_siswa',
+        'game_configs',
+        'game_sessions',
+        'game_tokens',
+        'lobby_settings',
+        'lobby_sections',
+        'lobby_links'
+      ];
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

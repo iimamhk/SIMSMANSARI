@@ -97,6 +97,17 @@ export async function renderSiswaDashboardPage(container) {
             <p class="mt-2 text-sm text-slate-500">Pantau riwayat kehadiran Anda setiap hari.</p>
           </a>
 
+          <a href="#siswa/materi" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#0EA5E9]/10 text-[#0EA5E9]">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" />
+                <path d="M8 19h10" />
+              </svg>
+            </div>
+            <p class="mt-4 text-lg font-semibold">Materi</p>
+            <p class="mt-2 text-sm text-slate-500">Baca materi yang sudah dipublikasikan guru untuk kelas Anda.</p>
+          </a>
+
           <article class="rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900">
             <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#FF9500]/10 text-[#FF9500]">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

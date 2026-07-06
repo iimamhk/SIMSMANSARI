@@ -1,5 +1,10 @@
 import { db } from './firebase-config.js';
 
+const MATERIAL_PUBLISHED_KEY = 'simguru_material_html_published';
+const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
+const MATERIAL_READS_KEY = 'simguru_material_reads';
+const MATERIAL_READS_COLLECTION = 'materi_reads';
+
 function normalizeClassKey(value) {
   return String(value || '')
     .toLowerCase()
@@ -13,6 +18,50 @@ function getCachedUsers() {
   } catch {
     return [];
   }
+}
+
+function readLocalPublishedMaterials() {
+  try {
+    return JSON.parse(localStorage.getItem(MATERIAL_PUBLISHED_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPublishedMaterials(materials) {
+  localStorage.setItem(MATERIAL_PUBLISHED_KEY, JSON.stringify(materials));
+}
+
+function readLocalMaterialReads() {
+  try {
+    return JSON.parse(localStorage.getItem(MATERIAL_READS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalMaterialReads(reads) {
+  localStorage.setItem(MATERIAL_READS_KEY, JSON.stringify(reads));
+}
+
+function normalizeTrackingToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function mergeMaterialsById(primaryMaterials = [], secondaryMaterials = []) {
+  const mergedMap = new Map();
+  [...secondaryMaterials, ...primaryMaterials].forEach((item) => {
+    const materialId = String(item?.id || '').trim();
+    if (!materialId) {
+      return;
+    }
+    mergedMap.set(materialId, { ...mergedMap.get(materialId), ...item, id: materialId });
+  });
+  return Array.from(mergedMap.values());
 }
 
 function getFallbackClassMembersFor(kelasId) {
@@ -112,6 +161,188 @@ export async function deleteDocument(collectionName, id) {
 
   await db.collection(collectionName).doc(id).delete();
   return true;
+}
+
+export async function getPublishedMaterials() {
+  if (!db) {
+    return readLocalPublishedMaterials();
+  }
+
+  try {
+    const localMaterials = readLocalPublishedMaterials();
+    const snapshot = await db.collection(MATERIAL_PUBLISHED_COLLECTION).get();
+    const firestoreMaterials = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const missingLocalMaterials = localMaterials.filter((item) => !firestoreMaterials.some((entry) => entry.id === item.id));
+
+    if (missingLocalMaterials.length) {
+      await Promise.all(
+        missingLocalMaterials.map((item) => saveDocument(MATERIAL_PUBLISHED_COLLECTION, item, item.id))
+      );
+    }
+
+    const materials = mergeMaterialsById(firestoreMaterials, localMaterials);
+    writeLocalPublishedMaterials(materials);
+    return materials;
+  } catch (error) {
+    console.warn('Gagal mengambil materi publish dari Firestore:', error);
+    return readLocalPublishedMaterials();
+  }
+}
+
+export async function getPublishedMaterialsForTeacher(guruId) {
+  const normalizedGuruId = String(guruId || '').trim().toLowerCase();
+  const materials = await getPublishedMaterials();
+  return materials
+    .filter((item) => String(item.guru_id || '').trim().toLowerCase() === normalizedGuruId)
+    .sort((a, b) => String(b.published_at || b.updated_at || '').localeCompare(String(a.published_at || a.updated_at || '')));
+}
+
+export async function savePublishedMaterial(material) {
+  const payload = {
+    ...material,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (!db) {
+    const localMaterials = readLocalPublishedMaterials();
+    const existingIndex = localMaterials.findIndex((item) => item.id === payload.id);
+    if (existingIndex >= 0) {
+      localMaterials[existingIndex] = { ...localMaterials[existingIndex], ...payload };
+    } else {
+      localMaterials.push(payload);
+    }
+    writeLocalPublishedMaterials(localMaterials);
+    return payload;
+  }
+
+  await saveDocument(MATERIAL_PUBLISHED_COLLECTION, payload, payload.id);
+  const localMaterials = readLocalPublishedMaterials();
+  const existingIndex = localMaterials.findIndex((item) => item.id === payload.id);
+  if (existingIndex >= 0) {
+    localMaterials[existingIndex] = { ...localMaterials[existingIndex], ...payload };
+  } else {
+    localMaterials.push(payload);
+  }
+  writeLocalPublishedMaterials(localMaterials);
+  return payload;
+}
+
+export async function deletePublishedMaterial(id) {
+  const materialId = String(id || '').trim();
+  if (!materialId) {
+    return false;
+  }
+
+  if (db) {
+    await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(materialId).delete();
+  }
+
+  const localMaterials = readLocalPublishedMaterials().filter((item) => item.id !== materialId);
+  writeLocalPublishedMaterials(localMaterials);
+  return true;
+}
+
+export async function recordMaterialRead(payload) {
+  const materialId = String(payload?.material_id || '').trim();
+  const studentId = String(payload?.siswa_id || '').trim();
+  if (!materialId || !studentId) {
+    return null;
+  }
+
+  const readId = `${normalizeTrackingToken(materialId)}__${normalizeTrackingToken(studentId)}`;
+  const localReads = readLocalMaterialReads();
+  const existingLocalRead = localReads.find((item) => item.id === readId) || {};
+  const eventType = String(payload?.event_type || 'open').trim().toLowerCase();
+  const shouldIncrementRead = payload?.increment_read_count === true || eventType === 'open';
+  const durationSeconds = Math.max(0, Number(payload?.duration_seconds || 0));
+  const nowIso = new Date().toISOString();
+  const isCompleted = payload?.completed === true || eventType === 'complete' || Boolean(existingLocalRead.completed_at);
+  const nextPayload = {
+    ...existingLocalRead,
+    ...payload,
+    id: readId,
+    material_id: materialId,
+    siswa_id: studentId,
+    event_type: eventType,
+    read_count: Number(existingLocalRead.read_count || 0) + (shouldIncrementRead ? 1 : 0),
+    first_read_at: existingLocalRead.first_read_at || nowIso,
+    last_read_at: nowIso,
+    last_duration_seconds: durationSeconds,
+    total_duration_seconds: Number(existingLocalRead.total_duration_seconds || 0) + durationSeconds,
+    completed_at: isCompleted ? (existingLocalRead.completed_at || nowIso) : '',
+    completion_status: isCompleted
+      ? 'completed'
+      : (Number(existingLocalRead.read_count || 0) + (shouldIncrementRead ? 1 : 0) > 0 ? 'opened' : 'unopened'),
+  };
+
+  if (db) {
+    try {
+      const ref = db.collection(MATERIAL_READS_COLLECTION).doc(readId);
+      const snapshot = await ref.get();
+      const existingRemoteRead = snapshot.exists ? snapshot.data() : null;
+      const remoteReadCount = Number(existingRemoteRead?.read_count || existingLocalRead.read_count || 0) + (shouldIncrementRead ? 1 : 0);
+      const remoteTotalDuration = Number(existingRemoteRead?.total_duration_seconds || existingLocalRead.total_duration_seconds || 0) + durationSeconds;
+      const remoteCompleted = payload?.completed === true || eventType === 'complete' || Boolean(existingRemoteRead?.completed_at) || Boolean(existingLocalRead.completed_at);
+      const remotePayload = {
+        ...(existingRemoteRead || {}),
+        ...nextPayload,
+        read_count: remoteReadCount,
+        first_read_at: existingRemoteRead?.first_read_at || existingLocalRead.first_read_at || nowIso,
+        last_read_at: nowIso,
+        last_duration_seconds: durationSeconds,
+        total_duration_seconds: remoteTotalDuration,
+        completed_at: remoteCompleted ? (existingRemoteRead?.completed_at || existingLocalRead.completed_at || nowIso) : '',
+        completion_status: remoteCompleted ? 'completed' : (remoteReadCount > 0 ? 'opened' : 'unopened'),
+      };
+      await ref.set(remotePayload, { merge: true });
+      const nextLocalReads = localReads.filter((item) => item.id !== readId);
+      nextLocalReads.push(remotePayload);
+      writeLocalMaterialReads(nextLocalReads);
+      return remotePayload;
+    } catch (error) {
+      console.warn('Gagal mencatat baca materi ke Firestore:', error);
+    }
+  }
+
+  const nextLocalReads = localReads.filter((item) => item.id !== readId);
+  nextLocalReads.push(nextPayload);
+  writeLocalMaterialReads(nextLocalReads);
+  return nextPayload;
+}
+
+export async function getMaterialReadStatsForTeacher(guruId) {
+  const normalizedGuruId = String(guruId || '').trim().toLowerCase();
+  if (!normalizedGuruId) {
+    return [];
+  }
+
+  if (!db) {
+    return readLocalMaterialReads()
+      .filter((item) => String(item.guru_id || '').trim().toLowerCase() === normalizedGuruId)
+      .sort((a, b) => Number(b.read_count || 0) - Number(a.read_count || 0));
+  }
+
+  try {
+    const snapshot = await db.collection(MATERIAL_READS_COLLECTION).get();
+    const remoteReads = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const localReads = readLocalMaterialReads();
+    const mergedReads = mergeMaterialsById(remoteReads, localReads)
+      .filter((item) => String(item.guru_id || '').trim().toLowerCase() === normalizedGuruId)
+      .sort((a, b) => {
+        const countDiff = Number(b.read_count || 0) - Number(a.read_count || 0);
+        if (countDiff !== 0) {
+          return countDiff;
+        }
+        return String(b.last_read_at || '').localeCompare(String(a.last_read_at || ''));
+      });
+    writeLocalMaterialReads(mergeMaterialsById(remoteReads, localReads));
+    return mergedReads;
+  } catch (error) {
+    console.warn('Gagal membaca statistik baca materi:', error);
+    return readLocalMaterialReads()
+      .filter((item) => String(item.guru_id || '').trim().toLowerCase() === normalizedGuruId)
+      .sort((a, b) => Number(b.read_count || 0) - Number(a.read_count || 0));
+  }
 }
 
 export async function getDocumentsWhere(collectionName, filters = []) {
@@ -332,6 +563,7 @@ export async function getClassMembers(context, kelasId) {
 
     const cachedUsers = getCachedUsers()
       .filter((item) => item.role === 'siswa')
+      .filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId || normalizeClassKey(item.kelas_nama) === normalizedKelasId)
       .map(mapStudentToMember)
       .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
 

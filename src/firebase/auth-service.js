@@ -86,6 +86,7 @@ export async function loginUser(username, password) {
 }
 
 export async function saveSession(userData, context) {
+  const existingLocalUser = getLocalUsers().find((item) => normalizeUsername(item.username) === normalizeUsername(userData.username));
   const session = {
     user: {
       id: userData.id,
@@ -97,9 +98,10 @@ export async function saveSession(userData, context) {
   };
 
   upsertLocalUser({
+    ...(existingLocalUser || {}),
+    ...userData,
     id: userData.id,
     username: userData.username,
-    password: userData.password,
     role: userData.role,
     nama: userData.nama,
   });

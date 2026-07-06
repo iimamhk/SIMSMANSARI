@@ -97,6 +97,18 @@ export function renderGuruDashboard(container) {
             <p class="mt-2 text-sm text-slate-500">Masukkan nilai siswa.</p>
           </a>
 
+          <a href="#guru/materi" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#0EA5E9]/10 text-[#0EA5E9]">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" />
+                <path d="M8 19h10" />
+                <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" />
+              </svg>
+            </div>
+            <p class="mt-4 text-lg font-semibold">Materi</p>
+            <p class="mt-2 text-sm text-slate-500">Import HTML AI, review, dan simpan draft materi.</p>
+          </a>
+
           <a href="#guru/dashboard" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
             <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#AF52DE]/10 text-[#AF52DE]">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
