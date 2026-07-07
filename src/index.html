@@ -2,7 +2,7 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>SIM SMANSARI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,6 +20,43 @@
         },
       };
     </script>
+    <script>
+      (function applyMobileViewportScale() {
+        const viewportMeta = document.getElementById('viewport-meta');
+        if (!viewportMeta) {
+          return;
+        }
+
+        const updateViewport = () => {
+          const isMobile = window.matchMedia('(max-width: 767px)').matches;
+          viewportMeta.setAttribute(
+            'content',
+            isMobile
+              ? 'width=device-width, initial-scale=0.8, viewport-fit=cover'
+              : 'width=device-width, initial-scale=1.0, viewport-fit=cover'
+          );
+        };
+
+        updateViewport();
+        window.addEventListener('resize', updateViewport, { passive: true });
+        window.addEventListener('orientationchange', updateViewport, { passive: true });
+      })();
+    </script>
+    <style>
+      :root {
+        --mobile-bottom-nav-scale: 1;
+      }
+
+      @media (max-width: 767px) {
+        :root {
+          --mobile-bottom-nav-scale: 0.9;
+        }
+
+        body {
+          overflow-x: hidden;
+        }
+      }
+    </style>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>

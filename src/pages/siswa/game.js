@@ -60,6 +60,28 @@ function formatDateTime(dateString) {
   });
 }
 
+function getGameOverlayMarkup() {
+  return `
+    <section id="student-game-overlay" class="fixed inset-0 z-[120] hidden bg-slate-950/75 backdrop-blur-sm">
+      <div class="flex h-[100dvh] w-full flex-col bg-white">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6" style="padding-top: calc(0.75rem + env(safe-area-inset-top));">
+          <div class="min-w-0">
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Mode Fokus Penuh</p>
+            <p id="student-game-overlay-title" class="mt-1 truncate text-base font-semibold text-slate-900">Game Center</p>
+          </div>
+          <button id="student-game-overlay-back-btn" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            <span>Kembali</span>
+          </button>
+        </div>
+        <div id="student-game-overlay-body" class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom));"></div>
+      </div>
+    </section>
+  `;
+}
+
 export async function renderSiswaGamePage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -71,6 +93,8 @@ export async function renderSiswaGamePage(container) {
       description: 'Latihan hitung cepat dengan token guru dan pilihan mode kuis.',
       access: 'Token Guru',
       accentClass: 'from-emerald-500 to-cyan-500',
+      tileClass: 'from-emerald-500 via-teal-500 to-cyan-500',
+      iconGlyph: '∑',
     },
     {
       key: 'english_vocab',
@@ -78,23 +102,20 @@ export async function renderSiswaGamePage(container) {
       description: 'Latihan kosakata bahasa Inggris berdasarkan tema tanpa token tambahan.',
       access: 'Tanpa Token',
       accentClass: 'from-sky-500 to-blue-500',
+      tileClass: 'from-fuchsia-500 via-violet-500 to-indigo-500',
+      iconGlyph: 'Aa',
     },
   ];
 
   const html = renderLayout('Game Center Siswa', `
     <div class="space-y-6">
-      <section class="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-800 p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <section id="game-hero" class="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-800 p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div class="grid gap-5 xl:grid-cols-[1.2fr_0.8fr] xl:items-start">
           <div class="space-y-4">
             <p class="text-xs font-semibold uppercase tracking-[0.26em] text-cyan-100">Game Center Siswa</p>
             <div>
-              <h2 class="text-3xl font-semibold tracking-tight">Masuk ke arena belajar dengan alur yang rapi dan cepat</h2>
-              <p class="mt-3 max-w-2xl text-sm leading-6 text-cyan-50/85">Pilih game aktif, cek aturan kelas, lalu mulai sesi belajar dari satu Game Center yang sama.</p>
-            </div>
-            <div class="flex flex-wrap gap-2 text-xs text-cyan-50/90">
-              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">2 game aktif</span>
-              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">Math dengan token, vocab tanpa token</span>
-              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">Hasil sesi tersimpan otomatis</span>
+              <h2 class="text-3xl font-semibold tracking-tight">Pilih game dan mulai bermain</h2>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-cyan-50/85">Semua game kelas aktif tersedia di satu tempat.</p>
             </div>
           </div>
           <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-2">
@@ -108,50 +129,62 @@ export async function renderSiswaGamePage(container) {
             </div>
             <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm xl:col-span-2">
               <p class="text-xs uppercase tracking-[0.18em] text-cyan-100">Ringkas</p>
-              <p class="mt-3 text-sm leading-6 text-cyan-50/90">Satu workspace untuk memilih konfigurasi, bermain, dan melihat hasil sesi setelah selesai.</p>
+              <p class="mt-3 text-sm leading-6 text-cyan-50/90">Pilih game, main, lihat hasil.</p>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+      <section id="game-selection-view" class="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <div class="space-y-4">
-          <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div id="game-workspace-panel" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Workspace Aktif</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Akses Game</p>
                 <h3 id="student-workspace-title" class="mt-2 text-2xl font-semibold text-slate-900">Arena Matematika Cepat</h3>
-                <p id="student-workspace-caption" class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Struktur halaman mengikuti modul guru: ringkasan, akses token, sesi bermain, lalu hasil akhir yang mudah dibaca.</p>
+                <p id="student-workspace-caption" class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Atur akses, mulai sesi, lalu cek hasil.</p>
               </div>
               <div id="student-workspace-badge" class="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Siap dimainkan</div>
             </div>
           </div>
 
-          <div class="grid gap-4 md:grid-cols-2">
+          <div id="game-card-grid" class="grid grid-cols-2 gap-4">
             ${studentGameCatalog.map((game, index) => `
-              <button type="button" data-student-game-card="${game.key}" class="student-game-card rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)] ${index === 0 ? 'ring-2 ring-sky-200' : ''}">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br ${game.accentClass} text-lg font-bold text-white shadow-lg">${game.title.split(' ').map((word) => word[0]).slice(0, 2).join('')}</div>
-                  <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">${game.access}</span>
+              <button type="button" data-student-game-card="${game.key}" class="student-game-card group relative overflow-hidden rounded-[30px] bg-gradient-to-br ${game.tileClass} p-4 text-left text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)] ${index === 0 ? 'ring-2 ring-white/80' : ''}">
+                <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/25 blur-2xl"></div>
+                <div class="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-white/20 blur-2xl"></div>
+                <div class="relative">
+                  <div class="mb-3 flex items-start justify-between gap-2">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 text-3xl font-extrabold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">${game.iconGlyph}</div>
+                    <span class="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/95">${game.access}</span>
+                  </div>
+                  <p class="text-base font-semibold leading-tight">${game.title}</p>
+                  <p class="mt-1 text-xs leading-5 text-white/90">${game.key === 'math' ? 'Hitung cepat dengan mode kuis.' : 'Kuis kosakata berdasarkan tema.'}</p>
                 </div>
-                <p class="mt-4 text-lg font-semibold text-slate-900">${game.title}</p>
-                <p class="mt-2 text-sm leading-6 text-slate-500">${game.description}</p>
               </button>
             `).join('')}
           </div>
 
-          <section id="game-lobby" class="space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <section id="game-lobby" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Lobby</p>
-                <h4 class="mt-1 text-xl font-semibold text-slate-900">Siapkan sesi game Anda</h4>
+                <h4 id="student-lobby-title" class="mt-1 text-xl font-semibold text-slate-900">Siapkan sesi</h4>
               </div>
-              <div id="student-lobby-note" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">Pilih konfigurasi, cek mode kuis, lalu masukkan token.</div>
+              <div class="flex items-center gap-2">
+                <div id="student-lobby-note" class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">Pilih mode lalu mulai.</div>
+                <button id="student-lobby-back-btn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 18l-6-6 6-6" />
+                  </svg>
+                  <span>Pilih Game</span>
+                </button>
+              </div>
             </div>
 
             <div class="grid gap-3 md:grid-cols-2">
               <div>
-                <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Relasi Game Aktif</label>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Konfigurasi Kelas</label>
                 <select id="game-config-select" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></select>
               </div>
               <div>
@@ -165,7 +198,7 @@ export async function renderSiswaGamePage(container) {
             <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div id="game-token-panel" class="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
                 <p class="font-semibold text-slate-800">Masukkan Token Dari Guru</p>
-                <p class="mt-1 text-xs text-slate-500">Token dibuat oleh guru di halaman Game Center. Token harus valid dan belum kedaluwarsa sebelum sesi dimulai.</p>
+                <p class="mt-1 text-xs text-slate-500">Token harus valid dan belum kedaluwarsa.</p>
                 <input id="game-access-token-input" type="text" maxlength="12" class="mt-3 w-full max-w-[320px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold uppercase tracking-[0.12em]" placeholder="Contoh: A7K9P2" />
               </div>
               <div class="flex flex-wrap items-center gap-3">
@@ -178,7 +211,7 @@ export async function renderSiswaGamePage(container) {
           <section id="game-play" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Sesi Bermain</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Sesi Game</p>
                 <p class="mt-1 text-sm font-semibold text-slate-800">Soal <span id="question-counter">1/10</span></p>
               </div>
               <p class="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Sisa waktu: <span id="timer-text">00:00</span></p>
@@ -199,8 +232,8 @@ export async function renderSiswaGamePage(container) {
           <section id="game-result" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Hasil Sesi</p>
-                <h4 class="mt-1 text-xl font-semibold text-slate-900">Rekap permainan Anda</h4>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Hasil Game</p>
+                <h4 class="mt-1 text-xl font-semibold text-slate-900">Hasil permainan</h4>
               </div>
               <div class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Tersimpan</div>
             </div>
@@ -231,40 +264,17 @@ export async function renderSiswaGamePage(container) {
           </section>
         </div>
 
-        <aside class="space-y-4">
-          <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Alur Main</p>
-            <div class="mt-4 space-y-3 text-sm text-slate-600">
-              <div class="rounded-2xl bg-slate-50 px-4 py-3">1. Pilih konfigurasi kelas yang tersedia.</div>
-              <div class="rounded-2xl bg-slate-50 px-4 py-3">2. Tentukan tipe kuis yang dibuka guru.</div>
-              <div class="rounded-2xl bg-slate-50 px-4 py-3">3. Ikuti akses game: token untuk math, langsung main untuk vocab.</div>
-              <div class="rounded-2xl bg-slate-50 px-4 py-3">4. Mainkan sesi dan cek hasil akhir.</div>
-            </div>
-          </div>
-
-          <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Catatan Siswa</p>
-            <div class="mt-4 space-y-3 text-sm text-slate-600">
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p class="font-semibold text-slate-900">Akses Tergantung Jenis Game</p>
-                <p class="mt-1">Math memakai token guru, sedangkan English Vocabulary bisa langsung dimainkan saat sudah published.</p>
-              </div>
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p class="font-semibold text-slate-900">Jawaban Tersimpan Per Soal</p>
-                <p class="mt-1">Gunakan tombol simpan jawaban untuk maju ke soal berikutnya dengan aman.</p>
-              </div>
-              <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p class="font-semibold text-slate-900">Hasil Masuk Monitoring Guru</p>
-                <p class="mt-1">Skor dan akurasi Anda dipakai guru untuk melihat performa kelas.</p>
-              </div>
-            </div>
-          </div>
-        </aside>
       </section>
     </div>
   `);
 
   container.innerHTML = html;
+
+  const existingOverlay = document.getElementById('student-game-overlay');
+  if (existingOverlay) {
+    existingOverlay.remove();
+  }
+  document.body.insertAdjacentHTML('beforeend', getGameOverlayMarkup());
 
   const configSelect = container.querySelector('#game-config-select');
   const quizTypeSelect = container.querySelector('#quiz-type-select');
@@ -273,17 +283,32 @@ export async function renderSiswaGamePage(container) {
   const accessTokenInput = container.querySelector('#game-access-token-input');
   const tokenPanelEl = container.querySelector('#game-token-panel');
   const gameCards = Array.from(container.querySelectorAll('[data-student-game-card]'));
+  const heroEl = container.querySelector('#game-hero');
+  const selectionViewEl = container.querySelector('#game-selection-view');
+  const workspacePanelEl = container.querySelector('#game-workspace-panel');
+  const cardGridEl = container.querySelector('#game-card-grid');
   const activeGameLabelEl = container.querySelector('#student-active-game-label');
   const activeAccessLabelEl = container.querySelector('#student-active-access-label');
   const workspaceTitleEl = container.querySelector('#student-workspace-title');
   const workspaceCaptionEl = container.querySelector('#student-workspace-caption');
   const workspaceBadgeEl = container.querySelector('#student-workspace-badge');
   const lobbyNoteEl = container.querySelector('#student-lobby-note');
+  const lobbyTitleEl = container.querySelector('#student-lobby-title');
+  const lobbyBackBtn = container.querySelector('#student-lobby-back-btn');
   const resultAnalysisLabelEl = container.querySelector('#result-analysis-label');
 
   const lobbyEl = container.querySelector('#game-lobby');
   const playEl = container.querySelector('#game-play');
   const resultEl = container.querySelector('#game-result');
+  const startGameBtn = container.querySelector('#start-game-btn');
+  const nextQuestionBtn = playEl?.querySelector('#next-question-btn');
+  const finishGameBtn = playEl?.querySelector('#finish-game-btn');
+  const playAgainBtn = resultEl?.querySelector('#play-again-btn');
+
+  const overlayEl = document.getElementById('student-game-overlay');
+  const overlayBodyEl = document.getElementById('student-game-overlay-body');
+  const overlayTitleEl = document.getElementById('student-game-overlay-title');
+  const overlayBackBtn = document.getElementById('student-game-overlay-back-btn');
 
   const counterEl = container.querySelector('#question-counter');
   const timerEl = container.querySelector('#timer-text');
@@ -303,6 +328,9 @@ export async function renderSiswaGamePage(container) {
   let timerId = null;
   let tokenState = null;
   let currentGameType = 'math';
+  if (overlayBodyEl && playEl && resultEl) {
+    overlayBodyEl.append(playEl, resultEl);
+  }
 
   function getCurrentGameMeta() {
     return studentGameCatalog.find((item) => item.key === currentGameType) || studentGameCatalog[0];
@@ -313,6 +341,16 @@ export async function renderSiswaGamePage(container) {
     messageEl.className = isError ? 'text-sm text-rose-600' : 'text-sm text-slate-500';
   }
 
+  function openGameOverlay() {
+    overlayEl?.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+
+  function closeGameOverlay() {
+    overlayEl?.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
   function updateWorkspaceMeta() {
     const meta = getCurrentGameMeta();
     if (activeGameLabelEl) {
@@ -321,13 +359,16 @@ export async function renderSiswaGamePage(container) {
     if (activeAccessLabelEl) {
       activeAccessLabelEl.textContent = meta.access;
     }
+    if (overlayTitleEl) {
+      overlayTitleEl.textContent = meta.title;
+    }
     if (workspaceTitleEl) {
       workspaceTitleEl.textContent = currentGameType === 'english_vocab' ? 'Arena English Vocabulary' : 'Arena Matematika Cepat';
     }
     if (workspaceCaptionEl) {
       workspaceCaptionEl.textContent = currentGameType === 'english_vocab'
-        ? 'Mainkan latihan kosakata dengan tema yang dibuka guru, tanpa token tambahan, lalu lihat kata yang masih perlu diulang.'
-        : 'Struktur halaman mengikuti modul guru: ringkasan, akses token, sesi bermain, lalu hasil akhir yang mudah dibaca.';
+        ? 'Pilih tema, mainkan kuis, lalu cek kata yang perlu diulang.'
+        : 'Masukkan token, mulai sesi, lalu cek hasil.';
     }
     if (workspaceBadgeEl) {
       workspaceBadgeEl.textContent = meta.access;
@@ -337,8 +378,11 @@ export async function renderSiswaGamePage(container) {
     }
     if (lobbyNoteEl) {
       lobbyNoteEl.textContent = currentGameType === 'english_vocab'
-        ? 'Pilih konfigurasi vocab dan mode kuis, lalu mulai tanpa token.'
-        : 'Pilih konfigurasi, cek mode kuis, lalu masukkan token.';
+        ? 'Pilih mode lalu mulai tanpa token.'
+        : 'Pilih mode lalu masukkan token.';
+    }
+    if (lobbyTitleEl) {
+      lobbyTitleEl.textContent = currentGameType === 'english_vocab' ? 'Lobby English Vocabulary' : 'Lobby Matematika Cepat';
     }
     if (tokenPanelEl) {
       tokenPanelEl.classList.toggle('hidden', currentGameType === 'english_vocab');
@@ -369,7 +413,7 @@ export async function renderSiswaGamePage(container) {
     gameCards.forEach((card) => {
       const isActive = card.getAttribute('data-student-game-card') === gameType;
       card.classList.toggle('ring-2', isActive);
-      card.classList.toggle('ring-sky-200', isActive);
+      card.classList.toggle('ring-white/80', isActive);
     });
     refreshPublishedConfigsForGame();
   }
@@ -412,9 +456,13 @@ export async function renderSiswaGamePage(container) {
   function renderTokenInfo() {}
 
   function openLobby() {
+    heroEl?.classList.add('hidden');
+    workspacePanelEl?.classList.add('hidden');
+    cardGridEl?.classList.add('hidden');
     lobbyEl.classList.remove('hidden');
     playEl.classList.add('hidden');
     resultEl.classList.add('hidden');
+    closeGameOverlay();
     if (timerId) {
       clearInterval(timerId);
       timerId = null;
@@ -422,15 +470,34 @@ export async function renderSiswaGamePage(container) {
   }
 
   function openPlay() {
+    heroEl?.classList.add('hidden');
+    workspacePanelEl?.classList.add('hidden');
+    cardGridEl?.classList.add('hidden');
     lobbyEl.classList.add('hidden');
     playEl.classList.remove('hidden');
     resultEl.classList.add('hidden');
+    openGameOverlay();
   }
 
   function openResult() {
+    heroEl?.classList.add('hidden');
+    workspacePanelEl?.classList.add('hidden');
+    cardGridEl?.classList.add('hidden');
     lobbyEl.classList.add('hidden');
     playEl.classList.add('hidden');
     resultEl.classList.remove('hidden');
+    openGameOverlay();
+  }
+
+  function openGameSelection() {
+    heroEl?.classList.remove('hidden');
+    workspacePanelEl?.classList.remove('hidden');
+    cardGridEl?.classList.remove('hidden');
+    lobbyEl.classList.add('hidden');
+    playEl.classList.add('hidden');
+    resultEl.classList.add('hidden');
+    closeGameOverlay();
+    setMessage('');
   }
 
   function renderConfigSummary(config) {
@@ -795,7 +862,7 @@ export async function renderSiswaGamePage(container) {
     }
   });
 
-  container.querySelector('#start-game-btn')?.addEventListener('click', async () => {
+  startGameBtn?.addEventListener('click', async () => {
     if (!activeConfig) {
       setMessage('Konfigurasi game tidak tersedia.', true);
       return;
@@ -855,7 +922,7 @@ export async function renderSiswaGamePage(container) {
     setMessage('');
   });
 
-  container.querySelector('#next-question-btn')?.addEventListener('click', async () => {
+  nextQuestionBtn?.addEventListener('click', async () => {
     if (!gameState) {
       return;
     }
@@ -877,7 +944,7 @@ export async function renderSiswaGamePage(container) {
     renderQuestion();
   });
 
-  container.querySelector('#finish-game-btn')?.addEventListener('click', async () => {
+  finishGameBtn?.addEventListener('click', async () => {
     if (!gameState) {
       return;
     }
@@ -885,17 +952,35 @@ export async function renderSiswaGamePage(container) {
     await finishGame(false);
   });
 
-  container.querySelector('#play-again-btn')?.addEventListener('click', () => {
+  playAgainBtn?.addEventListener('click', () => {
+    openLobby();
+  });
+
+  lobbyBackBtn?.addEventListener('click', () => {
+    openGameSelection();
+  });
+
+  overlayBackBtn?.addEventListener('click', () => {
+    if (gameState) {
+      const shouldExit = window.confirm('Permainan sedang berjalan. Keluar dari mode main penuh akan mengakhiri sesi ini. Lanjutkan?');
+      if (!shouldExit) {
+        return;
+      }
+      gameState = null;
+      setMessage('Sesi game dibatalkan.', true);
+    }
     openLobby();
   });
 
   gameCards.forEach((card) => {
     card.addEventListener('click', () => {
       setActiveGameType(card.getAttribute('data-student-game-card') || 'math');
+      openLobby();
     });
   });
 
   await loadPublishedConfigs();
+  openGameSelection();
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

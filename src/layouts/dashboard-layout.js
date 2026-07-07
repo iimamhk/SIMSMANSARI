@@ -74,8 +74,8 @@ export function renderLayout(title, content) {
     .map((item) => {
       const active = isRouteActive(item.routes);
       return `
-        <a href="${item.href}" class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50 sm:px-3 sm:text-[11px]">
-          <span class="flex h-6 w-6 items-center justify-center transition">${item.icon(active)}</span>
+        <a href="${item.href}" class="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-2xl px-2.5 py-2.5 text-[11px] font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50 sm:px-3 sm:text-xs">
+          <span class="flex h-7 w-7 items-center justify-center transition">${item.icon(active)}</span>
           <span class="w-full text-center leading-tight break-words">${item.label}</span>
         </a>
       `;
@@ -156,8 +156,8 @@ export function renderLayout(title, content) {
     .map((item) => {
       const active = isRouteActive(item.routes);
       return `
-        <a href="${item.href}" class="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[10px] font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50 sm:px-3 sm:text-[11px]">
-          <span class="flex h-6 w-6 items-center justify-center transition">${item.icon(active)}</span>
+        <a href="${item.href}" class="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-2xl px-2.5 py-2.5 text-[11px] font-semibold transition ${active ? activeItemClass : inactiveItemClass} hover:bg-slate-50 sm:px-3 sm:text-xs">
+          <span class="flex h-7 w-7 items-center justify-center transition">${item.icon(active)}</span>
           <span class="w-full text-center leading-tight break-words">${item.label}</span>
         </a>
       `;
@@ -303,7 +303,19 @@ export function renderLayout(title, content) {
         animation: float 6s ease-in-out infinite;
       }
       .safe-bottom-spacing {
-        padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+        padding-bottom: calc(8.5rem + env(safe-area-inset-bottom));
+      }
+      .mobile-bottom-nav {
+        transform: translateX(-50%);
+      }
+      @media (max-width: 767px) {
+        .mobile-bottom-nav {
+          width: calc((100vw - 2rem) / var(--mobile-bottom-nav-scale, 1));
+          max-width: none;
+          transform: translateX(-50%) scale(var(--mobile-bottom-nav-scale, 1));
+          transform-origin: bottom center;
+          bottom: calc(0.75rem + env(safe-area-inset-bottom));
+        }
       }
     </style>
 
@@ -350,8 +362,8 @@ export function renderLayout(title, content) {
         </main>
 
         ${isGuru || isSiswa ? `
-          <nav class="md:hidden fixed bottom-3 left-1/2 z-50 w-[min(92vw,420px)] -translate-x-1/2 rounded-[26px] border border-slate-200 bg-white/95 px-2 py-2 shadow-[0_14px_40px_rgba(15,23,42,0.18)] backdrop-blur supports-[backdrop-filter]:bg-white/80" style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));">
-            <div class="flex w-full items-start justify-between gap-1 overflow-hidden">
+          <nav class="mobile-bottom-nav md:hidden fixed left-1/2 z-50 rounded-[26px] border border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_14px_40px_rgba(15,23,42,0.18)] backdrop-blur supports-[backdrop-filter]:bg-white/80" style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));">
+            <div class="flex w-full items-start justify-between gap-1.5 overflow-hidden">
               ${isGuru ? guruBottomNav : siswaBottomNav}
             </div>
           </nav>

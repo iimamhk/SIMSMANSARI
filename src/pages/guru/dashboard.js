@@ -73,74 +73,108 @@ export function renderGuruDashboard(container) {
           </div>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <a href="#guru/input-absen" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#007AFF]/10 text-[#007AFF]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 7h16M7 11h10M7 15h6" />
-                <path d="M8 5h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
-              </svg>
+        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <a href="#guru/input-absen" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/25 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="4" y="5" width="16" height="15" rx="3" />
+                  <path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Absensi</p>
+              <p class="mt-1 text-xs text-white/90">Input kehadiran harian siswa.</p>
             </div>
-            <p class="mt-4 text-lg font-semibold">Absensi</p>
-            <p class="mt-2 text-sm text-slate-500">Catat kehadiran cepat.</p>
           </a>
 
-          <a href="#guru/penilaian" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#34C759]/10 text-[#34C759]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M5 21h14" />
-                <path d="M8 7h8M8 11h8M8 15h5" />
-                <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
-              </svg>
+          <a href="#guru/penilaian" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-blue-500 via-sky-500 to-cyan-500 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-white/20 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5" />
+                  <circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none" />
+                  <circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none" />
+                  <circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Penilaian</p>
+              <p class="mt-1 text-xs text-white/90">Kelola nilai per mapel.</p>
             </div>
-            <p class="mt-4 text-lg font-semibold">Penilaian</p>
-            <p class="mt-2 text-sm text-slate-500">Masukkan nilai siswa.</p>
           </a>
 
-          <a href="#guru/materi" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#0EA5E9]/10 text-[#0EA5E9]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" />
-                <path d="M8 19h10" />
-                <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" />
-              </svg>
+          <a href="#guru/materi" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-sky-500 via-cyan-500 to-blue-500 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/25 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" />
+                  <path d="M8 19h10" />
+                  <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Materi</p>
+              <p class="mt-1 text-xs text-white/90">Buat dan publikasikan materi.</p>
             </div>
-            <p class="mt-4 text-lg font-semibold">Materi</p>
-            <p class="mt-2 text-sm text-slate-500">Import HTML AI, review, dan simpan draft materi.</p>
           </a>
 
-          <a href="#guru/dashboard" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#AF52DE]/10 text-[#AF52DE]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3" />
-                <path d="M8 7h8M8 7v14M16 7v14M12 7v14" />
-                <path d="M4 11h16" />
-              </svg>
+          <a href="#guru/game" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-500 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-white/20 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="8" width="18" height="8" rx="4" />
+                  <path d="M8 12h4M10 10v4M16.5 11.5h.01M18 12.5h.01" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Game</p>
+              <p class="mt-1 text-xs text-white/90">Atur aktivitas game kelas.</p>
             </div>
-            <p class="mt-4 text-lg font-semibold">Jadwal</p>
-            <p class="mt-2 text-sm text-slate-500">Ringkasan jadwal mengajar.</p>
           </a>
 
-          <a href="#guru/dashboard" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#FF9500]/10 text-[#FF9500]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10Z" />
-                <path d="M8 9h8M8 13h4" />
-              </svg>
+          <a href="#guru/dashboard" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-500 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/25 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3" />
+                  <path d="M8 7h8M8 7v14M16 7v14M12 7v14" />
+                  <path d="M4 11h16" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Jadwal</p>
+              <p class="mt-1 text-xs text-white/90">Lihat ringkasan jadwal mengajar.</p>
             </div>
-            <p class="mt-4 text-lg font-semibold">Pengumuman</p>
-            <p class="mt-2 text-sm text-slate-500">Lihat info terbaru sekolah.</p>
           </a>
 
-          <a href="#guru/pengatur-sistem" class="group rounded-[28px] border border-slate-200 bg-white p-5 text-slate-900 transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-            <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#5856D6]/10 text-[#5856D6]">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
-                <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z" />
-              </svg>
+          <a href="#guru/dashboard" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-amber-500 via-orange-500 to-red-500 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-white/20 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 5.5v8" />
+                  <path d="M12 17.5h.01" />
+                  <path d="M10.3 3.8 4.8 13.1a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3l-5.5-9.3a2 2 0 0 0-3.4 0Z" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Info</p>
+              <p class="mt-1 text-xs text-white/90">Pantau informasi terbaru.</p>
             </div>
-            <p class="mt-4 text-lg font-semibold">Pengaturan Akun</p>
-            <p class="mt-2 text-sm text-slate-500">Ubah username dan password akun guru.</p>
+          </a>
+
+          <a href="#guru/pengatur-sistem" class="group relative overflow-hidden rounded-[30px] bg-gradient-to-br from-indigo-500 via-blue-600 to-slate-700 p-4 text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)]">
+            <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/25 blur-2xl"></div>
+            <div class="relative">
+              <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-7 w-7 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
+                  <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z" />
+                </svg>
+              </div>
+              <p class="mt-3 text-sm font-semibold">Akun</p>
+              <p class="mt-1 text-xs text-white/90">Ubah pengaturan akun.</p>
+            </div>
           </a>
         </div>
       </section>

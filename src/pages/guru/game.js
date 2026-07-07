@@ -188,18 +188,18 @@ export async function renderGuruGamePage(container) {
         </div>
       </section>
 
-      <section class="space-y-4">
+      <section id="game-catalog-section" class="space-y-4">
         <div>
           <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Katalog Game</p>
           <h3 class="mt-1 text-2xl font-semibold text-slate-900">Pilih game yang ingin dikelola</h3>
-          <p class="mt-2 text-sm text-slate-500">Game aktif bisa langsung dikelola. Game roadmap menampilkan arah pengembangan agar modul tetap terstruktur sejak awal.</p>
+          <p class="mt-2 text-sm text-slate-500">Klik satu game untuk membuka pengaturan. Tampilan akan tetap bersih sampai Anda memilih game.</p>
         </div>
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           ${gameCatalog.map((game) => `
             <button
               type="button"
               data-game-card="${game.key}"
-              class="game-card group rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)] ${game.key === 'math' ? 'ring-2 ring-emerald-200' : ''}"
+              class="game-card group rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br ${game.accentClass} text-lg font-bold text-white shadow-lg">${game.title.split(' ').map((word) => word[0]).slice(0, 2).join('')}</div>
@@ -209,19 +209,37 @@ export async function renderGuruGamePage(container) {
                 <p class="text-lg font-semibold text-slate-900">${game.title}</p>
                 <p class="mt-2 text-sm leading-6 text-slate-500">${game.description}</p>
               </div>
-              <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">${game.available ? 'Kelola sekarang' : 'Siap dikembangkan berikutnya'}</p>
+              <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">${game.available ? 'Pilih untuk atur game' : 'Siap dikembangkan berikutnya'}</p>
             </button>
           `).join('')}
         </div>
       </section>
 
-      <section class="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+      <section id="game-selection-hint" class="rounded-[28px] border border-dashed border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Pengaturan Game</p>
+        <h3 class="mt-1 text-xl font-semibold text-slate-900">Pilih game dari katalog untuk membuka pengaturan</h3>
+        <p class="mt-2 text-sm text-slate-500">Setelah game dipilih, panel pengaturan akan muncul dengan transisi halus.</p>
+      </section>
+
+      <section id="game-settings-section" class="hidden grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]" aria-hidden="true">
         <div class="space-y-4">
+          <div class="rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm font-semibold uppercase tracking-[0.16em] text-slate-600">Mode Pengaturan Penuh</p>
+              <button id="game-back-to-catalog-btn" type="button" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+                <span>Pilih Game Lain</span>
+              </button>
+            </div>
+          </div>
+
           <article id="game-workspace-math" data-game-workspace="math" class="game-workspace space-y-4">
             <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">Workspace Aktif</p>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">Pengaturan Game</p>
                   <h3 id="workspace-title" class="mt-2 text-2xl font-semibold text-slate-900">Workspace Game Matematika</h3>
                   <p id="workspace-caption" class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Kelola konfigurasi, akses siswa, dan monitoring hasil tanpa meninggalkan satu halaman kerja.</p>
                 </div>
@@ -230,7 +248,7 @@ export async function renderGuruGamePage(container) {
 
               <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
                 <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Relasi Mengajar</label>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Konfigurasi Kelas</label>
                   <select id="game-assignment" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
                 </div>
                 <div>
@@ -477,7 +495,7 @@ export async function renderGuruGamePage(container) {
             <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Workspace Aktif</p>
+                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Pengaturan Game</p>
                   <h3 class="mt-2 text-2xl font-semibold text-slate-900">Workspace English Vocabulary</h3>
                   <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Buat latihan kosakata berdasarkan tema, publish tanpa token, dan pantau penguasaan vocab siswa per kelas.</p>
                 </div>
@@ -486,7 +504,7 @@ export async function renderGuruGamePage(container) {
 
               <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
                 <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Relasi Mengajar</label>
+                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Konfigurasi Kelas</label>
                   <select id="english-game-assignment" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
                 </div>
                 <div>
@@ -764,7 +782,7 @@ export async function renderGuruGamePage(container) {
           `).join('')}
         </div>
 
-        <aside class="space-y-4">
+        <aside id="game-settings-aside" class="space-y-4">
           <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Template Modul</p>
             <h4 class="mt-1 text-xl font-semibold text-slate-900">Standar game platform</h4>
@@ -839,6 +857,11 @@ export async function renderGuruGamePage(container) {
   const overviewDurationEl = container.querySelector('#overview-duration');
   const overviewTokenEl = container.querySelector('#overview-token');
   const workspaceModePillEl = container.querySelector('#workspace-mode-pill');
+  const gameCatalogSectionEl = container.querySelector('#game-catalog-section');
+  const gameSelectionHintEl = container.querySelector('#game-selection-hint');
+  const gameSettingsSectionEl = container.querySelector('#game-settings-section');
+  const gameSettingsAsideEl = container.querySelector('#game-settings-aside');
+  const gameBackToCatalogBtn = container.querySelector('#game-back-to-catalog-btn');
   const gameCards = Array.from(container.querySelectorAll('[data-game-card]'));
   const gameWorkspaces = Array.from(container.querySelectorAll('[data-game-workspace]'));
   const workspaceTabs = Array.from(container.querySelectorAll('[data-workspace-tab]'));
@@ -871,10 +894,50 @@ export async function renderGuruGamePage(container) {
   let currentAccessToken = '';
   let currentAccessTokenIssuedAt = '';
   let currentAccessTokenExpiresAt = '';
-  let currentGameKey = 'math';
+  let currentGameKey = '';
   let currentWorkspaceTab = 'overview';
   let currentEnglishWorkspaceTab = 'overview';
   let currentEnglishWordBank = [];
+  let hasGameSelection = false;
+
+  function setGameSettingsVisibility(visible, animate = false) {
+    if (gameSelectionHintEl) {
+      gameSelectionHintEl.classList.toggle('hidden', visible);
+    }
+    if (gameCatalogSectionEl) {
+      gameCatalogSectionEl.classList.toggle('hidden', visible);
+    }
+    if (!gameSettingsSectionEl) {
+      return;
+    }
+
+    gameSettingsSectionEl.classList.toggle('hidden', !visible);
+    gameSettingsSectionEl.setAttribute('aria-hidden', String(!visible));
+
+    if (visible) {
+      gameSettingsSectionEl.style.gridTemplateColumns = 'minmax(0,1fr)';
+      gameSettingsSectionEl.style.minHeight = 'calc(100dvh - 240px)';
+      if (gameSettingsAsideEl) {
+        gameSettingsAsideEl.classList.add('hidden');
+      }
+    } else {
+      gameSettingsSectionEl.style.gridTemplateColumns = '';
+      gameSettingsSectionEl.style.minHeight = '';
+      if (gameSettingsAsideEl) {
+        gameSettingsAsideEl.classList.remove('hidden');
+      }
+    }
+
+    if (visible && animate && gameSettingsSectionEl.animate) {
+      gameSettingsSectionEl.animate(
+        [
+          { opacity: 0, transform: 'translateY(12px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ],
+        { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+    }
+  }
 
   function updateWorkspaceHeader() {
     const selectedGame = gameCatalog.find((item) => item.key === currentGameKey) || gameCatalog[0];
@@ -995,7 +1058,7 @@ export async function renderGuruGamePage(container) {
     }
   }
 
-  function setActiveGame(gameKey) {
+  function setActiveGame(gameKey, shouldAnimateWorkspace = false) {
     currentGameKey = gameKey;
     gameCards.forEach((card) => {
       const isActive = card.getAttribute('data-game-card') === gameKey;
@@ -1015,6 +1078,17 @@ export async function renderGuruGamePage(container) {
     if (gameKey === 'english_vocab') {
       setEnglishWorkspaceTab(currentEnglishWorkspaceTab);
       renderEnglishMonitoring(currentEnglishAssignmentId);
+    }
+
+    const activeWorkspace = gameWorkspaces.find((panel) => panel.getAttribute('data-game-workspace') === gameKey);
+    if (activeWorkspace && shouldAnimateWorkspace && activeWorkspace.animate) {
+      activeWorkspace.animate(
+        [
+          { opacity: 0, transform: 'translateY(8px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ],
+        { duration: 220, easing: 'ease-out' },
+      );
     }
   }
 
@@ -1652,8 +1726,19 @@ export async function renderGuruGamePage(container) {
   gameCards.forEach((card) => {
     card.addEventListener('click', () => {
       const nextKey = card.getAttribute('data-game-card') || 'math';
-      setActiveGame(nextKey);
+      const shouldReveal = !hasGameSelection;
+      hasGameSelection = true;
+      setGameSettingsVisibility(true, shouldReveal);
+      setActiveGame(nextKey, true);
+      gameSettingsSectionEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  });
+
+  gameBackToCatalogBtn?.addEventListener('click', () => {
+    hasGameSelection = false;
+    setGameSettingsVisibility(false);
+    setActiveGame('');
+    gameCatalogSectionEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   assignmentSelect?.addEventListener('change', async (event) => {
@@ -1769,7 +1854,9 @@ export async function renderGuruGamePage(container) {
   });
 
   updateWorkspaceHeader();
+  setGameSettingsVisibility(false);
   setActiveGame('math');
+  setActiveGame('');
   setWorkspaceTab('overview');
   setEnglishWorkspaceTab('overview');
   await loadConfig(currentAssignmentId);

@@ -88,7 +88,7 @@ function getReaderOverlayMarkup() {
       <div class="flex h-[100dvh] w-full flex-col bg-white">
         <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6" style="padding-top: calc(0.75rem + env(safe-area-inset-top));">
           <div class="min-w-0">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Mode Baca Penuh</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Mode Fokus Penuh</p>
             <p id="student-material-reader-title" class="mt-1 truncate text-base font-semibold text-slate-900">Materi</p>
           </div>
           <div class="flex items-center gap-2">
@@ -96,7 +96,7 @@ function getReaderOverlayMarkup() {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 6L9 17l-5-5" />
               </svg>
-              <span>Selesai Dibaca</span>
+              <span>Tandai Selesai</span>
             </button>
             <button id="student-material-back-btn" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -124,7 +124,7 @@ export async function renderSiswaMateriPage(container) {
   const html = renderLayout('Materi Siswa', `
     <div class="space-y-5">
       <section class="rounded-[30px] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-cyan-50 p-5 shadow-[0_24px_70px_-42px_rgba(37,99,235,0.2)]">
-        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">Materi Kelas</p>
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">Akses Materi</p>
         <h1 class="mt-2 text-2xl font-semibold text-slate-900">Materi untuk ${userName}</h1>
         <p class="mt-2 text-sm leading-6 text-slate-600">Halaman ini menampilkan materi yang dipublikasikan guru untuk kelas ${student?.kelas_nama || student?.kelas_id || '-'} pada periode aktif ${context.tahun_ajaran_aktif_nama || '-'} / ${context.semester_aktif_nama || '-'}.</p>
       </section>
@@ -133,7 +133,7 @@ export async function renderSiswaMateriPage(container) {
         <div class="mb-4 space-y-4">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">Daftar Materi Publish</h2>
+              <h2 class="text-lg font-semibold text-slate-900">Daftar Materi</h2>
               <p class="mt-1 text-sm text-slate-500">Klik salah satu materi untuk membukanya dalam mode baca penuh.</p>
             </div>
             <span class="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Untuk Siswa</span>

@@ -2,12 +2,13 @@ import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecords, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
 
-const statusLabels = ['H', 'S', 'I', 'A'];
+const statusLabels = ['H', 'S', 'I', 'A', 'K'];
 const statusClasses = {
   H: 'border-[#007AFF] bg-[#007AFF] text-white',
   S: 'border-[#F59E0B] bg-[#FEEBC8] text-[#92400E]',
   I: 'border-[#0EA5E9] bg-[#DBEAFE] text-[#0C4A6E]',
   A: 'border-[#EF4444] bg-[#FECACA] text-[#991B1B]',
+  K: 'border-[#7C3AED] bg-[#EDE9FE] text-[#5B21B6]',
 };
 const attendanceTabActiveClass = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_14px_30px_-18px_rgba(14,165,233,0.95)]';
 const attendanceTabIdleClass = 'bg-white/80 text-slate-700 hover:bg-white hover:text-slate-900';
@@ -262,6 +263,11 @@ export async function renderGuruInputAbsenPage(container) {
                 <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose-700">Alpa</p>
                 <p id="today-summary-absent" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
               </div>
+              <div class="rounded-[24px] border border-violet-100 bg-gradient-to-br from-violet-50 to-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-700">Siswa Tidak Ada Di Kelas</p>
+                <p id="today-summary-out-class" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                <div id="today-summary-out-class-names" class="mt-2 text-xs leading-5 text-violet-800"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -304,8 +310,14 @@ export async function renderGuruInputAbsenPage(container) {
             </div>
 
             <div class="mt-4 flex flex-wrap items-center gap-3">
-              <button id="save-special-note-btn" type="button" class="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(245,158,11,0.95)] transition hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600">Simpan Catatan</button>
+              <button id="save-special-note-btn" type="button" class="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(245,158,11,0.95)] transition hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600">Simpan Semua Catatan K</button>
               <p id="special-note-message" class="text-xs text-slate-500">Catatan akan tersimpan pada tanggal absensi yang sedang aktif.</p>
+            </div>
+
+            <div class="mt-5 rounded-[24px] border border-amber-100 bg-amber-50/60 p-3">
+              <p class="text-sm font-semibold text-amber-900">Daftar Siswa Berstatus K</p>
+              <p class="mt-1 text-xs text-amber-800">Nama siswa berstatus K pada tanggal aktif muncul otomatis. Lengkapi jenis catatan, jam, dan keterangan per baris lalu simpan sekali.</p>
+              <div id="keluar-kelas-k-list" class="mt-3 space-y-3"></div>
             </div>
           </div>
 
@@ -358,96 +370,145 @@ export async function renderGuruInputAbsenPage(container) {
       </section>
 
       <section id="tab-rekap" class="hidden space-y-6">
-        <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
-          <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 class="text-xl font-semibold text-slate-900">Rekap Kehadiran Profesional</h2>
-            </div>
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-3">
-            <div>
-              <label class="text-sm font-medium text-slate-700">Tipe Filter</label>
-              <select id="rekap-filter-type" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none">
-                <option value="month">Berdasarkan Bulan</option>
-                <option value="semester">1 Semester Penuh</option>
-                <option value="custom">Rentang Tertentu</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-sm font-medium text-slate-700" id="rekap-label-1">Pilih Bulan</label>
-              <select id="rekap-month" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none">
-                <option value="01">Januari</option>
-                <option value="02">Februari</option>
-                <option value="03">Maret</option>
-                <option value="04">April</option>
-                <option value="05">Mei</option>
-                <option value="06">Juni</option>
-                <option value="07">Juli</option>
-                <option value="08">Agustus</option>
-                <option value="09">September</option>
-                <option value="10">Oktober</option>
-                <option value="11">November</option>
-                <option value="12">Desember</option>
-              </select>
-            </div>
-            <div>
-              <label class="text-sm font-medium text-slate-700" id="rekap-label-2">Tahun</label>
-              <input id="rekap-year" type="number" placeholder="2024" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
-            </div>
-          </div>
-
-          <div id="rekap-custom-range" class="hidden mt-4 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label class="text-sm font-medium text-slate-700">Tanggal Mulai</label>
-              <input id="rekap-start-date" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
-            </div>
-            <div>
-              <label class="text-sm font-medium text-slate-700">Tanggal Akhir</label>
-              <input id="rekap-end-date" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
-            </div>
-          </div>
-
-          <div class="mt-6 max-w-full overflow-hidden rounded-[24px] border border-slate-100 bg-gradient-to-b from-white to-slate-50 shadow-inner">
-            <div class="max-w-full overflow-x-auto p-3">
-            <table class="min-w-max text-xs text-slate-700">
-              <thead id="rekap-table-head">
-                <tr class="border-b border-slate-300 bg-slate-50">
-                  <th class="sticky left-0 z-10 w-28 bg-slate-50 px-2 py-2 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
-                </tr>
-              </thead>
-              <tbody id="rekap-table-body"></tbody>
-            </table>
-            </div>
-          </div>
-
-          <div class="mt-6 grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
-            <div class="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
-              <p class="text-xs font-medium text-slate-600">H</p>
-              <p id="rekap-summary-present" class="mt-2 text-lg font-bold text-blue-600">0</p>
-            </div>
-            <div class="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
-              <p class="text-xs font-medium text-slate-600">S</p>
-              <p id="rekap-summary-sick" class="mt-2 text-lg font-bold text-orange-600">0</p>
-            </div>
-            <div class="rounded-2xl border border-cyan-100 bg-cyan-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
-              <p class="text-xs font-medium text-slate-600">I</p>
-              <p id="rekap-summary-permission" class="mt-2 text-lg font-bold text-cyan-600">0</p>
-            </div>
-            <div class="rounded-2xl border border-red-100 bg-red-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
-              <p class="text-xs font-medium text-slate-600">A</p>
-              <p id="rekap-summary-absent" class="mt-2 text-lg font-bold text-red-600">0</p>
-            </div>
-            <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
-              <p class="text-xs font-medium text-slate-600">Total Data</p>
-              <p id="summary-total-records" class="mt-2 text-lg font-bold text-slate-900">0</p>
-            </div>
-            <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
-              <p class="text-xs font-medium text-slate-600">Jumlah Siswa</p>
-              <p id="summary-total-students" class="mt-2 text-lg font-bold text-slate-900">0</p>
-            </div>
+        <div class="rounded-[24px] border border-sky-100 bg-gradient-to-r from-sky-50 via-white to-cyan-50 p-1 shadow-[0_12px_30px_-24px_rgba(14,165,233,0.22)]">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-rekap-subtab="rekap-absensi" class="rekap-subtab-btn rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-sm">Rekap Absensi</button>
+            <button type="button" data-rekap-subtab="rekap-catatan-keluar-kelas" class="rekap-subtab-btn rounded-full border border-transparent bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white">Rekap Catatan Siswa Keluar Kelas</button>
           </div>
         </div>
+
+        <section id="rekap-subtab-absensi" class="space-y-4">
+          <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-xl font-semibold text-slate-900">Rekap Kehadiran Profesional</h2>
+              </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label class="text-sm font-medium text-slate-700">Tipe Filter</label>
+                <select id="rekap-filter-type" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none">
+                  <option value="month">Berdasarkan Bulan</option>
+                  <option value="semester">1 Semester Penuh</option>
+                  <option value="custom">Rentang Tertentu</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-sm font-medium text-slate-700" id="rekap-label-1">Pilih Bulan</label>
+                <select id="rekap-month" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none">
+                  <option value="01">Januari</option>
+                  <option value="02">Februari</option>
+                  <option value="03">Maret</option>
+                  <option value="04">April</option>
+                  <option value="05">Mei</option>
+                  <option value="06">Juni</option>
+                  <option value="07">Juli</option>
+                  <option value="08">Agustus</option>
+                  <option value="09">September</option>
+                  <option value="10">Oktober</option>
+                  <option value="11">November</option>
+                  <option value="12">Desember</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-sm font-medium text-slate-700" id="rekap-label-2">Tahun</label>
+                <input id="rekap-year" type="number" placeholder="2024" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
+              </div>
+            </div>
+
+            <div id="rekap-custom-range" class="hidden mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label class="text-sm font-medium text-slate-700">Tanggal Mulai</label>
+                <input id="rekap-start-date" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
+              </div>
+              <div>
+                <label class="text-sm font-medium text-slate-700">Tanggal Akhir</label>
+                <input id="rekap-end-date" type="date" class="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
+              </div>
+            </div>
+
+            <div class="mt-6 max-w-full overflow-hidden rounded-[24px] border border-slate-100 bg-gradient-to-b from-white to-slate-50 shadow-inner">
+              <div class="max-w-full overflow-x-auto p-3">
+              <table class="min-w-max text-[9px] text-slate-700">
+                <thead id="rekap-table-head">
+                  <tr class="border-b border-slate-300 bg-slate-50">
+                    <th class="sticky left-0 z-10 w-28 bg-slate-50 px-2 py-2 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
+                  </tr>
+                </thead>
+                <tbody id="rekap-table-body"></tbody>
+              </table>
+              </div>
+            </div>
+
+            <div class="mt-6 grid gap-2 grid-cols-2 sm:grid-cols-3 xl:grid-cols-7">
+              <div class="rounded-2xl border border-blue-100 bg-blue-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">H</p>
+                <p id="rekap-summary-present" class="mt-2 text-lg font-bold text-blue-600">0</p>
+              </div>
+              <div class="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">S</p>
+                <p id="rekap-summary-sick" class="mt-2 text-lg font-bold text-orange-600">0</p>
+              </div>
+              <div class="rounded-2xl border border-cyan-100 bg-cyan-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">I</p>
+                <p id="rekap-summary-permission" class="mt-2 text-lg font-bold text-cyan-600">0</p>
+              </div>
+              <div class="rounded-2xl border border-red-100 bg-red-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">A</p>
+                <p id="rekap-summary-absent" class="mt-2 text-lg font-bold text-red-600">0</p>
+              </div>
+              <div class="rounded-2xl border border-violet-100 bg-violet-50 p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">K</p>
+                <p id="rekap-summary-keluar" class="mt-2 text-lg font-bold text-violet-700">0</p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">Total Data</p>
+                <p id="summary-total-records" class="mt-2 text-lg font-bold text-slate-900">0</p>
+              </div>
+              <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm transition hover:-translate-y-0.5">
+                <p class="text-xs font-medium text-slate-600">Jumlah Siswa</p>
+                <p id="summary-total-students" class="mt-2 text-lg font-bold text-slate-900">0</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="rekap-subtab-catatan-keluar-kelas" class="hidden space-y-4">
+          <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
+            <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 class="text-xl font-semibold text-slate-900">Rekap Catatan Siswa Keluar Kelas</h2>
+                <p class="mt-1 text-sm text-slate-500">Menampilkan rekap tabel absensi dengan fokus status kode K (Siswa Keluar Kelas).</p>
+              </div>
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-center shadow-sm">
+                <p class="text-xs font-medium text-slate-600">Siswa Berkode K</p>
+                <p id="rekap-note-student-count" class="mt-2 text-lg font-bold text-amber-700">0</p>
+              </div>
+              <div class="rounded-2xl border border-orange-100 bg-orange-50 p-3 text-center shadow-sm">
+                <p class="text-xs font-medium text-slate-600">Total Kode K</p>
+                <p id="rekap-note-total-count" class="mt-2 text-lg font-bold text-orange-700">0</p>
+              </div>
+            </div>
+
+            <div class="mt-6 max-w-full overflow-hidden rounded-[24px] border border-slate-100 bg-gradient-to-b from-white to-slate-50 shadow-inner">
+              <div class="max-w-full overflow-x-auto p-3">
+              <table class="min-w-max text-[9px] text-slate-700">
+                <thead id="rekap-k-table-head">
+                  <tr class="border-b border-slate-300 bg-slate-50">
+                    <th class="sticky left-0 z-10 w-28 bg-slate-50 px-2 py-2 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
+                  </tr>
+                </thead>
+                <tbody id="rekap-k-table-body"></tbody>
+              </table>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
 
       <section id="tab-pencapaian" class="hidden space-y-6">
         <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-5">
@@ -491,17 +552,27 @@ export async function renderGuruInputAbsenPage(container) {
   const todaySummaryPresent = container.querySelector('#today-summary-present');
   const todaySummaryExcused = container.querySelector('#today-summary-excused');
   const todaySummaryAbsent = container.querySelector('#today-summary-absent');
+  const todaySummaryOutClass = container.querySelector('#today-summary-out-class');
+  const todaySummaryOutClassNames = container.querySelector('#today-summary-out-class-names');
   const rekapSummaryPresent = container.querySelector('#rekap-summary-present');
   const rekapSummarySick = container.querySelector('#rekap-summary-sick');
   const rekapSummaryPermission = container.querySelector('#rekap-summary-permission');
   const rekapSummaryAbsent = container.querySelector('#rekap-summary-absent');
+  const rekapSummaryKeluar = container.querySelector('#rekap-summary-keluar');
   const rekapTableBody = container.querySelector('#rekap-table-body');
   const tabButtons = Array.from(container.querySelectorAll('.tab-btn'));
   const absensiSubtabButtons = Array.from(container.querySelectorAll('.absensi-subtab-btn'));
+  const rekapSubtabButtons = Array.from(container.querySelectorAll('.rekap-subtab-btn'));
   const tabInput = container.querySelector('#tab-input');
   const absensiSubtabAbsensi = container.querySelector('#absensi-subtab-absensi');
   const absensiSubtabKeluarKelas = container.querySelector('#absensi-subtab-keluar-kelas');
   const tabRekap = container.querySelector('#tab-rekap');
+  const rekapSubtabAbsensi = container.querySelector('#rekap-subtab-absensi');
+  const rekapSubtabCatatanKeluarKelas = container.querySelector('#rekap-subtab-catatan-keluar-kelas');
+  const rekapNoteStudentCount = container.querySelector('#rekap-note-student-count');
+  const rekapNoteTotalCount = container.querySelector('#rekap-note-total-count');
+  const rekapKTableHead = container.querySelector('#rekap-k-table-head');
+  const rekapKTableBody = container.querySelector('#rekap-k-table-body');
   const tabPencapaian = container.querySelector('#tab-pencapaian');
   const topPresentList = container.querySelector('#top-present-list');
   const topAbsentList = container.querySelector('#top-absent-list');
@@ -512,6 +583,7 @@ export async function renderGuruInputAbsenPage(container) {
   const specialNoteText = container.querySelector('#special-note-text');
   const saveSpecialNoteBtn = container.querySelector('#save-special-note-btn');
   const specialNoteMessage = container.querySelector('#special-note-message');
+  const keluarKelasKList = container.querySelector('#keluar-kelas-k-list');
   const specialNoteHistory = container.querySelector('#special-note-history');
   const specialNoteHistoryStudent = container.querySelector('#special-note-history-student');
   const specialNoteHistoryType = container.querySelector('#special-note-history-type');
@@ -525,6 +597,7 @@ export async function renderGuruInputAbsenPage(container) {
   let currentAttendance = attendanceRecords;
   let currentSpecialNotes = [];
   let activeAbsensiSubtab = 'absensi';
+  let activeRekapSubtab = 'rekap-absensi';
 
   function getCurrentAssignment() {
     return currentAssignments.find((item) => item.id === selectedAssignmentId) || currentAssignments[0] || null;
@@ -532,6 +605,32 @@ export async function renderGuruInputAbsenPage(container) {
 
   function getAttendanceForDate(date) {
     return currentAttendance.filter((record) => record.tanggal === date);
+  }
+
+  function getCurrentKStudentIdsFromInput() {
+    const ids = new Set();
+    Array.from(memberListEl?.querySelectorAll('li') || []).forEach((row) => {
+      const studentId = row.querySelector('.status-btn')?.getAttribute('data-student-id');
+      const selectedButton = row.querySelector('.status-btn[data-active="true"]') || row.querySelector('.status-btn');
+      const status = selectedButton?.getAttribute('data-status') || 'H';
+      if (studentId && status === 'K') {
+        ids.add(String(studentId));
+      }
+    });
+    return ids;
+  }
+
+  function getStudentsWithKStatus() {
+    const idsFromRecords = getAttendanceForDate(selectedDate)
+      .filter((record) => record.status === 'K')
+      .map((record) => String(record.siswa_id || ''));
+    const idsFromInput = [...getCurrentKStudentIdsFromInput()];
+    const mergedIds = new Set([...idsFromRecords, ...idsFromInput].filter(Boolean));
+    return getSortedMembers().filter((member) => mergedIds.has(String(member.siswa_id || member.id || '')));
+  }
+
+  function getExistingSpecialNoteByStudent(studentId) {
+    return currentSpecialNotes.find((item) => String(item.siswa_id || '') === String(studentId) && String(item.tanggal || '') === selectedDate) || null;
   }
 
   function setSpecialNoteMessage(text, isError = false) {
@@ -668,6 +767,65 @@ export async function renderGuruInputAbsenPage(container) {
       .join('');
   }
 
+  function renderKeluarKelasKList() {
+    if (!keluarKelasKList) {
+      return;
+    }
+
+    const students = getStudentsWithKStatus();
+    if (!students.length) {
+      keluarKelasKList.innerHTML = '<div class="rounded-xl border border-amber-200 bg-white p-3 text-sm text-amber-800">Belum ada siswa berstatus K pada tanggal ini.</div>';
+      return;
+    }
+
+    keluarKelasKList.innerHTML = students
+      .map((member, index) => {
+        const studentId = member.siswa_id || member.id;
+        const studentName = member.siswa_nama || member.nama || '-';
+        const existingNote = getExistingSpecialNoteByStudent(studentId);
+        const defaultType = existingNote?.jenis || 'Izin Keluar';
+        const defaultTime = existingNote?.jam && existingNote.jam !== '-' ? existingNote.jam : '';
+        const defaultNote = String(existingNote?.catatan || '').replace(/"/g, '&quot;');
+        const latestLabel = existingNote ? `Terakhir disimpan: ${formatAttendanceDate(existingNote.tanggal)} ${existingNote.jam || ''}`.trim() : 'Belum ada catatan.';
+        return `
+          <div data-k-student-row="${studentId}" class="rounded-xl border border-amber-200 bg-white p-3 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-sm font-semibold text-slate-900">${index + 1}. ${studentName}</p>
+              <span class="rounded-full bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-700">Status K</span>
+            </div>
+            <p class="mt-1 text-xs text-slate-500">${latestLabel}</p>
+            <div class="mt-3 grid gap-2 sm:grid-cols-[190px_130px_1fr] sm:items-end">
+              <div>
+                <label class="text-xs font-medium text-slate-700">Jenis Catatan</label>
+                <select class="k-note-type-input mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100">
+                  <option value="Izin Keluar" ${defaultType === 'Izin Keluar' ? 'selected' : ''}>Izin Keluar</option>
+                  <option value="Siswa Membolos" ${defaultType === 'Siswa Membolos' ? 'selected' : ''}>Siswa Membolos</option>
+                  <option value="Siswa ke Kantin" ${defaultType === 'Siswa ke Kantin' ? 'selected' : ''}>Siswa ke Kantin</option>
+                  <option value="Siswa Ikut Organisasi" ${defaultType === 'Siswa Ikut Organisasi' ? 'selected' : ''}>Siswa Ikut Organisasi</option>
+                  <option value="Siswa ke Toilet" ${defaultType === 'Siswa ke Toilet' ? 'selected' : ''}>Siswa ke Toilet</option>
+                  <option value="Siswa ke Perpustakaan" ${defaultType === 'Siswa ke Perpustakaan' ? 'selected' : ''}>Siswa ke Perpustakaan</option>
+                  <option value="Dipanggil Guru Lain" ${defaultType === 'Dipanggil Guru Lain' ? 'selected' : ''}>Dipanggil Guru Lain</option>
+                  <option value="Kembali Terlambat" ${defaultType === 'Kembali Terlambat' ? 'selected' : ''}>Kembali Terlambat</option>
+                  <option value="Keperluan UKS" ${defaultType === 'Keperluan UKS' ? 'selected' : ''}>Keperluan UKS</option>
+                  <option value="Catatan Guru" ${defaultType === 'Catatan Guru' ? 'selected' : ''}>Catatan Guru</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-medium text-slate-700">Jam</label>
+                <input type="time" class="k-note-time-input mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100" value="${defaultTime}" />
+              </div>
+              <div>
+                <label class="text-xs font-medium text-slate-700">Keterangan Keluar Kelas</label>
+                <input type="text" class="k-note-text-input mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 outline-none transition focus:border-amber-300 focus:ring-2 focus:ring-amber-100" placeholder="Contoh: izin ke UKS" value="${defaultNote}" />
+              </div>
+            </div>
+            <p class="k-note-row-message mt-2 text-xs text-slate-500"></p>
+          </div>
+        `;
+      })
+      .join('');
+  }
+
   function setAbsensiSubtab(nextTab) {
     activeAbsensiSubtab = nextTab === 'keluar-kelas' ? 'keluar-kelas' : 'absensi';
 
@@ -678,6 +836,45 @@ export async function renderGuruInputAbsenPage(container) {
 
     absensiSubtabAbsensi?.classList.toggle('hidden', activeAbsensiSubtab !== 'absensi');
     absensiSubtabKeluarKelas?.classList.toggle('hidden', activeAbsensiSubtab !== 'keluar-kelas');
+  }
+
+  function setRekapSubtab(nextTab) {
+    activeRekapSubtab = nextTab === 'rekap-catatan-keluar-kelas' ? 'rekap-catatan-keluar-kelas' : 'rekap-absensi';
+
+    rekapSubtabButtons.forEach((button) => {
+      const isActive = button.getAttribute('data-rekap-subtab') === activeRekapSubtab;
+      button.className = `rekap-subtab-btn rounded-full border px-4 py-2 text-xs font-semibold transition ${isActive ? 'border-sky-400 bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_10px_22px_-14px_rgba(14,165,233,0.9)]' : 'border-transparent bg-white/90 text-slate-700 hover:bg-white hover:border-sky-100'}`;
+    });
+
+    rekapSubtabAbsensi?.classList.toggle('hidden', activeRekapSubtab !== 'rekap-absensi');
+    rekapSubtabCatatanKeluarKelas?.classList.toggle('hidden', activeRekapSubtab !== 'rekap-catatan-keluar-kelas');
+  }
+
+  function setMainTab(targetTab) {
+    const tabKey = ['input', 'rekap', 'pencapaian'].includes(targetTab) ? targetTab : 'input';
+
+    tabInput.classList.toggle('hidden', tabKey !== 'input');
+    tabRekap.classList.toggle('hidden', tabKey !== 'rekap');
+    tabPencapaian.classList.toggle('hidden', tabKey !== 'pencapaian');
+
+    if (tabKey === 'input') {
+      setAbsensiSubtab(activeAbsensiSubtab);
+      return;
+    }
+
+    // Keep input subtab deterministic when leaving Input tab.
+    setAbsensiSubtab('absensi');
+
+    if (tabKey === 'rekap') {
+      // Rekap should always open on the default recap table view.
+      activeRekapSubtab = 'rekap-absensi';
+      setRekapSubtab('rekap-absensi');
+      renderRecap();
+      renderRecapSpecialNotes();
+      return;
+    }
+
+    renderPencapaian();
   }
 
   function setRowStatus(row, targetStatus) {
@@ -743,12 +940,20 @@ export async function renderGuruInputAbsenPage(container) {
       todaySummaryPresent.textContent = '0';
       todaySummaryExcused.textContent = '0';
       todaySummaryAbsent.textContent = '0';
+      if (todaySummaryOutClass) {
+        todaySummaryOutClass.textContent = '0';
+      }
+      if (todaySummaryOutClassNames) {
+        todaySummaryOutClassNames.textContent = 'Belum ada siswa.';
+      }
       return;
     }
 
     let present = 0;
     let excused = 0;
     let absent = 0;
+    let outClass = 0;
+    const outClassNames = [];
 
     rows.forEach((row) => {
       const selectedButton = row.querySelector('.status-btn[data-active="true"]') || row.querySelector('.status-btn');
@@ -756,11 +961,24 @@ export async function renderGuruInputAbsenPage(container) {
       if (status === 'H') present += 1;
       else if (status === 'S' || status === 'I') excused += 1;
       else if (status === 'A') absent += 1;
+      else if (status === 'K') {
+        outClass += 1;
+        const studentName = row.querySelector('.student-name')?.textContent.replace(/^\d+\.\s*/, '').trim() || '-';
+        outClassNames.push(studentName);
+      }
     });
 
     todaySummaryPresent.textContent = String(present);
     todaySummaryExcused.textContent = String(excused);
     todaySummaryAbsent.textContent = String(absent);
+    if (todaySummaryOutClass) {
+      todaySummaryOutClass.textContent = String(outClass);
+    }
+    if (todaySummaryOutClassNames) {
+      todaySummaryOutClassNames.textContent = outClassNames.length
+        ? outClassNames.join(', ')
+        : 'Tidak ada siswa berstatus K.';
+    }
   }
 
   function getRecapPeriod() {
@@ -813,11 +1031,15 @@ export async function renderGuruInputAbsenPage(container) {
     const sick = records.filter((item) => item.status === 'S').length;
     const permission = records.filter((item) => item.status === 'I').length;
     const absent = records.filter((item) => item.status === 'A').length;
+    const keluar = records.filter((item) => item.status === 'K').length;
 
     rekapSummaryPresent.textContent = present;
     rekapSummarySick.textContent = sick;
     rekapSummaryPermission.textContent = permission;
     rekapSummaryAbsent.textContent = absent;
+    if (rekapSummaryKeluar) {
+      rekapSummaryKeluar.textContent = keluar;
+    }
     container.querySelector('#summary-total-records').textContent = records.length;
     container.querySelector('#summary-total-students').textContent = currentMembers.length;
 
@@ -830,20 +1052,21 @@ export async function renderGuruInputAbsenPage(container) {
         const dayLabel = new Date(date).toLocaleDateString('id-ID', { weekday: 'short' });
         const dateLabel = new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
         const weekendClass = isWeekend ? 'bg-rose-50 text-rose-700' : 'bg-white text-slate-600';
-        return `<th class="px-2 py-2 text-center font-semibold text-xs ${weekendClass}">${dateLabel}<br/><span class="text-[10px]">${dayLabel}</span></th>`;
+        return `<th class="px-1 py-1.5 text-center font-semibold text-[9px] ${weekendClass}">${dateLabel}<br/><span class="text-[8px]">${dayLabel}</span></th>`;
       })
       .join('');
     
     tableHead.innerHTML = `
       <tr class="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-sky-50/60">
-        <th class="sticky left-0 z-10 w-12 bg-slate-50 px-2 py-3 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">No</th>
-        <th class="sticky left-12 z-10 w-44 bg-slate-50 px-2 py-3 text-left font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Nama</th>
+        <th class="sticky left-0 z-10 w-8 bg-slate-50 px-1 py-1.5 text-left font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px]">No</th>
+        <th class="sticky left-8 z-10 w-28 bg-slate-50 px-1 py-1.5 text-left font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px]">Nama</th>
         ${dateHeaderCells}
-        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-blue-50">H</th>
-        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-orange-50">S</th>
-        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-cyan-50">I</th>
-        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs bg-red-50">A</th>
-        <th class="px-2 py-3 text-center font-semibold uppercase tracking-[0.1em] text-slate-600 text-xs">Total</th>
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px] bg-blue-50">H</th>
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px] bg-orange-50">S</th>
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px] bg-cyan-50">I</th>
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px] bg-red-50">A</th>
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px] bg-violet-50">K</th>
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px]">Total</th>
       </tr>
     `;
 
@@ -861,6 +1084,7 @@ export async function renderGuruInputAbsenPage(container) {
         const countS = memberRecords.filter((r) => r.status === 'S').length;
         const countI = memberRecords.filter((r) => r.status === 'I').length;
         const countA = memberRecords.filter((r) => r.status === 'A').length;
+        const countK = memberRecords.filter((r) => r.status === 'K').length;
         const totalRecords = memberRecords.length;
 
         const cells = dates
@@ -868,7 +1092,7 @@ export async function renderGuruInputAbsenPage(container) {
             const day = new Date(date).getDay();
             const isWeekend = day === 0 || day === 6;
             if (isWeekend) {
-              return '<td class="px-2 py-2 text-center text-[11px] font-semibold text-rose-600 bg-rose-50">Libur</td>';
+              return '<td class="px-1 py-1.5 bg-rose-50"></td>';
             }
             const record = records.find((r) => r.siswa_id === memberId && r.tanggal === date);
             const status = record?.status || '-';
@@ -877,20 +1101,98 @@ export async function renderGuruInputAbsenPage(container) {
               status === 'I' ? 'text-cyan-700' :
               status === 'A' ? 'text-red-700' :
               'text-slate-400';
-            return `<td class="px-2 py-2 text-center text-xs font-semibold ${textClass}">${status}</td>`;
+            return `<td class="px-1 py-1.5 text-center text-[9px] font-semibold ${textClass}">${status}</td>`;
           })
           .join('');
 
         return `
-          <tr class="border-b border-slate-100 text-xs transition hover:bg-sky-50/60">
-            <td class="sticky left-0 z-10 bg-white px-2 py-3 font-medium text-slate-700">${index + 1}</td>
-            <td class="sticky left-12 z-10 max-w-44 truncate bg-white px-2 py-3 font-medium text-slate-900 w-44">${member.siswa_nama || member.nama || '-'}</td>
+          <tr class="border-b border-slate-100 text-[9px] transition hover:bg-sky-50/60">
+            <td class="sticky left-0 z-10 bg-white px-1 py-1.5 font-medium text-slate-700">${index + 1}</td>
+            <td class="sticky left-8 z-10 max-w-28 truncate bg-white px-1 py-1.5 font-medium text-slate-900 w-28">${member.siswa_nama || member.nama || '-'}</td>
             ${cells}
-            <td class="px-2 py-3 text-center font-bold text-blue-600 bg-blue-50">${countH}</td>
-            <td class="px-2 py-3 text-center font-bold text-orange-600 bg-orange-50">${countS}</td>
-            <td class="px-2 py-3 text-center font-bold text-cyan-600 bg-cyan-50">${countI}</td>
-            <td class="px-2 py-3 text-center font-bold text-red-600 bg-red-50">${countA}</td>
-            <td class="px-2 py-3 text-center font-bold text-slate-900">${totalRecords}</td>
+            <td class="px-1 py-1.5 text-center font-bold text-blue-600 bg-blue-50">${countH}</td>
+            <td class="px-1 py-1.5 text-center font-bold text-orange-600 bg-orange-50">${countS}</td>
+            <td class="px-1 py-1.5 text-center font-bold text-cyan-600 bg-cyan-50">${countI}</td>
+            <td class="px-1 py-1.5 text-center font-bold text-red-600 bg-red-50">${countA}</td>
+            <td class="px-1 py-1.5 text-center font-bold text-violet-700 bg-violet-50">${countK}</td>
+            <td class="px-1 py-1.5 text-center font-bold text-slate-900">${totalRecords}</td>
+          </tr>
+        `;
+      })
+      .join('');
+  }
+
+  function renderRecapSpecialNotes() {
+    if (!rekapKTableHead || !rekapKTableBody || !rekapNoteStudentCount || !rekapNoteTotalCount) {
+      return;
+    }
+
+    const period = getRecapPeriod();
+    const dates = getDatesInRange(period.start, period.end);
+    const filteredRecords = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
+    const kRecords = filteredRecords.filter((item) => item.status === 'K');
+
+    const tableDateHeaderCells = dates
+      .map((date) => {
+        const day = new Date(date).getDay();
+        const isWeekend = day === 0 || day === 6;
+        const dayLabel = new Date(date).toLocaleDateString('id-ID', { weekday: 'short' });
+        const dateLabel = new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
+        const weekendClass = isWeekend ? 'bg-rose-50 text-rose-700' : 'bg-white text-slate-600';
+        return `<th class="px-1 py-1.5 text-center font-semibold text-[9px] ${weekendClass}">${dateLabel}<br/><span class="text-[8px]">${dayLabel}</span></th>`;
+      })
+      .join('');
+
+    rekapKTableHead.innerHTML = `
+      <tr class="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-amber-50/60">
+        <th class="sticky left-0 z-10 w-8 bg-slate-50 px-1 py-1.5 text-left font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px]">No</th>
+        <th class="sticky left-8 z-10 w-28 bg-slate-50 px-1 py-1.5 text-left font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px]">Nama</th>
+        ${tableDateHeaderCells}
+        <th class="px-1 py-1.5 text-center font-semibold uppercase tracking-[0.06em] text-slate-600 text-[9px] bg-violet-50">K</th>
+      </tr>
+    `;
+
+    const sortedMembers = [...currentMembers].sort((a, b) => {
+      const nameA = (a.siswa_nama || a.nama || '').toLowerCase();
+      const nameB = (b.siswa_nama || b.nama || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    const studentsWithK = sortedMembers.filter((member) => {
+      const memberId = member.siswa_id || member.id;
+      return kRecords.some((record) => record.siswa_id === memberId);
+    });
+
+    rekapNoteStudentCount.textContent = String(studentsWithK.length);
+    rekapNoteTotalCount.textContent = String(kRecords.length);
+
+    if (!studentsWithK.length) {
+      rekapKTableBody.innerHTML = `<tr><td colspan="${dates.length + 3}" class="px-4 py-4 text-sm text-slate-500">Tidak ada data kode K pada periode ini.</td></tr>`;
+      return;
+    }
+
+    rekapKTableBody.innerHTML = studentsWithK
+      .map((member, index) => {
+        const memberId = member.siswa_id || member.id;
+        const countK = kRecords.filter((record) => record.siswa_id === memberId).length;
+        const cells = dates
+          .map((date) => {
+            const day = new Date(date).getDay();
+            const isWeekend = day === 0 || day === 6;
+            if (isWeekend) {
+              return '<td class="px-1 py-1.5 bg-rose-50"></td>';
+            }
+            const record = kRecords.find((r) => r.siswa_id === memberId && r.tanggal === date);
+            return `<td class="px-1 py-1.5 text-center text-[9px] font-semibold ${record ? 'text-violet-700 bg-violet-50' : 'text-slate-400'}">${record ? 'K' : '-'}</td>`;
+          })
+          .join('');
+
+        return `
+          <tr class="border-b border-slate-100 text-[9px] transition hover:bg-amber-50/50">
+            <td class="sticky left-0 z-10 bg-white px-1 py-1.5 font-medium text-slate-700">${index + 1}</td>
+            <td class="sticky left-8 z-10 max-w-28 truncate bg-white px-1 py-1.5 font-medium text-slate-900 w-28">${member.siswa_nama || member.nama || '-'}</td>
+            ${cells}
+            <td class="px-1 py-1.5 text-center font-bold text-violet-700 bg-violet-50">${countK}</td>
           </tr>
         `;
       })
@@ -919,7 +1221,9 @@ export async function renderGuruInputAbsenPage(container) {
     renderSpecialNoteHistoryStudentOptions();
     renderSpecialNoteHistory();
     renderMemberRows();
+    renderKeluarKelasKList();
     renderRecap();
+    renderRecapSpecialNotes();
   }
 
   async function saveSpecialNote() {
@@ -974,13 +1278,137 @@ export async function renderGuruInputAbsenPage(container) {
         created_at: new Date().toISOString(),
       }, docId);
 
+      const attendanceId = `${assignment.id}_${target.siswaId}_${selectedDate}`;
+      await saveDocument('absensi', {
+        id: attendanceId,
+        tahun_ajaran_id: context.tahun_ajaran_aktif,
+        semester_id: context.semester_aktif,
+        pengajaran_id: assignment.id,
+        guru_id: assignment.guru_id,
+        guru_nama: assignment.guru_nama,
+        mapel_id: assignment.mapel_id,
+        mapel_nama: assignment.mapel_nama,
+        kelas_id: assignment.kelas_id,
+        kelas_nama: assignment.kelas_nama,
+        siswa_id: target.siswaId,
+        siswa_nama: target.siswaName,
+        tanggal: selectedDate,
+        hari: getDayName(selectedDate),
+        status: 'K',
+        updated_at: new Date().toISOString(),
+      }, attendanceId);
+
       specialNoteText.value = '';
-      setSpecialNoteMessage('Catatan khusus berhasil disimpan.');
-      await refreshSpecialNotes();
-      renderSpecialNoteHistory();
+      setSpecialNoteMessage('Catatan khusus berhasil disimpan dan absensi diberi kode K.');
+      await refreshCurrentData();
+      setAbsensiSubtab('keluar-kelas');
     } catch (error) {
       console.error('Gagal menyimpan catatan khusus:', error);
       setSpecialNoteMessage('Gagal menyimpan catatan khusus.', true);
+    }
+  }
+
+  async function saveAllKSpecialNotes() {
+    const assignment = getCurrentAssignment();
+    if (!assignment) {
+      setSpecialNoteMessage('Relasi mengajar belum dipilih.', true);
+      return;
+    }
+
+    const rowElements = Array.from(keluarKelasKList?.querySelectorAll('[data-k-student-row]') || []);
+    if (!rowElements.length) {
+      setSpecialNoteMessage('Belum ada siswa berstatus K untuk disimpan.', true);
+      return;
+    }
+
+    const rowsPayload = [];
+    let hasValidationError = false;
+
+    rowElements.forEach((rowEl) => {
+      const studentId = rowEl.getAttribute('data-k-student-row');
+      const timeInput = rowEl.querySelector('.k-note-time-input');
+      const textInput = rowEl.querySelector('.k-note-text-input');
+      const typeInput = rowEl.querySelector('.k-note-type-input');
+      const rowMessageEl = rowEl.querySelector('.k-note-row-message');
+
+      const jam = String(timeInput?.value || '').trim();
+      const catatan = String(textInput?.value || '').trim();
+      const jenis = String(typeInput?.value || 'Izin Keluar').trim() || 'Izin Keluar';
+
+      if (!jam || !catatan) {
+        hasValidationError = true;
+        if (rowMessageEl) {
+          rowMessageEl.textContent = 'Lengkapi jam dan keterangan terlebih dahulu.';
+          rowMessageEl.className = 'k-note-row-message mt-2 text-xs text-rose-600';
+        }
+        return;
+      }
+
+      const targetMember = currentMembers.find((member) => String(member.siswa_id || member.id || '') === String(studentId));
+      const studentName = targetMember?.siswa_nama || targetMember?.nama || '-';
+      rowsPayload.push({ studentId, studentName, jam, catatan, jenis, rowMessageEl });
+    });
+
+    if (hasValidationError) {
+      setSpecialNoteMessage('Masih ada baris K yang belum lengkap. Periksa semua baris lalu simpan lagi.', true);
+      return;
+    }
+
+    try {
+      await Promise.all(rowsPayload.map(async (item, index) => {
+        const now = Date.now() + index;
+        const docId = `${assignment.id}_${item.studentId}_${selectedDate}_${now}`;
+        await saveDocument('catatan_khusus', {
+          tahun_ajaran_id: context.tahun_ajaran_aktif,
+          semester_id: context.semester_aktif,
+          pengajaran_id: assignment.id,
+          kelas_id: assignment.kelas_id,
+          kelas_nama: assignment.kelas_nama,
+          mapel_id: assignment.mapel_id,
+          mapel_nama: assignment.mapel_nama,
+          guru_id: assignment.guru_id,
+          guru_nama: assignment.guru_nama,
+          siswa_id: item.studentId,
+          siswa_nama: item.studentName,
+          tanggal: selectedDate,
+          jam: item.jam,
+          jenis: item.jenis,
+          catatan: item.catatan,
+          created_at: new Date().toISOString(),
+        }, docId);
+
+        const attendanceId = `${assignment.id}_${item.studentId}_${selectedDate}`;
+        await saveDocument('absensi', {
+          id: attendanceId,
+          tahun_ajaran_id: context.tahun_ajaran_aktif,
+          semester_id: context.semester_aktif,
+          pengajaran_id: assignment.id,
+          guru_id: assignment.guru_id,
+          guru_nama: assignment.guru_nama,
+          mapel_id: assignment.mapel_id,
+          mapel_nama: assignment.mapel_nama,
+          kelas_id: assignment.kelas_id,
+          kelas_nama: assignment.kelas_nama,
+          siswa_id: item.studentId,
+          siswa_nama: item.studentName,
+          tanggal: selectedDate,
+          hari: getDayName(selectedDate),
+          status: 'K',
+          updated_at: new Date().toISOString(),
+        }, attendanceId);
+
+        if (item.rowMessageEl) {
+          item.rowMessageEl.textContent = 'Siap disimpan';
+          item.rowMessageEl.className = 'k-note-row-message mt-2 text-xs text-emerald-700';
+        }
+      }));
+
+      await refreshCurrentData();
+      setAbsensiSubtab('keluar-kelas');
+      setSpecialNoteMessage(`${rowsPayload.length} catatan status K berhasil disimpan.`);
+    } catch (error) {
+      console.error('Gagal menyimpan catatan status K secara batch:', error);
+      setSpecialNoteMessage('Gagal menyimpan semua catatan K.', true);
     }
   }
 
@@ -1128,18 +1556,7 @@ export async function renderGuruInputAbsenPage(container) {
         btn.className = `tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition sm:w-auto ${isActive ? attendanceTabActiveClass : attendanceTabIdleClass}`;
       });
       const target = tabButton.getAttribute('data-tab');
-      tabInput.classList.toggle('hidden', target !== 'input');
-      tabRekap.classList.toggle('hidden', target !== 'rekap');
-      tabPencapaian.classList.toggle('hidden', target !== 'pencapaian');
-      if (target === 'input') {
-        setAbsensiSubtab(activeAbsensiSubtab);
-      }
-      if (target === 'rekap') {
-        renderRecap();
-      }
-      if (target === 'pencapaian') {
-        renderPencapaian();
-      }
+      setMainTab(target || 'input');
     }
 
     const button = event.target.closest('.status-btn');
@@ -1152,6 +1569,9 @@ export async function renderGuruInputAbsenPage(container) {
 
       setRowStatus(listItem, newStatus);
       renderTodaySummary();
+      if (activeAbsensiSubtab === 'keluar-kelas') {
+        renderKeluarKelasKList();
+      }
       return;
     }
   });
@@ -1162,6 +1582,20 @@ export async function renderGuruInputAbsenPage(container) {
       setAbsensiSubtab(nextTab);
       if (nextTab === 'keluar-kelas') {
         renderSpecialNoteHistory();
+        renderKeluarKelasKList();
+      }
+    });
+  });
+
+  rekapSubtabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextTab = button.getAttribute('data-rekap-subtab') || 'rekap-absensi';
+      setRekapSubtab(nextTab);
+      if (nextTab === 'rekap-absensi') {
+        renderRecap();
+      }
+      if (nextTab === 'rekap-catatan-keluar-kelas') {
+        renderRecapSpecialNotes();
       }
     });
   });
@@ -1194,39 +1628,55 @@ export async function renderGuruInputAbsenPage(container) {
       validateDate(selectedDate);
     }
     renderMemberRows();
+    renderKeluarKelasKList();
   });
 
   rekapFilterType?.addEventListener('change', (event) => {
     const filterType = event.target.value;
     rekapCustomRange.classList.toggle('hidden', filterType !== 'custom');
     renderRecap();
+    renderRecapSpecialNotes();
     renderPencapaian();
   });
 
   rekapMonth?.addEventListener('change', () => {
     renderRecap();
+    renderRecapSpecialNotes();
     renderPencapaian();
   });
 
   rekapYear?.addEventListener('change', () => {
     renderRecap();
+    renderRecapSpecialNotes();
     renderPencapaian();
   });
 
   rekapStartDate?.addEventListener('change', () => {
     renderRecap();
+    renderRecapSpecialNotes();
     renderPencapaian();
   });
 
   rekapEndDate?.addEventListener('change', () => {
     renderRecap();
+    renderRecapSpecialNotes();
     renderPencapaian();
   });
   saveAbsenBtn?.addEventListener('click', saveAttendance);
-  saveSpecialNoteBtn?.addEventListener('click', saveSpecialNote);
+  saveSpecialNoteBtn?.addEventListener('click', async () => {
+    await saveAllKSpecialNotes();
+  });
   [specialNoteHistoryStudent, specialNoteHistoryType, specialNoteHistoryStart, specialNoteHistoryEnd].forEach((el) => {
     el?.addEventListener('change', renderSpecialNoteHistory);
   });
+
+  const now = new Date();
+  if (rekapMonth) {
+    rekapMonth.value = String(now.getMonth() + 1).padStart(2, '0');
+  }
+  if (rekapYear) {
+    rekapYear.value = String(now.getFullYear());
+  }
 
   await refreshSpecialNotes();
   renderSpecialNoteStudentOptions();
@@ -1234,6 +1684,9 @@ export async function renderGuruInputAbsenPage(container) {
   renderSpecialNoteHistory();
   renderMemberRows();
   renderRecap();
+  renderRecapSpecialNotes();
   renderPencapaian();
   setAbsensiSubtab('absensi');
+  setRekapSubtab('rekap-absensi');
+  setMainTab('input');
 }
