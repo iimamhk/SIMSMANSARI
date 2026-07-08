@@ -1,11 +1,15 @@
 export function renderLayout(title, content) {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
+  const context = JSON.parse(localStorage.getItem('simguru_context') || '{}');
   const userName = session?.user?.nama || 'Pengguna';
   const role = session?.user?.role || 'guest';
   const isAdmin = role === 'admin';
   const isGuru = role === 'guru';
   const isSiswa = role === 'siswa';
   const currentHash = typeof window !== 'undefined' ? (window.location.hash || '') : '';
+  const activePeriod = context?.tahun_ajaran_aktif_nama && context?.semester_aktif_nama
+    ? `${context.tahun_ajaran_aktif_nama} / ${context.semester_aktif_nama}`
+    : '';
 
   const isRouteActive = (routes) => routes.some((route) => currentHash === route || currentHash.startsWith(`${route}/`));
   const activeItemClass = 'text-[#4F46E5]';
@@ -54,6 +58,18 @@ export function renderLayout(title, content) {
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="3" y="8" width="18" height="8" rx="4" stroke="currentColor" stroke-width="1.8"/>
           <path d="M8 12h4M10 10v4M16.5 11.5h.01M18 12.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      `,
+    },
+    {
+      label: 'Kuiz',
+      href: '#guru/kuiz',
+      routes: ['#guru/kuiz'],
+      icon: (active) => `
+        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       `,
     },
@@ -125,17 +141,6 @@ export function renderLayout(title, content) {
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
           <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        </svg>
-      `,
-    },
-    {
-      label: 'Game Center',
-      href: '#siswa/game',
-      routes: ['#siswa/game'],
-      icon: (active) => `
-        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="8" width="18" height="8" rx="4" stroke="currentColor" stroke-width="1.8"/>
-          <path d="M8 12h4M10 10v4M16.5 11.5h.01M18 12.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       `,
     },
@@ -254,6 +259,7 @@ export function renderLayout(title, content) {
           { label: 'Input Nilai', href: '#guru/penilaian', routes: ['#guru/penilaian', '#guru/input-nilai'], icon: iconChart },
           { label: 'Materi', href: '#guru/materi', routes: ['#guru/materi'], icon: iconBookSpark },
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
+          { label: 'Kuiz', href: '#guru/kuiz', routes: ['#guru/kuiz'], icon: iconBookSpark },
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
       : isSiswa
@@ -263,6 +269,7 @@ export function renderLayout(title, content) {
             { label: 'Absensi', href: '#siswa/absensi', routes: ['#siswa/absensi'], icon: iconCalendar },
             { label: 'Materi', href: '#siswa/materi', routes: ['#siswa/materi'], icon: iconBookSpark },
             { label: 'Game Center', href: '#siswa/game', routes: ['#siswa/game'], icon: iconGame },
+            { label: 'Kuiz', href: '#siswa/kuiz', routes: ['#siswa/kuiz'], icon: iconBookSpark },
             { label: 'Akun', href: '#siswa/pengatur-sistem', routes: ['#siswa/pengatur-sistem'], icon: iconSettings },
           ]
         : [];
@@ -279,7 +286,7 @@ export function renderLayout(title, content) {
     })
     .join('');
 
-  const adminMobileNav = isAdmin
+  const mobilePrimaryNav = isAdmin
     ? desktopNavItems
         .map((item) => {
           const active = isRouteActive(item.routes);
@@ -326,20 +333,21 @@ export function renderLayout(title, content) {
       <div class="absolute top-1/2 left-1/3 w-64 h-64 bg-white/5 rounded-full blur-3xl float-animation" style="animation-delay: 4s;"></div>
 
       <div class="mx-auto flex max-w-6xl flex-col gap-4 relative z-10 ${(isGuru || isSiswa) ? 'safe-bottom-spacing md:pb-0' : ''}">
-        <header class="rounded-[28px] border border-slate-200 bg-white p-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          <div class="flex flex-wrap items-center justify-between gap-3">
+        <header class="rounded-[24px] border border-slate-200 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.04)] sm:rounded-[28px] sm:p-4">
+          <div class="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
             <div>
-              <p class="text-sm text-slate-500">SIM SMANSARI</p>
-              <h2 class="text-xl font-semibold text-slate-900">${title}</h2>
+              <p class="text-xs text-slate-500 sm:text-sm">SIM SMANSARI</p>
+              <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">${title}</h2>
+              ${activePeriod ? `<p class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400/90 sm:text-[11px]"><span class="text-slate-300">Periode aktif</span> <span class="text-slate-400">•</span> ${activePeriod}</p>` : ''}
             </div>
-            <div class="flex items-center gap-2">
-              <button id="logout-btn" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 sm:px-4 sm:text-sm">Keluar</button>
-              <div class="flex items-center gap-3 rounded-full bg-slate-50 px-3 py-2">
-              <div class="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 text-sm font-semibold text-white">${userName.charAt(0)}</div>
-              <div>
-                <p class="text-sm font-medium text-slate-800">${userName}</p>
-                <p class="text-xs text-slate-500">Akses ${role}</p>
-              </div>
+            <div class="flex items-center">
+              <div class="flex w-full items-center gap-2 rounded-[18px] border border-slate-200 bg-slate-50 px-2.5 py-2 sm:w-auto sm:gap-3 sm:rounded-[22px] sm:px-3 sm:py-2.5">
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 text-xs font-semibold text-white sm:h-9 sm:w-9 sm:text-sm">${userName.charAt(0)}</div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-medium text-slate-800">${userName}</p>
+                  <p class="text-[11px] text-slate-500 sm:text-xs">Akses ${role}</p>
+                </div>
+                <button id="logout-btn" class="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm">Keluar</button>
               </div>
             </div>
           </div>
@@ -352,7 +360,7 @@ export function renderLayout(title, content) {
         ${isAdmin ? `
           <nav class="md:hidden overflow-x-auto rounded-[20px] border border-slate-200 bg-white p-2 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             <div class="flex w-max items-center gap-2 pr-1">
-              ${adminMobileNav}
+              ${mobilePrimaryNav}
             </div>
           </nav>
         ` : ''}

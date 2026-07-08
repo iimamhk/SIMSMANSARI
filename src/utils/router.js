@@ -16,6 +16,8 @@ import { renderSiswaAbsensiPage } from '../pages/siswa/absensi.js';
 import { renderSiswaMateriPage } from '../pages/siswa/materi.js';
 import { renderSiswaSystemSettingsPage } from '../pages/siswa/pengatur-sistem.js';
 import { renderSiswaGamePage } from '../pages/siswa/game.js';
+import { renderGuruKuizPage } from '../pages/guru/kuiz.js';
+import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
 import { renderMasterSiswaPage } from '../pages/admin/master-siswa.js';
 import { renderMasterAkademikPage } from '../pages/admin/master-akademik.js';
@@ -158,6 +160,11 @@ function renderRoute() {
     return;
   }
 
+  if (route === '#guru/kuiz') {
+    renderGuruKuizPage(container);
+    return;
+  }
+
   if (route === '#guru/pengatur-sistem') {
     renderGuruSystemSettingsPage(container);
     return;
@@ -185,6 +192,11 @@ function renderRoute() {
 
   if (route === '#siswa/game') {
     renderSiswaGamePage(container);
+    return;
+  }
+
+  if (route === '#siswa/kuiz') {
+    renderSiswaKuizPage(container);
     return;
   }
 

@@ -202,8 +202,8 @@ function getUserPublishedMaterials(session, context) {
 
 function getTabButtonClass(isActive) {
   return isActive
-    ? 'bg-slate-900 text-white shadow-[0_12px_24px_-16px_rgba(15,23,42,0.65)]'
-    : 'bg-white text-slate-600 hover:bg-slate-50';
+    ? 'border border-sky-500 bg-sky-500 text-white shadow-[0_16px_30px_-18px_rgba(14,116,144,0.6)]'
+    : 'border border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700';
 }
 
 function buildMaterialPromptTemplate(values = {}) {
@@ -559,6 +559,53 @@ function buildTemplatePresetOptions(catalog = []) {
   return optionGroups.join('');
 }
 
+function getMaterialCardTone(kind, visibleToStudents = true) {
+  if (kind === 'draft') {
+    return {
+      accentClass: 'from-sky-500 via-cyan-500 to-blue-500',
+      glowClass: 'bg-cyan-300/60',
+      badgeClass: 'border-sky-200 bg-sky-50 text-sky-700',
+      chipClass: 'border-sky-100 bg-sky-50 text-sky-700',
+      badgeLabel: 'Draft Lokal',
+      hint: 'Klik untuk lanjut edit',
+      motif: 'Workspace pribadi',
+    };
+  }
+
+  if (visibleToStudents === false) {
+    return {
+      accentClass: 'from-amber-400 via-orange-400 to-rose-400',
+      glowClass: 'bg-amber-200/70',
+      badgeClass: 'border-amber-200 bg-amber-50 text-amber-700',
+      chipClass: 'border-amber-100 bg-amber-50 text-amber-700',
+      badgeLabel: 'Unpublished',
+      hint: 'Siap dipublikasikan kembali',
+      motif: 'Butuh publikasi ulang',
+    };
+  }
+
+  return {
+    accentClass: 'from-emerald-500 via-teal-500 to-cyan-500',
+    glowClass: 'bg-emerald-200/70',
+    badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    chipClass: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    badgeLabel: 'Published',
+    hint: 'Klik untuk tinjau atau pakai ulang',
+    motif: 'Siap untuk siswa',
+  };
+}
+
+function getMaterialMonogram(item) {
+  const source = String(item?.mapel_nama || item?.title || 'MT').trim();
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'MT';
+}
+
 const MATERIAL_BUILDER_STORAGE_KEY = 'simguru_material_builder_content';
 const MATERIAL_BUILDER_SYMBOLS = [
   '∑', '∫', '√', 'π', 'θ', 'α', 'β', 'γ', 'δ', 'λ', 'μ', 'σ', 'φ', 'ω',
@@ -841,10 +888,56 @@ export async function renderGuruMateriPage(container) {
   const context = getStoredContext();
   const session = getSession();
   const userId = session?.user?.username || context?.user_logged_in || '';
+  const userName = session?.user?.nama || 'Guru';
   const userAssignments = userId ? await getTeachingAssignmentsForUser(context, userId) : [];
   const assignments = userAssignments.length ? userAssignments : await getActiveTeachingAssignments(context);
   const selectedAssignment = assignments[0] || null;
   const materialReadStats = userId ? await getMaterialReadStatsForTeacher(userId) : [];
+  const shortName = userName.split(' ')[0] || 'Guru';
+  const hour = new Date().getHours();
+  const materialHeroTheme = hour < 12
+    ? {
+        panel: 'from-sky-500 via-cyan-500 to-emerald-400',
+        eyebrow: 'text-cyan-100/90',
+        chip: 'border-white/18 bg-white/12 text-white/90',
+        glowA: 'bg-white/18',
+        glowB: 'bg-cyan-200/20',
+        badge: 'Pagi Produktif',
+        icon: '☀',
+        art: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/>'
+      }
+    : hour < 15
+      ? {
+          panel: 'from-amber-400 via-orange-400 to-rose-400',
+          eyebrow: 'text-amber-100/90',
+          chip: 'border-white/18 bg-white/12 text-white/90',
+          glowA: 'bg-white/16',
+          glowB: 'bg-amber-200/20',
+          badge: 'Siang Aktif',
+          icon: '✦',
+          art: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>'
+        }
+      : hour < 18
+        ? {
+            panel: 'from-violet-500 via-fuchsia-500 to-orange-400',
+            eyebrow: 'text-orange-100/90',
+            chip: 'border-white/18 bg-white/12 text-white/90',
+            glowA: 'bg-white/14',
+            glowB: 'bg-orange-200/20',
+            badge: 'Sore Terkelola',
+            icon: '◔',
+            art: '<path d="M4 15c2.5-4.8 5.8-7.2 10-7.2 2.4 0 4.3.6 6 1.8-1.4 5-5.2 8.4-10 8.4-2.1 0-4.1-1-6-3z"/><path d="M13 5.5c1.3.5 2.3 1.6 2.7 3"/>'
+          }
+        : {
+            panel: 'from-slate-900 via-indigo-900 to-blue-950',
+            eyebrow: 'text-indigo-100/90',
+            chip: 'border-white/14 bg-white/10 text-white/88',
+            glowA: 'bg-white/10',
+            glowB: 'bg-indigo-300/16',
+            badge: 'Malam Fokus',
+            icon: '☾',
+            art: '<path d="M18.5 14.5A6.5 6.5 0 0 1 9.5 5.5 7.5 7.5 0 1 0 18.5 14.5Z"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="4.5" r="0.8" fill="currentColor" stroke="none"/>'
+          };
   const assignmentOptions = assignments
     .map((item) => `<option value="${item.id}">${item.kelas_nama || '-'} • ${item.mapel_nama || '-'}</option>`)
     .join('');
@@ -856,20 +949,32 @@ export async function renderGuruMateriPage(container) {
 
   const html = renderLayout('Materi', `
     <div class="space-y-5">
-      <section class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-cyan-50 p-5 shadow-[0_24px_70px_-42px_rgba(37,99,235,0.28)]">
-        <div class="absolute -right-10 top-0 h-28 w-28 rounded-full bg-sky-200/40 blur-3xl"></div>
-        <div class="absolute bottom-0 left-8 h-24 w-24 rounded-full bg-cyan-200/40 blur-3xl"></div>
-        <div class="relative space-y-3">
-          <div class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
-            <span class="inline-block h-2 w-2 rounded-full bg-sky-500"></span>
-            Workflow Materi Guru
+      <section class="relative overflow-hidden rounded-[28px] border border-white/20 bg-gradient-to-br ${materialHeroTheme.panel} p-4 text-white shadow-[0_24px_70px_-42px_rgba(37,99,235,0.32)] sm:p-5">
+        <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full ${materialHeroTheme.glowA} blur-2xl"></div>
+        <div class="absolute bottom-0 left-1/3 h-16 w-16 rounded-full ${materialHeroTheme.glowB} blur-2xl"></div>
+        <div class="absolute right-4 top-4 hidden h-20 w-20 items-center justify-center rounded-[22px] border border-white/18 bg-white/10 backdrop-blur-sm sm:flex">
+          <svg viewBox="0 0 24 24" class="h-10 w-10 stroke-current text-white/90" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${materialHeroTheme.art}</svg>
+        </div>
+        <div class="relative min-w-0 sm:pr-28">
+          <p class="text-[11px] font-semibold uppercase tracking-[0.24em] ${materialHeroTheme.eyebrow}">Perpustakaan Guru</p>
+          <h1 class="mt-1 text-xl font-semibold leading-tight text-white sm:text-2xl">Studio Materi ${shortName}</h1>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${materialHeroTheme.chip}">${assignments.length} kelas</span>
+            <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${materialHeroTheme.chip}">${materialReadStats.length} log baca</span>
+            <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${materialHeroTheme.chip}">${materialHeroTheme.icon} ${materialHeroTheme.badge}</span>
           </div>
-          <h1 class="text-2xl font-semibold text-slate-900">Manajemen Materi Guru</h1>
-          <p class="max-w-4xl text-sm leading-6 text-slate-600">Pisahkan pekerjaan Anda per tab: siapkan materi di editor, kelola materi tersimpan di daftar, dan pantau aktivitas baca siswa di laporan.</p>
         </div>
       </section>
 
       <section class="rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-4">
+      <section class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Navigasi</p>
+            <h2 class="mt-1 text-lg font-semibold text-slate-900">Panel Kerja Materi</h2>
+          </div>
+          <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Ringkas</span>
+        </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" data-material-tab="buat" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(false)}">Buat Materi</button>
           <button type="button" data-material-tab="editor" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(true)}">Editor Materi HTML</button>
@@ -1711,23 +1816,35 @@ export async function renderGuruMateriPage(container) {
 
       <section data-material-panel="daftar" class="material-tab-panel hidden space-y-5">
         <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">Draft Materi Tersimpan</h2>
-              <p class="mt-1 text-sm text-slate-500">Draft disimpan per guru di browser ini. Klik untuk memuat kembali dan lanjutkan edit.</p>
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Koleksi</p>
+              <h2 class="mt-1 text-lg font-semibold text-slate-900">Daftar Materi Guru</h2>
             </div>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Terorganisir</span>
           </div>
-          <div id="material-draft-list" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
         </div>
 
         <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">Materi Dipublikasikan</h2>
-              <p class="mt-1 text-sm text-slate-500">Daftar materi yang sudah Anda finalkan. Materi ini siap dipakai ulang atau ditinjau ulang dari browser ini.</p>
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Draft</p>
+              <h2 class="mt-1 text-lg font-semibold text-slate-900">Draft Materi Tersimpan</h2>
+              <p class="mt-1 text-sm text-slate-500">Klik kartu untuk lanjut edit.</p>
             </div>
           </div>
-          <div id="material-published-list" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+          <div id="material-draft-list" class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));"></div>
+        </div>
+
+        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
+          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Publikasi</p>
+              <h2 class="mt-1 text-lg font-semibold text-slate-900">Materi Dipublikasikan</h2>
+              <p class="mt-1 text-sm text-slate-500">Siap dipakai ulang atau dikelola ulang.</p>
+            </div>
+          </div>
+          <div id="material-published-list" class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));"></div>
         </div>
       </section>
 
@@ -2737,27 +2854,50 @@ export async function renderGuruMateriPage(container) {
 
   function renderDraftList() {
     if (!drafts.length) {
-      draftListEl.innerHTML = '<div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada draft materi yang tersimpan untuk guru ini.</div>';
+      draftListEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada draft materi yang tersimpan untuk guru ini.</div>';
       return;
     }
 
     draftListEl.innerHTML = drafts
       .slice(0, 12)
-      .map((draft) => `
-        <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-0.5 hover:border-sky-200 hover:bg-white">
-          <div class="flex items-start justify-between gap-3">
-            <button type="button" data-draft-id="${draft.id}" class="material-draft-item min-w-0 flex-1 text-left">
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">${draft.kelas_nama || '-'} • ${draft.mapel_nama || '-'}</p>
-              <p class="mt-2 text-base font-semibold text-slate-900">${draft.title || 'Tanpa judul'}</p>
+      .map((draft) => {
+        const tone = getMaterialCardTone('draft');
+        const savedDate = new Date(draft.updated_at || draft.created_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        return `
+          <article class="group flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_36px_rgba(15,23,42,0.12)]">
+            <button type="button" data-draft-id="${draft.id}" class="material-draft-item flex h-full flex-col text-left">
+              <div class="relative h-[152px] bg-gradient-to-br ${tone.accentClass} p-3 text-white">
+                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/18 blur-2xl"></div>
+                <div class="absolute bottom-2 right-2 h-12 w-12 rounded-full ${tone.glowClass} blur-2xl"></div>
+                <div class="relative flex h-full flex-col justify-between">
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[15px] bg-white/18 px-2 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] backdrop-blur-sm">${getMaterialMonogram(draft)}</span>
+                    <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.badgeClass}">${tone.badgeLabel}</span>
+                  </div>
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">${tone.motif}</p>
+                    <p class="line-clamp-3 text-[15px] font-semibold leading-snug text-white">${draft.title || 'Tanpa judul'}</p>
+                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4.5 text-white/80">${draft.note || 'Draft siap dilanjutkan.'}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-1 flex-col justify-between space-y-2.5 p-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.chipClass}">${draft.mapel_nama || '-'}</span>
+                  <span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">${draft.kelas_nama || '-'}</span>
+                </div>
+                <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                  <span class="truncate">${savedDate}</span>
+                  <span class="font-semibold uppercase tracking-[0.14em] text-slate-500">Buka</span>
+                </div>
+              </div>
             </button>
-            <button type="button" data-delete-draft-id="${draft.id}" class="delete-draft-btn rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50">Hapus Draft</button>
-          </div>
-          <button type="button" data-draft-id="${draft.id}" class="material-draft-item mt-2 block w-full text-left">
-            <p class="text-sm leading-6 text-slate-500">${draft.note || 'Draft HTML materi siap ditinjau ulang.'}</p>
-            <p class="mt-3 text-xs text-slate-400">Diperbarui ${new Date(draft.updated_at).toLocaleString('id-ID')}</p>
-          </button>
-        </div>
-      `)
+            <div class="border-t border-slate-100 p-3 pt-0">
+              <button type="button" data-delete-draft-id="${draft.id}" class="delete-draft-btn mt-3 w-full rounded-full border border-rose-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-600 transition hover:bg-rose-50">Hapus Draft</button>
+            </div>
+          </article>
+        `;
+      })
       .join('');
 
     draftListEl.querySelectorAll('.material-draft-item').forEach((button) => {
@@ -2790,33 +2930,51 @@ export async function renderGuruMateriPage(container) {
 
   function renderPublishedList() {
     if (!publishedMaterials.length) {
-      publishedListEl.innerHTML = '<div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada materi yang dipublikasikan dari browser ini.</div>';
+      publishedListEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada materi yang dipublikasikan dari browser ini.</div>';
       return;
     }
 
     publishedListEl.innerHTML = publishedMaterials
       .slice(0, 12)
-      .map((material) => `
-        <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-white">
-          <div class="flex items-center justify-between gap-3">
-            <button type="button" data-material-id="${material.id}" class="material-published-item min-w-0 flex-1 text-left">
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">${material.kelas_nama || '-'} • ${material.mapel_nama || '-'}</p>
+      .map((material) => {
+        const tone = getMaterialCardTone('published', material.visible_to_students !== false);
+        const publishedDate = new Date(material.published_at || material.updated_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        return `
+          <article class="group flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_36px_rgba(15,23,42,0.12)]">
+            <button type="button" data-material-id="${material.id}" class="material-published-item flex h-full flex-col text-left">
+              <div class="relative h-[152px] bg-gradient-to-br ${tone.accentClass} p-3 text-white">
+                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/18 blur-2xl"></div>
+                <div class="absolute bottom-2 right-2 h-12 w-12 rounded-full ${tone.glowClass} blur-2xl"></div>
+                <div class="relative flex h-full flex-col justify-between">
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[15px] bg-white/18 px-2 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] backdrop-blur-sm">${getMaterialMonogram(material)}</span>
+                    <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.badgeClass}">${tone.badgeLabel}</span>
+                  </div>
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">${tone.motif}</p>
+                    <p class="line-clamp-3 text-[15px] font-semibold leading-snug text-white">${material.title || 'Tanpa judul'}</p>
+                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4.5 text-white/80">${material.note || 'Materi siap dibuka ulang atau diperbarui.'}</p>
+                  </div>
+                </div>
+              </div>
+              <div class="flex flex-1 flex-col justify-between space-y-2.5 p-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.chipClass}">${material.mapel_nama || '-'}</span>
+                  <span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">${material.kelas_nama || '-'}</span>
+                </div>
+                <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                  <span class="truncate">${publishedDate}</span>
+                  <span class="font-semibold uppercase tracking-[0.14em] text-slate-500">Buka</span>
+                </div>
+              </div>
             </button>
-            <div class="flex items-center gap-2">
-              <span class="rounded-full ${material.visible_to_students === false ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'} px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]">${material.visible_to_students === false ? 'Unpublished' : 'Published'}</span>
+            <div class="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2">
+              <button type="button" data-toggle-published-id="${material.id}" class="toggle-published-btn rounded-full border ${material.visible_to_students === false ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'} bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] leading-tight whitespace-normal text-center transition">${material.visible_to_students === false ? 'Publish Lagi' : 'Unpublish'}</button>
+              <button type="button" data-delete-published-id="${material.id}" class="delete-published-btn rounded-full border border-rose-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] leading-tight whitespace-normal text-center text-rose-600 transition hover:bg-rose-50">Hapus Permanen</button>
             </div>
-          </div>
-          <button type="button" data-material-id="${material.id}" class="material-published-item mt-2 block w-full text-left">
-            <p class="text-base font-semibold text-slate-900">${material.title || 'Tanpa judul'}</p>
-            <p class="mt-2 text-sm leading-6 text-slate-500">${material.note || 'Materi HTML siap digunakan kembali atau disempurnakan.'}</p>
-            <p class="mt-3 text-xs text-slate-400">Dipublikasikan ${new Date(material.published_at || material.updated_at).toLocaleString('id-ID')}</p>
-          </button>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <button type="button" data-toggle-published-id="${material.id}" class="toggle-published-btn rounded-full border ${material.visible_to_students === false ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'} bg-white px-3 py-1.5 text-xs font-semibold transition">${material.visible_to_students === false ? 'Publish Lagi' : 'Unpublish'}</button>
-            <button type="button" data-delete-published-id="${material.id}" class="delete-published-btn rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50">Hapus Permanen</button>
-          </div>
-        </div>
-      `)
+          </article>
+        `;
+      })
       .join('');
 
     publishedListEl.querySelectorAll('.material-published-item').forEach((button) => {

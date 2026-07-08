@@ -52,6 +52,8 @@ export function getSessionUserKeys(session = {}, context = {}) {
   const keys = [
     session?.user?.username,
     session?.user?.id,
+    session?.user?.nis,
+    session?.user?.nisn,
     context?.user_logged_in,
   ]
     .map((value) => normalizeUserKey(value))

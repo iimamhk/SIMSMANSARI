@@ -93,6 +93,10 @@ service cloud.firestore {
         'game_configs',
         'game_sessions',
         'game_tokens',
+        'kuiz_paket',
+        'kuiz_sesi',
+        'kuiz_jawaban',
+        'kuiz_nilai_final',
         'lobby_settings',
         'lobby_sections',
         'lobby_links'

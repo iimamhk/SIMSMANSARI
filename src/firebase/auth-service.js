@@ -93,6 +93,11 @@ export async function saveSession(userData, context) {
       username: userData.username,
       role: userData.role,
       nama: userData.nama,
+      kelas_id: userData.kelas_id || userData.kelas || '',
+      kelas_nama: userData.kelas_nama || userData.kelas || '',
+      kelas: userData.kelas || userData.kelas_nama || userData.kelas_id || '',
+      nis: userData.nis || '',
+      nisn: userData.nisn || '',
     },
     logged_in_at: new Date().toISOString(),
   };

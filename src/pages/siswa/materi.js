@@ -2,6 +2,8 @@ import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
 import { getPublishedMaterials, recordMaterialRead } from '../../firebase/data-service.js';
 
+const MATERIAL_READS_KEY = 'simguru_material_reads';
+
 function normalizeClassToken(value) {
   return String(value || '')
     .trim()
@@ -71,6 +73,103 @@ function getMapelCounts(materials) {
     .map(([mapel, total]) => ({ mapel, total }));
 }
 
+function getMaterialSeed(material) {
+  const source = `${material?.id || ''}__${material?.title || ''}__${material?.mapel_nama || ''}`;
+  return source.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
+}
+
+function getMaterialCardTheme(material, index = 0) {
+  const palette = [
+    { cover: 'from-sky-500 via-cyan-500 to-blue-600', chip: 'border-sky-200 bg-sky-50 text-sky-700', glow: 'bg-sky-200/50' },
+    { cover: 'from-fuchsia-500 via-pink-500 to-rose-500', chip: 'border-pink-200 bg-pink-50 text-pink-700', glow: 'bg-pink-200/50' },
+    { cover: 'from-emerald-500 via-teal-500 to-cyan-500', chip: 'border-emerald-200 bg-emerald-50 text-emerald-700', glow: 'bg-emerald-200/50' },
+    { cover: 'from-amber-400 via-orange-400 to-rose-500', chip: 'border-amber-200 bg-amber-50 text-amber-700', glow: 'bg-amber-200/50' },
+    { cover: 'from-violet-500 via-indigo-500 to-blue-600', chip: 'border-violet-200 bg-violet-50 text-violet-700', glow: 'bg-violet-200/50' },
+    { cover: 'from-slate-700 via-slate-800 to-slate-900', chip: 'border-slate-300 bg-slate-100 text-slate-700', glow: 'bg-slate-300/40' },
+  ];
+
+  const seed = getMaterialSeed(material) + index;
+  return palette[seed % palette.length];
+}
+
+function getSubjectCoverMeta(material) {
+  const mapel = String(material?.mapel_nama || '').toLowerCase();
+
+  if (mapel.includes('matematika')) {
+    return { icon: '∑', motif: 'Rumus & Logika' };
+  }
+  if (mapel.includes('bahasa indonesia')) {
+    return { icon: 'Aa', motif: 'Literasi & Teks' };
+  }
+  if (mapel.includes('bahasa inggris')) {
+    return { icon: 'En', motif: 'Words & Talk' };
+  }
+  if (mapel.includes('biologi')) {
+    return { icon: 'DNA', motif: 'Makhluk Hidup' };
+  }
+  if (mapel.includes('kimia')) {
+    return { icon: 'H2O', motif: 'Zat & Reaksi' };
+  }
+  if (mapel.includes('fisika')) {
+    return { icon: 'Fx', motif: 'Gerak & Energi' };
+  }
+  if (mapel.includes('sejarah')) {
+    return { icon: '⌛', motif: 'Kronologi' };
+  }
+  if (mapel.includes('geografi')) {
+    return { icon: '◔', motif: 'Ruang & Peta' };
+  }
+  if (mapel.includes('informatika')) {
+    return { icon: '</>', motif: 'Logika Digital' };
+  }
+
+  return { icon: getMaterialMonogram(material), motif: 'Materi Pilihan' };
+}
+
+function readLocalMaterialReads() {
+  try {
+    return JSON.parse(localStorage.getItem(MATERIAL_READS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function getMaterialVisualStatus(material, studentId, readMap) {
+  const read = readMap.get(`${String(material?.id || '').trim()}__${String(studentId || '').trim()}`);
+
+  if (read?.completed_at || read?.completion_status === 'completed') {
+    return {
+      label: 'Selesai',
+      badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    };
+  }
+
+  if (Number(read?.read_count || 0) > 0 || read?.last_read_at) {
+    return {
+      label: 'Dibaca',
+      badgeClass: 'border-sky-200 bg-sky-50 text-sky-700',
+    };
+  }
+
+  const publishedAt = new Date(material?.published_at || material?.updated_at || '').getTime();
+  const isFresh = Number.isFinite(publishedAt) && publishedAt > 0 && (Date.now() - publishedAt) <= (1000 * 60 * 60 * 24 * 10);
+  return {
+    label: isFresh ? 'Baru' : 'Belum',
+    badgeClass: isFresh ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600',
+  };
+}
+
+function getMaterialMonogram(material) {
+  const source = String(material?.mapel_nama || material?.title || 'MT').trim();
+  return source
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase() || 'MT';
+}
+
 function buildBookIcon() {
   return `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -120,23 +219,81 @@ export async function renderSiswaMateriPage(container) {
   const materials = await getStudentMaterials(session, context);
   const mapelOptions = getMapelOptions(materials);
   const mapelCounts = getMapelCounts(materials);
+  const classLabel = student?.kelas_nama || student?.kelas_id || '-';
+  const hour = new Date().getHours();
+  const libraryHeroTheme = hour < 12
+    ? {
+        panel: 'from-sky-500 via-cyan-500 to-emerald-400',
+        eyebrow: 'text-cyan-100/90',
+        chip: 'border-white/18 bg-white/12 text-white/90',
+        glowA: 'bg-white/18',
+        glowB: 'bg-cyan-200/20',
+        badge: 'Pagi Cerah',
+        icon: '☀',
+        art: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/>'
+      }
+    : hour < 15
+      ? {
+          panel: 'from-amber-400 via-orange-400 to-rose-400',
+          eyebrow: 'text-amber-100/90',
+          chip: 'border-white/18 bg-white/12 text-white/90',
+          glowA: 'bg-white/16',
+          glowB: 'bg-amber-200/20',
+          badge: 'Siang Aktif',
+          icon: '✦',
+          art: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>'
+        }
+      : hour < 18
+        ? {
+            panel: 'from-violet-500 via-fuchsia-500 to-orange-400',
+            eyebrow: 'text-orange-100/90',
+            chip: 'border-white/18 bg-white/12 text-white/90',
+            glowA: 'bg-white/14',
+            glowB: 'bg-orange-200/20',
+            badge: 'Sore Hangat',
+            icon: '◔',
+            art: '<path d="M4 15c2.5-4.8 5.8-7.2 10-7.2 2.4 0 4.3.6 6 1.8-1.4 5-5.2 8.4-10 8.4-2.1 0-4.1-1-6-3z"/><path d="M13 5.5c1.3.5 2.3 1.6 2.7 3"/>'
+          }
+        : {
+            panel: 'from-slate-900 via-indigo-900 to-blue-950',
+            eyebrow: 'text-indigo-100/90',
+            chip: 'border-white/14 bg-white/10 text-white/88',
+            glowA: 'bg-white/10',
+            glowB: 'bg-indigo-300/16',
+            badge: 'Malam Tenang',
+            icon: '☾',
+            art: '<path d="M18.5 14.5A6.5 6.5 0 0 1 9.5 5.5 7.5 7.5 0 1 0 18.5 14.5Z"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="4.5" r="0.8" fill="currentColor" stroke="none"/>'
+          };
 
   const html = renderLayout('Materi Siswa', `
     <div class="space-y-5">
-      <section class="rounded-[30px] border border-sky-100 bg-gradient-to-br from-white via-sky-50 to-cyan-50 p-5 shadow-[0_24px_70px_-42px_rgba(37,99,235,0.2)]">
-        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-700">Akses Materi</p>
-        <h1 class="mt-2 text-2xl font-semibold text-slate-900">Materi untuk ${userName}</h1>
-        <p class="mt-2 text-sm leading-6 text-slate-600">Halaman ini menampilkan materi yang dipublikasikan guru untuk kelas ${student?.kelas_nama || student?.kelas_id || '-'} pada periode aktif ${context.tahun_ajaran_aktif_nama || '-'} / ${context.semester_aktif_nama || '-'}.</p>
+      <section class="relative overflow-hidden rounded-[28px] border border-white/20 bg-gradient-to-br ${libraryHeroTheme.panel} p-4 text-white shadow-[0_24px_70px_-42px_rgba(37,99,235,0.32)] sm:p-5">
+        <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full ${libraryHeroTheme.glowA} blur-2xl"></div>
+        <div class="absolute bottom-0 left-1/3 h-16 w-16 rounded-full ${libraryHeroTheme.glowB} blur-2xl"></div>
+        <div class="absolute right-4 top-4 hidden h-20 w-20 items-center justify-center rounded-[22px] border border-white/18 bg-white/10 backdrop-blur-sm sm:flex">
+          <svg viewBox="0 0 24 24" class="h-10 w-10 stroke-current text-white/90" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${libraryHeroTheme.art}</svg>
+        </div>
+        <div class="relative">
+          <div class="min-w-0 sm:pr-28">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] ${libraryHeroTheme.eyebrow}">Perpustakaan Digital</p>
+            <h1 class="mt-1 text-xl font-semibold leading-tight text-white sm:text-2xl">Perpustakaan ${userName}</h1>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${libraryHeroTheme.chip}">${classLabel}</span>
+              <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${libraryHeroTheme.chip}">${materials.length} materi</span>
+              <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${libraryHeroTheme.chip}">${libraryHeroTheme.icon} ${libraryHeroTheme.badge}</span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
         <div class="mb-4 space-y-4">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">Daftar Materi</h2>
-              <p class="mt-1 text-sm text-slate-500">Klik salah satu materi untuk membukanya dalam mode baca penuh.</p>
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Koleksi</p>
+              <h2 class="mt-1 text-lg font-semibold text-slate-900">Daftar Materi</h2>
             </div>
-            <span class="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Untuk Siswa</span>
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Ringkas</span>
           </div>
 
           <div id="student-material-mapel-badges" class="flex flex-wrap gap-2">
@@ -165,7 +322,7 @@ export async function renderSiswaMateriPage(container) {
           </div>
         </div>
 
-        <div id="student-material-list" class="space-y-3"></div>
+        <div id="student-material-list" class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));"></div>
       </section>
 
     </div>
@@ -191,9 +348,20 @@ export async function renderSiswaMateriPage(container) {
 
   let filteredMaterials = [...materials];
   let activeReadSession = null;
+  let readMap = new Map();
 
   function getCurrentStudentId() {
     return student?.username || student?.id || session?.user?.username || session?.user?.id || '';
+  }
+
+  function refreshReadMap() {
+    const currentStudentId = String(getCurrentStudentId() || '').trim();
+    const normalizedStudentId = normalizeClassToken(currentStudentId);
+    readMap = new Map(
+      readLocalMaterialReads()
+        .filter((item) => normalizeClassToken(item?.siswa_id) === normalizedStudentId)
+        .map((item) => [`${String(item.material_id || '').trim()}__${String(item.siswa_id || '').trim()}`, item])
+    );
   }
 
   function buildReadPayload(material) {
@@ -219,9 +387,9 @@ export async function renderSiswaMateriPage(container) {
     return Math.max(0, Math.round((Date.now() - activeReadSession.openedAt) / 1000));
   }
 
-  function finalizeReadSession(markCompleted = false) {
+  async function finalizeReadSession(markCompleted = false) {
     if (!activeReadSession?.material || activeReadSession.isClosing) {
-      return;
+      return null;
     }
 
     const payload = {
@@ -233,8 +401,13 @@ export async function renderSiswaMateriPage(container) {
     };
 
     activeReadSession.isClosing = true;
-    recordMaterialRead(payload).catch((error) => {
+    return recordMaterialRead(payload).then((result) => {
+      refreshReadMap();
+      renderMaterialList();
+      return result;
+    }).catch((error) => {
       console.warn('Gagal menyimpan progress baca materi siswa:', error);
+      return null;
     });
   }
 
@@ -265,6 +438,9 @@ export async function renderSiswaMateriPage(container) {
         duration_seconds: 0,
         completed: false,
         increment_read_count: true,
+      }).then(() => {
+        refreshReadMap();
+        renderMaterialList();
       }).catch((error) => {
         console.warn('Gagal mencatat baca materi siswa:', error);
       });
@@ -295,34 +471,53 @@ export async function renderSiswaMateriPage(container) {
   }
 
   function renderMaterialList() {
+    refreshReadMap();
     filteredMaterials = getFilteredMaterials();
     renderMapelBadges(filteredMaterials);
 
     if (!filteredMaterials.length) {
-      listEl.innerHTML = '<div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Tidak ada materi yang cocok dengan filter mapel dan judul saat ini.</div>';
+      listEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Tidak ada materi yang cocok dengan filter mapel dan judul saat ini.</div>';
       closeReaderOverlay();
       return;
     }
 
     listEl.innerHTML = filteredMaterials
-      .map((material) => `
-        <button type="button" data-material-id="${material.id}" class="student-material-item block w-full rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-left transition hover:-translate-y-0.5 hover:border-sky-200 hover:bg-white">
-          <div class="flex items-start gap-3">
-            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
-              ${buildBookIcon()}
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700">${material.mapel_nama || '-'}</span>
-                <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">${material.kelas_nama || '-'}</span>
+      .map((material, index) => {
+        const theme = getMaterialCardTheme(material, index);
+        const coverMeta = getSubjectCoverMeta(material);
+        const status = getMaterialVisualStatus(material, getCurrentStudentId(), readMap);
+        return `
+          <button type="button" data-material-id="${material.id}" class="student-material-item group block h-full w-full text-left transition hover:-translate-y-1">
+            <article class="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition group-hover:shadow-[0_20px_36px_rgba(15,23,42,0.12)]">
+              <div class="relative h-[152px] bg-gradient-to-br ${theme.cover} p-3 text-white">
+                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/18 blur-2xl"></div>
+                <div class="absolute bottom-2 right-2 h-12 w-12 rounded-full ${theme.glow} blur-2xl"></div>
+                <div class="relative flex h-full flex-col justify-between">
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[15px] bg-white/18 px-2 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] backdrop-blur-sm">${coverMeta.icon}</span>
+                    <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${status.badgeClass}">${status.label}</span>
+                  </div>
+                  <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">${coverMeta.motif}</p>
+                    <p class="line-clamp-3 text-[15px] font-semibold leading-snug text-white">${material.title || 'Tanpa judul'}</p>
+                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4.5 text-white/80">${material.note || 'Materi siap dibaca siswa.'}</p>
+                  </div>
+                </div>
               </div>
-              <p class="mt-3 truncate text-base font-semibold text-slate-900">${material.title || 'Tanpa judul'}</p>
-              <p class="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">${material.note || 'Materi siap dibaca siswa.'}</p>
-              <p class="mt-3 text-xs text-slate-400">Dipublikasikan ${new Date(material.published_at || material.updated_at).toLocaleString('id-ID')}</p>
-            </div>
-          </div>
-        </button>
-      `)
+              <div class="flex flex-1 flex-col justify-between space-y-2.5 p-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${theme.chip}">${material.mapel_nama || '-'}</span>
+                  <span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">Materi</span>
+                </div>
+                <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
+                  <span class="truncate">${new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  <span class="font-semibold uppercase tracking-[0.14em] text-slate-500">Buka</span>
+                </div>
+              </div>
+            </article>
+          </button>
+        `;
+      })
       .join('');
 
     listEl.querySelectorAll('.student-material-item').forEach((button) => {
@@ -336,7 +531,7 @@ export async function renderSiswaMateriPage(container) {
   }
 
   if (!materials.length) {
-    listEl.innerHTML = '<div class="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada materi yang dipublikasikan untuk kelas Anda.</div>';
+    listEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada materi yang dipublikasikan untuk kelas Anda.</div>';
     closeReaderOverlay();
     return;
   }
