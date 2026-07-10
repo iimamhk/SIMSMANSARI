@@ -163,6 +163,48 @@ export async function deleteDocument(collectionName, id) {
   return true;
 }
 
+export function subscribeCollection(collectionName, filters = [], callback) {
+  if (typeof callback !== 'function') {
+    return () => {};
+  }
+
+  if (!db) {
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled) return;
+      const data = await getDocumentsWhere(collectionName, filters);
+      callback(data);
+      if (!cancelled) {
+        setTimeout(poll, 3000);
+      }
+    };
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }
+
+  try {
+    let query = db.collection(collectionName);
+    filters.forEach(({ field, operator = '==', value }) => {
+      query = query.where(field, operator, value);
+    });
+    const unsubscribe = query.onSnapshot(
+      (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        callback(data);
+      },
+      (error) => {
+        console.warn(`Gagal memantau koleksi ${collectionName}:`, error);
+      }
+    );
+    return unsubscribe;
+  } catch (error) {
+    console.warn(`subscribeCollection error pada ${collectionName}:`, error);
+    return () => {};
+  }
+}
+
 export async function getPublishedMaterials() {
   if (!db) {
     return readLocalPublishedMaterials();

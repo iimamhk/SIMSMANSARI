@@ -20,13 +20,17 @@ import { renderSiswaSystemSettingsPage } from '../pages/siswa/pengatur-sistem.js
 import { renderSiswaGamePage } from '../pages/siswa/game.js';
 import { renderGuruKuizPage } from '../pages/guru/kuiz.js';
 import { renderGuruPembayaranBukuPage } from '../pages/guru/pembayaran-buku.js';
+import { renderGuruWaliKelasPage } from '../pages/guru/wali-kelas.js';
+import { renderGuruKasKelasPage } from '../pages/guru/wali/kas-kelas.js';
 import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
+import { renderSiswaKasKelasPage } from '../pages/siswa/kas-kelas.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
 import { renderMasterSiswaPage } from '../pages/admin/master-siswa.js';
 import { renderMasterAkademikPage } from '../pages/admin/master-akademik.js';
 import { renderMasterTahunAjaranPage } from '../pages/admin/master-tahun-ajaran.js';
 import { renderPlottingJadwalPage } from '../pages/admin/plotting-jadwal.js';
 import { renderMasterPembelajaranPage } from '../pages/admin/master-pembelajaran.js';
+import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
 
 function getSession() {
   const raw = localStorage.getItem('simguru_session');
@@ -133,6 +137,11 @@ async function renderRoute() {
     return;
   }
 
+  if (route === '#admin/wali-kelas') {
+    await renderAndFinalize(renderAdminWaliKelasPage, container);
+    return;
+  }
+
   if (route === '#admin/lobi-sekolah' || route.startsWith('#admin/lobi-sekolah/')) {
     await renderAndFinalize(renderAdminLobbySchoolPage, container);
     return;
@@ -188,6 +197,16 @@ async function renderRoute() {
     return;
   }
 
+  if (route === '#guru/wali-kelas') {
+    await renderAndFinalize(renderGuruWaliKelasPage, container);
+    return;
+  }
+
+  if (route === '#guru/kas-kelas') {
+    await renderAndFinalize(renderGuruKasKelasPage, container);
+    return;
+  }
+
   if (route === '#siswa/dashboard') {
     await renderAndFinalize(renderSiswaDashboardPage, container);
     return;
@@ -215,6 +234,11 @@ async function renderRoute() {
 
   if (route === '#siswa/kuiz') {
     await renderAndFinalize(renderSiswaKuizPage, container);
+    return;
+  }
+
+  if (route === '#siswa/kas-kelas') {
+    await renderAndFinalize(renderSiswaKasKelasPage, container);
     return;
   }
 

@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getTeachingAssignmentsForUser } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, getDocumentsWhere } from '../../firebase/data-service.js';
 
 export function renderGuruDashboard(container) {
   const context = JSON.parse(localStorage.getItem('simguru_context') || '{}');
@@ -147,6 +147,17 @@ export function renderGuruDashboard(container) {
             celestialPos: 'left-1/2 top-0 -translate-x-1/2'
           };
 
+  const waliCacheDash = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('simguru_wali') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  const waliQuickCard = waliCacheDash && waliCacheDash.kelas_id
+    ? quickCard('#guru/wali-kelas', 'Wali Kelas', `Kelola kelas ${waliCacheDash.kelas_nama}.`, 'from-cyan-500 to-blue-500', '<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M8 20h8M12 16v4"/>')
+    : '';
+
   const pageHtml = `
     <div class="space-y-6">
       <section>
@@ -203,6 +214,7 @@ export function renderGuruDashboard(container) {
               ${quickCard('#guru/penilaian', 'Penilaian', 'Kelola nilai per mapel.', 'from-blue-600 to-indigo-500', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>')}
               ${quickCard('#guru/jurnal', 'Jurnal', 'Catat jurnal mengajar harian.', 'from-indigo-500 to-violet-500', '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 11h8M8 15h6"/>')}
               ${quickCard('#guru/materi', 'Materi', 'Buat dan publikasikan materi.', 'from-sky-500 to-cyan-500', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/><path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z"/>')}
+              ${waliQuickCard}
               ${quickCard('#guru/game', 'Game', 'Atur aktivitas game kelas.', 'from-pink-500 to-rose-500', '<rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h4M10 10v4M16.5 11.5h.01M18 12.5h.01"/>')}
               ${quickCard('#guru/kuiz', 'Kuiz', 'Buat dan kelola kuiz kelas.', 'from-amber-500 to-orange-500', '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>')}
               ${quickCard('#guru/pembayaran-buku', 'Pembayaran', 'Kelola pembayaran buku siswa.', 'from-emerald-500 to-teal-500', '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="13.5" r="1.4" fill="currentColor" stroke="none"/>')}
@@ -312,4 +324,30 @@ export function renderGuruDashboard(container) {
     localStorage.removeItem('simguru_session');
     window.location.hash = '#login';
   });
+
+  const refreshWali = async () => {
+    const userId = session?.user?.username || '';
+    if (!userId) return;
+    const waliRels = await getDocumentsWhere('wali_kelas', [
+      { field: 'guru_id', value: userId },
+      { field: 'tahun_ajaran_id', value: context.tahun_ajaran_aktif },
+      { field: 'semester_id', value: context.semester_aktif },
+    ]);
+    const wali = waliRels[0] || null;
+    let cached = null;
+    try {
+      cached = JSON.parse(localStorage.getItem('simguru_wali') || 'null');
+    } catch {
+      cached = null;
+    }
+    const changed = (wali?.kelas_id || null) !== (cached?.kelas_id || null);
+    if (changed) {
+      try {
+        localStorage.setItem('simguru_wali', JSON.stringify(wali));
+      } catch {}
+      renderGuruDashboard(container);
+    }
+  };
+
+  refreshWali();
 }

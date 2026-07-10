@@ -1,5 +1,5 @@
 import { loginUser, saveSession, normalizeUsername, normalizePassword } from '../firebase/auth-service.js';
-import { getAppConfig } from '../firebase/data-service.js';
+import { getAppConfig, getDocumentsWhere } from '../firebase/data-service.js';
 import { getStoredContext } from '../utils/helpers.js';
 
 const demoUsers = {
@@ -175,6 +175,18 @@ export function renderLoginPage(container) {
     }
 
     if (user.role === 'guru') {
+      try {
+        const waliRelations = await getDocumentsWhere('wali_kelas', [
+          { field: 'guru_id', value: user.username },
+          { field: 'tahun_ajaran_id', value: activeContext.tahun_ajaran_aktif },
+          { field: 'semester_id', value: activeContext.semester_aktif },
+        ]);
+        localStorage.setItem('simguru_wali', JSON.stringify(waliRelations[0] || null));
+      } catch {
+        try {
+          localStorage.removeItem('simguru_wali');
+        } catch {}
+      }
       window.location.hash = '#guru/dashboard';
       return;
     }

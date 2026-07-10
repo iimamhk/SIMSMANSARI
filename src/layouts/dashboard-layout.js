@@ -6,6 +6,13 @@ export function renderLayout(title, content, opts = {}) {
   const isAdmin = role === 'admin';
   const isGuru = role === 'guru';
   const isSiswa = role === 'siswa';
+  let waliCache = null;
+  try {
+    waliCache = JSON.parse(localStorage.getItem('simguru_wali') || 'null');
+  } catch {
+    waliCache = null;
+  }
+  const isWaliKelas = isGuru && !!(waliCache && waliCache.kelas_id);
   const currentHash = typeof window !== 'undefined' ? (window.location.hash || '') : '';
   const activePeriod = context?.tahun_ajaran_aktif_nama && context?.semester_aktif_nama
     ? `${context.tahun_ajaran_aktif_nama} / ${context.semester_aktif_nama}`
@@ -20,6 +27,7 @@ export function renderLayout(title, content, opts = {}) {
     '#guru/game',
     '#guru/kuiz',
     '#guru/pembayaran-buku',
+    '#guru/wali-kelas',
     '#siswa/dashboard',
     '#siswa/absensi',
     '#siswa/nilai',
@@ -90,6 +98,21 @@ export function renderLayout(title, content, opts = {}) {
         </svg>
       `,
     },
+    ...(isWaliKelas
+      ? [
+          {
+            label: 'Wali',
+            href: '#guru/wali-kelas',
+            routes: ['#guru/wali-kelas'],
+            icon: (active) => `
+              <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3.5" y="5" width="17" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            `,
+          },
+        ]
+      : []),
     {
       label: 'Akun',
       href: '#guru/pengatur-sistem',
@@ -161,6 +184,18 @@ export function renderLayout(title, content, opts = {}) {
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
           <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      `,
+    },
+    {
+      label: 'Kas',
+      href: '#siswa/kas-kelas',
+      routes: ['#siswa/kas-kelas'],
+      icon: (active) => `
+        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="6" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="12" cy="12.5" r="3" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M6.5 6.5V5.5a1.5 1.5 0 0 1 1.5-1.5h8a1.5 1.5 0 0 1 1.5 1.5v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       `,
     },
@@ -273,6 +308,7 @@ export function renderLayout(title, content, opts = {}) {
         { label: 'Lobi Sekolah', href: '#admin/lobi-sekolah', routes: ['#admin/lobi-sekolah'], icon: iconLink },
         { label: 'Mapping', href: '#admin/plotting-jadwal', routes: ['#admin/plotting-jadwal'], icon: iconLink },
         { label: 'Pembelajaran', href: '#admin/master-pembelajaran', routes: ['#admin/master-pembelajaran'], icon: iconClassroom },
+        { label: 'Wali Kelas', href: '#admin/wali-kelas', routes: ['#admin/wali-kelas'], icon: iconClassroom },
         { label: 'Akun', href: '#admin/pengatur-sistem', routes: ['#admin/pengatur-sistem'], icon: iconSettings },
       ]
     : isGuru
@@ -285,6 +321,7 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
           { label: 'Kuiz', href: '#guru/kuiz', routes: ['#guru/kuiz'], icon: iconBookSpark },
           { label: 'Pembayaran', href: '#guru/pembayaran-buku', routes: ['#guru/pembayaran-buku'], icon: iconWallet },
+          ...(isWaliKelas ? [{ label: 'Wali Kelas', href: '#guru/wali-kelas', routes: ['#guru/wali-kelas'], icon: iconClassroom }] : []),
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
       : isSiswa
@@ -293,6 +330,7 @@ export function renderLayout(title, content, opts = {}) {
             { label: 'Nilai', href: '#siswa/nilai', routes: ['#siswa/nilai'], icon: iconChart },
             { label: 'Absensi', href: '#siswa/absensi', routes: ['#siswa/absensi'], icon: iconCalendar },
             { label: 'Materi', href: '#siswa/materi', routes: ['#siswa/materi'], icon: iconBookSpark },
+            { label: 'Kas Kelas', href: '#siswa/kas-kelas', routes: ['#siswa/kas-kelas'], icon: iconWallet },
             { label: 'Game Center', href: '#siswa/game', routes: ['#siswa/game'], icon: iconGame },
             { label: 'Kuiz', href: '#siswa/kuiz', routes: ['#siswa/kuiz'], icon: iconBookSpark },
             { label: 'Akun', href: '#siswa/pengatur-sistem', routes: ['#siswa/pengatur-sistem'], icon: iconSettings },
@@ -380,11 +418,11 @@ export function renderLayout(title, content, opts = {}) {
                 <p id="dashboard-date" class="mt-1 text-[10px] text-slate-500 sm:text-[11px]">Memuat tanggal...</p>
               </div>
             ` : ''}
-            ${showHeaderClock ? `
-              <button id="logout-btn" class="absolute bottom-0 right-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 sm:h-10 sm:w-10" aria-label="Keluar" title="Keluar">
-                <svg viewBox="0 0 24 24" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h10"/><path d="m17 8 4 4-4 4"/></svg>
-              </button>
-            ` : ''}
+          ${(showHeaderClock || isAdmin) ? `
+            <button id="logout-btn" class="absolute bottom-0 right-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 sm:h-10 sm:w-10" aria-label="Keluar" title="Keluar">
+              <svg viewBox="0 0 24 24" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h10"/><path d="m17 8 4 4-4 4"/></svg>
+            </button>
+          ` : ''}
             <div class="flex items-center gap-3">
               <div class="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${accentPanel} text-white shadow-lg sm:flex">
                 <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5L12 4l8.5 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-4.5v-5h-5v5H5a1.5 1.5 0 0 1-1.5-1.5v-8z"/></svg>

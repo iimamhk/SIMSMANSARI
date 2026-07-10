@@ -102,7 +102,10 @@ service cloud.firestore {
         'lobby_sections',
         'lobby_links',
         'item_pembayaran_buku',
-        'pembayaran_buku'
+        'pembayaran_buku',
+        'wali_kelas',
+        'kas_kelas',
+        'kas_transaksi'
       ];
     }
 

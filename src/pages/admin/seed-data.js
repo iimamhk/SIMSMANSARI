@@ -49,4 +49,36 @@ export async function seedInitialData() {
   for (const item of users) {
     await saveDocument('users', item, item.username);
   }
+
+  const waliKelasSeed = [
+    { kelas_id: 'X_1', guru_username: 'imambudiharto' },
+  ];
+
+  for (const seed of waliKelasSeed) {
+    const kelasDoc = kelas.find((item) => item.id === seed.kelas_id);
+    const guruDoc = users.find((item) => item.username === seed.guru_username && item.role === 'guru');
+    if (!kelasDoc || !guruDoc) continue;
+
+    const tahunAjaranId = '2026_2027';
+    const semesterId = '2026_2027_1';
+    const waliId = `${tahunAjaranId}_${semesterId}_${seed.kelas_id}`;
+    await saveDocument('wali_kelas', {
+      id: waliId,
+      tahun_ajaran_id: tahunAjaranId,
+      semester_id: semesterId,
+      kelas_id: seed.kelas_id,
+      kelas_nama: kelasDoc.nama,
+      guru_id: guruDoc.username,
+      guru_nama: guruDoc.nama,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, waliId);
+
+    await saveDocument('kelas', {
+      ...kelasDoc,
+      wali_kelas_id: guruDoc.username,
+      wali_kelas_nama: guruDoc.nama,
+      updated_at: new Date().toISOString(),
+    }, seed.kelas_id);
+  }
 }
