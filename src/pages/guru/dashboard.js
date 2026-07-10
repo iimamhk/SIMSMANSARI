@@ -180,11 +180,6 @@ export function renderGuruDashboard(container) {
                   </svg>
                 </div>
               </div>
-              <div class="border-l border-white/20 pl-3 text-right">
-                <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Waktu</p>
-                <p id="dashboard-clock" class="mt-0.5 text-xl font-semibold leading-none text-white">--:--</p>
-                <p id="dashboard-date" class="mt-1 text-[10px] text-white/80">Memuat tanggal...</p>
-              </div>
             </div>
           </div>
 
@@ -296,13 +291,13 @@ export function renderGuruDashboard(container) {
     const clockEl = container.querySelector('#dashboard-clock');
     const dateEl = container.querySelector('#dashboard-date');
     if (!clockEl || !dateEl) return;
-    clockEl.textContent = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    clockEl.textContent = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     dateEl.textContent = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   updateClock();
   if (!container.dashboardClockInterval) {
-    container.dashboardClockInterval = setInterval(updateClock, 60000);
+    container.dashboardClockInterval = setInterval(updateClock, 1000);
   }
 
   const updateWeather = () => {

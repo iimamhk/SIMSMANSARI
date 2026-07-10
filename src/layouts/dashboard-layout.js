@@ -10,6 +10,7 @@ export function renderLayout(title, content, opts = {}) {
   const activePeriod = context?.tahun_ajaran_aktif_nama && context?.semester_aktif_nama
     ? `${context.tahun_ajaran_aktif_nama} / ${context.semester_aktif_nama}`
     : '';
+  const showHeaderClock = (isGuru || isSiswa) && title.toLowerCase().includes('dashboard');
 
   const accentPanel = opts?.accentPanel || 'from-emerald-500 via-cyan-500 to-sky-500';
 
@@ -345,26 +346,30 @@ export function renderLayout(title, content, opts = {}) {
         <header class="relative overflow-hidden rounded-[24px] border border-white/60 bg-white/85 p-3 shadow-[0_10px_34px_-12px_rgba(15,23,42,0.22)] ring-1 ring-white/70 backdrop-blur-xl sm:rounded-[28px] sm:p-4">
           <div class="pointer-events-none absolute inset-0 bg-gradient-to-br ${accentPanel} opacity-[0.14]"></div>
           <div class="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-gradient-to-br ${accentPanel} opacity-20 blur-2xl"></div>
-          <div class="relative flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3">
+          <div class="relative flex flex-col gap-2.5 pr-24 sm:pr-32">
+            ${showHeaderClock ? `
+              <div class="absolute right-0 top-0 flex flex-col items-end text-right">
+                <p id="dashboard-clock" class="text-lg font-extrabold leading-none text-slate-900 sm:text-xl">--:--:--</p>
+                <p id="dashboard-date" class="mt-1 text-[10px] text-slate-500 sm:text-[11px]">Memuat tanggal...</p>
+              </div>
+            ` : ''}
             <div class="flex items-center gap-3">
               <div class="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${accentPanel} text-white shadow-lg sm:flex">
                 <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5L12 4l8.5 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-4.5v-5h-5v5H5a1.5 1.5 0 0 1-1.5-1.5v-8z"/></svg>
               </div>
-              <div>
+              <div class="min-w-0">
                 <p class="text-xs text-slate-500 sm:text-sm">SIM SMANSARI</p>
                 <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">${title}</h2>
                 ${activePeriod ? `<p class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400/90 sm:text-[11px]"><span class="text-slate-300">Periode aktif</span> <span class="text-slate-400">•</span> ${activePeriod}</p>` : ''}
               </div>
             </div>
-            <div class="flex items-center">
-              <div class="flex w-full items-center gap-2 rounded-[18px] border border-slate-200/70 bg-slate-50/80 px-2.5 py-2 sm:w-auto sm:gap-3 sm:rounded-[22px] sm:px-3 sm:py-2.5">
+            <div class="flex w-full items-center gap-2 rounded-[18px] border border-slate-200/70 bg-slate-50/80 px-2.5 py-2 sm:w-auto sm:max-w-max sm:gap-3 sm:self-end sm:rounded-[22px] sm:px-3 sm:py-2.5">
                 <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br ${accentPanel} text-xs font-semibold text-white shadow ring-2 ring-white sm:h-9 sm:w-9 sm:text-sm">${userName.charAt(0)}</div>
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-sm font-medium text-slate-800">${userName}</p>
                   <p class="text-[11px] text-slate-500 sm:text-xs">Akses ${role}</p>
                 </div>
                 <button id="logout-btn" class="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm">Keluar</button>
-              </div>
             </div>
           </div>
         </header>
