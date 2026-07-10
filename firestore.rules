@@ -99,7 +99,9 @@ service cloud.firestore {
         'kuiz_nilai_final',
         'lobby_settings',
         'lobby_sections',
-        'lobby_links'
+        'lobby_links',
+        'item_pembayaran_buku',
+        'pembayaran_buku'
       ];
     }
 

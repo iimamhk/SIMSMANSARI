@@ -18,6 +18,7 @@ export function renderLayout(title, content, opts = {}) {
     '#guru/materi',
     '#guru/game',
     '#guru/kuiz',
+    '#guru/pembayaran-buku',
     '#siswa/dashboard',
     '#siswa/absensi',
     '#siswa/nilai',
@@ -32,6 +33,14 @@ export function renderLayout(title, content, opts = {}) {
   const isRouteActive = (routes) => routes.some((route) => currentHash === route || currentHash.startsWith(`${route}/`));
   const activeItemClass = 'text-[#4F46E5]';
   const inactiveItemClass = 'text-slate-500';
+
+  const iconWallet = (active) => `
+    <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="6" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.8"/>
+      <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="16.5" cy="13.5" r="1.4" fill="currentColor"/>
+    </svg>
+  `;
 
   const guruBottomNavItems = [
     {
@@ -273,6 +282,7 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Materi', href: '#guru/materi', routes: ['#guru/materi'], icon: iconBookSpark },
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
           { label: 'Kuiz', href: '#guru/kuiz', routes: ['#guru/kuiz'], icon: iconBookSpark },
+          { label: 'Pembayaran', href: '#guru/pembayaran-buku', routes: ['#guru/pembayaran-buku'], icon: iconWallet },
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
       : isSiswa
@@ -380,7 +390,7 @@ export function renderLayout(title, content, opts = {}) {
               <div class="min-w-0">
                 <p class="text-xs text-slate-500 sm:text-sm">SIM SMANSARI</p>
                 <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">${title}</h2>
-                ${activePeriod ? `<p class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400/90 sm:text-[11px]"><span class="text-slate-300">Periode aktif</span> <span class="text-slate-400">•</span> ${activePeriod}</p>` : ''}
+                ${activePeriod ? `<p class="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-amber-700/90 sm:text-[11px]"><span class="text-amber-600">TP</span> <span class="text-amber-500/80">•</span> ${activePeriod}</p>` : ''}
               </div>
             </div>
             <div class="inline-flex w-auto max-w-[calc(100%-4.5rem)] items-center gap-2 self-start rounded-[18px] border border-slate-200/70 bg-slate-50/80 px-2.5 py-2 sm:max-w-xs sm:gap-3 sm:rounded-[22px] sm:px-3 sm:py-2.5">

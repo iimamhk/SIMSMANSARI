@@ -18,6 +18,7 @@ import { renderSiswaMateriPage } from '../pages/siswa/materi.js';
 import { renderSiswaSystemSettingsPage } from '../pages/siswa/pengatur-sistem.js';
 import { renderSiswaGamePage } from '../pages/siswa/game.js';
 import { renderGuruKuizPage } from '../pages/guru/kuiz.js';
+import { renderGuruPembayaranBukuPage } from '../pages/guru/pembayaran-buku.js';
 import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
 import { renderMasterSiswaPage } from '../pages/admin/master-siswa.js';
@@ -168,6 +169,11 @@ async function renderRoute() {
 
   if (route === '#guru/kuiz') {
     await renderAndFinalize(renderGuruKuizPage, container);
+    return;
+  }
+
+  if (route === '#guru/pembayaran-buku') {
+    await renderAndFinalize(renderGuruPembayaranBukuPage, container);
     return;
   }
 
