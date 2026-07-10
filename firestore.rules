@@ -84,6 +84,7 @@ service cloud.firestore {
         'anggota_kelas',
         'absensi',
         'catatan_khusus',
+        'jurnal_guru',
         'nilai_tugas',
         'nilai_ujian',
         'bab',

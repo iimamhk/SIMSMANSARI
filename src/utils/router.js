@@ -7,6 +7,7 @@ import { renderAdminLobbySchoolPage } from '../pages/admin/lobi-sekolah.js';
 import { renderSystemSettingsPage } from '../pages/admin/pengatur-sistem.js';
 import { renderGuruDashboard } from '../pages/guru/dashboard.js';
 import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
+import { renderGuruJurnalPage } from '../pages/guru/jurnal.js';
 import { renderGuruPenilaianPage } from '../pages/guru/penilaian.js';
 import { renderGuruMateriPage } from '../pages/guru/materi.js';
 import { renderGuruSystemSettingsPage } from '../pages/guru/pengatur-sistem.js';
@@ -149,6 +150,11 @@ async function renderRoute() {
 
   if (route === '#guru/input-nilai') {
     await renderAndFinalize(renderGuruPenilaianPage, container);
+    return;
+  }
+
+  if (route === '#guru/jurnal') {
+    await renderAndFinalize(renderGuruJurnalPage, container);
     return;
   }
 

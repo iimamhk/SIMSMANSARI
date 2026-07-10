@@ -13,6 +13,7 @@ export function renderLayout(title, content, opts = {}) {
   const headerClockRoutes = [
     '#guru/dashboard',
     '#guru/input-absen',
+    '#guru/jurnal',
     '#guru/input-nilai',
     '#guru/penilaian',
     '#guru/materi',
@@ -278,6 +279,7 @@ export function renderLayout(title, content, opts = {}) {
       ? [
           { label: 'Dashboard', href: '#guru/dashboard', routes: ['#guru/dashboard'], icon: iconHome },
           { label: 'Input Absensi', href: '#guru/input-absen', routes: ['#guru/input-absen'], icon: iconCalendar },
+          { label: 'Jurnal', href: '#guru/jurnal', routes: ['#guru/jurnal'], icon: iconBookSpark },
           { label: 'Input Nilai', href: '#guru/penilaian', routes: ['#guru/penilaian', '#guru/input-nilai'], icon: iconChart },
           { label: 'Materi', href: '#guru/materi', routes: ['#guru/materi'], icon: iconBookSpark },
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },

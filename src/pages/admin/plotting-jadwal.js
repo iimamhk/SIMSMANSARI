@@ -124,7 +124,7 @@ export async function renderPlottingJadwalPage(container) {
         </div>
         <div>
           <label for="jam" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jam Ke</label>
-          <input id="jam" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Contoh: 1-2" />
+          <input id="jam" type="text" inputmode="text" autocomplete="off" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Contoh: 1-2" />
         </div>
         <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Perhatian: perubahan relasi akan memengaruhi data pembelajaran pada relasi yang sama.</p>
         <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Plotting</button>
