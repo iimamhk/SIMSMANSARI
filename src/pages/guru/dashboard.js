@@ -286,20 +286,6 @@ export function renderGuruDashboard(container) {
 
   renderJadwal();
 
-  const updateClock = () => {
-    const now = new Date();
-    const clockEl = container.querySelector('#dashboard-clock');
-    const dateEl = container.querySelector('#dashboard-date');
-    if (!clockEl || !dateEl) return;
-    clockEl.textContent = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    dateEl.textContent = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  };
-
-  updateClock();
-  if (!container.dashboardClockInterval) {
-    container.dashboardClockInterval = setInterval(updateClock, 1000);
-  }
-
   const updateWeather = () => {
     const tempEl = container.querySelector('#dashboard-weather-temp');
     const descEl = container.querySelector('#dashboard-weather-desc');

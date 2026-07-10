@@ -10,7 +10,22 @@ export function renderLayout(title, content, opts = {}) {
   const activePeriod = context?.tahun_ajaran_aktif_nama && context?.semester_aktif_nama
     ? `${context.tahun_ajaran_aktif_nama} / ${context.semester_aktif_nama}`
     : '';
-  const showHeaderClock = (isGuru || isSiswa) && title.toLowerCase().includes('dashboard');
+  const headerClockRoutes = [
+    '#guru/dashboard',
+    '#guru/input-absen',
+    '#guru/input-nilai',
+    '#guru/penilaian',
+    '#guru/materi',
+    '#guru/game',
+    '#guru/kuiz',
+    '#siswa/dashboard',
+    '#siswa/absensi',
+    '#siswa/nilai',
+    '#siswa/materi',
+    '#siswa/game',
+    '#siswa/kuiz',
+  ];
+  const showHeaderClock = (isGuru || isSiswa) && headerClockRoutes.some((route) => currentHash === route || currentHash.startsWith(`${route}/`));
 
   const accentPanel = opts?.accentPanel || 'from-emerald-500 via-cyan-500 to-sky-500';
 
@@ -400,4 +415,40 @@ export function renderLayout(title, content, opts = {}) {
       </div>
     </div>
   `;
+}
+
+export function initHeaderClock(container) {
+  if (!container) {
+    return;
+  }
+
+  const clockEl = container.querySelector('#dashboard-clock');
+  const dateEl = container.querySelector('#dashboard-date');
+
+  if (container.headerClockInterval) {
+    clearInterval(container.headerClockInterval);
+    container.headerClockInterval = null;
+  }
+
+  if (!clockEl || !dateEl) {
+    return;
+  }
+
+  const updateClock = () => {
+    const now = new Date();
+    clockEl.textContent = now.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    dateEl.textContent = now.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  updateClock();
+  container.headerClockInterval = setInterval(updateClock, 1000);
 }

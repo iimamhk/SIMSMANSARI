@@ -1,3 +1,4 @@
+import { initHeaderClock } from '../layouts/dashboard-layout.js';
 import { renderLoginPage } from '../pages/login.js';
 import { renderPublicHomePage } from '../pages/public-home.js';
 import { renderPublicLobbyDetailPage } from '../pages/public-lobby-detail.js';
@@ -67,145 +68,150 @@ function resolveRoute(hash) {
   return normalized;
 }
 
-function renderRoute() {
+async function renderRoute() {
   const route = resolveRoute(window.location.hash);
   const container = document.getElementById('app');
+
+  const renderAndFinalize = async (renderer, ...args) => {
+    await renderer(...args);
+    initHeaderClock(container);
+  };
 
   if (!container) {
     return;
   }
 
   if (route === '#home') {
-    renderPublicHomePage(container);
+    await renderAndFinalize(renderPublicHomePage, container);
     return;
   }
 
   if (route.startsWith('#lobi/')) {
-    renderPublicLobbyDetailPage(container, route.replace('#lobi/', ''));
+    await renderAndFinalize(renderPublicLobbyDetailPage, container, route.replace('#lobi/', ''));
     return;
   }
 
   if (route === '#admin/dashboard') {
-    renderAdminDashboard(container);
+    await renderAndFinalize(renderAdminDashboard, container);
     return;
   }
 
   if (route === '#admin/pengatur-sistem') {
-    renderSystemSettingsPage(container);
+    await renderAndFinalize(renderSystemSettingsPage, container);
     return;
   }
 
   if (route === '#admin/master-guru') {
-    renderMasterGuruPage(container);
+    await renderAndFinalize(renderMasterGuruPage, container);
     return;
   }
 
   if (route === '#admin/master-siswa') {
-    renderMasterSiswaPage(container);
+    await renderAndFinalize(renderMasterSiswaPage, container);
     return;
   }
 
   if (route === '#admin/master-akademik') {
-    renderMasterAkademikPage(container);
+    await renderAndFinalize(renderMasterAkademikPage, container);
     return;
   }
 
   if (route === '#admin/master-tahun-ajaran') {
-    renderMasterTahunAjaranPage(container);
+    await renderAndFinalize(renderMasterTahunAjaranPage, container);
     return;
   }
 
   if (route === '#admin/plotting-jadwal') {
-    renderPlottingJadwalPage(container);
+    await renderAndFinalize(renderPlottingJadwalPage, container);
     return;
   }
 
   if (route === '#admin/master-pembelajaran') {
-    renderMasterPembelajaranPage(container);
+    await renderAndFinalize(renderMasterPembelajaranPage, container);
     return;
   }
 
   if (route === '#admin/lobi-sekolah' || route.startsWith('#admin/lobi-sekolah/')) {
-    renderAdminLobbySchoolPage(container);
+    await renderAndFinalize(renderAdminLobbySchoolPage, container);
     return;
   }
 
   if (route === '#guru/dashboard') {
-    renderGuruDashboard(container);
+    await renderAndFinalize(renderGuruDashboard, container);
     return;
   }
 
   if (route === '#guru/input-absen') {
-    renderGuruInputAbsenPage(container);
+    await renderAndFinalize(renderGuruInputAbsenPage, container);
     return;
   }
 
   if (route === '#guru/input-nilai') {
-    renderGuruPenilaianPage(container);
+    await renderAndFinalize(renderGuruPenilaianPage, container);
     return;
   }
 
   if (route === '#guru/penilaian') {
-    renderGuruPenilaianPage(container);
+    await renderAndFinalize(renderGuruPenilaianPage, container);
     return;
   }
 
   if (route === '#guru/materi') {
-    renderGuruMateriPage(container);
+    await renderAndFinalize(renderGuruMateriPage, container);
     return;
   }
 
   if (route === '#guru/game') {
-    renderGuruGamePage(container);
+    await renderAndFinalize(renderGuruGamePage, container);
     return;
   }
 
   if (route === '#guru/kuiz') {
-    renderGuruKuizPage(container);
+    await renderAndFinalize(renderGuruKuizPage, container);
     return;
   }
 
   if (route === '#guru/pengatur-sistem') {
-    renderGuruSystemSettingsPage(container);
+    await renderAndFinalize(renderGuruSystemSettingsPage, container);
     return;
   }
 
   if (route === '#siswa/dashboard') {
-    renderSiswaDashboardPage(container);
+    await renderAndFinalize(renderSiswaDashboardPage, container);
     return;
   }
 
   if (route === '#siswa/nilai') {
-    renderSiswaNilaiPage(container);
+    await renderAndFinalize(renderSiswaNilaiPage, container);
     return;
   }
 
   if (route === '#siswa/absensi') {
-    renderSiswaAbsensiPage(container);
+    await renderAndFinalize(renderSiswaAbsensiPage, container);
     return;
   }
 
   if (route === '#siswa/materi') {
-    renderSiswaMateriPage(container);
+    await renderAndFinalize(renderSiswaMateriPage, container);
     return;
   }
 
   if (route === '#siswa/game') {
-    renderSiswaGamePage(container);
+    await renderAndFinalize(renderSiswaGamePage, container);
     return;
   }
 
   if (route === '#siswa/kuiz') {
-    renderSiswaKuizPage(container);
+    await renderAndFinalize(renderSiswaKuizPage, container);
     return;
   }
 
   if (route === '#siswa/pengatur-sistem') {
-    renderSiswaSystemSettingsPage(container);
+    await renderAndFinalize(renderSiswaSystemSettingsPage, container);
     return;
   }
 
-  renderLoginPage(container);
+  await renderAndFinalize(renderLoginPage, container);
 }
 
 window.addEventListener('hashchange', renderRoute);
