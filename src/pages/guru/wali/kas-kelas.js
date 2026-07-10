@@ -146,6 +146,11 @@ export async function renderGuruKasKelasPage(container) {
     state.transaksi = (data || []).slice().sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
     renderContent();
   });
+  container.routeCleanup = () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
+  };
 
   const tabBar = container.querySelector('#kas-tabs');
   tabBar.addEventListener('click', (event) => {
@@ -160,7 +165,8 @@ export async function renderGuruKasKelasPage(container) {
   });
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
-    if (typeof unsubscribe === 'function') unsubscribe();
+    container.routeCleanup?.();
+    container.routeCleanup = null;
     localStorage.removeItem('simguru_session');
     window.location.hash = '#login';
   });
@@ -268,19 +274,8 @@ function weekOptions(semesterWeeks, selected) {
 function renderPemasukanForm(state) {
   const today = todayInput();
   const frekuensi = state.config.frekuensi || 'bulanan';
-  let periodeField = '';
-  let defaultPeriode = '';
-  if (frekuensi === 'harian') {
-    defaultPeriode = today;
-    periodeField = `<input id="periode" type="date" value="${defaultPeriode}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />`;
-  } else if (frekuensi === 'mingguan') {
-    defaultPeriode = getWeekKey(new Date());
-    const weeks = getSemesterWeeks(state.context);
-    periodeField = `<select id="periode" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${weekOptions(weeks, defaultPeriode)}</select>`;
-  } else {
-    defaultPeriode = currentMonthKey();
-    periodeField = `<select id="periode" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${periodeOptions(state.semesterMonths, defaultPeriode)}</select>`;
-  }
+  const defaultPeriode = frekuensi === 'harian' ? today : frekuensi === 'mingguan' ? getWeekKey(new Date()) : currentMonthKey();
+  const periodeField = getPeriodFieldMarkup(frekuensi, state.context, state.semesterMonths, defaultPeriode, 'periode');
   const periodLabel = frekuensi === 'harian' ? 'Tanggal' : frekuensi === 'mingguan' ? 'Periode Minggu' : 'Periode Bulan';
   return `
     <div class="space-y-4">
@@ -336,28 +331,38 @@ function renderBulkPemasukanModal(state) {
   }).map((m) => {
     const id = m.siswa_id || m.id;
     const nama = m.siswa_nama || m.nama || '-';
-    return `<label class="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3"><input type="checkbox" value="${id}" class="bulk-siswa h-4 w-4 rounded border-slate-300 text-[#4F46E5] focus:ring-[#4F46E5]" checked /><span class="text-sm text-slate-700">${nama}</span></label>`;
+    return `<label class="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5"><input type="checkbox" value="${id}" class="bulk-siswa h-4 w-4 rounded border-slate-300 text-[#4F46E5] focus:ring-[#4F46E5]" /><span class="truncate text-sm text-slate-700">${nama}</span></label>`;
   }).join('');
   return `
-    <div class="space-y-4">
+    <div class="space-y-3">
       <form id="bulk-pemasukan-form" class="space-y-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
         <h4 class="text-base font-semibold text-slate-900">Input Pembayaran Masal</h4>
-        <div>
-          <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tanggal Pembayaran</label>
-          <input id="bulk-tanggal" type="date" value="${today}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tanggal Pembayaran</label>
+            <input id="bulk-tanggal" type="date" value="${today}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode</label>
+            ${frekuensi === 'harian' ? `<input id="bulk-periode" type="date" value="${defaultPeriode}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />` : frekuensi === 'mingguan' ? `<select id="bulk-periode" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${weekOptions(getSemesterWeeks(state.context), defaultPeriode)}</select>` : `<select id="bulk-periode" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${periodeOptions(state.semesterMonths, defaultPeriode)}</select>`}
+          </div>
         </div>
         <div>
-          <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode</label>
-          ${frekuensi === 'harian' ? `<input id="bulk-periode" type="date" value="${defaultPeriode}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />` : frekuensi === 'mingguan' ? `<select id="bulk-periode" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${weekOptions(getSemesterWeeks(state.context), defaultPeriode)}</select>` : `<select id="bulk-periode" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${periodeOptions(state.semesterMonths, defaultPeriode)}</select>`}
+          <div class="mb-2 flex items-center justify-between gap-2">
+            <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
+            <span class="text-[11px] text-slate-400">Default tidak dicentang</span>
+          </div>
+          <div class="max-h-48 space-y-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2">${memberChecks}</div>
         </div>
-        <div class="max-h-60 space-y-2 overflow-y-auto">${memberChecks}</div>
-        <div>
-          <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Nominal per Siswa (Rp)</label>
-          <input id="bulk-nominal" type="text" inputmode="numeric" placeholder="Rp 0" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Keterangan</label>
-          <input id="bulk-keterangan" type="text" placeholder="Misal: Kas Juli 2026" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+        <div class="grid gap-3 sm:grid-cols-[1fr_1.2fr]">
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Nominal per Siswa (Rp)</label>
+            <input id="bulk-nominal" type="text" inputmode="numeric" placeholder="Rp 0" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Keterangan</label>
+            <input id="bulk-keterangan" type="text" placeholder="Misal: Kas Juli 2026" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+          </div>
         </div>
         <div class="flex gap-2">
           <button type="button" data-close-bulk class="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600">Batal</button>
@@ -404,8 +409,10 @@ function filterTransaksi(list, filter, context) {
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayMs = 86400000;
+  const semesterMonths = new Set(getSemesterMonths(context));
   return list.filter((t) => {
     const d = new Date(t.tanggal);
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     if (filter === 'hari') return d >= startOfDay;
     if (filter === 'minggu') {
       const diff = (now - d) / dayMs;
@@ -413,9 +420,22 @@ function filterTransaksi(list, filter, context) {
     }
     if (filter === 'bulan') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     if (filter === 'tahun') return d.getFullYear() === now.getFullYear();
-    if (filter === 'semester') return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === context.semester_aktif?.split('_').slice(0, 2).join('-') || d.getFullYear() === now.getFullYear();
+    if (filter === 'semester') return semesterMonths.has(monthKey);
     return true;
   });
+}
+
+function getPeriodFieldMarkup(frekuensi, context, semesterMonths, selectedValue, inputId) {
+  if (frekuensi === 'harian') {
+    return `<input id="${inputId}" type="date" value="${selectedValue}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />`;
+  }
+  if (frekuensi === 'mingguan') {
+    const weeks = getSemesterWeeks(context);
+    const defaultValue = selectedValue || getWeekKey(new Date());
+    return `<select id="${inputId}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${weekOptions(weeks, defaultValue)}</select>`;
+  }
+  const defaultValue = selectedValue || currentMonthKey();
+  return `<select id="${inputId}" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${periodeOptions(semesterMonths, defaultValue)}</select>`;
 }
 
 function renderRiwayat(state, s) {
@@ -509,6 +529,11 @@ function renderLaporan(state, s) {
         <td class="px-3 py-2 text-right font-bold text-slate-900">${formatRupiah(running)}</td>
       </tr>`;
   }).join('');
+  const exportButton = (kind, label, classes, icon) => `
+    <button data-export="${kind}" class="inline-flex items-center justify-center gap-2 rounded-xl ${classes} px-3 py-2.5 text-sm font-semibold text-white">
+      <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+      <span>${label}</span>
+    </button>`;
 
   return `
     <div class="space-y-4">
@@ -518,10 +543,16 @@ function renderLaporan(state, s) {
         ${card('Saldo', formatRupiah(s.saldo), '', 'bg-indigo-400')}
       </div>
 
-      <div class="grid grid-cols-3 gap-2">
-        <button data-export="excel" class="rounded-xl bg-emerald-500 px-3 py-3 text-sm font-semibold text-white">Excel</button>
-        <button data-export="pdf" class="rounded-xl bg-rose-500 px-3 py-3 text-sm font-semibold text-white">PDF</button>
-        <button data-export="word" class="rounded-xl bg-blue-500 px-3 py-3 text-sm font-semibold text-white">Word</button>
+      <div class="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-sm font-semibold text-slate-900">Ekspor Laporan</p>
+          <span class="text-[11px] text-slate-400">Unduh cepat</span>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          ${exportButton('excel', 'Excel', 'bg-emerald-500 hover:bg-emerald-600', '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>')}
+          ${exportButton('pdf', 'PDF', 'bg-rose-500 hover:bg-rose-600', '<path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/>')}
+          ${exportButton('word', 'Word', 'bg-blue-500 hover:bg-blue-600', '<path d="M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m8.5 9 1.5 6 2-4 2 4 1.5-6"/>')}
+        </div>
       </div>
 
       <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -927,6 +958,10 @@ function attachContentHandlers(container, state) {
           <div>
             <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Siswa</label>
             <select id="e-siswa" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${memberOptions(state.members, t.siswa_id)}</select>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode</label>
+            ${getPeriodFieldMarkup(state.config.frekuensi || 'bulanan', state.context, state.semesterMonths, t.periode || getPeriodKey(t.tanggal, state.config.frekuensi || 'bulanan'), 'e-periode')}
           </div>` : `
           <div>
             <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kategori</label>
@@ -957,6 +992,7 @@ function attachContentHandlers(container, state) {
           const siswaId = modal.querySelector('#e-siswa').value;
           updates.siswa_id = siswaId;
           updates.siswa_nama = state.members.find((m) => (m.siswa_id || m.id) === siswaId)?.siswa_nama || '';
+          updates.periode = modal.querySelector('#e-periode').value;
         } else {
           updates.kategori = modal.querySelector('#e-kategori').value;
         }

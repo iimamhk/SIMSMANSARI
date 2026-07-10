@@ -87,6 +87,14 @@ async function renderRoute() {
     return;
   }
 
+  if (typeof container.routeCleanup === 'function') {
+    try {
+      container.routeCleanup();
+    } finally {
+      container.routeCleanup = null;
+    }
+  }
+
   if (route === '#home') {
     await renderAndFinalize(renderPublicHomePage, container);
     return;

@@ -166,11 +166,12 @@ export function hitungStatistik(transaksi, members, config, context) {
     currentPeriodKey = currentMonthKey();
     labelPeriode = monthLabel(currentPeriodKey);
   }
-  const pemasukanPeriodeIni = pemasukan.filter((t) => (t.periode || getMonthKey(new Date(t.tanggal))) === currentPeriodKey).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
-  const pengeluaranPeriodeIni = pengeluaran.filter((t) => getMonthKey(new Date(t.tanggal)) === currentMonthKey()).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+  const resolvePeriodKey = (item) => item.periode || getPeriodKey(new Date(item.tanggal), frekuensi);
+  const pemasukanPeriodeIni = pemasukan.filter((t) => resolvePeriodKey(t) === currentPeriodKey).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+  const pengeluaranPeriodeIni = pengeluaran.filter((t) => resolvePeriodKey(t) === currentPeriodKey).reduce((sum, t) => sum + Number(t.nominal || 0), 0);
   const paidSiswa = new Set(
     pemasukan
-      .filter((t) => t.siswa_id && (t.periode || getMonthKey(new Date(t.tanggal))) === currentPeriodKey)
+      .filter((t) => t.siswa_id && resolvePeriodKey(t) === currentPeriodKey)
       .map((t) => t.siswa_id)
   );
   const tunggakan = members.filter((m) => !paidSiswa.has(m.siswa_id || m.id));
