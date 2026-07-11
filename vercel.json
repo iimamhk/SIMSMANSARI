@@ -14,6 +14,18 @@
   },
   "rewrites": [
     {
+      "source": "/api/health",
+      "destination": "/api/health.js"
+    },
+    {
+      "source": "/api/ai/test-connection",
+      "destination": "/api/ai/test-connection.js"
+    },
+    {
+      "source": "/api/ai/generate-material",
+      "destination": "/api/ai/generate-material.js"
+    },
+    {
       "source": "/firebase/(.*)",
       "destination": "/src/firebase/$1"
     },
