@@ -202,8 +202,8 @@ function getUserPublishedMaterials(session, context) {
 
 function getTabButtonClass(isActive) {
   return isActive
-    ? 'border border-sky-500 bg-sky-500 text-white shadow-[0_16px_30px_-18px_rgba(14,116,144,0.6)]'
-    : 'border border-slate-200 bg-white text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700';
+    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_8px_24px_-6px_rgba(99,102,241,0.4)] scale-[1.02]'
+    : 'border border-slate-200/70 bg-white/70 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-700 hover:shadow-[0_4px_12px_-6px_rgba(99,102,241,0.15)]';
 }
 
 function buildMaterialPromptTemplate(values = {}) {
@@ -562,10 +562,10 @@ function buildTemplatePresetOptions(catalog = []) {
 function getMaterialCardTone(kind, visibleToStudents = true) {
   if (kind === 'draft') {
     return {
-      accentClass: 'from-sky-500 via-cyan-500 to-blue-500',
-      glowClass: 'bg-cyan-300/60',
-      badgeClass: 'border-sky-200 bg-sky-50 text-sky-700',
-      chipClass: 'border-sky-100 bg-sky-50 text-sky-700',
+      accentClass: 'from-indigo-500 via-violet-500 to-fuchsia-500',
+      glowClass: 'bg-violet-300/70',
+      badgeClass: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+      chipClass: 'border-indigo-100 bg-indigo-50 text-indigo-700',
       badgeLabel: 'Draft Lokal',
       hint: 'Klik untuk lanjut edit',
       motif: 'Workspace pribadi',
@@ -948,43 +948,109 @@ export async function renderGuruMateriPage(container) {
     .join('');
 
   const html = renderLayout('Materi', `
-    <div class="space-y-5">
-      <section class="relative overflow-hidden rounded-[28px] border border-white/20 bg-gradient-to-br ${materialHeroTheme.panel} p-4 text-white shadow-[0_24px_70px_-42px_rgba(37,99,235,0.32)] sm:p-5">
-        <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full ${materialHeroTheme.glowA} blur-2xl"></div>
-        <div class="absolute bottom-0 left-1/3 h-16 w-16 rounded-full ${materialHeroTheme.glowB} blur-2xl"></div>
-        <div class="absolute right-4 top-4 hidden h-20 w-20 items-center justify-center rounded-[22px] border border-white/18 bg-white/10 backdrop-blur-sm sm:flex">
-          <svg viewBox="0 0 24 24" class="h-10 w-10 stroke-current text-white/90" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${materialHeroTheme.art}</svg>
+    <div class="space-y-6">
+      <style>
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes floatSoft { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-8px) scale(1.02); } }
+        @keyframes pulseGlow { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+        @keyframes slideUp { 0% { opacity:0; transform:translateY(16px); } 100% { opacity:1; transform:translateY(0); } }
+        @keyframes slideInRight { 0% { opacity:0; transform:translateX(12px); } 100% { opacity:1; transform:translateX(0); } }
+        @keyframes scaleIn { 0% { opacity:0; transform:scale(0.92); } 100% { opacity:1; transform:scale(1); } }
+        @keyframes tabGlow { 0%,100% { box-shadow:0 0 12px rgba(99,102,241,0.15); } 50% { box-shadow:0 0 24px rgba(99,102,241,0.3); } }
+        .premium-glass {
+          background: rgba(255,255,255,0.72);
+          backdrop-filter: blur(20px) saturate(1.4);
+          -webkit-backdrop-filter: blur(20px) saturate(1.4);
+          border: 1px solid rgba(255,255,255,0.5);
+        }
+        .premium-glass-strong {
+          background: rgba(255,255,255,0.85);
+          backdrop-filter: blur(24px) saturate(1.6);
+          -webkit-backdrop-filter: blur(24px) saturate(1.6);
+          border: 1px solid rgba(255,255,255,0.6);
+        }
+        .animate-shimmer { background-size: 200% 100%; animation: shimmer 3s linear infinite; }
+        .animate-float { animation: floatSoft 5s ease-in-out infinite; }
+        .animate-pulse-glow { animation: pulseGlow 3s ease-in-out infinite; }
+        .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
+        .animate-slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) both; }
+        .animate-scale-in { animation: scaleIn 0.35s cubic-bezier(0.16,1,0.3,1) both; }
+        .tab-glow { animation: tabGlow 3s ease-in-out infinite; }
+        .scrollbar-premium::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar-premium::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-premium::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+        .scrollbar-premium::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .card-hover-premium { transition: all 0.35s cubic-bezier(0.16,1,0.3,1); }
+        .card-hover-premium:hover { transform: translateY(-4px); box-shadow: 0 24px 48px -12px rgba(15,23,42,0.2); }
+        .btn-premium { transition: all 0.3s cubic-bezier(0.16,1,0.3,1); position: relative; overflow: hidden; }
+        .btn-premium::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(255,255,255,0.15), transparent); opacity:0; transition:opacity 0.3s; }
+        .btn-premium:hover::after { opacity:1; }
+        .btn-premium:active { transform: scale(0.96); }
+        .premium-input { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
+        .premium-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99,102,241,0.12); }
+        .gradient-border { position:relative; }
+        .gradient-border::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(135deg, #6366f1, #06b6d4, #6366f1); opacity:0; transition:opacity 0.4s; z-index:-1; }
+        .gradient-border:hover::before { opacity:1; }
+        @media (max-width: 640px) {
+          .premium-glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(16px); }
+          .premium-glass-strong { background: rgba(255,255,255,0.9); backdrop-filter: blur(18px); }
+        }
+      </style>
+
+      <section class="animate-slide-up relative overflow-hidden rounded-[32px] bg-gradient-to-br ${materialHeroTheme.panel} p-5 text-white shadow-[0_32px_80px_-40px_rgba(99,102,241,0.4)] sm:p-7" style="animation-delay:0.05s">
+        <div class="absolute -right-8 -top-8 h-28 w-28 rounded-full ${materialHeroTheme.glowA} blur-3xl animate-float"></div>
+        <div class="absolute bottom-0 left-1/4 h-20 w-20 rounded-full ${materialHeroTheme.glowB} blur-3xl animate-pulse-glow"></div>
+        <div class="absolute right-12 top-12 h-10 w-10 rounded-full bg-white/8 blur-xl"></div>
+        <div class="absolute -left-4 bottom-4 h-14 w-14 rounded-full bg-white/6 blur-2xl"></div>
+
+        <div class="absolute right-5 top-5 hidden h-24 w-24 items-center justify-center rounded-[24px] border border-white/20 bg-white/10 backdrop-blur-md shadow-lg sm:flex">
+          <svg viewBox="0 0 24 24" class="h-12 w-12 stroke-current text-white/90" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${materialHeroTheme.art}</svg>
         </div>
-        <div class="relative min-w-0 sm:pr-28">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.24em] ${materialHeroTheme.eyebrow}">Perpustakaan Guru</p>
-          <h1 class="mt-1 text-xl font-semibold leading-tight text-white sm:text-2xl">Studio Materi ${shortName}</h1>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${materialHeroTheme.chip}">${assignments.length} kelas</span>
-            <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${materialHeroTheme.chip}">${materialReadStats.length} log baca</span>
-            <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${materialHeroTheme.chip}">${materialHeroTheme.icon} ${materialHeroTheme.badge}</span>
+
+        <div class="relative min-w-0 sm:pr-32">
+          <div class="flex items-center gap-2">
+            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs">✦</span>
+            <p class="text-[10px] font-bold uppercase tracking-[0.28em] ${materialHeroTheme.eyebrow}">Perpustakaan Guru Digital</p>
+          </div>
+          <h1 class="mt-2 text-2xl font-bold leading-tight text-white sm:text-3xl">Studio Materi <span class="bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">${shortName}</span></h1>
+          <p class="mt-1.5 text-sm text-white/75 sm:text-base">Kelola, buat, dan publikasikan materi pembelajaran premium untuk siswa Anda</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm ${materialHeroTheme.chip}">
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+              ${assignments.length} kelas aktif
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm ${materialHeroTheme.chip}">
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 12h4l3-9 4 18 3-9h4"/></svg>
+              ${materialReadStats.length} log baca
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm ${materialHeroTheme.chip}">
+              ${materialHeroTheme.icon} ${materialHeroTheme.badge}
+            </span>
           </div>
         </div>
       </section>
 
-      <section class="rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-4">
-      <section class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+      <section class="animate-slide-up premium-glass-strong rounded-[28px] p-3 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.2)] sm:p-4" style="animation-delay:0.1s">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Navigasi</p>
-            <h2 class="mt-1 text-lg font-semibold text-slate-900">Panel Kerja Materi</h2>
+            <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Navigasi Cepat</p>
+            <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Panel Kerja Materi</h2>
           </div>
-          <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Ringkas</span>
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-600">
+            <span class="inline-flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse-glow"></span>
+            Premium
+          </span>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" data-material-tab="buat" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(false)}">Buat Materi</button>
-          <button type="button" data-material-tab="editor" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(true)}">Editor Materi HTML</button>
-          <button type="button" data-material-tab="template" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(false)}">Template HTML</button>
-          <button type="button" data-material-tab="daftar" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(false)}">Daftar Materi</button>
-          <button type="button" data-material-tab="laporan" class="material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(false)}">Laporan</button>
+        <div class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-premium sm:flex-wrap sm:gap-2 sm:overflow-visible" id="material-tab-bar">
+          <button type="button" data-material-tab="daftar" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(true)}">Daftar Materi</button>
+          <button type="button" data-material-tab="buat" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Buat Materi</button>
+          <button type="button" data-material-tab="editor" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Editor HTML</button>
+          <button type="button" data-material-tab="template" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Template</button>
+          <button type="button" data-material-tab="laporan" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Laporan</button>
         </div>
       </section>
 
-      <section data-material-panel="buat" class="material-tab-panel hidden space-y-4">
+      <section data-material-panel="buat" class="material-tab-panel hidden space-y-4 animate-slide-up">
         <style>
           #material-builder-shell {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1619,15 +1685,15 @@ export async function renderGuruMateriPage(container) {
           </div>
         </div>
 
-        <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)]">
+        <div class="overflow-hidden premium-glass rounded-[28px] border border-slate-200/70 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)]">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
             <div>
               <h3 class="text-base font-semibold text-slate-900">Preview Buat Materi</h3>
               <p class="mt-1 text-sm text-slate-500">Tampilan mandiri hasil editor ini tanpa perlu pindah ke tab Editor Materi HTML.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button id="builder-preview-refresh-btn" type="button" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-sky-200 hover:text-sky-700">
-                <i class="fas fa-rotate-right mr-2"></i>Refresh Preview
+              <button id="builder-preview-refresh-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">
+                <i class="fas fa-rotate-right"></i>Refresh Preview
               </button>
             </div>
           </div>
@@ -1637,68 +1703,67 @@ export async function renderGuruMateriPage(container) {
         </div>
       </section>
 
-      <section data-material-panel="editor" class="material-tab-panel grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+      <section data-material-panel="editor" class="material-tab-panel animate-slide-up grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <div class="space-y-4">
-          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-            <div class="mb-4">
-              <h2 class="text-lg font-semibold text-slate-900">Informasi Materi</h2>
+          <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">
+            <div class="mb-5">
+              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Metadata</p>
+              <h2 class="mt-1 text-lg font-semibold text-slate-900">Informasi Materi</h2>
               <p class="mt-1 text-sm text-slate-500">Metadata ini memudahkan Anda merapikan hasil AI tanpa membongkar semua kode.</p>
             </div>
 
             <div class="space-y-4">
               <div>
                 <label class="text-sm font-medium text-slate-700">Relasi Mengajar</label>
-                <select id="material-assignment" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
+                <select id="material-assignment" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
                   ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
                 </select>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Judul Materi</label>
-                <input id="material-title" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Polinomial" />
+                <input id="material-title" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
               </div>
               <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label class="text-sm font-medium text-slate-700">Label Kelas</label>
-                  <input id="material-level" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Kelas 11" />
+                  <input id="material-level" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
                 </div>
                 <div>
                   <label class="text-sm font-medium text-slate-700">Bab / Unit</label>
-                  <input id="material-chapter" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Bab 4" />
+                  <input id="material-chapter" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Bab 4" />
                 </div>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Pertemuan</label>
-                <input id="material-meetings" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: 6 pertemuan" />
+                <input id="material-meetings" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: 6 pertemuan" />
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Catatan Guru</label>
-                <textarea id="material-note" rows="3" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: cek kembali pembahasan contoh 2 dan tambahkan soal HOTS."></textarea>
+                <textarea id="material-note" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: cek kembali pembahasan contoh 2 dan tambahkan soal HOTS."></textarea>
               </div>
               <div class="flex flex-wrap gap-3">
-                <button id="apply-material-metadata-btn" type="button" class="rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(14,165,233,0.9)] transition hover:-translate-y-0.5 hover:from-sky-600 hover:to-cyan-600">Terapkan ke HTML</button>
-                <button id="save-material-draft-btn" type="button" class="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Simpan Draft</button>
-                <button id="publish-material-btn" type="button" class="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Publish Materi</button>
-                <button id="reset-material-editor-btn" type="button" class="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Draft Baru</button>
+<button id="apply-material-metadata-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Terapkan ke HTML</button>
+                 <button id="save-material-draft-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">Simpan Draft</button>
+                 <button id="publish-material-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(13,148,136,0.9)] transition hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700">Publish Materi</button>
+                 <button id="reset-material-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Draft Baru</button>
               </div>
               <p id="material-status" class="text-sm text-slate-500">Paste HTML dari AI, lalu pilih "Muat Preview" untuk memeriksa hasilnya.</p>
             </div>
           </div>
 
-          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="text-lg font-semibold text-slate-900">Sumber HTML AI</h2>
                 <p class="mt-1 text-sm text-slate-500">Paste hasil HTML lengkap dari AI di sini. Anda tetap bisa mengedit langsung sebelum preview.</p>
               </div>
-              <button id="load-material-preview-btn" type="button" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Muat Preview</button>
+              <button id="load-material-preview-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Muat Preview</button>
             </div>
-            <textarea id="material-html-source" rows="24" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-sky-100 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Tempel HTML hasil AI di sini..."></textarea>
+            <textarea id="material-html-source" rows="24" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tempel HTML hasil AI di sini..."></textarea>
           </div>
         </div>
 
         <div class="space-y-4">
-          <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 class="text-lg font-semibold text-slate-900">Preview Materi</h2>
                 <p class="mt-1 text-sm text-slate-500">Preview berjalan dalam iframe terisolasi agar kode HTML dari AI tetap bisa diuji sebelum disimpan.</p>
@@ -1711,14 +1776,13 @@ export async function renderGuruMateriPage(container) {
       </section>
 
       <section data-material-panel="template" class="material-tab-panel hidden space-y-4">
-        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 class="text-lg font-semibold text-slate-900">Template Prompt HTML</h2>
               <p class="mt-1 text-sm text-slate-500">Isi form ini untuk menghasilkan prompt yang konsisten sebelum Anda meminta AI membuat HTML materi.</p>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button id="fill-template-from-editor-btn" type="button" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Ambil dari Editor</button>
+              <button id="fill-template-from-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Ambil dari Editor</button>
             </div>
           </div>
 
@@ -1726,12 +1790,12 @@ export async function renderGuruMateriPage(container) {
             <div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
               <div>
                 <label class="text-sm font-medium text-slate-700">Preset Template Mapel</label>
-                <select id="template-material-preset" class="mt-1.5 w-full rounded-2xl border border-sky-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
+                <select id="template-material-preset" class="premium-input mt-1.5 w-full rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
                   <option value="">Pilih preset mapel...</option>
                   ${templatePresetOptions}
                 </select>
               </div>
-              <button id="apply-template-preset-btn" type="button" class="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Terapkan Preset</button>
+              <button id="apply-template-preset-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Terapkan Preset</button>
             </div>
             <p class="mt-3 text-sm text-slate-600">Preset akan mengisi pola tujuan, materi pokok, contoh, latihan, evaluasi, dan gaya visual agar konsisten untuk jenjang SMA Kurikulum Merdeka dengan pendekatan deep learning.</p>
           </div>
@@ -1740,137 +1804,141 @@ export async function renderGuruMateriPage(container) {
             <div class="space-y-4">
               <div>
                 <label class="text-sm font-medium text-slate-700">Judul Materi</label>
-                <input id="template-material-title" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Polinomial" />
+                <input id="template-material-title" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
               </div>
               <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label class="text-sm font-medium text-slate-700">Mata Pelajaran</label>
-                  <input id="template-material-mapel" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Matematika" />
+                  <input id="template-material-mapel" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Matematika" />
                 </div>
                 <div>
                   <label class="text-sm font-medium text-slate-700">Kelas/Level</label>
-                  <input id="template-material-kelas" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Kelas 11" />
+                  <input id="template-material-kelas" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
                 </div>
               </div>
               <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label class="text-sm font-medium text-slate-700">Bab / Unit</label>
-                  <input id="template-material-bab" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Bab 4" />
+                  <input id="template-material-bab" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Bab 4" />
                 </div>
                 <div>
                   <label class="text-sm font-medium text-slate-700">Pertemuan</label>
-                  <input id="template-material-pertemuan" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: 6 pertemuan" />
+                  <input id="template-material-pertemuan" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: 6 pertemuan" />
                 </div>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Tujuan Pembelajaran</label>
-                <textarea id="template-material-tujuan" rows="3" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Tuliskan tujuan pembelajaran utama."></textarea>
+                <textarea id="template-material-tujuan" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan tujuan pembelajaran utama."></textarea>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Materi Pokok</label>
-                <textarea id="template-material-pokok" rows="4" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Tuliskan poin-poin materi inti yang wajib muncul."></textarea>
+                <textarea id="template-material-pokok" rows="4" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan poin-poin materi inti yang wajib muncul."></textarea>
               </div>
             </div>
 
             <div class="space-y-4">
               <div>
                 <label class="text-sm font-medium text-slate-700">Contoh</label>
-                <textarea id="template-material-contoh" rows="3" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh soal, contoh kasus, atau ilustrasi."></textarea>
+                <textarea id="template-material-contoh" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh soal, contoh kasus, atau ilustrasi."></textarea>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Latihan</label>
-                <textarea id="template-material-latihan" rows="3" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Tuliskan bentuk latihan bertahap yang diinginkan."></textarea>
+                <textarea id="template-material-latihan" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan bentuk latihan bertahap yang diinginkan."></textarea>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Evaluasi / Tugas</label>
-                <textarea id="template-material-evaluasi" rows="3" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Tuliskan tugas atau evaluasi akhir."></textarea>
+                <textarea id="template-material-evaluasi" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan tugas atau evaluasi akhir."></textarea>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Gaya Visual</label>
-                <textarea id="template-material-gaya" rows="3" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: modern, kartu membulat, dominan biru, rapi dan ringan.">rapi, modern, mudah dibaca siswa, dominan biru-sky/cyan, kartu membulat</textarea>
+                <textarea id="template-material-gaya" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: modern, kartu membulat, dominan biru, rapi dan ringan.">rapi, modern, mudah dibaca siswa, dominan biru-sky/cyan, kartu membulat</textarea>
               </div>
               <div>
                 <label class="text-sm font-medium text-slate-700">Catatan Guru Tambahan</label>
-                <textarea id="template-material-catatan" rows="4" class="mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Tuliskan preferensi tambahan untuk AI."></textarea>
+                <textarea id="template-material-catatan" rows="4" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan preferensi tambahan untuk AI."></textarea>
               </div>
             </div>
           </div>
 
           <div class="mt-5 flex flex-wrap gap-3">
-            <button id="generate-template-prompt-btn" type="button" class="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">Buat Prompt</button>
-            <button id="copy-template-prompt-btn" type="button" class="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Salin Prompt</button>
-            <button id="open-chatgpt-btn" type="button" class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100">Menuju ChatGPT</button>
-            <button id="open-deepseek-btn" type="button" class="rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-100">Menuju DeepSeek</button>
+<button id="generate-template-prompt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Buat Prompt</button>
+             <button id="copy-template-prompt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">Salin Prompt</button>
+             <button id="open-chatgpt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 hover:border-emerald-300">Menuju ChatGPT</button>
+             <button id="open-deepseek-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-50 hover:border-cyan-300">Menuju DeepSeek</button>
           </div>
           <p id="template-prompt-status" class="mt-3 text-sm text-slate-500">Isi form lalu klik Buat Prompt untuk menghasilkan template prompt HTML.</p>
         </div>
 
-        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-          <div class="mb-4">
+        <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">          <div class="mb-4">
             <h2 class="text-lg font-semibold text-slate-900">Hasil Prompt</h2>
             <p class="mt-1 text-sm text-slate-500">Gunakan prompt ini pada AI Anda agar struktur HTML materi tetap konsisten.</p>
           </div>
-          <textarea id="template-prompt-output" rows="20" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-sky-100 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Prompt template akan muncul di sini..."></textarea>
+          <textarea id="template-prompt-output" rows="20" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Prompt template akan muncul di sini..."></textarea>
         </div>
       </section>
 
-      <section data-material-panel="daftar" class="material-tab-panel hidden space-y-5">
-        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
+      <section data-material-panel="daftar" class="material-tab-panel hidden space-y-5 animate-scale-in">
+        <div class="premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Koleksi</p>
-              <h2 class="mt-1 text-lg font-semibold text-slate-900">Daftar Materi Guru</h2>
+              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Perpustakaan</p>
+              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Koleksi Materi</h2>
+              <p class="mt-0.5 text-sm text-slate-500">Semua materi dan draft dalam satu tempat</p>
             </div>
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Terorganisir</span>
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-600">
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              Terorganisir
+            </span>
           </div>
         </div>
 
-        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
+        <div class="premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Draft</p>
-              <h2 class="mt-1 text-lg font-semibold text-slate-900">Draft Materi Tersimpan</h2>
-              <p class="mt-1 text-sm text-slate-500">Klik kartu untuk lanjut edit.</p>
+              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-500">Draft Lokal</p>
+              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Draft Materi Tersimpan</h2>
+              <p class="mt-0.5 text-sm text-slate-500">Klik kartu untuk melanjutkan penyuntingan</p>
             </div>
           </div>
-          <div id="material-draft-list" class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));"></div>
+          <div id="material-draft-list" class="grid gap-3 sm:gap-4" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));"></div>
         </div>
 
-        <div class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
+        <div class="premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
           <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Publikasi</p>
-              <h2 class="mt-1 text-lg font-semibold text-slate-900">Materi Dipublikasikan</h2>
-              <p class="mt-1 text-sm text-slate-500">Siap dipakai ulang atau dikelola ulang.</p>
+              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-500">Publikasi</p>
+              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Materi Dipublikasikan</h2>
+              <p class="mt-0.5 text-sm text-slate-500">Siap diakses siswa dan dapat dikelola ulang</p>
             </div>
           </div>
-          <div id="material-published-list" class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));"></div>
+          <div id="material-published-list" class="grid gap-3 sm:gap-4" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));"></div>
         </div>
       </section>
 
-      <section data-material-panel="laporan" class="material-tab-panel hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section data-material-panel="laporan" class="material-tab-panel hidden animate-slide-up premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 class="text-lg font-semibold text-slate-900">Progress Baca Siswa per Materi</h2>
-            <p class="mt-1 text-sm text-slate-500">Pantau siapa yang belum buka, sudah buka, berapa durasi baca, dan siapa yang menandai selesai baca.</p>
+            <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Analitik</p>
+            <h2 class="text-base font-semibold text-slate-900 sm:text-lg">Progress Baca Siswa</h2>
+            <p class="mt-0.5 text-sm text-slate-500">Pantau siapa yang sudah membaca materi Anda</p>
           </div>
         </div>
         <div class="grid gap-3 sm:grid-cols-3">
           <div>
-            <label class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Filter Kelas</label>
-            <select id="material-report-class-filter" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
+            <label class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Filter Kelas</label>
+            <select id="material-report-class-filter" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
               <option value="">Semua kelas</option>
             </select>
           </div>
           <div>
-            <label class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Filter Mapel</label>
-            <select id="material-report-mapel-filter" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
+            <label class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Filter Mapel</label>
+            <select id="material-report-mapel-filter" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
               <option value="">Semua mapel</option>
             </select>
           </div>
           <div>
-            <label class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Filter Status</label>
-            <select id="material-report-status-filter" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
+            <label class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Filter Status</label>
+            <select id="material-report-status-filter" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
               <option value="">Semua status</option>
               <option value="unopened">Belum buka</option>
               <option value="opened">Sudah buka</option>
@@ -1878,10 +1946,38 @@ export async function renderGuruMateriPage(container) {
             </select>
           </div>
         </div>
-        <div id="material-report-summary" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
-        <div id="material-report-table" class="mt-4"></div>
+        <div id="material-report-summary" class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
+        <div id="material-report-table" class="mt-4 scrollbar-premium"></div>
       </section>
     </div>
+
+    <section id="guru-material-reader-overlay" class="fixed inset-0 z-[120] hidden animate-scale-in">
+      <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md"></div>
+      <div class="relative flex h-[100dvh] w-full flex-col bg-white/95 backdrop-blur-xl shadow-2xl sm:m-4 sm:h-[calc(100dvh-2rem)] sm:w-[calc(100vw-2rem)] sm:rounded-[28px] sm:overflow-hidden">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-3 sm:px-6" style="padding-top: calc(0.75rem + env(safe-area-inset-top));">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Preview Materi</p>
+            <p id="guru-material-reader-title" class="mt-0.5 truncate text-base font-semibold text-slate-900">Materi</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="guru-material-edit-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(99,102,241,0.35)] hover:shadow-[0_12px_32px_-8px_rgba(99,102,241,0.45)]">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              <span>Edit</span>
+            </button>
+            <button id="guru-material-back-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 hover:border-slate-300">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+              <span>Tutup</span>
+            </button>
+          </div>
+        </div>
+        <iframe id="guru-material-reader-frame" title="Preview materi guru layar penuh" sandbox="allow-scripts allow-modals" class="min-h-0 flex-1 w-full bg-white" style="padding-bottom: env(safe-area-inset-bottom);"></iframe>
+      </div>
+    </section>
   `);
 
   container.innerHTML = html;
@@ -1897,6 +1993,11 @@ export async function renderGuruMateriPage(container) {
   const statusEl = container.querySelector('#material-status');
   const draftListEl = container.querySelector('#material-draft-list');
   const publishedListEl = container.querySelector('#material-published-list');
+  const readerOverlayEl = document.getElementById('guru-material-reader-overlay');
+  const readerFrameEl = document.getElementById('guru-material-reader-frame');
+  const readerTitleEl = document.getElementById('guru-material-reader-title');
+  const readerBackBtn = document.getElementById('guru-material-back-btn');
+  const readerEditBtn = document.getElementById('guru-material-edit-btn');
   const materialTabButtons = Array.from(container.querySelectorAll('[data-material-tab]'));
   const materialTabPanels = Array.from(container.querySelectorAll('[data-material-panel]'));
   const templateTitleInput = container.querySelector('#template-material-title');
@@ -1972,7 +2073,7 @@ export async function renderGuruMateriPage(container) {
   let activeDraftId = '';
   let drafts = getUserDrafts(session, context);
   let publishedMaterials = await getUserPublishedMaterials(session, context);
-  let activeTab = 'editor';
+  let activeTab = 'daftar';
   const builderStorageKey = getMaterialBuilderStorageBucket(session, context);
   let builderHistory = [];
   let builderHistoryIndex = -1;
@@ -2187,11 +2288,16 @@ export async function renderGuruMateriPage(container) {
     activeTab = nextTab;
     materialTabButtons.forEach((button) => {
       const isActive = button.getAttribute('data-material-tab') === nextTab;
-      button.className = `material-tab-btn rounded-full px-4 py-2.5 text-sm font-semibold transition ${getTabButtonClass(isActive)}`;
+      button.className = `material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(isActive)}`;
     });
     materialTabPanels.forEach((panel) => {
       const isActive = panel.getAttribute('data-material-panel') === nextTab;
       panel.classList.toggle('hidden', !isActive);
+      if (isActive) {
+        panel.classList.remove('animate-scale-in');
+        void panel.offsetWidth;
+        panel.classList.add('animate-scale-in');
+      }
     });
   }
 
@@ -2852,6 +2958,46 @@ export async function renderGuruMateriPage(container) {
     setStatus(`Draft dimuat: ${draft.title || 'Tanpa judul'}`);
   }
 
+  let activePreviewMaterial = null;
+
+  function openMaterialPreview(material) {
+    if (!material || !readerOverlayEl) {
+      return;
+    }
+
+    activePreviewMaterial = material;
+    const source = String(material.html_source || '').trim();
+    readerFrameEl.srcdoc = buildPreviewSource(source);
+    readerTitleEl.textContent = material.title || 'Tanpa judul';
+    readerOverlayEl.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+
+    if (readerEditBtn) {
+      const isPublished = material.status === 'published' || material.published_at;
+      readerEditBtn.classList.toggle('hidden', !isPublished && !material.html_source);
+    }
+  }
+
+  function closeMaterialPreview() {
+    if (!readerOverlayEl) {
+      return;
+    }
+    readerFrameEl.srcdoc = '';
+    readerOverlayEl.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    activePreviewMaterial = null;
+  }
+
+  function openMaterialInEditor(material) {
+    if (!material) {
+      return;
+    }
+    closeMaterialPreview();
+    loadDraft(material);
+    setActiveTab('editor');
+    setStatus(`Materi dimuat ke editor: ${material.title || 'Tanpa judul'}`);
+  }
+
   function renderDraftList() {
     if (!drafts.length) {
       draftListEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada draft materi yang tersimpan untuk guru ini.</div>';
@@ -2864,36 +3010,49 @@ export async function renderGuruMateriPage(container) {
         const tone = getMaterialCardTone('draft');
         const savedDate = new Date(draft.updated_at || draft.created_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
         return `
-          <article class="group flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_36px_rgba(15,23,42,0.12)]">
-            <button type="button" data-draft-id="${draft.id}" class="material-draft-item flex h-full flex-col text-left">
-              <div class="relative h-[152px] bg-gradient-to-br ${tone.accentClass} p-3 text-white">
-                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/18 blur-2xl"></div>
-                <div class="absolute bottom-2 right-2 h-12 w-12 rounded-full ${tone.glowClass} blur-2xl"></div>
+          <article class="card-hover-premium group flex h-full flex-col overflow-hidden rounded-[26px] border border-slate-200/70 bg-white shadow-[0_14px_30px_-12px_rgba(15,23,42,0.10)]">
+            <button type="button" data-draft-id="${draft.id}" class="material-draft-item relative flex h-full flex-col text-left">
+              <div class="relative h-[170px] overflow-hidden bg-gradient-to-br ${tone.accentClass} p-4 text-white">
+                <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-3xl transition-transform duration-500 group-hover:scale-125"></div>
+                <div class="absolute bottom-0 right-0 h-16 w-16 rounded-full ${tone.glowClass} blur-3xl"></div>
+                <div class="absolute inset-0 opacity-30" style="background-image:radial-gradient(circle at 30% 20%, rgba(255,255,255,0.5) 0%, transparent 40%);"></div>
                 <div class="relative flex h-full flex-col justify-between">
                   <div class="flex items-start justify-between gap-2">
-                    <span class="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[15px] bg-white/18 px-2 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] backdrop-blur-sm">${getMaterialMonogram(draft)}</span>
-                    <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.badgeClass}">${tone.badgeLabel}</span>
+                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-sm font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-sm">${getMaterialMonogram(draft)}</span>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] backdrop-blur-sm">${tone.badgeLabel}</span>
                   </div>
                   <div>
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">${tone.motif}</p>
-                    <p class="line-clamp-3 text-[15px] font-semibold leading-snug text-white">${draft.title || 'Tanpa judul'}</p>
-                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4.5 text-white/80">${draft.note || 'Draft siap dilanjutkan.'}</p>
+                    <p class="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/70">${tone.motif}</p>
+                    <p class="mt-1 line-clamp-2 text-[16px] font-bold leading-snug text-white">${draft.title || 'Tanpa judul'}</p>
+                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4 text-white/80">${draft.note || 'Draft siap dilanjutkan.'}</p>
                   </div>
                 </div>
               </div>
-              <div class="flex flex-1 flex-col justify-between space-y-2.5 p-3">
+              <div class="flex flex-1 flex-col justify-between gap-3 p-4">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.chipClass}">${draft.mapel_nama || '-'}</span>
-                  <span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">${draft.kelas_nama || '-'}</span>
+                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${tone.chipClass}">
+                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    ${draft.mapel_nama || '-'}
+                  </span>
+                  <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    ${draft.kelas_nama || '-'}
+                  </span>
                 </div>
                 <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
-                  <span class="truncate">${savedDate}</span>
-                  <span class="font-semibold uppercase tracking-[0.14em] text-slate-500">Buka</span>
+                  <span class="inline-flex items-center gap-1 truncate">
+                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    ${savedDate}
+                  </span>
+                  <span class="inline-flex items-center gap-1 font-bold uppercase tracking-[0.14em] text-indigo-500">Buka
+                    <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </span>
                 </div>
               </div>
             </button>
-            <div class="border-t border-slate-100 p-3 pt-0">
-              <button type="button" data-delete-draft-id="${draft.id}" class="delete-draft-btn mt-3 w-full rounded-full border border-rose-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-rose-600 transition hover:bg-rose-50">Hapus Draft</button>
+            <div class="grid gap-2 border-t border-slate-100 bg-slate-50/60 p-3 sm:grid-cols-2">
+              <button type="button" data-preview-draft-id="${draft.id}" class="btn-premium preview-draft-btn inline-flex items-center justify-center gap-1.5 rounded-2xl border border-indigo-200 bg-white px-2.5 py-2 text-[10px] font-bold uppercase tracking-[0.06em] leading-tight text-indigo-700 transition hover:bg-indigo-50">Preview</button>
+              <button type="button" data-delete-draft-id="${draft.id}" class="btn-premium delete-draft-btn inline-flex items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-2.5 py-2 text-[10px] font-bold uppercase tracking-[0.06em] leading-tight text-rose-600 transition hover:bg-rose-50">Hapus</button>
             </div>
           </article>
         `;
@@ -2905,6 +3064,15 @@ export async function renderGuruMateriPage(container) {
         const draft = drafts.find((item) => item.id === button.getAttribute('data-draft-id'));
         if (draft) {
           loadDraft(draft);
+        }
+      });
+    });
+
+    draftListEl.querySelectorAll('.preview-draft-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const draft = drafts.find((item) => item.id === button.getAttribute('data-preview-draft-id'));
+        if (draft) {
+          openMaterialPreview(draft);
         }
       });
     });
@@ -2940,37 +3108,52 @@ export async function renderGuruMateriPage(container) {
         const tone = getMaterialCardTone('published', material.visible_to_students !== false);
         const publishedDate = new Date(material.published_at || material.updated_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
         return `
-          <article class="group flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition hover:-translate-y-1 hover:shadow-[0_20px_36px_rgba(15,23,42,0.12)]">
-            <button type="button" data-material-id="${material.id}" class="material-published-item flex h-full flex-col text-left">
-              <div class="relative h-[152px] bg-gradient-to-br ${tone.accentClass} p-3 text-white">
-                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/18 blur-2xl"></div>
-                <div class="absolute bottom-2 right-2 h-12 w-12 rounded-full ${tone.glowClass} blur-2xl"></div>
+          <article class="card-hover-premium group flex h-full flex-col overflow-hidden rounded-[26px] border border-slate-200/70 bg-white shadow-[0_14px_30px_-12px_rgba(15,23,42,0.10)]">
+            <button type="button" data-material-id="${material.id}" class="material-published-item relative flex h-full flex-col text-left">
+              <div class="relative h-[170px] overflow-hidden bg-gradient-to-br ${tone.accentClass} p-4 text-white">
+                <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-3xl transition-transform duration-500 group-hover:scale-125"></div>
+                <div class="absolute bottom-0 right-0 h-16 w-16 rounded-full ${tone.glowClass} blur-3xl"></div>
+                <div class="absolute inset-0 opacity-30" style="background-image:radial-gradient(circle at 30% 20%, rgba(255,255,255,0.5) 0%, transparent 40%);"></div>
                 <div class="relative flex h-full flex-col justify-between">
                   <div class="flex items-start justify-between gap-2">
-                    <span class="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[15px] bg-white/18 px-2 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] backdrop-blur-sm">${getMaterialMonogram(material)}</span>
-                    <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.badgeClass}">${tone.badgeLabel}</span>
+                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-sm font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-sm">${getMaterialMonogram(material)}</span>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] backdrop-blur-sm">${tone.badgeLabel}</span>
                   </div>
                   <div>
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">${tone.motif}</p>
-                    <p class="line-clamp-3 text-[15px] font-semibold leading-snug text-white">${material.title || 'Tanpa judul'}</p>
-                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4.5 text-white/80">${material.note || 'Materi siap dibuka ulang atau diperbarui.'}</p>
+                    <p class="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/70">${tone.motif}</p>
+                    <p class="mt-1 line-clamp-2 text-[16px] font-bold leading-snug text-white">${material.title || 'Tanpa judul'}</p>
+                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4 text-white/80">${material.note || 'Materi siap dibuka ulang atau diperbarui.'}</p>
                   </div>
                 </div>
               </div>
-              <div class="flex flex-1 flex-col justify-between space-y-2.5 p-3">
+              <div class="flex flex-1 flex-col justify-between gap-3 p-4">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.chipClass}">${material.mapel_nama || '-'}</span>
-                  <span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">${material.kelas_nama || '-'}</span>
+                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${tone.chipClass}">
+                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    ${material.mapel_nama || '-'}
+                  </span>
+                  <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    ${material.kelas_nama || '-'}
+                  </span>
                 </div>
                 <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
-                  <span class="truncate">${publishedDate}</span>
-                  <span class="font-semibold uppercase tracking-[0.14em] text-slate-500">Buka</span>
+                  <span class="inline-flex items-center gap-1 truncate">
+                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                    ${publishedDate}
+                  </span>
+                  <span class="inline-flex items-center gap-1 font-bold uppercase tracking-[0.14em] text-indigo-500">Buka
+                    <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </span>
                 </div>
               </div>
             </button>
-            <div class="grid gap-2 border-t border-slate-100 p-3 sm:grid-cols-2">
-              <button type="button" data-toggle-published-id="${material.id}" class="toggle-published-btn rounded-full border ${material.visible_to_students === false ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'} bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] leading-tight whitespace-normal text-center transition">${material.visible_to_students === false ? 'Publish Lagi' : 'Unpublish'}</button>
-              <button type="button" data-delete-published-id="${material.id}" class="delete-published-btn rounded-full border border-rose-200 bg-white px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] leading-tight whitespace-normal text-center text-rose-600 transition hover:bg-rose-50">Hapus Permanen</button>
+            <div class="grid gap-2 border-t border-slate-100 bg-slate-50/60 p-3">
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" data-preview-published-id="${material.id}" class="btn-premium preview-published-btn inline-flex items-center justify-center gap-1 rounded-2xl border border-indigo-200 bg-white px-2 py-2 text-[9px] font-bold uppercase tracking-[0.04em] leading-tight text-indigo-700 transition hover:bg-indigo-50">Preview</button>
+                <button type="button" data-toggle-published-id="${material.id}" class="btn-premium toggle-published-btn inline-flex items-center justify-center gap-1 rounded-2xl border ${material.visible_to_students === false ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'} bg-white px-2 py-2 text-[9px] font-bold uppercase tracking-[0.04em] leading-tight transition">${material.visible_to_students === false ? 'Publish' : 'Unpub'}</button>
+                <button type="button" data-delete-published-id="${material.id}" class="btn-premium delete-published-btn inline-flex items-center justify-center gap-1 rounded-2xl border border-rose-200 bg-white px-2 py-2 text-[9px] font-bold uppercase tracking-[0.04em] leading-tight text-rose-600 transition hover:bg-rose-50">Hapus</button>
+              </div>
             </div>
           </article>
         `;
@@ -2981,8 +3164,16 @@ export async function renderGuruMateriPage(container) {
       button.addEventListener('click', () => {
         const material = publishedMaterials.find((item) => item.id === button.getAttribute('data-material-id'));
         if (material) {
-          loadDraft(material);
-          setStatus(`Materi terpublikasi dimuat ulang: ${material.title || 'Tanpa judul'}`);
+          openMaterialPreview(material);
+        }
+      });
+    });
+
+    publishedListEl.querySelectorAll('.preview-published-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const material = publishedMaterials.find((item) => item.id === button.getAttribute('data-preview-published-id'));
+        if (material) {
+          openMaterialPreview(material);
         }
       });
     });
@@ -3456,6 +3647,19 @@ export async function renderGuruMateriPage(container) {
     button.addEventListener('click', () => {
       setActiveTab(button.getAttribute('data-material-tab') || 'editor');
     });
+  });
+
+  readerBackBtn?.addEventListener('click', closeMaterialPreview);
+  readerEditBtn?.addEventListener('click', () => {
+    if (activePreviewMaterial) {
+      openMaterialInEditor(activePreviewMaterial);
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && readerOverlayEl && !readerOverlayEl.classList.contains('hidden')) {
+      closeMaterialPreview();
+    }
   });
 
   resetEditor();
