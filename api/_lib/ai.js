@@ -52,6 +52,14 @@ function getEnv(key, fallback = '') {
   return value === undefined || value === null ? fallback : String(value).trim();
 }
 
+function getFirstEnv(keys, fallback = '') {
+  for (const key of keys) {
+    const value = getEnv(key);
+    if (value) return value;
+  }
+  return fallback;
+}
+
 function getNumberEnv(key, fallback) {
   const raw = process.env[key];
   if (!raw) return fallback;
@@ -60,16 +68,31 @@ function getNumberEnv(key, fallback) {
 }
 
 function getConfig() {
+  const apiKey = getFirstEnv(['IAMHC_API_KEY', 'GROQ_API_KEY', 'OPENAI_API_KEY']);
+  const baseUrl = getFirstEnv(['IAMHC_BASE_URL', 'GROQ_BASE_URL', 'OPENAI_BASE_URL'], DEFAULT_BASE_URL).replace(/\/$/, '');
+  const model = getFirstEnv(['IAMHC_MODEL', 'GROQ_MODEL', 'OPENAI_MODEL'], DEFAULT_MODEL);
+
   return {
-    apiKey: getEnv('IAMHC_API_KEY'),
-    baseUrl: getEnv('IAMHC_BASE_URL', DEFAULT_BASE_URL).replace(/\/$/, ''),
-    model: getEnv('IAMHC_MODEL', DEFAULT_MODEL),
+    apiKey,
+    baseUrl,
+    model,
     allowedOrigins: getEnv('ALLOWED_ORIGINS')
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
     rateLimitMax: getNumberEnv('RATE_LIMIT_MAX', DEFAULT_RATE_LIMIT_MAX),
     rateLimitWindowMs: getNumberEnv('RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS),
+    diagnostics: {
+      hasIamhcApiKey: Boolean(getEnv('IAMHC_API_KEY')),
+      hasGroqApiKey: Boolean(getEnv('GROQ_API_KEY')),
+      hasOpenAiApiKey: Boolean(getEnv('OPENAI_API_KEY')),
+      hasIamhcBaseUrl: Boolean(getEnv('IAMHC_BASE_URL')),
+      hasGroqBaseUrl: Boolean(getEnv('GROQ_BASE_URL')),
+      hasOpenAiBaseUrl: Boolean(getEnv('OPENAI_BASE_URL')),
+      hasIamhcModel: Boolean(getEnv('IAMHC_MODEL')),
+      hasGroqModel: Boolean(getEnv('GROQ_MODEL')),
+      hasOpenAiModel: Boolean(getEnv('OPENAI_MODEL')),
+    },
   };
 }
 

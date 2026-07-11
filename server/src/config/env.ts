@@ -7,6 +7,14 @@ function getEnv(key: string, fallback = ''): string {
   return value === undefined || value === null ? fallback : String(value).trim();
 }
 
+function getFirstEnv(keys: string[], fallback = ''): string {
+  for (const key of keys) {
+    const value = getEnv(key);
+    if (value) return value;
+  }
+  return fallback;
+}
+
 function getNumberEnv(key: string, fallback: number): number {
   const raw = process.env[key];
   if (!raw) return fallback;
@@ -20,9 +28,9 @@ function getNumberEnv(key: string, fallback: number): number {
  * dikirim ke frontend atau disertakan dalam respons apa pun.
  */
 export const env = {
-  apiKey: getEnv('IAMHC_API_KEY'),
-  baseUrl: getEnv('IAMHC_BASE_URL', 'https://api.iamhc.cn/v1').replace(/\/$/, ''),
-  model: getEnv('IAMHC_MODEL', 'gpt-4o-mini'),
+  apiKey: getFirstEnv(['IAMHC_API_KEY', 'GROQ_API_KEY', 'OPENAI_API_KEY']),
+  baseUrl: getFirstEnv(['IAMHC_BASE_URL', 'GROQ_BASE_URL', 'OPENAI_BASE_URL'], 'https://api.iamhc.cn/v1').replace(/\/$/, ''),
+  model: getFirstEnv(['IAMHC_MODEL', 'GROQ_MODEL', 'OPENAI_MODEL'], 'gpt-4o-mini'),
   allowedOrigins: getEnv('ALLOWED_ORIGINS')
     .split(',')
     .map((origin) => origin.trim())
@@ -36,10 +44,10 @@ export const env = {
 export function validateServerConfig(): string[] {
   const errors: string[] = [];
   if (!env.apiKey || env.apiKey === 'sk-xxxxxxxxxxxxxxxx') {
-    errors.push('IAMHC_API_KEY belum dikonfigurasi di file .env');
+    errors.push('API key AI belum dikonfigurasi di file .env (IAMHC_API_KEY / GROQ_API_KEY / OPENAI_API_KEY)');
   }
   if (!env.baseUrl) {
-    errors.push('IAMHC_BASE_URL belum dikonfigurasi di file .env');
+    errors.push('Base URL AI belum dikonfigurasi di file .env (IAMHC_BASE_URL / GROQ_BASE_URL / OPENAI_BASE_URL)');
   }
   return errors;
 }

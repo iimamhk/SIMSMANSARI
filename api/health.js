@@ -12,6 +12,8 @@ module.exports = async (req, res) => {
     status: 'ok',
     configured: Boolean(env.apiKey) && env.apiKey !== 'sk-xxxxxxxxxxxxxxxx',
     model: env.model,
+    baseUrl: env.baseUrl,
+    diagnostics: env.diagnostics,
     time: new Date().toISOString(),
   });
 };
