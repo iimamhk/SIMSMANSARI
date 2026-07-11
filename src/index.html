@@ -179,11 +179,17 @@
   <body class="min-h-screen bg-[linear-gradient(145deg,_#10b981_0%,_#5eead4_28%,_#67e8f9_56%,_#93c5fd_76%,_#c4b5fd_100%)] text-slate-900 antialiased">
     <div id="app" class="min-h-screen"></div>
     <script>
-      // Base URL backend AI (Express). Kosongkan ('') untuk pakai origin yang sama.
-      // Saat membuka app lewat Live Server (port 5500), arahkan ke Express di 3000.
-      window.__SIM_BACKEND_URL__ = 'http://localhost:3000';
+      (function resolveBackendBaseUrl() {
+        const hostname = window.location.hostname;
+        const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+        const isLocalStaticPreview = isLocalHost && window.location.port && window.location.port !== '3000';
+
+        // Production di Vercel memakai origin yang sama agar /api/* langsung aktif.
+        // Saat preview lokal dibuka dari port lain, arahkan ke server Express lokal.
+        window.__SIM_BACKEND_URL__ = isLocalStaticPreview ? 'http://localhost:3000' : '';
+      })();
     </script>
-    <script type="module" src="./firebase/firebase-config.js"></script>
-    <script type="module" src="./utils/router.js"></script>
+    <script type="module" src="/src/firebase/firebase-config.js"></script>
+    <script type="module" src="/src/utils/router.js"></script>
   </body>
 </html>

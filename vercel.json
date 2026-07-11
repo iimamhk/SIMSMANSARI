@@ -1,6 +1,23 @@
 {
   "cleanUrls": false,
   "trailingSlash": false,
+  "functions": {
+    "api/ai/generate-material.js": {
+      "maxDuration": 60
+    },
+    "api/ai/test-connection.js": {
+      "maxDuration": 30
+    },
+    "api/health.js": {
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/src/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
