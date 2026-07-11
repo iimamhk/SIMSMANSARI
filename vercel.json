@@ -14,6 +14,22 @@
   },
   "rewrites": [
     {
+      "source": "/firebase/(.*)",
+      "destination": "/src/firebase/$1"
+    },
+    {
+      "source": "/utils/(.*)",
+      "destination": "/src/utils/$1"
+    },
+    {
+      "source": "/layouts/(.*)",
+      "destination": "/src/layouts/$1"
+    },
+    {
+      "source": "/pages/(.*)",
+      "destination": "/src/pages/$1"
+    },
+    {
       "source": "/",
       "destination": "/src/index.html"
     }
