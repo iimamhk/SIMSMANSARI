@@ -8,3 +8,10 @@ coverage/
 *.log
 Thumbs.db
 .DS_Store
+
+# Backend Express (server)
+server/node_modules/
+server/dist/
+server/.env
+server/.env.*
+!server/.env.example

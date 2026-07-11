@@ -12,12 +12,13 @@ import {
 import { streamGenerateMaterial, MaterialGenerationError, getApiBase } from '../../utils/ai-client.js';
 import {
   renderMarkdown,
+  ensureKaTeXReady,
+  buildInteractiveMaterialBody,
+  buildInteractiveMaterialHtml,
   exportToWord,
   exportToPdf,
   extractTitleFromMarkdown,
 } from '../../utils/markdown-export.js';
-
-const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
 
 const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
 
@@ -29,6 +30,30 @@ const TAMPILAN_OPTIONS = [
   { value: 'multitab', label: 'Multi Tab' },
   { value: 'ilustratif', label: 'Ilustratif' },
   { value: 'ringkas', label: 'Ringkas' },
+];
+
+const GAYA_BAHASA_OPTIONS = [
+  { value: 'hangat', label: 'Hangat' },
+  { value: 'formal', label: 'Formal' },
+  { value: 'dialogis', label: 'Dialogis' },
+  { value: 'memotivasi', label: 'Memotivasi' },
+];
+
+const FITUR_MATERI_OPTIONS = [
+  { value: 'analogi', label: 'Analogi sederhana' },
+  { value: 'langkah', label: 'Langkah bertahap' },
+  { value: 'miskonsepsi', label: 'Cegah miskonsepsi' },
+  { value: 'refleksi', label: 'Pertanyaan refleksi' },
+  { value: 'kontekstual', label: 'Contoh kontekstual' },
+  { value: 'visual', label: 'Arahan visual premium' },
+];
+
+const QUICK_REVISION_ACTIONS = [
+  { value: 'ringkas', label: 'Lebih ringkas', instruction: 'Ringkas materi ini tanpa menghilangkan poin inti. Pangkas kalimat yang berulang dan buat lebih cepat dipelajari siswa.' },
+  { value: 'menarik', label: 'Lebih menarik', instruction: 'Buat materi ini lebih hidup, tidak kaku, dan lebih enak dibaca siswa. Tambahkan transisi yang natural serta variasi penjelasan yang lebih engaging.' },
+  { value: 'latihan', label: 'Tambah latihan', instruction: 'Tambahkan variasi latihan soal dan pembahasan singkat seperlunya tanpa menghapus soal yang sudah ada.' },
+  { value: 'analogi', label: 'Tambah analogi', instruction: 'Tambahkan analogi atau ilustrasi konkret pada bagian yang abstrak agar siswa lebih mudah memahami konsep.' },
+  { value: 'premium', label: 'Upgrade premium', instruction: 'Perkuat nuansa premium dan interaktif pada materi, termasuk struktur tab, callout, dan penekanan visual yang tetap rapi untuk tampilan siswa.' },
 ];
 
 function normalizeClassToken(value) {
@@ -80,6 +105,82 @@ function uid() {
   return `mai_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function dedupeAssignments(assignments = []) {
+  const map = new Map();
+  assignments.forEach((assignment) => {
+    const key = String(assignment?.id || `${assignment?.kelas_id || ''}__${assignment?.mapel_id || ''}`).trim();
+    if (!key) return;
+    map.set(key, assignment);
+  });
+  return Array.from(map.values());
+}
+
+function buildPromptAssist(input) {
+  const selectedStyles = Array.isArray(input?.tampilan) ? input.tampilan : [];
+  const styleText = selectedStyles.length ? selectedStyles.join(', ') : 'modern, premium, interaktif';
+  return [
+    'Pastikan hasil cocok dijadikan materi interaktif siswa.',
+    'Gunakan heading H2 untuk: Tujuan Pembelajaran, Materi Inti, Contoh Soal, Latihan Soal, Tugas Siswa, Ringkasan dan Catatan.',
+    'Pada Materi Inti, gunakan subbagian H3 yang pendek dan jelas.',
+    `Tampilan yang ditekankan: ${styleText}.`,
+    'Jika ada rumus matematika, tulis dengan LaTeX yang valid dan lengkap.',
+  ].join(' ');
+}
+
+function buildPromptDraft(input) {
+  const lines = [];
+  const tampilan = Array.isArray(input?.tampilan) && input.tampilan.length
+    ? input.tampilan.join(', ')
+    : 'premium, interaktif, modern';
+  const gayaBahasa = Array.isArray(input?.gayaBahasa) && input.gayaBahasa.length
+    ? input.gayaBahasa.join(', ')
+    : 'hangat, jelas, tidak kaku';
+  const fiturMateri = Array.isArray(input?.fiturMateri) && input.fiturMateri.length
+    ? input.fiturMateri.join(', ')
+    : 'langkah bertahap, contoh kontekstual, pertanyaan refleksi';
+
+  lines.push(`Buat materi ajar ${input.mapel || '[mata pelajaran]'} untuk kelas ${input.kelas || '[kelas]'} pada ${input.fase || '[fase]'} semester ${input.semester || '[semester]'}.`);
+  lines.push(`Fokus bab ${input.bab || '[bab/unit]'} dengan topik utama ${input.topik || '[topik]'}.`);
+  if (input.alokasiWaktu) lines.push(`Rancang agar cocok untuk alokasi waktu ${input.alokasiWaktu}.`);
+  if (input.kedalaman) lines.push(`Kedalaman materi yang diinginkan: ${input.kedalaman}.`);
+  lines.push(`Sajikan materi dengan gaya bahasa ${gayaBahasa}.`);
+  lines.push(`Tampilan yang diharapkan: ${tampilan}.`);
+  lines.push(`Perkaya isi dengan ${fiturMateri}.`);
+  if (input.jumlahContoh) lines.push(`Sertakan sekitar ${input.jumlahContoh} contoh yang relevan.`);
+  if (input.jumlahLatihan) lines.push(`Sertakan sekitar ${input.jumlahLatihan} latihan soal yang bervariasi.`);
+  lines.push('Gunakan heading H2 untuk bagian Tujuan Pembelajaran, Materi Inti, Contoh Soal, Latihan Soal, Tugas Siswa, dan Ringkasan dan Catatan. Gunakan subbagian H3 yang singkat dan jelas di bagian Materi Inti.');
+  lines.push('Buat hasil terasa premium, siap dibaca siswa, responsif di layar HP, dan tidak terdengar seperti template AI yang kaku.');
+  lines.push('Jika ada konsep matematika atau simbol, gunakan LaTeX yang valid.');
+  if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
+  lines.push(buildPromptAssist(input));
+
+  return lines.filter(Boolean).join('\n\n');
+}
+
+function summarizePrompt(input) {
+  return [
+    input.mapel || 'Mata pelajaran',
+    input.kelas || 'Kelas',
+    input.topik || 'Topik',
+    input.kedalaman || 'Kedalaman default',
+  ].filter(Boolean).join(' • ');
+}
+
+function buildInteractivePreview(markdown, input) {
+  const title = extractTitleFromMarkdown(markdown);
+  return buildInteractiveMaterialBody({
+    title,
+    markdown,
+    meta: {
+      subject: input.mapel,
+      className: input.kelas,
+      level: input.fase,
+      chapter: input.bab,
+      meetings: input.alokasiWaktu,
+    },
+  });
+}
+
 function premiumStyles() {
   return `
     @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
@@ -114,11 +215,44 @@ function premiumStyles() {
     .ai-preview pre code { background: transparent; padding: 0; }
     .ai-preview blockquote { border-left: 4px solid #6366f1; margin: 1em 0; padding: 8px 14px; background: #f8fafc; border-radius: 0 12px 12px 0; color: #334155; }
     .ai-preview img { max-width: 100%; border-radius: 12px; }
+    .ai-preview .math-display { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; margin: 1em 0; overflow-x: auto; }
+    .ai-preview .math-display .katex-display { text-align: left; margin: 0; }
+    .ai-preview .math-inline { display: inline-flex; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding-block: 0.08rem; }
+    .ai-preview .math-display::-webkit-scrollbar, .ai-preview .math-inline::-webkit-scrollbar { height: 5px; }
+    .ai-preview .math-display::-webkit-scrollbar-thumb, .ai-preview .math-inline::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.5); border-radius: 999px; }
     .ai-typing-dot { display:inline-block; width:6px; height:6px; margin:0 1px; border-radius:999px; background:#6366f1; animation: pulseGlow 1s ease-in-out infinite; }
+    .mai-modal-overlay { position: fixed; inset: 0; z-index: 120; display: none; align-items: center; justify-content: center; background: rgba(15,23,42,0.48); backdrop-filter: blur(6px); padding: 16px; }
+    .mai-modal-overlay.open { display: flex; }
+    .mai-modal-box { width: min(680px, 100%); max-height: min(85vh, 720px); overflow: auto; border-radius: 24px; background: rgba(255,255,255,0.97); border: 1px solid rgba(226,232,240,0.95); box-shadow: 0 28px 80px -32px rgba(15,23,42,0.35); padding: 20px; }
+    .mai-modal-box h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+    .mai-modal-sub { margin-top: 6px; font-size: 0.86rem; color: #64748b; }
+    .mai-publish-grid { display: grid; gap: 10px; margin-top: 16px; }
+    .mai-publish-item { display: flex; gap: 12px; align-items: flex-start; border: 1px solid #e2e8f0; border-radius: 18px; padding: 12px 14px; background: #fff; transition: .2s ease; }
+    .mai-publish-item:hover { border-color: #a5b4fc; background: #f8faff; }
+    .mai-publish-item input { margin-top: 2px; width: 18px; height: 18px; }
+    .mai-publish-item strong { display: block; font-size: 0.92rem; color: #0f172a; }
+    .mai-publish-item span { display: block; font-size: 0.8rem; color: #64748b; margin-top: 3px; }
+    .mai-modal-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 18px; }
   `;
 }
 
 function formHtml() {
+  const gayaBahasaCheckboxes = GAYA_BAHASA_OPTIONS.map(
+    (opt) => `
+      <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50">
+        <input type="checkbox" name="gayaBahasa" value="${opt.value}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
+        <span>${opt.label}</span>
+      </label>`
+  ).join('');
+
+  const fiturMateriCheckboxes = FITUR_MATERI_OPTIONS.map(
+    (opt) => `
+      <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50">
+        <input type="checkbox" name="fiturMateri" value="${opt.value}" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-400" />
+        <span>${opt.label}</span>
+      </label>`
+  ).join('');
+
   const tampilanCheckboxes = TAMPILAN_OPTIONS.map(
     (opt) => `
       <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50">
@@ -194,8 +328,38 @@ function formHtml() {
       </div>
 
       <div>
+        <label class="mb-1.5 block text-xs font-semibold text-slate-600">Gaya bahasa materi</label>
+        <div class="grid grid-cols-2 gap-2">${gayaBahasaCheckboxes}</div>
+      </div>
+
+      <div>
         <label class="mb-1.5 block text-xs font-semibold text-slate-600">Tampilan</label>
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">${tampilanCheckboxes}</div>
+      </div>
+
+      <div>
+        <label class="mb-1.5 block text-xs font-semibold text-slate-600">Bantuan isi premium</label>
+        <div class="grid grid-cols-2 gap-2">${fiturMateriCheckboxes}</div>
+      </div>
+
+      <div class="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-fuchsia-50 p-3.5">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Prompt AI</p>
+            <p id="prompt-summary" class="mt-1 text-xs text-slate-500">Ringkasan prompt akan muncul di sini.</p>
+          </div>
+          <button type="button" id="prompt-toggle-btn" class="btn-premium inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50" aria-expanded="false">
+            <i class="fas fa-chevron-down text-[11px]"></i>
+            <span>Buka Prompt</span>
+          </button>
+        </div>
+        <div id="prompt-panel" hidden class="mt-3 space-y-2">
+          <textarea id="prompt-editor" name="promptDraft" rows="9" class="premium-input w-full resize-y rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm leading-relaxed text-slate-800"></textarea>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="text-[11px] text-slate-500">Prompt ini otomatis dibangun dari form. Anda bisa edit manual sebelum generate.</p>
+            <button type="button" id="prompt-reset-btn" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Susun Ulang dari Form</button>
+          </div>
+        </div>
       </div>
 
       <div class="flex flex-col gap-2 pt-1 sm:flex-row">
@@ -217,6 +381,13 @@ function formHtml() {
 }
 
 function resultHtml() {
+  const revisionButtons = QUICK_REVISION_ACTIONS.map(
+    (item) => `
+      <button type="button" data-revision="${item.value}" data-revision-instruction="${escapeHtml(item.instruction)}" class="ai-revision-btn rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-50 disabled:opacity-50">
+        ${item.label}
+      </button>`
+  ).join('');
+
   return `
     <div class="flex flex-col gap-3">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -238,6 +409,23 @@ function resultHtml() {
       </div>
 
       <div id="ai-error" hidden class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"></div>
+
+      <div class="rounded-2xl border border-amber-100 bg-gradient-to-r from-amber-50 via-white to-orange-50 p-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-amber-600">Perintah Setelah Generate</p>
+            <p class="mt-1 text-xs text-slate-500">Gunakan revisi cepat agar AI memperbarui materi yang sudah ada tanpa mengubah seluruh isi secara liar.</p>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">${revisionButtons}</div>
+        <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input id="custom-revision-input" type="text" placeholder="Mis. perjelas bagian contoh soal, tambahkan analogi kehidupan sehari-hari" class="premium-input min-w-0 flex-1 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800" />
+          <button type="button" id="custom-revision-btn" class="btn-premium inline-flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 shadow-sm hover:bg-amber-50 disabled:opacity-50">
+            <i class="fas fa-sparkles"></i>
+            <span>Update Sebagian</span>
+          </button>
+        </div>
+      </div>
 
       <div class="flex flex-wrap items-center gap-2">
         <button type="button" id="save-btn" disabled class="btn-premium inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50">
@@ -273,6 +461,26 @@ function historyHtml() {
       </div>
       <div id="history-list" class="space-y-2">
         <p class="text-xs text-slate-400">Memuat riwayat...</p>
+      </div>
+    </div>
+  `;
+}
+
+function publishModalHtml() {
+  return `
+    <div id="mai-publish-modal" class="mai-modal-overlay" aria-hidden="true">
+      <div class="mai-modal-box" role="dialog" aria-modal="true" aria-labelledby="mai-publish-title">
+        <h3 id="mai-publish-title">Publish Materi ke Kelas</h3>
+        <p class="mai-modal-sub">Pilih satu atau beberapa kelas tujuan. Materi AI yang sama akan langsung dibagikan ke semua kelas yang dipilih.</p>
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <button type="button" id="mai-publish-select-all" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Pilih Semua</button>
+          <div id="mai-publish-count" class="text-xs font-medium text-slate-500">0 kelas dipilih</div>
+        </div>
+        <div id="mai-publish-class-list" class="mai-publish-grid"></div>
+        <div class="mai-modal-actions">
+          <button type="button" id="mai-publish-cancel" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
+          <button type="button" id="mai-publish-confirm" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-indigo-700">Publish ke Kelas Terpilih</button>
+        </div>
       </div>
     </div>
   `;
@@ -325,6 +533,7 @@ export async function renderGuruMateriAiPage(container) {
         ${historyHtml()}
       </section>
     </div>
+    ${publishModalHtml()}
   `,
     { accentPanel: 'from-violet-500 via-indigo-500 to-fuchsia-500' }
   );
@@ -352,11 +561,26 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   const clearBtn = root.querySelector('#clear-btn');
   const continueBtn = root.querySelector('#continue-btn');
   const saveStatus = root.querySelector('#save-status');
+  const promptSummary = root.querySelector('#prompt-summary');
+  const promptPanel = root.querySelector('#prompt-panel');
+  const promptToggleBtn = root.querySelector('#prompt-toggle-btn');
+  const promptEditor = root.querySelector('#prompt-editor');
+  const promptResetBtn = root.querySelector('#prompt-reset-btn');
+  const customRevisionInput = root.querySelector('#custom-revision-input');
+  const customRevisionBtn = root.querySelector('#custom-revision-btn');
+  const publishModal = root.querySelector('#mai-publish-modal');
+  const publishClassList = root.querySelector('#mai-publish-class-list');
+  const publishCount = root.querySelector('#mai-publish-count');
+  const publishSelectAllBtn = root.querySelector('#mai-publish-select-all');
+  const publishCancelBtn = root.querySelector('#mai-publish-cancel');
+  const publishConfirmBtn = root.querySelector('#mai-publish-confirm');
 
   let abortController = null;
   let isGenerating = false;
   let currentRecordId = null;
   let previewTimer = null;
+  let promptTouched = false;
+  const availableAssignments = dedupeAssignments(teachingAssignments);
 
   const actionButtons = [saveBtn, publishBtn, wordBtn, pdfBtn, copyBtn];
 
@@ -370,7 +594,17 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
 
     const input = readForm();
     const title = extractTitleFromMarkdown(markdown);
-    const htmlContent = renderMarkdown(markdown);
+    const htmlContent = buildInteractiveMaterialHtml({
+      title,
+      markdown,
+      meta: {
+        subject: input.mapel,
+        className: input.kelas,
+        level: input.fase,
+        chapter: input.bab,
+        meetings: input.alokasiWaktu,
+      },
+    });
 
     // Cari teaching assignment yang sesuai dengan mapel dan kelas dari form
     let assignment = null;
@@ -403,7 +637,8 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
       chapter: input.bab || '',
       meetings: input.alokasiWaktu || '',
       note: input.lainLain || `Materi dari AI - ${input.topik || ''}`,
-      html_source: `<h1>${escapeHtml(title)}</h1>${htmlContent}`,
+      html_source: htmlContent,
+      markdown_source: markdown,
       updated_at: new Date().toISOString(),
       source: 'materi_ai',
       tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
@@ -456,8 +691,9 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
 
   function schedulePreview() {
     if (previewTimer) clearTimeout(previewTimer);
-    previewTimer = setTimeout(() => {
-      preview.innerHTML = renderMarkdown(editor.value);
+    previewTimer = setTimeout(async () => {
+      await ensureKaTeXReady();
+      preview.innerHTML = buildInteractivePreview(editor.value, readForm());
     }, 200);
   }
 
@@ -488,6 +724,8 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   function readForm() {
     const data = new FormData(form);
     const tampilan = data.getAll('tampilan').map(String);
+    const gayaBahasa = data.getAll('gayaBahasa').map(String);
+    const fiturMateri = data.getAll('fiturMateri').map(String);
     return {
       mapel: String(data.get('mapel') || ''),
       kelas: String(data.get('kelas') || ''),
@@ -500,17 +738,98 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
       jumlahContoh: String(data.get('jumlahContoh') || ''),
       jumlahLatihan: String(data.get('jumlahLatihan') || ''),
       lainLain: String(data.get('lainLain') || ''),
+      gayaBahasa,
+      fiturMateri,
+      promptDraft: String(data.get('promptDraft') || ''),
       tampilan,
     };
+  }
+
+  function syncPromptDraft({ force = false } = {}) {
+    const input = readForm();
+    const autoPrompt = buildPromptDraft({ ...input, promptDraft: '' });
+    if ((force || !promptTouched) && promptEditor) {
+      promptEditor.value = autoPrompt;
+    }
+    if (promptSummary) {
+      promptSummary.textContent = summarizePrompt(input) || 'Ringkasan prompt akan muncul di sini.';
+    }
   }
 
   function updateContinueButton() {
     if (continueBtn) continueBtn.disabled = isGenerating || !editor.value.trim();
   }
 
-  async function runStream(partial) {
+  function updateRevisionButtons() {
+    const disabled = isGenerating || !editor.value.trim();
+    root.querySelectorAll('.ai-revision-btn').forEach((button) => {
+      button.disabled = disabled;
+    });
+    if (customRevisionBtn) customRevisionBtn.disabled = disabled;
+  }
+
+  function closePublishModal() {
+    if (!publishModal) return;
+    publishModal.classList.remove('open');
+    publishModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function getSelectedAssignments() {
+    if (!publishClassList) return [];
+    const selectedIds = Array.from(publishClassList.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
+    return availableAssignments.filter((assignment) => selectedIds.includes(String(assignment.id)));
+  }
+
+  function updatePublishCount() {
+    if (!publishCount || !publishConfirmBtn) return;
+    const total = getSelectedAssignments().length;
+    publishCount.textContent = `${total} kelas dipilih`;
+    publishConfirmBtn.disabled = total === 0;
+    publishConfirmBtn.classList.toggle('opacity-50', total === 0);
+  }
+
+  function openPublishModal() {
+    if (!publishModal || !publishClassList) return;
+    if (!availableAssignments.length) {
+      showError('Belum ada relasi mengajar aktif. Tambahkan kelas mengajar terlebih dahulu.');
+      return;
+    }
+
+    const currentInput = readForm();
+    const currentMapel = String(currentInput.mapel || '').trim().toLowerCase();
+    const suggestedAssignments = availableAssignments.filter((assignment) => {
+      const assignmentMapel = String(assignment.mapel_nama || '').trim().toLowerCase();
+      return !currentMapel || assignmentMapel.includes(currentMapel) || currentMapel.includes(assignmentMapel);
+    });
+    const preselectedIds = new Set((suggestedAssignments.length ? suggestedAssignments : availableAssignments).map((assignment) => String(assignment.id)));
+
+    publishClassList.innerHTML = availableAssignments.map((assignment) => {
+      const assignmentId = String(assignment.id);
+      const checked = preselectedIds.has(assignmentId) ? 'checked' : '';
+      return `
+        <label class="mai-publish-item">
+          <input type="checkbox" value="${escapeHtml(assignmentId)}" ${checked} />
+          <div>
+            <strong>${escapeHtml(assignment.kelas_nama || assignment.kelas_id || 'Tanpa kelas')}</strong>
+            <span>${escapeHtml(assignment.mapel_nama || 'Tanpa mapel')} • Pengajaran: ${escapeHtml(assignmentId)}</span>
+          </div>
+        </label>
+      `;
+    }).join('');
+
+    publishClassList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.addEventListener('change', updatePublishCount);
+    });
+
+    updatePublishCount();
+    publishModal.classList.add('open');
+    publishModal.setAttribute('aria-hidden', 'false');
+  }
+
+  async function runStream(partial, revisionInstruction = '') {
     clearError();
     const input = readForm();
+    const promptDraft = promptEditor ? String(promptEditor.value || '').trim() : '';
 
     if (!input.mapel.trim() && !input.topik.trim()) {
       showError('Minimal isi Mata Pelajaran atau Topik.');
@@ -518,24 +837,35 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     }
 
     const isContinuation = Boolean(partial && partial.trim());
-    if (!isContinuation) {
+    const isRevision = Boolean(revisionInstruction && revisionInstruction.trim());
+    const originalContent = editor.value;
+    if (!isContinuation && !isRevision) {
       editor.value = '';
       preview.innerHTML = '';
       currentRecordId = null;
+    } else if (isRevision) {
+      editor.value = '';
+      preview.innerHTML = '';
     }
     setResultAvailable(false);
     saveStatus.textContent = '';
-    statusEl.textContent = isContinuation ? 'Melanjutkan materi…' : 'Menyiapkan…';
+    statusEl.textContent = isRevision ? 'Memperbarui materi…' : isContinuation ? 'Melanjutkan materi…' : 'Menyiapkan…';
     setGenerating(true);
     updateContinueButton();
+    updateRevisionButtons();
 
     abortController = new AbortController();
 
     try {
       await streamGenerateMaterial({
-        input,
+        input: {
+          ...input,
+          promptDraft,
+        },
         temperature: 0.7,
         partial: isContinuation ? partial : undefined,
+        currentContent: isRevision ? originalContent : undefined,
+        revisionInstruction: isRevision ? revisionInstruction : undefined,
         signal: abortController.signal,
         onDelta: (chunk) => {
           editor.value += chunk;
@@ -550,7 +880,12 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
         },
       });
       setResultAvailable(Boolean(editor.value.trim()));
+      updateRevisionButtons();
     } catch (err) {
+      if (!editor.value.trim() && isRevision) {
+        editor.value = originalContent;
+        schedulePreview();
+      }
       if (err instanceof MaterialGenerationError && err.code !== 'aborted') {
         showError(err.message);
         // Bila generasi terputus di tengah jalan, hasil sebagian tetap di editor.
@@ -565,6 +900,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
       setGenerating(false);
       abortController = null;
       updateContinueButton();
+      updateRevisionButtons();
     }
   }
 
@@ -625,6 +961,57 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     schedulePreview();
     if (editor.value.trim()) setResultAvailable(true);
     updateContinueButton();
+    updateRevisionButtons();
+  });
+
+  form.addEventListener('input', (event) => {
+    if (event.target === promptEditor) return;
+    syncPromptDraft();
+  });
+
+  promptEditor?.addEventListener('input', () => {
+    promptTouched = true;
+  });
+
+  promptToggleBtn?.addEventListener('click', () => {
+    const isHidden = promptPanel?.hasAttribute('hidden');
+    if (!promptPanel) return;
+    if (isHidden) {
+      promptPanel.removeAttribute('hidden');
+      promptToggleBtn.setAttribute('aria-expanded', 'true');
+      promptToggleBtn.querySelector('span').textContent = 'Tutup Prompt';
+      const icon = promptToggleBtn.querySelector('i');
+      if (icon) icon.className = 'fas fa-chevron-up text-[11px]';
+    } else {
+      promptPanel.setAttribute('hidden', 'true');
+      promptToggleBtn.setAttribute('aria-expanded', 'false');
+      promptToggleBtn.querySelector('span').textContent = 'Buka Prompt';
+      const icon = promptToggleBtn.querySelector('i');
+      if (icon) icon.className = 'fas fa-chevron-down text-[11px]';
+    }
+  });
+
+  promptResetBtn?.addEventListener('click', () => {
+    promptTouched = false;
+    syncPromptDraft({ force: true });
+  });
+
+  root.querySelectorAll('.ai-revision-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (isGenerating || !editor.value.trim()) return;
+      const instruction = button.getAttribute('data-revision-instruction') || '';
+      runStream(null, instruction);
+    });
+  });
+
+  customRevisionBtn?.addEventListener('click', () => {
+    const instruction = String(customRevisionInput?.value || '').trim();
+    if (!instruction) {
+      showError('Tulis dulu instruksi revisi khusus yang ingin diterapkan.');
+      return;
+    }
+    if (isGenerating || !editor.value.trim()) return;
+    runStream(null, instruction);
   });
 
   root.querySelectorAll('.ai-view-btn').forEach((btn) => {
@@ -639,9 +1026,11 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     setResultAvailable(false);
     saveStatus.textContent = '';
     clearError();
+    updateRevisionButtons();
   });
 
   saveBtn.addEventListener('click', async () => {
+    await ensureKaTeXReady();
     const draftPayload = buildDraftPayloadFromAI();
     if (!draftPayload) {
       return;
@@ -689,60 +1078,104 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   });
 
   publishBtn.addEventListener('click', async () => {
+    await ensureKaTeXReady();
     const draftPayload = buildDraftPayloadFromAI();
     if (!draftPayload) {
       return;
     }
+    openPublishModal();
+  });
+
+  publishSelectAllBtn?.addEventListener('click', () => {
+    if (!publishClassList) return;
+    const checkboxes = Array.from(publishClassList.querySelectorAll('input[type="checkbox"]'));
+    const shouldCheckAll = checkboxes.some((input) => !input.checked);
+    checkboxes.forEach((input) => {
+      input.checked = shouldCheckAll;
+    });
+    updatePublishCount();
+  });
+
+  publishCancelBtn?.addEventListener('click', closePublishModal);
+  publishModal?.addEventListener('click', (event) => {
+    if (event.target === publishModal) {
+      closePublishModal();
+    }
+  });
+
+  publishConfirmBtn?.addEventListener('click', async () => {
+    await ensureKaTeXReady();
+    const draftPayload = buildDraftPayloadFromAI();
+    if (!draftPayload) {
+      closePublishModal();
+      return;
+    }
+
+    const selectedAssignments = getSelectedAssignments();
+    if (!selectedAssignments.length) {
+      showError('Pilih minimal satu kelas tujuan publish.');
+      updatePublishCount();
+      return;
+    }
 
     try {
-      // 1. Simpan ke draft dengan status published
-      const publishedDraft = {
+      const publishedAt = new Date().toISOString();
+      const input = readForm();
+      const markdown = editor.value.trim();
+      const title = extractTitleFromMarkdown(markdown);
+      const allDrafts = readDrafts();
+      const draftIndex = allDrafts.findIndex((item) => item.id === draftPayload.id);
+      const nextDraft = {
         ...draftPayload,
         status: 'published',
         visible_to_students: true,
-        published_at: new Date().toISOString(),
+        published_at: publishedAt,
+        published_targets: selectedAssignments.map((assignment) => ({
+          pengajaran_id: assignment.id,
+          kelas_id: assignment.kelas_id,
+          kelas_nama: assignment.kelas_nama,
+          mapel_id: assignment.mapel_id,
+          mapel_nama: assignment.mapel_nama,
+        })),
       };
-      
-      const allDrafts = readDrafts();
-      const existingIndex = allDrafts.findIndex((item) => item.id === publishedDraft.id);
-      
-      if (existingIndex >= 0) {
-        allDrafts[existingIndex] = publishedDraft;
-      } else {
-        allDrafts.push(publishedDraft);
-      }
-      
-      writeDrafts(allDrafts);
-      currentRecordId = publishedDraft.id;
 
-      // 2. Publish ke koleksi materi_publish (untuk siswa)
-      await savePublishedMaterial({
-        id: publishedDraft.id,
-        guru_id: publishedDraft.guru_id,
-        guru_nama: publishedDraft.guru_nama,
-        pengajaran_id: publishedDraft.pengajaran_id,
-        kelas_id: publishedDraft.kelas_id,
-        kelas_nama: publishedDraft.kelas_nama,
-        kelas_token: publishedDraft.kelas_token,
-        mapel_id: publishedDraft.mapel_id,
-        mapel_nama: publishedDraft.mapel_nama,
-        title: publishedDraft.title,
-        html: publishedDraft.html_source,
+      if (draftIndex >= 0) {
+        allDrafts[draftIndex] = nextDraft;
+      } else {
+        allDrafts.push(nextDraft);
+      }
+      writeDrafts(allDrafts);
+      currentRecordId = nextDraft.id;
+
+      await Promise.all(selectedAssignments.map((assignment) => savePublishedMaterial({
+        id: `${nextDraft.id}__${assignment.id}`,
+        source_id: nextDraft.id,
+        guru_id: nextDraft.guru_id,
+        guru_nama: nextDraft.guru_nama,
+        pengajaran_id: assignment.id,
+        kelas_id: assignment.kelas_id,
+        kelas_nama: assignment.kelas_nama,
+        kelas_token: normalizeClassToken(assignment.kelas_id || assignment.kelas_nama),
+        mapel_id: assignment.mapel_id,
+        mapel_nama: assignment.mapel_nama,
+        title: nextDraft.title,
+        note: nextDraft.note,
+        level: nextDraft.level,
+        chapter: nextDraft.chapter,
+        meetings: nextDraft.meetings,
+        html_source: nextDraft.html_source,
+        markdown_source: nextDraft.markdown_source,
         visible_to_students: true,
         status: 'published',
-        published_at: publishedDraft.published_at,
+        published_at: publishedAt,
         source: 'materi_ai',
-        tahun_ajaran_id: publishedDraft.tahun_ajaran_id,
-        semester_id: publishedDraft.semester_id,
-        created_at: publishedDraft.updated_at,
-        updated_at: publishedDraft.updated_at,
-      });
+        tahun_ajaran_id: nextDraft.tahun_ajaran_id,
+        semester_id: nextDraft.semester_id,
+        created_at: nextDraft.updated_at,
+        updated_at: nextDraft.updated_at,
+      })));
 
-      // 3. Simpan juga ke riwayat materi_ai
-      const markdown = editor.value.trim();
-      const input = readForm();
-      const title = extractTitleFromMarkdown(markdown);
-      const aiRecord = {
+      await saveMateriAi({
         id: currentRecordId,
         guru_id: userId,
         guru_nama: userName,
@@ -750,17 +1183,18 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
         markdown,
         ...input,
         published: true,
+        published_targets: nextDraft.published_targets,
         created_at: new Date().toISOString(),
-      };
-      await saveMateriAi(aiRecord);
+      });
 
-      saveStatus.textContent = 'Berhasil dipublikasikan! Materi sudah masuk ke halaman siswa dan daftar materi guru.';
+      closePublishModal();
+      saveStatus.textContent = `Berhasil dipublikasikan ke ${selectedAssignments.length} kelas.`;
       saveStatus.className = 'text-xs text-emerald-600';
       setTimeout(() => (saveStatus.textContent = ''), 4000);
       loadHistory(root, userId);
     } catch (err) {
       console.error('Error publishing material:', err);
-      saveStatus.textContent = 'Gagal memublikasikan materi.';
+      saveStatus.textContent = 'Gagal memublikasikan materi ke kelas terpilih.';
       saveStatus.className = 'text-xs text-rose-600';
     }
   });
@@ -800,6 +1234,22 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     }
   });
 
+  preview.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-mai-tab-target]');
+    if (!button) return;
+    const group = button.closest('[data-mai-tab-group]');
+    if (!group) return;
+    const target = button.getAttribute('data-mai-tab-target');
+    group.querySelectorAll('[data-mai-tab-target]').forEach((item) => {
+      const active = item.getAttribute('data-mai-tab-target') === target;
+      item.classList.toggle('is-active', active);
+      item.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    group.querySelectorAll('[data-mai-tab-panel]').forEach((panel) => {
+      panel.hidden = panel.getAttribute('data-mai-tab-panel') !== target;
+    });
+  });
+
   const historyList = root.querySelector('#history-list');
   if (historyList) {
     historyList.addEventListener('click', async (event) => {
@@ -823,23 +1273,72 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   setView('split');
   setResultAvailable(false);
   updateContinueButton();
+  updateRevisionButtons();
+  syncPromptDraft({ force: true });
+  ensureKaTeXReady().then(() => schedulePreview());
 }
 
 function loadRecordIntoForm(root, form, editor, preview, statusEl, record) {
-  ['mapel', 'kelas', 'fase', 'semester', 'bab', 'topik', 'alokasiWaktu', 'lainLain'].forEach((field) => {
+  ['mapel', 'kelas', 'fase', 'semester', 'bab', 'topik', 'alokasiWaktu', 'lainLain', 'promptDraft'].forEach((field) => {
     const el = form.elements[field];
     if (el && record[field] != null) el.value = record[field];
   });
   if (form.elements['kedalaman'] && record.kedalaman) form.elements['kedalaman'].value = record.kedalaman;
   if (record.jumlahContoh != null && form.elements['jumlahContoh']) form.elements['jumlahContoh'].value = record.jumlahContoh;
   if (record.jumlahLatihan != null && form.elements['jumlahLatihan']) form.elements['jumlahLatihan'].value = record.jumlahLatihan;
+  if (Array.isArray(record.gayaBahasa)) {
+    form.querySelectorAll('input[name="gayaBahasa"]').forEach((cb) => {
+      cb.checked = record.gayaBahasa.includes(cb.value);
+    });
+  }
+  if (Array.isArray(record.fiturMateri)) {
+    form.querySelectorAll('input[name="fiturMateri"]').forEach((cb) => {
+      cb.checked = record.fiturMateri.includes(cb.value);
+    });
+  }
   if (Array.isArray(record.tampilan)) {
     form.querySelectorAll('input[name="tampilan"]').forEach((cb) => {
       cb.checked = record.tampilan.includes(cb.value);
     });
   }
+  const promptEditor = form.elements['promptDraft'];
+  if (promptEditor && !promptEditor.value) {
+    promptEditor.value = buildPromptDraft({
+      mapel: record.mapel,
+      kelas: record.kelas,
+      fase: record.fase,
+      semester: record.semester,
+      bab: record.bab,
+      topik: record.topik,
+      alokasiWaktu: record.alokasiWaktu,
+      kedalaman: record.kedalaman,
+      jumlahContoh: record.jumlahContoh,
+      jumlahLatihan: record.jumlahLatihan,
+      lainLain: record.lainLain,
+      gayaBahasa: Array.isArray(record.gayaBahasa) ? record.gayaBahasa : [],
+      fiturMateri: Array.isArray(record.fiturMateri) ? record.fiturMateri : [],
+      tampilan: Array.isArray(record.tampilan) ? record.tampilan : [],
+    });
+  }
+  const promptSummary = root.querySelector('#prompt-summary');
+  if (promptSummary) {
+    promptSummary.textContent = summarizePrompt({
+      mapel: record.mapel,
+      kelas: record.kelas,
+      topik: record.topik,
+      kedalaman: record.kedalaman,
+    }) || 'Ringkasan prompt akan muncul di sini.';
+  }
   editor.value = record.markdown || '';
-  preview.innerHTML = renderMarkdown(record.markdown || '');
+  ensureKaTeXReady().then(() => {
+    preview.innerHTML = buildInteractivePreview(record.markdown || '', {
+      mapel: record.mapel,
+      kelas: record.kelas,
+      fase: record.fase,
+      bab: record.bab,
+      alokasiWaktu: record.alokasiWaktu,
+    });
+  });
   statusEl.textContent = 'Dimuat dari riwayat.';
   root.querySelectorAll('#save-btn,#publish-btn,#word-btn,#pdf-btn,#copy-btn').forEach((b) => (b.disabled = false));
 }

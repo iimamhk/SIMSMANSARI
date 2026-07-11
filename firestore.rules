@@ -5,6 +5,7 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if request.resource.data.keys().hasOnly([
         'id',
+        'source_id',
         'pengajaran_id',
         'kelas_id',
         'kelas_nama',
@@ -19,6 +20,9 @@ service cloud.firestore {
         'meetings',
         'note',
         'html_source',
+        'markdown_source',
+        'source',
+        'created_at',
         'updated_at',
         'tahun_ajaran_id',
         'semester_id',
@@ -34,6 +38,9 @@ service cloud.firestore {
       && request.resource.data.title is string
       && request.resource.data.html_source is string
       && request.resource.data.html_source.size() <= 200000
+      && (!('markdown_source' in request.resource.data) || request.resource.data.markdown_source is string)
+      && (!('source_id' in request.resource.data) || request.resource.data.source_id is string)
+      && (!('source' in request.resource.data) || request.resource.data.source is string)
       && request.resource.data.visible_to_students is bool;
 
       allow delete: if true;
@@ -105,7 +112,8 @@ service cloud.firestore {
         'pembayaran_buku',
         'wali_kelas',
         'kas_kelas',
-        'kas_transaksi'
+        'kas_transaksi',
+        'materi_ai'
       ];
     }
 

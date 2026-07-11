@@ -172,9 +172,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   </head>
   <body class="min-h-screen bg-[linear-gradient(145deg,_#10b981_0%,_#5eead4_28%,_#67e8f9_56%,_#93c5fd_76%,_#c4b5fd_100%)] text-slate-900 antialiased">
     <div id="app" class="min-h-screen"></div>
+    <script>
+      // Base URL backend AI (Express). Kosongkan ('') untuk pakai origin yang sama.
+      // Saat membuka app lewat Live Server (port 5500), arahkan ke Express di 3000.
+      window.__SIM_BACKEND_URL__ = 'http://localhost:3000';
+    </script>
     <script type="module" src="./firebase/firebase-config.js"></script>
     <script type="module" src="./utils/router.js"></script>
   </body>

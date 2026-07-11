@@ -10,6 +10,7 @@ import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
 import { renderGuruJurnalPage } from '../pages/guru/jurnal.js';
 import { renderGuruPenilaianPage } from '../pages/guru/penilaian.js';
 import { renderGuruMateriPage } from '../pages/guru/materi.js';
+import { renderGuruMateriAiPage } from '../pages/guru/materi-ai.js';
 import { renderGuruSystemSettingsPage } from '../pages/guru/pengatur-sistem.js';
 import { renderGuruGamePage } from '../pages/guru/game.js';
 import { renderSiswaDashboardPage } from '../pages/siswa/dashboard.js';
@@ -182,6 +183,11 @@ async function renderRoute() {
 
   if (route === '#guru/materi') {
     await renderAndFinalize(renderGuruMateriPage, container);
+    return;
+  }
+
+  if (route === '#guru/materi-ai') {
+    await renderAndFinalize(renderGuruMateriAiPage, container);
     return;
   }
 

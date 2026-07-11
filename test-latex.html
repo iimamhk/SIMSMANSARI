@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test LaTeX Rendering</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f8fafc;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h1 { color: #1e293b; margin-bottom: 24px; }
+    h2 { color: #334155; margin-top: 32px; margin-bottom: 16px; }
+    .test-section {
+      margin: 24px 0;
+      padding: 20px;
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+    .math-display {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 1rem;
+      margin: 1em 0;
+      overflow-x: auto;
+    }
+    .math-display .katex-display {
+      text-align: left;
+      margin: 0;
+    }
+    .math-inline {
+      display: inline-flex;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-block: 0.08rem;
+    }
+    #preview {
+      margin-top: 20px;
+      padding: 20px;
+      background: white;
+      border: 2px solid #6366f1;
+      border-radius: 8px;
+      min-height: 200px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 300px;
+      padding: 12px;
+      border: 2px solid #cbd5e1;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    button {
+      background: #6366f1;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #4f46e5;
+    }
+    .status {
+      margin-top: 12px;
+      padding: 12px;
+      background: #dbeafe;
+      border-left: 4px solid #3b82f6;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Test LaTeX Rendering dengan KaTeX</h1>
+    
+    <div class="test-section">
+      <h2>📝 Editor Markdown + LaTeX</h2>
+      <textarea id="editor" placeholder="Ketik markdown dengan LaTeX di sini..."># Persamaan Kuadrat
+
+Bentuk umum persamaan kuadrat adalah $ax^2 + bx + c = 0$ dengan $a \neq 0$.
+
+## Rumus ABC
+
+Untuk menyelesaikan persamaan kuadrat, gunakan rumus:
+
+$$
+x_{1,2} = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$
+
+## Diskriminan
+
+Nilai diskriminan $D = b^2 - 4ac$ menentukan jenis akar:
+
+- Jika $D > 0$: dua akar real berbeda
+- Jika $D = 0$: dua akar real sama  
+- Jika $D < 0$: tidak ada akar real
+
+## Contoh Soal
+
+Tentukan akar-akar dari $x^2 - 5x + 6 = 0$
+
+Diketahui: $a = 1$, $b = -5$, $c = 6$
+
+$$
+D = (-5)^2 - 4(1)(6) = 25 - 24 = 1
+$$
+
+Karena $D > 0$, maka ada dua akar real:
+
+$$
+x_{1,2} = \frac{5 \pm \sqrt{1}}{2} = \frac{5 \pm 1}{2}
+$$
+
+Jadi $x_1 = 3$ dan $x_2 = 2$
+
+## Rumus Lainnya
+
+Integral: $\int x^2 \, dx = \frac{x^3}{3} + C$
+
+Limit: $\lim_{x \to 0} \frac{\sin x}{x} = 1$
+
+Sigma: $\sum_{i=1}^{n} i = \frac{n(n+1)}{2}$
+</textarea>
+      <button onclick="renderTest()">🚀 Render Preview</button>
+      <div class="status" id="status">Siap untuk test. Klik tombol "Render Preview"</div>
+    </div>
+
+    <div class="test-section">
+      <h2>👁️ Preview Hasil</h2>
+      <div id="preview">Preview akan muncul di sini setelah klik tombol render...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    function renderMarkdown(markdown) {
+      const raw = String(markdown || '');
+      if (!raw.trim()) return '';
+
+      // Step 1: Proteksi LaTeX dari markdown parser dengan placeholder HTML comment
+      const mathPlaceholders = [];
+      let protectedText = raw;
+
+      // Proteksi display math $$...$$
+      protectedText = protectedText.replace(/\$\$([\s\S]+?)\$\$/g, (match, tex) => {
+        const index = mathPlaceholders.length;
+        mathPlaceholders.push({ type: 'display', tex: tex.trim() });
+        return `<!--MATH_DISPLAY_${index}-->`;
+      });
+
+      // Proteksi inline math $...$
+      protectedText = protectedText.replace(/\$([^\$\n]+?)\$/g, (match, tex) => {
+        const index = mathPlaceholders.length;
+        mathPlaceholders.push({ type: 'inline', tex: tex.trim() });
+        return `<!--MATH_INLINE_${index}-->`;
+      });
+
+      // Step 2: Parse markdown ke HTML
+      let html = protectedText;
+      try {
+        if (window.marked && typeof window.marked.parse === 'function') {
+          html = window.marked.parse(protectedText);
+        }
+      } catch (error) {
+        console.warn('Gagal merender markdown:', error);
+      }
+
+      // Step 3: Render LaTeX dengan KaTeX
+      if (window.katex) {
+        mathPlaceholders.forEach((item, index) => {
+          try {
+            const rendered = window.katex.renderToString(item.tex, {
+              displayMode: item.type === 'display',
+              throwOnError: false,
+              trust: true,
+            });
+            
+            const replacement = item.type === 'display'
+              ? `<div class="math-display">${rendered}</div>`
+              : `<span class="math-inline">${rendered}</span>`;
+            
+            const placeholder = item.type === 'display'
+              ? `<!--MATH_DISPLAY_${index}-->`
+              : `<!--MATH_INLINE_${index}-->`;
+            
+            html = html.replace(placeholder, replacement);
+          } catch (err) {
+            console.warn('Error rendering LaTeX:', err);
+            const original = item.type === 'display' ? `$$${item.tex}$$` : `$${item.tex}$`;
+            const placeholder = item.type === 'display'
+              ? `<!--MATH_DISPLAY_${index}-->`
+              : `<!--MATH_INLINE_${index}-->`;
+            html = html.replace(placeholder, original);
+          }
+        });
+      }
+
+      // Step 4: Sanitize HTML
+      if (window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+        html = window.DOMPurify.sanitize(html, {
+          ADD_TAGS: ['math', 'semantics', 'annotation', 'mrow', 'mi', 'mo', 'mn', 'span', 'div', 'mfrac', 'msup', 'msub', 'msubsup', 'munder', 'mover', 'munderover', 'mtable', 'mtr', 'mtd', 'msqrt', 'mroot'],
+          ADD_ATTR: ['encoding', 'aria-hidden', 'style', 'class', 'xmlns'],
+        });
+      }
+
+      return html;
+    }
+
+    window.renderTest = function() {
+      const editor = document.getElementById('editor');
+      const preview = document.getElementById('preview');
+      const status = document.getElementById('status');
+      
+      try {
+        const markdown = editor.value;
+        const html = renderMarkdown(markdown);
+        preview.innerHTML = html;
+        status.textContent = '✅ Render berhasil! LaTeX sudah ter-render dengan KaTeX.';
+        status.style.background = '#dcfce7';
+        status.style.borderColor = '#22c55e';
+      } catch (err) {
+        status.textContent = '❌ Error: ' + err.message;
+        status.style.background = '#fee2e2';
+        status.style.borderColor = '#ef4444';
+        console.error('Render error:', err);
+      }
+    };
+
+    // Auto-render on load
+    setTimeout(() => {
+      if (window.katex && window.marked && window.DOMPurify) {
+        renderTest();
+      }
+    }, 500);
+  </script>
+</body>
+</html>

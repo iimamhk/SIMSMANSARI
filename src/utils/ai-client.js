@@ -18,11 +18,13 @@ export class MaterialGenerationError extends Error {
   }
 }
 
-function buildRequestBody({ input, temperature, maxTokens }) {
+function buildRequestBody({ input, temperature, maxTokens, partial, currentContent, revisionInstruction }) {
   const body = { input, stream: true };
   if (typeof temperature === 'number' && Number.isFinite(temperature)) body.temperature = temperature;
   if (typeof maxTokens === 'number' && Number.isFinite(maxTokens)) body.maxTokens = maxTokens;
   if (typeof partial === 'string' && partial.trim()) body.partial = partial;
+  if (typeof currentContent === 'string' && currentContent.trim()) body.currentContent = currentContent;
+  if (typeof revisionInstruction === 'string' && revisionInstruction.trim()) body.revisionInstruction = revisionInstruction;
   return body;
 }
 
@@ -43,6 +45,8 @@ export async function streamGenerateMaterial({
   temperature,
   maxTokens,
   partial,
+  currentContent,
+  revisionInstruction,
   signal,
   onDelta,
   onDone,
@@ -53,7 +57,7 @@ export async function streamGenerateMaterial({
     response = await fetch(`${getApiBase()}/api/ai/generate-material`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildRequestBody({ input, temperature, maxTokens, partial })),
+      body: JSON.stringify(buildRequestBody({ input, temperature, maxTokens, partial, currentContent, revisionInstruction })),
       signal,
     });
   } catch (err) {

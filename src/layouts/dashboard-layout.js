@@ -24,6 +24,7 @@ export function renderLayout(title, content, opts = {}) {
     '#guru/input-nilai',
     '#guru/penilaian',
     '#guru/materi',
+    '#guru/materi-ai',
     '#guru/game',
     '#guru/kuiz',
     '#guru/pembayaran-buku',
@@ -82,6 +83,17 @@ export function renderLayout(title, content, opts = {}) {
           <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
           <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
           <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+        </svg>
+      `,
+    },
+    {
+      label: 'AI',
+      href: '#guru/materi-ai',
+      routes: ['#guru/materi-ai'],
+      icon: (active) => `
+        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
         </svg>
       `,
     },
@@ -290,6 +302,13 @@ export function renderLayout(title, content, opts = {}) {
     </svg>
   `;
 
+  const iconSparkle = (active) => `
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+  `;
+
   const iconBookSpark = (active) => `
     <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -318,6 +337,7 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Jurnal', href: '#guru/jurnal', routes: ['#guru/jurnal'], icon: iconBookSpark },
           { label: 'Input Nilai', href: '#guru/penilaian', routes: ['#guru/penilaian', '#guru/input-nilai'], icon: iconChart },
           { label: 'Materi', href: '#guru/materi', routes: ['#guru/materi'], icon: iconBookSpark },
+          { label: 'Materi AI', href: '#guru/materi-ai', routes: ['#guru/materi-ai'], icon: iconSparkle },
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
           { label: 'Kuiz', href: '#guru/kuiz', routes: ['#guru/kuiz'], icon: iconBookSpark },
           { label: 'Pembayaran', href: '#guru/pembayaran-buku', routes: ['#guru/pembayaran-buku'], icon: iconWallet },
