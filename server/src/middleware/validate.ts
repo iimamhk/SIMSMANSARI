@@ -1,4 +1,4 @@
-import type { MaterialGenerationInput } from '../types/index.js';
+import type { MaterialGenerationInput, RpmGenerationInput } from '../types/index.js';
 import { AiServiceError } from '../types/index.js';
 
 const MAX_FIELD_LENGTH = 2000;
@@ -68,6 +68,67 @@ export function sanitizeMaterialInput(raw: unknown): MaterialGenerationInput {
       .filter((item) => ALLOWED_TAMPILAN.includes(item))
       .slice(0, ALLOWED_TAMPILAN.length);
   }
+
+  if (!input.mapel && !input.topik) {
+    throw new AiServiceError('Minimal isi Mata Pelajaran atau Topik.', 400, 'missing_required');
+  }
+
+  return input;
+}
+
+const RPM_TEXT = 2000;
+const RPM_LONG = 4000;
+const RPM_ARR_ITEM = 200;
+const RPM_ARR_MAX = 24;
+
+function asRpmString(value: unknown, max: number): string {
+  return typeof value === 'string' ? value.slice(0, max).trim() : '';
+}
+
+function asRpmStringArray(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.slice(0, max).trim())
+    .filter(Boolean)
+    .slice(0, RPM_ARR_MAX);
+}
+
+/**
+ * Memvalidasi dan membersihkan payload RPM dari frontend.
+ */
+export function sanitizeRpmInput(raw: unknown): RpmGenerationInput {
+  if (!raw || typeof raw !== 'object') {
+    throw new AiServiceError('Payload tidak valid.', 400, 'invalid_payload');
+  }
+  const data = raw as Record<string, unknown>;
+
+  const input: RpmGenerationInput = {
+    namaSekolah: asRpmString(data.namaSekolah, RPM_TEXT),
+    jenjang: asRpmString(data.jenjang, 16),
+    kelas: asRpmString(data.kelas, 16),
+    semester: asRpmString(data.semester, 16),
+    fase: asRpmString(data.fase, 8),
+    mapel: asRpmString(data.mapel, RPM_TEXT),
+    topik: asRpmString(data.topik, RPM_TEXT),
+    capaian: asRpmString(data.capaian, RPM_LONG),
+    tahunPelajaran: asRpmString(data.tahunPelajaran, 32),
+    totalWaktu: asRpmString(data.totalWaktu, 16),
+    alokasiWaktu: asRpmString(data.alokasiWaktu, 32),
+    modelPembelajaran: asRpmString(data.modelPembelajaran, RPM_TEXT),
+    metode: asRpmStringArray(data.metode, RPM_ARR_ITEM),
+    media: asRpmStringArray(data.media, RPM_ARR_ITEM),
+    sumberBelajar: asRpmString(data.sumberBelajar, RPM_LONG),
+    dimensi: asRpmStringArray(data.dimensi, 200),
+    kabupaten: asRpmString(data.kabupaten, RPM_TEXT),
+    tanggalPengesahan: asRpmString(data.tanggalPengesahan, 32),
+    namaGuru: asRpmString(data.namaGuru, RPM_TEXT),
+    nipGuru: asRpmString(data.nipGuru, 64),
+    namaKepala: asRpmString(data.namaKepala, RPM_TEXT),
+    nipKepala: asRpmString(data.nipKepala, 64),
+    karakteristik: asRpmString(data.karakteristik, RPM_LONG),
+    instruksiTambahan: asRpmString(data.instruksiTambahan, RPM_LONG),
+  };
 
   if (!input.mapel && !input.topik) {
     throw new AiServiceError('Minimal isi Mata Pelajaran atau Topik.', 400, 'missing_required');

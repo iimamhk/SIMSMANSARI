@@ -18,13 +18,16 @@ export class MaterialGenerationError extends Error {
   }
 }
 
-function buildRequestBody({ input, temperature, maxTokens, partial, currentContent, revisionInstruction }) {
+function buildRequestBody({ input, temperature, maxTokens, partial, currentContent, revisionInstruction, revisionMode, profileId, model }) {
   const body = { input, stream: true };
   if (typeof temperature === 'number' && Number.isFinite(temperature)) body.temperature = temperature;
   if (typeof maxTokens === 'number' && Number.isFinite(maxTokens)) body.maxTokens = maxTokens;
   if (typeof partial === 'string' && partial.trim()) body.partial = partial;
   if (typeof currentContent === 'string' && currentContent.trim()) body.currentContent = currentContent;
   if (typeof revisionInstruction === 'string' && revisionInstruction.trim()) body.revisionInstruction = revisionInstruction;
+  if (typeof revisionMode === 'string' && revisionMode.trim()) body.revisionMode = revisionMode;
+  if (typeof profileId === 'string' && profileId.trim()) body.profileId = profileId.trim();
+  if (typeof model === 'string' && model.trim()) body.model = model.trim();
   return body;
 }
 
@@ -44,9 +47,12 @@ export async function streamGenerateMaterial({
   input,
   temperature,
   maxTokens,
+  profileId,
+  model,
   partial,
   currentContent,
   revisionInstruction,
+  revisionMode,
   signal,
   onDelta,
   onDone,
@@ -57,7 +63,7 @@ export async function streamGenerateMaterial({
     response = await fetch(`${getApiBase()}/api/ai/generate-material`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(buildRequestBody({ input, temperature, maxTokens, partial, currentContent, revisionInstruction })),
+      body: JSON.stringify(buildRequestBody({ input, temperature, maxTokens, profileId, model, partial, currentContent, revisionInstruction, revisionMode })),
       signal,
     });
   } catch (err) {
@@ -97,7 +103,7 @@ export async function streamGenerateMaterial({
       const content = data.content || '';
       full.text = content;
       onDelta?.(content);
-      onDone?.({ model: data.model || '' });
+      onDone?.({ model: data.model || '', profileId: data.profileId || '', requestedModel: data.requestedModel || '', fallbackUsed: Boolean(data.fallbackUsed), modelFallbackUsed: Boolean(data.modelFallbackUsed) });
     } catch (err) {
       const parseError = new MaterialGenerationError('Respons server tidak dapat dibaca.', 'parse_error');
       onError?.(parseError);
@@ -128,7 +134,7 @@ async function consumeSse(response, full, onDelta, onDone, onError) {
         full.text += payload.content;
         onDelta?.(payload.content);
       } else if (currentEvent === 'done') {
-        onDone?.({ model: payload.model || '' });
+        onDone?.({ model: payload.model || '', profileId: payload.profileId || '', requestedModel: payload.requestedModel || '', fallbackUsed: Boolean(payload.fallbackUsed), modelFallbackUsed: Boolean(payload.modelFallbackUsed) });
       } else if (currentEvent === 'error') {
         const error = new MaterialGenerationError(payload.error || 'Kesalahan saat generate.', payload.code || 'generation_failed');
         onError?.(error);

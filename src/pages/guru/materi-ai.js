@@ -49,12 +49,21 @@ const FITUR_MATERI_OPTIONS = [
 ];
 
 const QUICK_REVISION_ACTIONS = [
-  { value: 'ringkas', label: 'Lebih ringkas', instruction: 'Ringkas materi ini tanpa menghilangkan poin inti. Pangkas kalimat yang berulang dan buat lebih cepat dipelajari siswa.' },
-  { value: 'menarik', label: 'Lebih menarik', instruction: 'Buat materi ini lebih hidup, tidak kaku, dan lebih enak dibaca siswa. Tambahkan transisi yang natural serta variasi penjelasan yang lebih engaging.' },
-  { value: 'latihan', label: 'Tambah latihan', instruction: 'Tambahkan variasi latihan soal dan pembahasan singkat seperlunya tanpa menghapus soal yang sudah ada.' },
-  { value: 'analogi', label: 'Tambah analogi', instruction: 'Tambahkan analogi atau ilustrasi konkret pada bagian yang abstrak agar siswa lebih mudah memahami konsep.' },
-  { value: 'premium', label: 'Upgrade premium', instruction: 'Perkuat nuansa premium dan interaktif pada materi, termasuk struktur tab, callout, dan penekanan visual yang tetap rapi untuk tampilan siswa.' },
+  { value: 'ringkas', mode: 'concise', label: 'Lebih ringkas', instruction: 'Ringkas materi ini tanpa menghilangkan poin inti. Pangkas kalimat yang berulang dan buat lebih cepat dipelajari siswa.' },
+  { value: 'menarik', mode: 'engaging', label: 'Lebih menarik', instruction: 'Buat materi ini lebih hidup, tidak kaku, dan lebih enak dibaca siswa. Tambahkan transisi yang natural serta variasi penjelasan yang lebih engaging.' },
+  { value: 'latihan', mode: 'exercise', label: 'Tambah latihan', instruction: 'Tambahkan variasi latihan soal dan pembahasan singkat seperlunya tanpa menghapus soal yang sudah ada.' },
+  { value: 'analogi', mode: 'analogy', label: 'Tambah analogi', instruction: 'Tambahkan analogi atau ilustrasi konkret pada bagian yang abstrak agar siswa lebih mudah memahami konsep.' },
+  { value: 'premium', mode: 'premium', label: 'Upgrade premium', instruction: 'Perkuat nuansa premium dan interaktif pada materi, termasuk struktur tab, callout, dan penekanan visual yang tetap rapi untuk tampilan siswa.' },
 ];
+
+const QUICK_REVISION_MODE_LABELS = {
+  concise: 'ringkas',
+  engaging: 'lebih menarik',
+  exercise: 'latihan tambahan',
+  analogy: 'analogi tambahan',
+  premium: 'upgrade premium',
+  custom: 'revisi khusus',
+};
 
 function normalizeClassToken(value) {
   return String(value || '')
@@ -119,9 +128,13 @@ function buildPromptAssist(input) {
   const selectedStyles = Array.isArray(input?.tampilan) ? input.tampilan : [];
   const styleText = selectedStyles.length ? selectedStyles.join(', ') : 'modern, premium, interaktif';
   return [
+    'Kamu bertindak sebagai penulis buku dan materi digital pembelajaran berpengalaman selama 15 tahun.',
     'Pastikan hasil cocok dijadikan materi interaktif siswa.',
     'Gunakan heading H2 untuk: Tujuan Pembelajaran, Materi Inti, Contoh Soal, Latihan Soal, Tugas Siswa, Ringkasan dan Catatan.',
-    'Pada Materi Inti, gunakan subbagian H3 yang pendek dan jelas.',
+    'Pada Materi Inti, gunakan subbagian H3 yang pendek, jelas, dan bervariasi cara penyajiannya agar tidak monoton.',
+    'Pada bagian Contoh Soal, gunakan penomoran jelas seperti Contoh 1, Contoh 2, dan seterusnya disertai pembahasan langkah demi langkah.',
+    'Pada bagian Latihan Soal, gunakan penomoran jelas dan susun soal bertahap dari yang lebih mudah ke yang lebih menantang.',
+    'Buat materi kaya isi, menarik, modern, interaktif, dan tidak terdengar seperti template AI yang kaku.',
     `Tampilan yang ditekankan: ${styleText}.`,
     'Jika ada rumus matematika, tulis dengan LaTeX yang valid dan lengkap.',
   ].join(' ');
@@ -139,6 +152,7 @@ function buildPromptDraft(input) {
     ? input.fiturMateri.join(', ')
     : 'langkah bertahap, contoh kontekstual, pertanyaan refleksi';
 
+  lines.push('Kamu bertindak sebagai penulis buku dan materi digital pembelajaran berpengalaman selama 15 tahun, yang terbiasa menulis materi siswa secara kaya, menarik, dan modern.');
   lines.push(`Buat materi ajar ${input.mapel || '[mata pelajaran]'} untuk kelas ${input.kelas || '[kelas]'} pada ${input.fase || '[fase]'} semester ${input.semester || '[semester]'}.`);
   lines.push(`Fokus bab ${input.bab || '[bab/unit]'} dengan topik utama ${input.topik || '[topik]'}.`);
   if (input.alokasiWaktu) lines.push(`Rancang agar cocok untuk alokasi waktu ${input.alokasiWaktu}.`);
@@ -148,8 +162,12 @@ function buildPromptDraft(input) {
   lines.push(`Perkaya isi dengan ${fiturMateri}.`);
   if (input.jumlahContoh) lines.push(`Sertakan sekitar ${input.jumlahContoh} contoh yang relevan.`);
   if (input.jumlahLatihan) lines.push(`Sertakan sekitar ${input.jumlahLatihan} latihan soal yang bervariasi.`);
-  lines.push('Gunakan heading H2 untuk bagian Tujuan Pembelajaran, Materi Inti, Contoh Soal, Latihan Soal, Tugas Siswa, dan Ringkasan dan Catatan. Gunakan subbagian H3 yang singkat dan jelas di bagian Materi Inti.');
-  lines.push('Buat hasil terasa premium, siap dibaca siswa, responsif di layar HP, dan tidak terdengar seperti template AI yang kaku.');
+  lines.push('Gunakan heading H2 untuk bagian Tujuan Pembelajaran, Materi Inti, Contoh Soal, Latihan Soal, Tugas Siswa, dan Ringkasan dan Catatan. Gunakan subbagian H3 yang singkat, jelas, dan bervariasi di bagian Materi Inti.');
+  lines.push('Buat hasil terasa premium, siap dibaca siswa, responsif di layar HP, kaya isi, tidak monoton, dan tidak terdengar seperti template AI yang kaku.');
+  lines.push('Awali setiap bagian utama dengan pengantar singkat yang natural dan hidup. Hindari definisi yang terlalu pendek tanpa pengembangan.');
+  lines.push('Pada bagian Contoh Soal, wajib beri penomoran eksplisit seperti Contoh 1, Contoh 2, dan seterusnya.');
+  lines.push('Pada bagian Latihan Soal, wajib beri penomoran urut dan variasikan tingkat kesulitan.');
+  lines.push('Sisipkan ilustrasi, analogi, atau konteks kehidupan sehari-hari agar materi terasa dekat dengan siswa dan tidak membosankan.');
   lines.push('Jika ada konsep matematika atau simbol, gunakan LaTeX yang valid.');
   if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
   lines.push(buildPromptAssist(input));
@@ -159,6 +177,7 @@ function buildPromptDraft(input) {
 
 function summarizePrompt(input) {
   return [
+    'Persona premium aktif',
     input.mapel || 'Mata pelajaran',
     input.kelas || 'Kelas',
     input.topik || 'Topik',
@@ -236,7 +255,27 @@ function premiumStyles() {
   `;
 }
 
-function formHtml() {
+function getSelectedAiProfile(aiProfiles, selectedAiProfileId) {
+  return aiProfiles.find((profile) => profile.id === selectedAiProfileId) || aiProfiles[0] || null;
+}
+
+function getAvailableModelsForProfile(profile) {
+  if (!profile) return [];
+  const candidates = Array.isArray(profile.models) && profile.models.length ? profile.models : [profile.model];
+  return Array.from(new Set(candidates.map((model) => String(model || '').trim()).filter(Boolean)));
+}
+
+function formHtml(aiProfiles = [], selectedAiProfileId = '', selectedAiModel = '') {
+  const currentProfile = getSelectedAiProfile(aiProfiles, selectedAiProfileId);
+  const profileOptions = aiProfiles.length
+    ? aiProfiles.map((profile) => `<option value="${escapeHtml(profile.id)}" ${selectedAiProfileId === profile.id ? 'selected' : ''}>${escapeHtml(profile.label)}</option>`).join('')
+    : '<option value="">Memuat profil AI...</option>';
+  const availableModels = getAvailableModelsForProfile(currentProfile);
+  const modelOptions = [
+    `<option value="" ${!selectedAiModel ? 'selected' : ''}>Gunakan default profil (${escapeHtml(currentProfile?.model || 'memuat...')})</option>`,
+    ...availableModels.map((model) => `<option value="${escapeHtml(model)}" ${selectedAiModel === model ? 'selected' : ''}>${escapeHtml(model)}</option>`),
+  ].join('');
+
   const gayaBahasaCheckboxes = GAYA_BAHASA_OPTIONS.map(
     (opt) => `
       <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-indigo-300 hover:bg-indigo-50">
@@ -279,6 +318,21 @@ function formHtml() {
       </button>
     </div>
     <form id="materi-ai-form" class="space-y-4" novalidate>
+      <div class="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-cyan-50 p-3.5">
+        <p class="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Model AI</p>
+        <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-slate-600">Profil AI</label>
+            <select id="materi-ai-profile" class="premium-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">${profileOptions}</select>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold text-slate-600">Model AI</label>
+            <select id="materi-ai-model" class="premium-input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">${modelOptions}</select>
+          </div>
+        </div>
+        <p class="mt-2 text-xs text-slate-500">Pilih model Groq terlebih dahulu sebelum tes koneksi atau generate materi.</p>
+      </div>
+
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label class="mb-1 block text-xs font-semibold text-slate-600">Mata Pelajaran</label>
@@ -383,7 +437,7 @@ function formHtml() {
 function resultHtml() {
   const revisionButtons = QUICK_REVISION_ACTIONS.map(
     (item) => `
-      <button type="button" data-revision="${item.value}" data-revision-instruction="${escapeHtml(item.instruction)}" class="ai-revision-btn rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-50 disabled:opacity-50">
+      <button type="button" data-revision="${item.value}" data-revision-mode="${escapeHtml(item.mode || '')}" data-revision-instruction="${escapeHtml(item.instruction)}" class="ai-revision-btn rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-50 disabled:opacity-50">
         ${item.label}
       </button>`
   ).join('');
@@ -494,10 +548,34 @@ export async function renderGuruMateriAiPage(container) {
 
   // Load teaching assignments untuk keperluan draft
   let teachingAssignments = [];
+  let aiProfiles = [];
+  let selectedAiProfileId = localStorage.getItem('materi_ai_profile_id') || '';
+  let selectedAiModel = localStorage.getItem('materi_ai_model_override') || '';
   try {
     teachingAssignments = await getActiveTeachingAssignments(context);
   } catch (error) {
     console.warn('Gagal memuat relasi mengajar:', error);
+  }
+
+  try {
+    const res = await fetch(`${getApiBase()}/api/ai/model-options`, { headers: { Accept: 'application/json' } });
+    const data = await res.json().catch(() => ({}));
+    aiProfiles = Array.isArray(data?.profiles) ? data.profiles : [];
+    if (!selectedAiProfileId) {
+      selectedAiProfileId = data?.defaultProfileId || aiProfiles[0]?.id || '';
+    }
+    if (aiProfiles.length && !aiProfiles.some((profile) => profile.id === selectedAiProfileId)) {
+      selectedAiProfileId = data?.defaultProfileId || aiProfiles[0]?.id || '';
+    }
+    const currentProfile = getSelectedAiProfile(aiProfiles, selectedAiProfileId);
+    const models = getAvailableModelsForProfile(currentProfile);
+    if (selectedAiModel && !models.includes(selectedAiModel)) {
+      selectedAiModel = '';
+    }
+  } catch (error) {
+    console.warn('Gagal memuat opsi model AI:', error);
+    aiProfiles = [];
+    selectedAiModel = '';
   }
 
   const html = renderLayout(
@@ -511,7 +589,7 @@ export async function renderGuruMateriAiPage(container) {
           <div>
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-white/80">Asisten Guru • AI Aman</p>
             <h2 class="mt-1 text-xl font-bold sm:text-2xl">Generator Materi AI</h2>
-            <p class="mt-1 max-w-xl text-sm text-white/85">Buat materi pembelajaran lengkap dari OpenAI-compatible API. API key disimpan di server, tidak pernah di frontend.</p>
+            <p class="mt-1 max-w-xl text-sm text-white/85">Mari siapkan materi yang lebih hidup, rapi, dan nyaman dibaca, supaya siswa lebih mudah tertarik sejak awal pembelajaran.</p>
           </div>
           <div class="flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium">
             <i class="fas fa-shield-halved"></i><span>Aman • Streaming</span>
@@ -521,7 +599,7 @@ export async function renderGuruMateriAiPage(container) {
 
       <div class="grid grid-cols-1 gap-5 lg:grid-cols-5">
         <section class="premium-glass-strong rounded-[24px] p-4 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] sm:p-5 lg:col-span-2">
-          ${formHtml()}
+          ${formHtml(aiProfiles, selectedAiProfileId, selectedAiModel)}
         </section>
 
         <section class="premium-glass-strong rounded-[24px] p-4 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] sm:p-5 lg:col-span-3">
@@ -540,11 +618,11 @@ export async function renderGuruMateriAiPage(container) {
 
   container.innerHTML = html;
 
-  initMateriAi(container, { userId, userName, teachingAssignments, context });
+  initMateriAi(container, { userId, userName, teachingAssignments, context, aiProfiles, selectedAiProfileId, selectedAiModel });
   loadHistory(container, userId);
 }
 
-function initMateriAi(root, { userId, userName, teachingAssignments, context }) {
+function initMateriAi(root, { userId, userName, teachingAssignments, context, aiProfiles, selectedAiProfileId, selectedAiModel }) {
   const form = root.querySelector('#materi-ai-form');
   const generateBtn = root.querySelector('#generate-btn');
   const stopBtn = root.querySelector('#stop-btn');
@@ -566,6 +644,8 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   const promptToggleBtn = root.querySelector('#prompt-toggle-btn');
   const promptEditor = root.querySelector('#prompt-editor');
   const promptResetBtn = root.querySelector('#prompt-reset-btn');
+  const aiProfileSelect = root.querySelector('#materi-ai-profile');
+  const aiModelSelect = root.querySelector('#materi-ai-model');
   const customRevisionInput = root.querySelector('#custom-revision-input');
   const customRevisionBtn = root.querySelector('#custom-revision-btn');
   const publishModal = root.querySelector('#mai-publish-modal');
@@ -580,6 +660,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   let currentRecordId = null;
   let previewTimer = null;
   let promptTouched = false;
+  let lastGenerationMeta = null;
   const availableAssignments = dedupeAssignments(teachingAssignments);
 
   const actionButtons = [saveBtn, publishBtn, wordBtn, pdfBtn, copyBtn];
@@ -703,8 +784,61 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     stopBtn.disabled = !state;
     generateBtn.querySelector('span').textContent = state ? 'Menghasilkan...' : 'Generate Materi';
     if (state) {
-      statusEl.innerHTML = '<span class="ai-typing-dot"></span><span class="ai-typing-dot"></span><span class="ai-typing-dot"></span> Sedang menulis materi...';
+      statusEl.innerHTML = `<span class="ai-typing-dot"></span><span class="ai-typing-dot"></span><span class="ai-typing-dot"></span> Sedang menulis materi...${renderModelMetaText(true) ? ` <span class="text-slate-400">• ${renderModelMetaText(true)}</span>` : ''}`;
     }
+  }
+
+  function getCurrentAiProfile() {
+    return getSelectedAiProfile(aiProfiles, selectedAiProfileId);
+  }
+
+  function refreshAiModelSelect() {
+    if (!aiModelSelect) return;
+    const currentProfile = getCurrentAiProfile();
+    const models = getAvailableModelsForProfile(currentProfile);
+    if (selectedAiModel && !models.includes(selectedAiModel)) {
+      selectedAiModel = '';
+    }
+    aiModelSelect.innerHTML = [
+      `<option value="" ${!selectedAiModel ? 'selected' : ''}>Gunakan default profil (${escapeHtml(currentProfile?.model || 'memuat...')})</option>`,
+      ...models.map((model) => `<option value="${escapeHtml(model)}" ${selectedAiModel === model ? 'selected' : ''}>${escapeHtml(model)}</option>`),
+    ].join('');
+  }
+
+  function updateAiSelectionFromUi() {
+    selectedAiProfileId = aiProfileSelect?.value || selectedAiProfileId || '';
+    selectedAiModel = aiModelSelect?.value || '';
+    localStorage.setItem('materi_ai_profile_id', selectedAiProfileId);
+    if (selectedAiModel) localStorage.setItem('materi_ai_model_override', selectedAiModel);
+    else localStorage.removeItem('materi_ai_model_override');
+  }
+
+  function buildAiRequestOptions() {
+    return Object.fromEntries(
+      Object.entries({
+        profileId: selectedAiProfileId || undefined,
+        model: selectedAiModel || undefined,
+      }).filter(([, value]) => typeof value === 'string' && value.trim())
+    );
+  }
+
+  function renderModelMetaText(isGenerating = false) {
+    if (!lastGenerationMeta && !isGenerating) return '';
+    const currentProfile = getCurrentAiProfile();
+    const requestedModel = selectedAiModel || currentProfile?.model || '-';
+    const actualModel = lastGenerationMeta?.model || requestedModel;
+    const parts = [];
+    if (lastGenerationMeta?.profileId) parts.push(`profil: ${lastGenerationMeta.profileId}`);
+    parts.push(`model: ${actualModel}`);
+    if (lastGenerationMeta?.requestedModel && lastGenerationMeta.requestedModel !== actualModel) {
+      parts.push(`awal: ${lastGenerationMeta.requestedModel}`);
+    }
+    if (lastGenerationMeta?.modelFallbackUsed) parts.push('fallback model aktif');
+    if (lastGenerationMeta?.fallbackUsed) parts.push('fallback profil aktif');
+    if (isGenerating && !lastGenerationMeta) {
+      return `model diminta: ${requestedModel}`;
+    }
+    return parts.join(' • ');
   }
 
   function setResultAvailable(available) {
@@ -722,6 +856,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   }
 
   function readForm() {
+    updateAiSelectionFromUi();
     const data = new FormData(form);
     const tampilan = data.getAll('tampilan').map(String);
     const gayaBahasa = data.getAll('gayaBahasa').map(String);
@@ -826,7 +961,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     publishModal.setAttribute('aria-hidden', 'false');
   }
 
-  async function runStream(partial, revisionInstruction = '') {
+  async function runStream(partial, revisionInstruction = '', revisionMode = '') {
     clearError();
     const input = readForm();
     const promptDraft = promptEditor ? String(promptEditor.value || '').trim() : '';
@@ -849,7 +984,9 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     }
     setResultAvailable(false);
     saveStatus.textContent = '';
-    statusEl.textContent = isRevision ? 'Memperbarui materi…' : isContinuation ? 'Melanjutkan materi…' : 'Menyiapkan…';
+    lastGenerationMeta = null;
+    const revisionLabel = QUICK_REVISION_MODE_LABELS[revisionMode] || 'revisi';
+    statusEl.textContent = isRevision ? `Menyempurnakan materi (${revisionLabel})…` : isContinuation ? 'Melanjutkan materi…' : 'Menyiapkan…';
     setGenerating(true);
     updateContinueButton();
     updateRevisionButtons();
@@ -863,17 +1000,23 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
           promptDraft,
         },
         temperature: 0.7,
+        ...buildAiRequestOptions(),
         partial: isContinuation ? partial : undefined,
         currentContent: isRevision ? originalContent : undefined,
         revisionInstruction: isRevision ? revisionInstruction : undefined,
+        revisionMode: isRevision ? revisionMode : undefined,
         signal: abortController.signal,
         onDelta: (chunk) => {
           editor.value += chunk;
           editor.scrollTop = editor.scrollHeight;
           schedulePreview();
         },
-        onDone: ({ model }) => {
-          statusEl.textContent = `Selesai${model ? ` • model: ${model}` : ''}`;
+        onDone: (meta) => {
+          lastGenerationMeta = meta;
+          const detail = renderModelMetaText();
+          statusEl.textContent = isRevision
+            ? `Penyempurnaan selesai${detail ? ` • ${detail}` : ''}`
+            : `Selesai${detail ? ` • ${detail}` : ''}`;
         },
         onError: (err) => {
           showError(err.message || 'Gagal menghasilkan materi.');
@@ -939,10 +1082,12 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
 
   if (testConnBtn) {
     testConnBtn.addEventListener('click', async () => {
+      updateAiSelectionFromUi();
       renderConnStatus('checking', 'Mengecek...');
       testConnBtn.disabled = true;
       try {
-        const res = await fetch(`${getApiBase()}/api/ai/test-connection`, { headers: { Accept: 'application/json' } });
+        const params = new URLSearchParams(buildAiRequestOptions());
+        const res = await fetch(`${getApiBase()}/api/ai/test-connection${params.toString() ? `?${params.toString()}` : ''}`, { headers: { Accept: 'application/json' } });
         const data = await res.json();
         if (data && data.ok) {
           renderConnStatus('ok', `Terhubung${data.model ? ` • ${data.model}` : ''}`);
@@ -956,6 +1101,17 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
       }
     });
   }
+
+  aiProfileSelect?.addEventListener('change', () => {
+    updateAiSelectionFromUi();
+    refreshAiModelSelect();
+    renderConnStatus('idle', 'Profil berubah, tes ulang');
+  });
+
+  aiModelSelect?.addEventListener('change', () => {
+    updateAiSelectionFromUi();
+    renderConnStatus('idle', 'Model berubah, tes ulang');
+  });
 
   editor.addEventListener('input', () => {
     schedulePreview();
@@ -1000,7 +1156,8 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
     button.addEventListener('click', () => {
       if (isGenerating || !editor.value.trim()) return;
       const instruction = button.getAttribute('data-revision-instruction') || '';
-      runStream(null, instruction);
+      const revisionMode = button.getAttribute('data-revision-mode') || '';
+      runStream(null, instruction, revisionMode);
     });
   });
 
@@ -1011,7 +1168,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
       return;
     }
     if (isGenerating || !editor.value.trim()) return;
-    runStream(null, instruction);
+    runStream(null, instruction, 'custom');
   });
 
   root.querySelectorAll('.ai-view-btn').forEach((btn) => {
@@ -1271,6 +1428,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context }) 
   }
 
   setView('split');
+  refreshAiModelSelect();
   setResultAvailable(false);
   updateContinueButton();
   updateRevisionButtons();

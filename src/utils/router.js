@@ -27,6 +27,7 @@ import { renderGuruWaliKelasPage } from '../pages/guru/wali-kelas.js';
 import { renderGuruKasKelasPage } from '../pages/guru/wali/kas-kelas.js';
 import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
 import { renderSiswaKasKelasPage } from '../pages/siswa/kas-kelas.js';
+import { renderGuruRpmAiPage } from '../pages/guru/rpm-ai.js';
 import { renderChatListPage } from '../pages/chat/list.js';
 import { renderChatRoomPage } from '../pages/chat/room.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
@@ -230,6 +231,11 @@ async function renderRoute() {
     return;
   }
 
+  if (route === '#guru/rpm-ai') {
+    await renderAndFinalize(renderGuruRpmAiPage, container);
+    return;
+  }
+
   if (route === '#siswa/dashboard') {
     await renderAndFinalize(renderSiswaDashboardPage, container);
     return;
@@ -275,16 +281,13 @@ async function renderRoute() {
     return;
   }
 
-  if (route === '#chat' || route.startsWith('#chat/')) {
-    if (!getSession()) {
-      await renderAndFinalize(renderLoginPage, container);
-      return;
-    }
-    if (route.startsWith('#chat/room/')) {
-      await renderAndFinalize(renderChatRoomPage, container, route.replace('#chat/room/', ''));
-    } else {
-      await renderAndFinalize(renderChatListPage, container);
-    }
+  if (route.startsWith('#chat/room/')) {
+    await renderAndFinalize(renderChatRoomPage, container, route.replace('#chat/room/', ''));
+    return;
+  }
+
+  if (route === '#chat') {
+    await renderAndFinalize(renderChatListPage, container);
     return;
   }
 

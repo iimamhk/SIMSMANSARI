@@ -1028,3 +1028,66 @@ export async function getChatRoom(roomId) {
     return null;
   }
 }
+
+// ===================== FITUR RPM AI (Draft) =====================
+
+export async function saveRpmDraft(uid, title, sections, formData, version = 1) {
+  if (!db) return null;
+  const now = new Date().toISOString();
+  const docId = `${uid}_rpm_${Date.now()}`;
+  const draft = {
+    uid,
+    title,
+    sections,
+    formData,
+    version,
+    createdAt: now,
+    updatedAt: now,
+  };
+  try {
+    await db.collection('rpm_drafts').doc(docId).set(draft);
+    return { id: docId, ...draft };
+  } catch (error) {
+    console.warn('Gagal menyimpan draft RPM:', error);
+    return null;
+  }
+}
+
+export async function getRpmDrafts(uid, limit = 20) {
+  if (!db) return [];
+  try {
+    const snapshot = await db
+      .collection('rpm_drafts')
+      .where('uid', '==', uid)
+      .orderBy('updatedAt', 'desc')
+      .limit(limit)
+      .get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.warn('Gagal mengambil draft RPM:', error);
+    return [];
+  }
+}
+
+export async function getRpmDraftById(id) {
+  if (!db) return null;
+  try {
+    const snap = await db.collection('rpm_drafts').doc(id).get();
+    return snap.exists ? { id: snap.id, ...snap.data() } : null;
+  } catch (error) {
+    console.warn('Gagal mengambil draft RPM oleh ID:', error);
+    return null;
+  }
+}
+
+export async function updateRpmDraft(id, updates) {
+  if (!db) return false;
+  try {
+    const updatedAt = new Date().toISOString();
+    await db.collection('rpm_drafts').doc(id).update({ ...updates, updatedAt });
+    return true;
+  } catch (error) {
+    console.warn('Gagal mengupdate draft RPM:', error);
+    return false;
+  }
+}

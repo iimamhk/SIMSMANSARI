@@ -337,13 +337,8 @@ function sanitizeFilename(name) {
   return (String(name || 'materi').trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '_') || 'materi').slice(0, 80);
 }
 
-function buildWordDocument(title, html) {
-  return `<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<title>${title}</title>
-<style>
+function buildWordDocument(title, html, options = {}) {
+  const styles = String(options.styles || `
   body { font-family: Calibri, Arial, sans-serif; line-height: 1.6; color: #1f2937; max-width: 900px; margin: 32px auto; padding: 0 24px; }
   h1,h2,h3,h4 { color: #111827; margin-top: 1.2em; }
   table { border-collapse: collapse; width: 100%; margin: 12px 0; }
@@ -353,6 +348,14 @@ function buildWordDocument(title, html) {
   blockquote { border-left: 4px solid #6366f1; margin: 12px 0; padding: 8px 14px; background: #f8fafc; color: #334155; }
   img { max-width: 100%; }
   code { background: #f1f5f9; padding: 2px 6px; border-radius: 6px; }
+  `).trim();
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>${title}</title>
+<style>
+  ${styles}
 </style>
 </head>
 <body>
@@ -361,8 +364,8 @@ ${html}
 </html>`;
 }
 
-export function exportToWord(title, html) {
-  const document = buildWordDocument(title, html);
+export function exportToWord(title, html, options = {}) {
+  const document = buildWordDocument(title, html, options);
   const blob = new Blob(['﻿', document], { type: 'application/msword' });
   triggerDownload(blob, `${sanitizeFilename(title)}.doc`);
 }

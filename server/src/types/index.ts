@@ -19,9 +19,52 @@ export interface GenerateMaterialRequest {
   stream?: boolean;
   temperature?: number;
   maxTokens?: number;
+  profileId?: string;
+  model?: string;
   partial?: string;
   currentContent?: string;
   revisionInstruction?: string;
+  revisionMode?: string;
+}
+
+export interface RpmGenerationInput {
+  namaSekolah: string;
+  jenjang: string;
+  kelas: string;
+  semester: string;
+  fase: string;
+  mapel: string;
+  topik: string;
+  capaian: string;
+  tahunPelajaran: string;
+  totalWaktu: string;
+  alokasiWaktu: string;
+  modelPembelajaran: string;
+  metode: string[];
+  media: string[];
+  sumberBelajar: string;
+  dimensi: string[];
+  kabupaten: string;
+  tanggalPengesahan: string;
+  namaGuru: string;
+  nipGuru: string;
+  namaKepala: string;
+  nipKepala: string;
+  karakteristik: string;
+  instruksiTambahan: string;
+}
+
+export interface GenerateRpmRequest {
+  input: Partial<RpmGenerationInput>;
+  stream?: boolean;
+  temperature?: number;
+  maxTokens?: number;
+  profileId?: string;
+  model?: string;
+  sectionTitle?: string;
+  context?: string;
+  currentSection?: string;
+  partial?: string;
 }
 
 export interface ChatMessage {

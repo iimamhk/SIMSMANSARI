@@ -1,12 +1,15 @@
 import type { ChatMessage, GenerateMaterialResult } from '../types/index.js';
 import { AiServiceError } from '../types/index.js';
-import { env } from '../config/env.js';
+import { env, getAiProfileModelCandidates, resolveAiProfile } from '../config/env.js';
 
 interface StreamOptions {
+  profileId?: string;
   model?: string;
   temperature?: number;
   maxTokens?: number;
   signal?: AbortSignal;
+  onModelSelected?: (model: string) => void;
+  onModelFallback?: (fromModel: string, toModel: string) => void;
 }
 
 interface OpenAiDelta {
@@ -53,58 +56,73 @@ export async function* streamChatCompletions(
   messages: ChatMessage[],
   options: StreamOptions = {},
 ): AsyncGenerator<string, void, unknown> {
-  if (!env.apiKey) {
+  const profile = resolveAiProfile(options.profileId);
+  if (!profile?.apiKey) {
     throw new AiServiceError('Layanan AI belum dikonfigurasi (API key kosong).', 503, 'not_configured');
   }
 
-  const model = options.model || env.model;
   const temperature = Number.isFinite(options.temperature)
     ? Math.min(Math.max(Number(options.temperature), 0), 1.5)
     : 0.7;
   const maxTokens = clampTokens(options.maxTokens);
+  const url = `${profile.baseUrl}/chat/completions`;
+  const modelCandidates = getAiProfileModelCandidates(profile.id, options.model);
+  let response: Response | null = null;
+  let clear = () => {};
 
-  const url = `${env.baseUrl}/chat/completions`;
-  const { signal, clear } = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
+  for (let modelIndex = 0; modelIndex < modelCandidates.length; modelIndex += 1) {
+    const candidateModel = modelCandidates[modelIndex];
+    const timeout = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
+    clear = timeout.clear;
 
-  console.log(`[AI] Calling upstream: ${url} with model ${model}`);
-  
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      signal,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.apiKey}`,
-        // Mencegah proxy menyimpan respons yang mungkin berisi data sensitif.
-        'Cache-Control': 'no-store',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        stream: true,
-      }),
-    });
-  } catch (error) {
-    clear();
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new AiServiceError('Waktu permintaan ke layanan AI habis.', 504, 'upstream_timeout');
+    console.log(`[AI] Calling upstream: ${url} with model ${candidateModel}`);
+
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        signal: timeout.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${profile.apiKey}`,
+          'Cache-Control': 'no-store',
+        },
+        body: JSON.stringify({
+          model: candidateModel,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: true,
+        }),
+      });
+    } catch (error) {
+      clear();
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new AiServiceError('Waktu permintaan ke layanan AI habis.', 504, 'upstream_timeout');
+      }
+      throw new AiServiceError('Gagal terhubung ke layanan AI.', 502, 'upstream_unreachable');
     }
-    throw new AiServiceError('Gagal terhubung ke layanan AI.', 502, 'upstream_unreachable');
-  }
 
-  if (!response.ok) {
-    clear();
+    if (response.ok) {
+      options.onModelSelected?.(candidateModel);
+      break;
+    }
+
     let detail = '';
     try {
       detail = (await response.text()).slice(0, 300);
     } catch {
       detail = '';
     }
-    // Hanya dicatat di server log; tidak dikirim ke klien.
+    clear();
     if (detail) console.warn(`[AI upstream ${response.status}] ${detail}`);
+
+    if (response.status === 429 && modelIndex < modelCandidates.length - 1) {
+      const nextModel = modelCandidates[modelIndex + 1];
+      options.onModelFallback?.(candidateModel, nextModel);
+      console.warn(`[AI model fallback] Model ${candidateModel} terkena limit kuota, mencoba model ${nextModel}.`);
+      response = null;
+      continue;
+    }
     if (response.status === 401 || response.status === 403) {
       throw new AiServiceError('Akses layanan AI ditolak (periksa API key).', 502, 'auth_failed');
     }
@@ -112,6 +130,10 @@ export async function* streamChatCompletions(
       throw new AiServiceError('Kuota layanan AI terlampaui, coba beberapa saat lagi.', 429, 'rate_limited');
     }
     throw new AiServiceError(`Layanan AI mengembalikan kesalahan (${response.status}).`, 502, 'upstream_error');
+  }
+
+  if (!response) {
+    throw new AiServiceError('Kuota layanan AI terlampaui, coba beberapa saat lagi.', 429, 'rate_limited');
   }
 
   const contentType = response.headers.get('content-type') || '';
@@ -189,6 +211,7 @@ export async function generateCompletion(
 ): Promise<GenerateMaterialResult> {
   let content = '';
   let usage: GenerateMaterialResult['usage'] = null;
+  const profile = resolveAiProfile(options.profileId);
 
   for await (const delta of streamChatCompletions(messages, { ...options, signal: options.signal })) {
     content += delta;
@@ -198,7 +221,7 @@ export async function generateCompletion(
   // cukup kembalikan hasil teks dan model yang dipakai.
   return {
     content,
-    model: options.model || env.model,
+    model: options.model || profile.model || env.model,
     finishReason: content ? 'stop' : null,
     usage,
   };
@@ -215,25 +238,35 @@ export interface ConnectionTestResult {
  * Uji koneksi ke layanan AI dengan permintaan sangat kecil (1 token).
  * Digunakan oleh tombol "Tes Koneksi" di frontend. Tidak mengubah state.
  */
-export async function testUpstreamConnection(): Promise<ConnectionTestResult> {
-  if (!env.apiKey || env.apiKey === 'sk-xxxxxxxxxxxxxxxx') {
-    return { ok: false, model: env.model, error: 'API key belum dikonfigurasi di server.', code: 'not_configured' };
+export async function testUpstreamConnection(options: { profileId?: string; model?: string } = {}): Promise<ConnectionTestResult> {
+  const profile = resolveAiProfile(options.profileId);
+  if (!profile?.apiKey || profile.apiKey === 'sk-xxxxxxxxxxxxxxxx') {
+    return { ok: false, model: options.model || profile?.model || env.model, error: 'API key belum dikonfigurasi di server.', code: 'not_configured' };
   }
 
   try {
     let received = false;
+    let activeModel = options.model || profile.model || env.model;
     for await (const _delta of streamChatCompletions(
       [{ role: 'user', content: 'ping' }],
-      { maxTokens: 4, temperature: 0 },
+      {
+        maxTokens: 4,
+        temperature: 0,
+        profileId: profile.id,
+        model: options.model,
+        onModelSelected: (model) => {
+          activeModel = model;
+        },
+      },
     )) {
       received = true;
       break;
     }
-    return { ok: received, model: env.model };
+    return { ok: received, model: activeModel };
   } catch (error) {
     if (error instanceof AiServiceError) {
-      return { ok: false, model: env.model, error: error.message, code: error.code };
+      return { ok: false, model: options.model || profile.model || env.model, error: error.message, code: error.code };
     }
-    return { ok: false, model: env.model, error: 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
+    return { ok: false, model: options.model || profile.model || env.model, error: 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
   }
 }

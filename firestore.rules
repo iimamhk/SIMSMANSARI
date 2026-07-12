@@ -114,9 +114,9 @@ service cloud.firestore {
         'kas_kelas',
         'kas_transaksi',
         'materi_ai',
-        'pengumuman',
+'pengumuman',
         'pengumuman_reads',
-        'chat_rooms'
+        'rpm_drafts'
       ];
     }
 
