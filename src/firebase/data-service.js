@@ -620,3 +620,411 @@ export async function getClassMembers(context, kelasId) {
     return getDemoClassMembers(context, kelasId);
   }
 }
+
+/* =========================================================================
+   PENGUMUMAN (Announcements)
+   Pola: mirror materi/materi_reads — Firestore + fallback localStorage demo.
+   Dokumen pengumuman:
+     { id, judul, isi, guru_id, guru_nama,
+       kelas_ids: ["x_1", ...], kelas_nama_csv: "X.1, ...",
+       created_at, updated_at, tahun_ajaran_id, semester_id }
+   Dokumen pengumuman_reads (id deterministik `${pengumuman_id}__${siswa_id}`):
+     { id, pengumuman_id, siswa_id, siswa_nama, first_read_at, last_read_at }
+   ========================================================================= */
+
+const PENGUMUMAN_KEY = 'simguru_pengumuman';
+const PENGUMUMAN_COLLECTION = 'pengumuman';
+const PENGUMUMAN_READS_KEY = 'simguru_pengumuman_reads';
+const PENGUMUMAN_READS_COLLECTION = 'pengumuman_reads';
+
+function readLocalPengumuman() {
+  try {
+    return JSON.parse(localStorage.getItem(PENGUMUMAN_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPengumuman(items) {
+  localStorage.setItem(PENGUMUMAN_KEY, JSON.stringify(items));
+}
+
+function readLocalPengumumanReads() {
+  try {
+    return JSON.parse(localStorage.getItem(PENGUMUMAN_READS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPengumumanReads(reads) {
+  localStorage.setItem(PENGUMUMAN_READS_KEY, JSON.stringify(reads));
+}
+
+function getPengumumanKelasIds(item) {
+  if (Array.isArray(item?.kelas_ids) && item.kelas_ids.length) {
+    return item.kelas_ids.map((id) => normalizeClassKey(id)).filter(Boolean);
+  }
+  // Cadangan: fallback ke kelas_id tunggal lama
+  return item?.kelas_id ? [normalizeClassKey(item.kelas_id)] : [];
+}
+
+export async function getAllPengumuman() {
+  if (!db) {
+    return readLocalPengumuman();
+  }
+
+  try {
+    const snapshot = await db.collection(PENGUMUMAN_COLLECTION).get();
+    const firestoreItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const localItems = readLocalPengumuman();
+    const merged = mergeMaterialsById(firestoreItems, localItems);
+    writeLocalPengumuman(merged);
+    return merged;
+  } catch (error) {
+    console.warn('Gagal mengambil pengumuman dari Firestore, memakai data cadangan:', error);
+    return readLocalPengumuman();
+  }
+}
+
+export async function getPengumumanForGuru(context, guruId) {
+  const normalizedGuruId = String(guruId || '').trim().toLowerCase();
+  if (!normalizedGuruId) {
+    return [];
+  }
+  const items = await getAllPengumuman();
+  return items
+    .filter((item) => String(item.guru_id || '').trim().toLowerCase() === normalizedGuruId)
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+
+export async function getPengumumanForSiswa(context, kelasId) {
+  const normalizedKelas = normalizeClassKey(kelasId);
+  if (!normalizedKelas) {
+    return [];
+  }
+  const items = await getAllPengumuman();
+  return items
+    .filter((item) => getPengumumanKelasIds(item).includes(normalizedKelas))
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+}
+
+export async function savePengumuman(payload, id = null) {
+  const nowIso = new Date().toISOString();
+  const cleaned = {
+    judul: String(payload?.judul || '').trim(),
+    isi: String(payload?.isi || '').trim(),
+    guru_id: String(payload?.guru_id || '').trim(),
+    guru_nama: String(payload?.guru_nama || '').trim(),
+    kelas_ids: Array.isArray(payload?.kelas_ids) ? payload.kelas_ids.map((id) => normalizeClassKey(id)).filter(Boolean) : [],
+    kelas_nama_csv: String(payload?.kelas_nama_csv || '').trim(),
+    tahun_ajaran_id: String(payload?.tahun_ajaran_id || '').trim(),
+    semester_id: String(payload?.semester_id || '').trim(),
+  };
+
+  if (id) {
+    const existing = readLocalPengumuman().find((item) => item.id === id);
+    cleaned.created_at = existing?.created_at || payload?.created_at || nowIso;
+    cleaned.updated_at = nowIso;
+  } else {
+    cleaned.created_at = payload?.created_at || nowIso;
+    cleaned.updated_at = nowIso;
+  }
+
+  if (!db) {
+    const localItems = readLocalPengumuman();
+    const docId = id || `pengumuman_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const fullPayload = { ...cleaned, id: docId };
+    const existingIndex = localItems.findIndex((item) => item.id === docId);
+    if (existingIndex >= 0) {
+      localItems[existingIndex] = { ...localItems[existingIndex], ...fullPayload };
+    } else {
+      localItems.push(fullPayload);
+    }
+    writeLocalPengumuman(localItems);
+    return fullPayload;
+  }
+
+  const saved = await saveDocument(PENGUMUMAN_COLLECTION, cleaned, id || undefined);
+  const localItems = readLocalPengumuman();
+  const fullPayload = { ...cleaned, id: saved.id };
+  const existingIndex = localItems.findIndex((item) => item.id === saved.id);
+  if (existingIndex >= 0) {
+    localItems[existingIndex] = { ...localItems[existingIndex], ...fullPayload };
+  } else {
+    localItems.push(fullPayload);
+  }
+  writeLocalPengumuman(localItems);
+  return fullPayload;
+}
+
+export async function deletePengumuman(id) {
+  const pengumumanId = String(id || '').trim();
+  if (!pengumumanId) {
+    return false;
+  }
+
+  if (db) {
+    try {
+      await db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId).delete();
+    } catch (error) {
+      console.warn('Gagal menghapus pengumuman dari Firestore:', error);
+    }
+  }
+
+  writeLocalPengumuman(readLocalPengumuman().filter((item) => item.id !== pengumumanId));
+
+  // Hapus juga catatan baca terkait
+  writeLocalPengumumanReads(
+    readLocalPengumumanReads().filter((item) => String(item.pengumuman_id || '') !== pengumumanId)
+  );
+
+  return true;
+}
+
+export async function recordPengumumanRead(payload) {
+  const pengumumanId = String(payload?.pengumuman_id || '').trim();
+  const siswaId = String(payload?.siswa_id || '').trim();
+  if (!pengumumanId || !siswaId) {
+    return null;
+  }
+
+  const readId = `${normalizeTrackingToken(pengumumanId)}__${normalizeTrackingToken(siswaId)}`;
+  const nowIso = new Date().toISOString();
+  const localReads = readLocalPengumumanReads();
+  const existing = localReads.find((item) => item.id === readId) || {};
+  const nextPayload = {
+    ...existing,
+    ...payload,
+    id: readId,
+    pengumuman_id: pengumumanId,
+    siswa_id: siswaId,
+    first_read_at: existing.first_read_at || nowIso,
+    last_read_at: nowIso,
+  };
+
+  if (db) {
+    try {
+      await db.collection(PENGUMUMAN_READS_COLLECTION).doc(readId).set(nextPayload, { merge: true });
+    } catch (error) {
+      console.warn('Gagal mencatat baca pengumuman ke Firestore:', error);
+    }
+  }
+
+  const nextLocalReads = localReads.filter((item) => item.id !== readId);
+  nextLocalReads.push(nextPayload);
+  writeLocalPengumumanReads(nextLocalReads);
+  return nextPayload;
+}
+
+export async function getPengumumanReadMap(siswaId) {
+  const normalizedSiswa = normalizeTrackingToken(siswaId);
+  const map = new Map();
+  if (!normalizedSiswa) {
+    return map;
+  }
+  readLocalPengumumanReads()
+    .filter((item) => normalizeTrackingToken(item?.siswa_id) === normalizedSiswa)
+    .forEach((item) => {
+      map.set(`${normalizeTrackingToken(item.pengumuman_id)}__${normalizedSiswa}`, item);
+    });
+  return map;
+}
+
+export async function getPengumumanReadCounts() {
+  // Mengembalikan { [pengumuman_id]: jumlah_pembaca_unik }
+  const counts = {};
+  readLocalPengumumanReads().forEach((item) => {
+    const key = String(item?.pengumuman_id || '').trim();
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+}
+
+// ===================== FITUR PESAN (CHAT) =====================
+
+function getChatRoomId(uidA, uidB) {
+  return ['chat', ...[uidA, uidB].map((v) => String(v).trim().toLowerCase()).sort()].join('_');
+}
+
+export async function getChatContacts(excludeUid) {
+  const filterFn = (u) => u && u.username && u.username !== excludeUid;
+  if (!db) {
+    return getCachedUsers().filter(filterFn);
+  }
+  try {
+    const snapshot = await db.collection('users').get();
+    return snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter(filterFn);
+  } catch (error) {
+    console.warn('Gagal memuat kontak chat:', error);
+    return getCachedUsers().filter(filterFn);
+  }
+}
+
+export async function getChatRoomsForUser(uid) {
+  if (!db) return [];
+  try {
+    const snapshot = await db.collection('chat_rooms').where('participants', 'array-contains', uid).get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.warn('Gagal memuat daftar chat:', error);
+    return [];
+  }
+}
+
+export function subscribeChatRooms(uid, callback) {
+  if (typeof callback !== 'function') return () => {};
+  if (!db) {
+    let cancelled = false;
+    const poll = async () => {
+      if (cancelled) return;
+      const data = await getChatRoomsForUser(uid);
+      callback(data);
+      if (!cancelled) setTimeout(poll, 4000);
+    };
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }
+  try {
+    const unsubscribe = db
+      .collection('chat_rooms')
+      .where('participants', 'array-contains', uid)
+      .onSnapshot(
+        (snapshot) => callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))),
+        (error) => console.warn('Gagal memantau daftar chat:', error)
+      );
+    return unsubscribe;
+  } catch (error) {
+    return () => {};
+  }
+}
+
+export async function findOrCreateChatRoom(myUid, myNama, otherUser) {
+  const otherUid = String(otherUser?.username || otherUser?.id || '').trim();
+  const otherNama = otherUser?.nama || otherUser?.username || '';
+  if (!otherUid || otherUid === myUid) return null;
+  const roomId = getChatRoomId(myUid, otherUid);
+  const nowIso = new Date().toISOString();
+  const participants = [myUid, otherUid];
+  const participantNama = { [myUid]: myNama, [otherUid]: otherNama };
+  const unread = { [myUid]: 0, [otherUid]: 0 };
+  const payload = {
+    id: roomId,
+    participants,
+    participant_nama: participantNama,
+    tipe: 'private',
+    last_message: '',
+    last_sender_id: '',
+    last_at: nowIso,
+    created_at: nowIso,
+    created_by: myUid,
+    unread,
+  };
+  if (db) {
+    try {
+      await db.collection('chat_rooms').doc(roomId).set(payload, { merge: true });
+    } catch (error) {
+      console.warn('Gagal membuat ruang chat:', error);
+    }
+  }
+  return { id: roomId, ...payload };
+}
+
+export async function sendChatMessage(roomId, senderId, senderNama, text) {
+  const clean = String(text || '').trim();
+  if (!clean || !db) return null;
+  const nowIso = new Date().toISOString();
+  const msgRef = db.collection('chat_rooms').doc(roomId).collection('messages').doc();
+  const message = {
+    id: msgRef.id,
+    sender_id: senderId,
+    sender_nama: senderNama,
+    text: clean,
+    created_at: nowIso,
+    edited_at: '',
+    type: 'text',
+  };
+  await msgRef.set(message);
+
+  try {
+    const roomSnap = await db.collection('chat_rooms').doc(roomId).get();
+    const room = roomSnap.exists ? roomSnap.data() : {};
+    const participants = Array.isArray(room.participants) ? room.participants : [];
+    const unread = room.unread && typeof room.unread === 'object' ? { ...room.unread } : {};
+    participants.forEach((p) => {
+      if (p !== senderId) unread[p] = (unread[p] || 0) + 1;
+    });
+    await db.collection('chat_rooms').doc(roomId).update({
+      last_message: clean,
+      last_sender_id: senderId,
+      last_at: nowIso,
+      unread,
+    });
+  } catch (error) {
+    console.warn('Gagal memperbarui metadata ruang chat:', error);
+  }
+  return message;
+}
+
+export function subscribeChatMessages(roomId, callback) {
+  if (typeof callback !== 'function') return () => {};
+  if (!db) return () => {};
+  try {
+    const fieldPath = window.firebase.firestore.FieldPath.documentId();
+    const q = db
+      .collection('chat_rooms').doc(roomId).collection('messages')
+      .orderBy('created_at', 'desc')
+      .orderBy(fieldPath, 'desc')
+      .limit(30);
+    const unsubscribe = q.onSnapshot(
+      (snapshot) => callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))),
+      (error) => console.warn('Gagal memantau pesan:', error)
+    );
+    return unsubscribe;
+  } catch (error) {
+    return () => {};
+  }
+}
+
+export async function loadOlderChatMessages(roomId, oldestDoc, limit = 30) {
+  if (!db || !oldestDoc) return [];
+  try {
+    const fieldPath = window.firebase.firestore.FieldPath.documentId();
+    const q = db
+      .collection('chat_rooms').doc(roomId).collection('messages')
+      .orderBy('created_at', 'desc')
+      .orderBy(fieldPath, 'desc')
+      .startAfter(oldestDoc.created_at, oldestDoc.id)
+      .limit(limit);
+    const snapshot = await q.get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.warn('Gagal memuat pesan lama:', error);
+    return [];
+  }
+}
+
+export async function markChatRoomRead(roomId, uid) {
+  if (!db) return;
+  try {
+    await db.collection('chat_rooms').doc(roomId).update({ [`unread.${uid}`]: 0 });
+  } catch (error) {
+    console.warn('Gagal menandai chat dibaca:', error);
+  }
+}
+
+export async function getChatRoom(roomId) {
+  if (!db) return null;
+  try {
+    const snap = await db.collection('chat_rooms').doc(roomId).get();
+    return snap.exists ? { id: snap.id, ...snap.data() } : null;
+  } catch (error) {
+    console.warn('Gagal memuat ruang chat:', error);
+    return null;
+  }
+}

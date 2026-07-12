@@ -87,17 +87,6 @@ export function renderLayout(title, content, opts = {}) {
       `,
     },
     {
-      label: 'AI',
-      href: '#guru/materi-ai',
-      routes: ['#guru/materi-ai'],
-      icon: (active) => `
-        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-          <path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
-        </svg>
-      `,
-    },
-    {
       label: 'Nilai',
       href: '#guru/penilaian',
       routes: ['#guru/penilaian', '#guru/input-nilai'],
@@ -110,21 +99,6 @@ export function renderLayout(title, content, opts = {}) {
         </svg>
       `,
     },
-    ...(isWaliKelas
-      ? [
-          {
-            label: 'Wali',
-            href: '#guru/wali-kelas',
-            routes: ['#guru/wali-kelas'],
-            icon: (active) => `
-              <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="3.5" y="5" width="17" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/>
-                <path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              </svg>
-            `,
-          },
-        ]
-      : []),
     {
       label: 'Akun',
       href: '#guru/pengatur-sistem',
@@ -196,18 +170,6 @@ export function renderLayout(title, content, opts = {}) {
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
           <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        </svg>
-      `,
-    },
-    {
-      label: 'Kas',
-      href: '#siswa/kas-kelas',
-      routes: ['#siswa/kas-kelas'],
-      icon: (active) => `
-        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="6" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.8"/>
-          <circle cx="12" cy="12.5" r="3" stroke="currentColor" stroke-width="1.8"/>
-          <path d="M6.5 6.5V5.5a1.5 1.5 0 0 1 1.5-1.5h8a1.5 1.5 0 0 1 1.5 1.5v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       `,
     },
@@ -295,6 +257,20 @@ export function renderLayout(title, content, opts = {}) {
     </svg>
   `;
 
+  const iconMegaphone = (active) => `
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 11l14-7v16L3 13z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M3 11v2a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M19 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  `;
+
+  const iconChat = (active) => `
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-3.5-.6L3 21l1.3-4A8.4 8.4 0 1 1 21 11.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+    </svg>
+  `;
+
   const iconGame = (active) => `
     <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="3" y="8" width="18" height="8" rx="4" stroke="currentColor" stroke-width="1.8"/>
@@ -341,6 +317,8 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Game Center', href: '#guru/game', routes: ['#guru/game'], icon: iconGame },
           { label: 'Kuiz', href: '#guru/kuiz', routes: ['#guru/kuiz'], icon: iconBookSpark },
           { label: 'Pembayaran', href: '#guru/pembayaran-buku', routes: ['#guru/pembayaran-buku'], icon: iconWallet },
+          { label: 'Pengumuman', href: '#guru/pengumuman', routes: ['#guru/pengumuman'], icon: iconMegaphone },
+          { label: 'Pesan', href: '#chat', routes: ['#chat', '#chat/room'], icon: iconChat },
           ...(isWaliKelas ? [{ label: 'Wali Kelas', href: '#guru/wali-kelas', routes: ['#guru/wali-kelas'], icon: iconClassroom }] : []),
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
@@ -353,6 +331,8 @@ export function renderLayout(title, content, opts = {}) {
             { label: 'Kas Kelas', href: '#siswa/kas-kelas', routes: ['#siswa/kas-kelas'], icon: iconWallet },
             { label: 'Game Center', href: '#siswa/game', routes: ['#siswa/game'], icon: iconGame },
             { label: 'Kuiz', href: '#siswa/kuiz', routes: ['#siswa/kuiz'], icon: iconBookSpark },
+            { label: 'Woro-woro', href: '#siswa/pengumuman', routes: ['#siswa/pengumuman'], icon: iconMegaphone },
+            { label: 'Pesan', href: '#chat', routes: ['#chat', '#chat/room'], icon: iconChat },
             { label: 'Akun', href: '#siswa/pengatur-sistem', routes: ['#siswa/pengatur-sistem'], icon: iconSettings },
           ]
         : [];
@@ -439,9 +419,14 @@ export function renderLayout(title, content, opts = {}) {
               </div>
             ` : ''}
           ${(showHeaderClock || isAdmin) ? `
-            <button id="logout-btn" class="absolute bottom-0 right-0 inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 sm:h-10 sm:w-10" aria-label="Keluar" title="Keluar">
-              <svg viewBox="0 0 24 24" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h10"/><path d="m17 8 4 4-4 4"/></svg>
-            </button>
+            <div class="absolute bottom-0 right-0 flex items-center gap-2">
+              <a href="#chat" class="hidden md:inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-[#25D366] hover:text-[#25D366] sm:h-10 sm:w-10" aria-label="Pesan" title="Pesan">
+                <svg viewBox="0 0 24 24" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-3.5-.6L3 21l1.3-4A8.4 8.4 0 1 1 21 11.5z"/></svg>
+              </a>
+              <button id="logout-btn" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900 sm:h-10 sm:w-10" aria-label="Keluar" title="Keluar">
+                <svg viewBox="0 0 24 24" class="h-4 w-4 sm:h-5 sm:w-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 7V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-2"/><path d="M10 12h10"/><path d="m17 8 4 4-4 4"/></svg>
+              </button>
+            </div>
           ` : ''}
             <div class="flex items-center gap-3">
               <div class="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${accentPanel} text-white shadow-lg sm:flex">
@@ -480,6 +465,9 @@ export function renderLayout(title, content, opts = {}) {
         </main>
 
         ${isGuru || isSiswa ? `
+          <a href="#chat" class="md:hidden fixed bottom-24 right-4 z-[55] inline-flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg ring-4 ring-white/50 transition hover:scale-105 active:scale-95" aria-label="Pesan" title="Pesan">
+            <svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-3.5-.6L3 21l1.3-4A8.4 8.4 0 1 1 21 11.5z"/></svg>
+          </a>
           <nav class="mobile-bottom-nav nav-bottom md:hidden fixed left-1/2 bottom-4 z-50 w-[calc(100vw-1.5rem)] max-w-md -translate-x-1/2 rounded-[28px] border border-black/5 bg-white/70 px-2 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.12)] backdrop-blur-md" style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));">
             <div class="flex items-center justify-between gap-1">
               ${isGuru ? guruBottomNav : siswaBottomNav}

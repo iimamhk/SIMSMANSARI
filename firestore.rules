@@ -113,8 +113,18 @@ service cloud.firestore {
         'wali_kelas',
         'kas_kelas',
         'kas_transaksi',
-        'materi_ai'
+        'materi_ai',
+        'pengumuman',
+        'pengumuman_reads',
+        'chat_rooms'
       ];
+    }
+
+    match /chat_rooms/{roomId} {
+      allow read, write: if true;
+      match /messages/{msgId} {
+        allow read, write: if true;
+      }
     }
 
     match /{document=**} {

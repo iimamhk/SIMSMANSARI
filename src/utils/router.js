@@ -13,18 +13,22 @@ import { renderGuruMateriPage } from '../pages/guru/materi.js';
 import { renderGuruMateriAiPage } from '../pages/guru/materi-ai.js';
 import { renderGuruSystemSettingsPage } from '../pages/guru/pengatur-sistem.js';
 import { renderGuruGamePage } from '../pages/guru/game.js';
+import { renderGuruPengumumanPage } from '../pages/guru/pengumuman.js';
 import { renderSiswaDashboardPage } from '../pages/siswa/dashboard.js';
 import { renderSiswaNilaiPage } from '../pages/siswa/nilai.js';
 import { renderSiswaAbsensiPage } from '../pages/siswa/absensi.js';
 import { renderSiswaMateriPage } from '../pages/siswa/materi.js';
 import { renderSiswaSystemSettingsPage } from '../pages/siswa/pengatur-sistem.js';
 import { renderSiswaGamePage } from '../pages/siswa/game.js';
+import { renderSiswaPengumumanPage } from '../pages/siswa/pengumuman.js';
 import { renderGuruKuizPage } from '../pages/guru/kuiz.js';
 import { renderGuruPembayaranBukuPage } from '../pages/guru/pembayaran-buku.js';
 import { renderGuruWaliKelasPage } from '../pages/guru/wali-kelas.js';
 import { renderGuruKasKelasPage } from '../pages/guru/wali/kas-kelas.js';
 import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
 import { renderSiswaKasKelasPage } from '../pages/siswa/kas-kelas.js';
+import { renderChatListPage } from '../pages/chat/list.js';
+import { renderChatRoomPage } from '../pages/chat/room.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
 import { renderMasterSiswaPage } from '../pages/admin/master-siswa.js';
 import { renderMasterAkademikPage } from '../pages/admin/master-akademik.js';
@@ -221,6 +225,11 @@ async function renderRoute() {
     return;
   }
 
+  if (route === '#guru/pengumuman') {
+    await renderAndFinalize(renderGuruPengumumanPage, container);
+    return;
+  }
+
   if (route === '#siswa/dashboard') {
     await renderAndFinalize(renderSiswaDashboardPage, container);
     return;
@@ -256,8 +265,26 @@ async function renderRoute() {
     return;
   }
 
+  if (route === '#siswa/pengumuman') {
+    await renderAndFinalize(renderSiswaPengumumanPage, container);
+    return;
+  }
+
   if (route === '#siswa/pengatur-sistem') {
     await renderAndFinalize(renderSiswaSystemSettingsPage, container);
+    return;
+  }
+
+  if (route === '#chat' || route.startsWith('#chat/')) {
+    if (!getSession()) {
+      await renderAndFinalize(renderLoginPage, container);
+      return;
+    }
+    if (route.startsWith('#chat/room/')) {
+      await renderAndFinalize(renderChatRoomPage, container, route.replace('#chat/room/', ''));
+    } else {
+      await renderAndFinalize(renderChatListPage, container);
+    }
     return;
   }
 
