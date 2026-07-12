@@ -8,6 +8,7 @@ const {
   handleOptions,
   parseGenerationOptions,
   parseJsonBody,
+  resolveAiProfile,
   sanitizeMaterialInput,
   sendJson,
   sendSseComment,
@@ -28,6 +29,9 @@ module.exports = async (req, res) => {
   let partialRaw = '';
   let revisionInstruction = '';
   let currentContent = '';
+  let revisionMode = '';
+  let profileId = '';
+  let model = '';
 
   try {
     applyRateLimit(req, res);
@@ -37,6 +41,9 @@ module.exports = async (req, res) => {
     partialRaw = typeof body.partial === 'string' ? body.partial.slice(0, 20000).trim() : '';
     revisionInstruction = typeof body.revisionInstruction === 'string' ? body.revisionInstruction.slice(0, 4000).trim() : '';
     currentContent = typeof body.currentContent === 'string' ? body.currentContent.slice(0, 50000).trim() : '';
+    revisionMode = typeof body.revisionMode === 'string' ? body.revisionMode.slice(0, 100).trim() : '';
+    profileId = typeof body.profileId === 'string' ? body.profileId.slice(0, 100).trim() : '';
+    model = typeof body.model === 'string' ? body.model.slice(0, 200).trim() : '';
   } catch (error) {
     if (error instanceof AiServiceError) {
       sendJson(req, res, error.statusCode, { error: error.message, code: error.code });
@@ -55,7 +62,7 @@ module.exports = async (req, res) => {
   }
 
   const messages = revisionInstruction && currentContent
-    ? buildRevisionMessages(input, currentContent, revisionInstruction)
+    ? buildRevisionMessages(input, currentContent, revisionInstruction, revisionMode)
     : partialRaw
       ? buildContinuationMessages(input, partialRaw)
       : buildMessages(input);
@@ -70,17 +77,58 @@ module.exports = async (req, res) => {
   });
 
   try {
-    for await (const delta of streamChatCompletions(messages, {
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-      signal: abortController.signal,
-    })) {
-      if (!delta) continue;
-      hasStreamed = true;
-      sendSseEvent(res, 'delta', { content: delta });
-    }
+    const fallbackProfiles = getConfig().aiProfiles && getConfig().aiProfiles.length
+      ? [resolveAiProfile(profileId), ...getConfig().aiProfiles.filter((profile) => profile.id !== resolveAiProfile(profileId).id)]
+      : [resolveAiProfile(profileId)];
+    let requestedModel = model || resolveAiProfile(profileId).model || getConfig().model;
+    let activeModel = requestedModel;
+    let activeProfileId = resolveAiProfile(profileId).id;
+    let modelFallbackUsed = false;
 
-    sendSseEvent(res, 'done', { model: getConfig().model });
+    for (let index = 0; index < fallbackProfiles.length; index += 1) {
+      const profile = fallbackProfiles[index];
+      activeProfileId = profile.id;
+      if (index > 0) {
+        requestedModel = model || profile.model || getConfig().model;
+        activeModel = requestedModel;
+        sendSseComment(res, `fallback:${profile.id}`);
+      }
+      try {
+        for await (const delta of streamChatCompletions(messages, {
+          profileId: profile.id,
+          model,
+          temperature: options.temperature,
+          maxTokens: options.maxTokens,
+          signal: abortController.signal,
+          onModelSelected: (selectedModel) => {
+            activeModel = selectedModel;
+          },
+          onModelFallback: (fromModel, toModel) => {
+            modelFallbackUsed = true;
+            activeModel = toModel;
+            sendSseComment(res, `model-fallback:${fromModel}->${toModel}`);
+          },
+        })) {
+          if (!delta) continue;
+          hasStreamed = true;
+          sendSseEvent(res, 'delta', { content: delta });
+        }
+
+        sendSseEvent(res, 'done', {
+          model: activeModel,
+          requestedModel,
+          profileId: activeProfileId,
+          fallbackUsed: index > 0,
+          modelFallbackUsed,
+        });
+        res.end();
+        return;
+      } catch (error) {
+        const canFallback = error instanceof AiServiceError && error.code === 'rate_limited' && !hasStreamed && index < fallbackProfiles.length - 1;
+        if (canFallback) continue;
+        throw error;
+      }
+    }
   } catch (error) {
     const errAny = error || {};
     let message;

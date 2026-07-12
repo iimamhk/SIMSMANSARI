@@ -5,6 +5,12 @@
     "api/ai/generate-material.js": {
       "maxDuration": 60
     },
+    "api/ai/generate-rpm.js": {
+      "maxDuration": 60
+    },
+    "api/ai/model-options.js": {
+      "maxDuration": 10
+    },
     "api/ai/test-connection.js": {
       "maxDuration": 30
     },

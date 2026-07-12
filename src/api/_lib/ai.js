@@ -5,6 +5,77 @@ const DEFAULT_RATE_LIMIT_WINDOW_MS = 900000;
 const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_TOKENS_CAP = 8000;
 
+function sanitizeProfileId(value, fallback) {
+  const cleaned = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-');
+  return cleaned || fallback;
+}
+
+function parseModelList(value, fallbackModel) {
+  const fromArray = Array.isArray(value)
+    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const merged = [...fromArray, String(fallbackModel || '').trim()].filter(Boolean);
+  return Array.from(new Set(merged));
+}
+
+function parseAiProfiles() {
+  const defaultModel = getFirstEnv(['IAMHC_MODEL', 'GROQ_MODEL', 'OPENAI_MODEL'], DEFAULT_MODEL);
+  const defaultProfile = {
+    id: 'default',
+    label: getEnv('AI_DEFAULT_LABEL', 'Default AI'),
+    apiKey: getFirstEnv(['IAMHC_API_KEY', 'GROQ_API_KEY', 'OPENAI_API_KEY']),
+    baseUrl: getFirstEnv(['IAMHC_BASE_URL', 'GROQ_BASE_URL', 'OPENAI_BASE_URL'], DEFAULT_BASE_URL).replace(/\/$/, ''),
+    model: defaultModel,
+    models: parseModelList([], defaultModel),
+    isDefault: true,
+  };
+
+  const raw = getEnv('AI_MODEL_PROFILES');
+  if (!raw) return [defaultProfile];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [defaultProfile];
+
+    const customProfiles = parsed
+      .map((entry, index) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const record = entry;
+        const apiKey = typeof record.apiKey === 'string' ? record.apiKey.trim() : '';
+        const apiKeyEnv = typeof record.apiKeyEnv === 'string' ? getEnv(record.apiKeyEnv) : '';
+        const resolvedApiKey = apiKey || apiKeyEnv;
+        const baseUrl = typeof record.baseUrl === 'string' ? record.baseUrl.trim().replace(/\/$/, '') : '';
+        const model = typeof record.model === 'string' ? record.model.trim() : '';
+        if (!resolvedApiKey || !baseUrl || !model) return null;
+        const label = typeof record.label === 'string' && record.label.trim()
+          ? record.label.trim()
+          : `AI Profile ${index + 1}`;
+        const id = sanitizeProfileId(typeof record.id === 'string' ? record.id : label, `profile-${index + 1}`);
+        return {
+          id,
+          label,
+          apiKey: resolvedApiKey,
+          baseUrl,
+          model,
+          models: parseModelList(record.models, model),
+          isDefault: record.isDefault === true,
+        };
+      })
+      .filter(Boolean);
+
+    if (!customProfiles.length) return [defaultProfile];
+    if (!customProfiles.some((profile) => profile.isDefault)) {
+      customProfiles[0] = { ...customProfiles[0], isDefault: true };
+    }
+    return customProfiles;
+  } catch {
+    return [defaultProfile];
+  }
+}
+
 const KEDALAMAN_LABEL = {
   pengenalan: 'Pengenalan (konsep dasar, mudah dipahami siswa)',
   menengah: 'Menengah (konsep lengkap dengan contoh kontekstual)',
@@ -25,15 +96,20 @@ const TAMPILAN_LABEL = {
 const ALLOWED_TAMPILAN = Object.keys(TAMPILAN_LABEL);
 
 const SYSTEM_CONTENT = [
-  'Kamu adalah pedagog guru senior Kurikulum Merdeka Indonesia.',
-  'Tugasmu menyusun materi pembelajaran lengkap dalam bahasa Indonesia.',
+  'Kamu bertindak sebagai penulis buku dan materi digital pembelajaran berpengalaman selama 15 tahun, sekaligus pedagog guru senior Kurikulum Merdeka Indonesia.',
+  'Tugasmu menyusun materi pembelajaran lengkap dalam bahasa Indonesia yang kaya isi, enak dibaca, modern, interaktif, dan tidak membosankan.',
   'Selalu keluarkan materi dalam MARKDOWN murni (tanpa blok kode ```markdown, tanpa penjelasan di luar materi).',
   'Struktur wajib dan urutannya harus jelas: # Judul, ## Tujuan Pembelajaran, ## Materi Inti, ## Contoh Soal, ## Latihan Soal, ## Tugas Siswa, ## Ringkasan dan Catatan.',
-  'Gunakan heading, daftar, tabel, blok kutipan, dan subbagian pendek agar hasil mudah diubah menjadi tampilan tab interaktif untuk siswa.',
+  'Gunakan heading, daftar, tabel, blok kutipan, callout, dan subbagian pendek agar hasil mudah diubah menjadi tampilan tab interaktif untuk siswa.',
   'Untuk rumus matematika, tulis dengan sintaks LaTeX ($...$ untuk inline dan $$...$$ untuk display). Jangan gunakan code fence untuk rumus.',
-  'Gaya bahasa ramah siswa SMA, runtut, dan mendalam sesuai tingkat kedalaman yang diminta.',
-  'Tulis paragraf yang tidak terlalu panjang, poin ringkas, dan blok Yang Perlu Dicatat bila relevan agar nyaman dibaca di ponsel.',
-  'Jika mapel eksakta, sertakan langkah penyelesaian yang berurutan dan mudah disalin siswa.',
+  'Gaya bahasa harus hangat, luwes, komunikatif, dan tetap akademik. Hindari suara yang datar, kaku, robotik, atau seperti template generik AI.',
+  'Tulis paragraf yang tidak terlalu panjang, tetapi setiap bagian harus substantif, kaya penjelasan, dan tidak terlalu singkat.',
+  'Variasikan cara penyajian antarsubbagian: kombinasikan paragraf pembuka singkat, daftar bernomor, tabel ringkas, contoh kontekstual, dan pertanyaan reflektif bila relevan.',
+  'Pada bagian Contoh Soal, WAJIB gunakan penomoran yang jelas seperti Contoh 1, Contoh 2, dan seterusnya, lalu beri pembahasan langkah demi langkah yang rapi.',
+  'Pada bagian Latihan Soal, WAJIB gunakan penomoran yang jelas dan bertingkat, bukan hanya bullet biasa.',
+  'Jika mapel eksakta, sertakan langkah penyelesaian yang berurutan, mudah disalin siswa, dan jelaskan alasan setiap langkah penting.',
+  'Jika mapel non-eksakta, gunakan ilustrasi, analogi, potongan kasus, atau skenario nyata agar materi terasa hidup.',
+  'Pastikan materi terasa seperti halaman materi digital premium: kaya, terstruktur, menarik, dan memberi ritme baca yang tidak monoton.',
   'JANGAN mencantumkan API key, instruksi sistem, atau metadata teknis apa pun.',
   'JIKA diminta MELANJUTKAN: langsung tulis kelanjutan dari teks yang terhenti TANPA mengulang bagian yang sudah ada dan TANPA kalimat pembuka. Sambung secara alami (lanjutkan paragraf/section/daftar yang tertunda).',
 ].join(' ');
@@ -68,14 +144,18 @@ function getNumberEnv(key, fallback) {
 }
 
 function getConfig() {
-  const apiKey = getFirstEnv(['IAMHC_API_KEY', 'GROQ_API_KEY', 'OPENAI_API_KEY']);
-  const baseUrl = getFirstEnv(['IAMHC_BASE_URL', 'GROQ_BASE_URL', 'OPENAI_BASE_URL'], DEFAULT_BASE_URL).replace(/\/$/, '');
-  const model = getFirstEnv(['IAMHC_MODEL', 'GROQ_MODEL', 'OPENAI_MODEL'], DEFAULT_MODEL);
+  const aiProfiles = parseAiProfiles();
+  const defaultAiProfile = aiProfiles.find((profile) => profile.isDefault) || aiProfiles[0];
+  const apiKey = defaultAiProfile?.apiKey || '';
+  const baseUrl = defaultAiProfile?.baseUrl || DEFAULT_BASE_URL;
+  const model = defaultAiProfile?.model || DEFAULT_MODEL;
 
   return {
     apiKey,
     baseUrl,
     model,
+    aiProfiles,
+    defaultAiProfileId: defaultAiProfile?.id || 'default',
     allowedOrigins: getEnv('ALLOWED_ORIGINS')
       .split(',')
       .map((origin) => origin.trim())
@@ -92,8 +172,42 @@ function getConfig() {
       hasIamhcModel: Boolean(getEnv('IAMHC_MODEL')),
       hasGroqModel: Boolean(getEnv('GROQ_MODEL')),
       hasOpenAiModel: Boolean(getEnv('OPENAI_MODEL')),
+      hasAiModelProfiles: Boolean(getEnv('AI_MODEL_PROFILES')),
     },
   };
+}
+
+function resolveAiProfile(profileId) {
+  const env = getConfig();
+  const normalized = typeof profileId === 'string' ? profileId.trim() : '';
+  return env.aiProfiles.find((profile) => profile.id === normalized) || env.aiProfiles[0];
+}
+
+function getAiProfileModelCandidates(profileId, preferredModel) {
+  const profile = resolveAiProfile(profileId);
+  const preferred = typeof preferredModel === 'string' ? preferredModel.trim() : '';
+  const candidates = [preferred, profile.model, ...(Array.isArray(profile.models) ? profile.models : [])]
+    .map((model) => String(model || '').trim())
+    .filter(Boolean);
+  return Array.from(new Set(candidates));
+}
+
+function getAiFallbackProfiles(profileId) {
+  const env = getConfig();
+  const primary = resolveAiProfile(profileId);
+  return [primary, ...env.aiProfiles.filter((profile) => profile.id !== primary.id)];
+}
+
+function getPublicAiProfiles() {
+  const env = getConfig();
+  return env.aiProfiles.map((profile) => ({
+    id: profile.id,
+    label: profile.label,
+    model: profile.model,
+    models: profile.models,
+    baseUrl: profile.baseUrl,
+    isDefault: Boolean(profile.isDefault),
+  }));
 }
 
 function setCorsHeaders(req, res) {
@@ -254,10 +368,14 @@ function describeRequest(input) {
     'Ketentuan hasil yang wajib diikuti:',
     '- Tulis output dalam markdown siap render, tanpa pembuka atau penutup tambahan.',
     '- Gunakan heading H2 persis untuk bagian utama ini: Tujuan Pembelajaran, Materi Inti, Contoh Soal, Latihan Soal, Tugas Siswa, Ringkasan dan Catatan.',
-    '- Pada bagian Materi Inti, pecah lagi menjadi subbagian pendek dengan heading H3.',
-    '- Pada bagian Contoh Soal, berikan pembahasan langkah demi langkah yang rapi.',
-    `- Pada bagian Latihan Soal, berikan minimal ${jumlahLatihan} butir latihan yang jelas dan bertingkat.`,
+    '- Pada bagian Materi Inti, pecah lagi menjadi subbagian pendek dengan heading H3 dan gaya penyajian yang bervariasi agar tidak monoton.',
+    '- Awali setiap bagian utama dengan pengantar singkat yang hidup dan natural, bukan kalimat formal yang kaku.',
+    '- Pada bagian Contoh Soal, gunakan penomoran eksplisit seperti Contoh 1, Contoh 2, dan seterusnya, lalu berikan pembahasan langkah demi langkah yang rapi.',
+    `- Pada bagian Latihan Soal, berikan minimal ${jumlahLatihan} butir latihan yang jelas, bertingkat, dan bernomor urut.`,
     '- Pada bagian Tugas Siswa, berikan tugas mandiri atau refleksi yang bisa langsung dikerjakan.',
+    '- Buat isi setiap bagian cukup kaya: jangan terlalu singkat, jangan sekadar definisi satu paragraf lalu selesai.',
+    '- Sisipkan contoh kontekstual, analogi, atau ilustrasi nyata agar siswa merasa materi dekat dengan kehidupan mereka.',
+    '- Jika sesuai, gunakan tabel ringkas atau blok sorotan untuk memperjelas ringkasan konsep, miskonsepsi umum, atau langkah penting.',
     '- Jika materi memuat rumus, pastikan rumus valid dalam LaTeX kompleks sekalipun.',
     '- Hindari tabel yang terlalu lebar dan hindari paragraf yang terlalu panjang.',
   ].filter(Boolean).join('\n');
@@ -284,16 +402,28 @@ function buildContinuationMessages(input, partial) {
   ];
 }
 
-function buildRevisionMessages(input, currentContent, revisionInstruction) {
+function buildRevisionMessages(input, currentContent, revisionInstruction, revisionMode) {
+  const normalizedMode = String(revisionMode || '').trim().toLowerCase();
+  const modeGuidance = {
+    concise: 'Fokus revisi: buat materi lebih ringkas tanpa menghilangkan isi inti. Pangkas kalimat berulang, pembuka yang terlalu panjang, dan penjelasan yang tidak menambah makna. Pertahankan struktur utama, istilah penting, contoh yang kuat, dan alur belajar. Target akhir harus terasa lebih padat, lebih mudah dipindai, dan lebih cepat dipelajari.',
+    engaging: 'Fokus revisi: buat materi lebih menarik, hangat, dan hidup. Perkuat variasi kalimat, gunakan pengantar yang memancing rasa ingin tahu, dan tambahkan kaitan dengan situasi nyata siswa. Utamakan peningkatan daya tarik baca tanpa membongkar struktur besar yang sudah rapi.',
+    exercise: 'Fokus revisi: tambahkan latihan yang lebih kaya dan terstruktur. Perluas bagian latihan soal dengan penomoran yang jelas, variasi tingkat kesulitan, dan instruksi yang mudah dipahami. Jika latihan sudah ada, pertahankan yang bagus lalu lengkapi agar lebih menantang dan relevan.',
+    analogy: 'Fokus revisi: tambahkan analogi, ilustrasi, atau perbandingan kontekstual untuk konsep yang abstrak. Sisipkan analogi pada bagian yang paling sulit dipahami tanpa membuat materi menjadi bertele-tele. Pastikan analogi tetap akurat secara akademik dan dekat dengan pengalaman siswa.',
+    premium: 'Fokus revisi: perkuat nuansa premium, modern, dan interaktif pada penyajian materi. Rapikan struktur, tambahkan callout atau penekanan isi yang elegan, dan buat transisi antarbab terasa lebih halus. Tetap jaga materi mudah dibaca dan tidak berubah menjadi dekoratif berlebihan.',
+  }[normalizedMode] || '';
+
   const revisionPrompt = [
     'Perbarui materi berikut sesuai instruksi revisi guru.',
     'Keluarkan hasil akhir lengkap dalam MARKDOWN utuh.',
     'Pertahankan sebanyak mungkin isi, struktur, dan bagian yang sudah bagus.',
     'Hanya ubah bagian yang relevan dengan instruksi revisi.',
     'Jangan menulis ulang seluruh materi dengan gaya yang benar-benar berbeda kecuali memang diminta.',
+    'Saat merevisi, pertahankan gaya penulisan yang kaya, hidup, modern, dan tidak kaku.',
     'Pastikan heading utama tetap rapi dan rumus LaTeX tetap valid.',
+    'Jika instruksi revisi bersifat lokal, prioritaskan penyempurnaan bagian terkait dan biarkan bagian lain tetap stabil.',
+    modeGuidance,
     `Instruksi revisi guru: ${revisionInstruction}`,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 
   return [
     { role: 'system', content: SYSTEM_CONTENT },
@@ -324,18 +454,16 @@ function clampTokens(value) {
   return Math.min(Math.floor(value), MAX_TOKENS_CAP);
 }
 
-async function* streamChatCompletions(messages, options = {}) {
-  const env = getConfig();
-  if (!env.apiKey) {
+async function* streamSingleChatCompletion(profile, model, messages, options = {}) {
+  if (!profile?.apiKey) {
     throw new AiServiceError('Layanan AI belum dikonfigurasi (API key kosong).', 503, 'not_configured');
   }
 
-  const model = options.model || env.model;
   const temperature = Number.isFinite(options.temperature)
     ? Math.min(Math.max(Number(options.temperature), 0), 1.5)
     : 0.7;
   const maxTokens = clampTokens(options.maxTokens);
-  const url = `${env.baseUrl}/chat/completions`;
+  const url = `${profile.baseUrl}/chat/completions`;
   const { signal, clear } = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
 
   let response;
@@ -345,7 +473,7 @@ async function* streamChatCompletions(messages, options = {}) {
       signal,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.apiKey}`,
+        Authorization: `Bearer ${profile.apiKey}`,
         'Cache-Control': 'no-store',
       },
       body: JSON.stringify({
@@ -440,24 +568,70 @@ async function* streamChatCompletions(messages, options = {}) {
   }
 }
 
-async function testUpstreamConnection() {
-  const env = getConfig();
-  if (!env.apiKey || env.apiKey === 'sk-xxxxxxxxxxxxxxxx') {
-    return { ok: false, model: env.model, error: 'API key belum dikonfigurasi di server.', code: 'not_configured' };
+async function* streamChatCompletions(messages, options = {}) {
+  const profile = resolveAiProfile(options.profileId);
+  const candidates = getAiProfileModelCandidates(profile.id, options.model);
+  if (!candidates.length) {
+    throw new AiServiceError('Model AI belum dikonfigurasi.', 503, 'not_configured');
+  }
+
+  let lastError = null;
+  for (let index = 0; index < candidates.length; index += 1) {
+    const candidate = candidates[index];
+    try {
+      if (typeof options.onModelSelected === 'function') {
+        options.onModelSelected(candidate);
+      }
+      if (index > 0 && typeof options.onModelFallback === 'function') {
+        options.onModelFallback(candidates[index - 1], candidate);
+      }
+      yield* streamSingleChatCompletion(profile, candidate, messages, options);
+      return;
+    } catch (error) {
+      lastError = error;
+      const canRetryWithNextModel = error instanceof AiServiceError
+        && error.code === 'rate_limited'
+        && index < candidates.length - 1;
+      if (canRetryWithNextModel) continue;
+      throw error;
+    }
+  }
+
+  throw lastError || new AiServiceError('Gagal memulai generate. Periksa koneksi ke layanan AI.', 502, 'generation_failed');
+}
+
+async function testUpstreamConnection(options = {}) {
+  const profile = resolveAiProfile(options.profileId);
+  if (!profile?.apiKey || profile.apiKey === 'sk-xxxxxxxxxxxxxxxx') {
+    return { ok: false, model: profile?.model || DEFAULT_MODEL, error: 'API key belum dikonfigurasi di server.', code: 'not_configured' };
   }
 
   try {
     let received = false;
-    for await (const _delta of streamChatCompletions([{ role: 'user', content: 'ping' }], { maxTokens: 4, temperature: 0 })) {
+    let activeModel = options.model || profile.model;
+    let modelFallbackUsed = false;
+    for await (const _delta of streamChatCompletions([{ role: 'user', content: 'ping' }], {
+      profileId: profile.id,
+      model: options.model,
+      maxTokens: 4,
+      temperature: 0,
+      onModelSelected: (model) => {
+        activeModel = model;
+      },
+      onModelFallback: (_fromModel, toModel) => {
+        modelFallbackUsed = true;
+        activeModel = toModel;
+      },
+    })) {
       received = true;
       break;
     }
-    return { ok: received, model: env.model };
+    return { ok: received, model: activeModel, profileId: profile.id, modelFallbackUsed };
   } catch (error) {
     if (error instanceof AiServiceError) {
-      return { ok: false, model: env.model, error: error.message, code: error.code };
+      return { ok: false, model: profile.model, profileId: profile.id, error: error.message, code: error.code };
     }
-    return { ok: false, model: env.model, error: 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
+    return { ok: false, model: profile.model, profileId: profile.id, error: 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
   }
 }
 
@@ -493,10 +667,14 @@ module.exports = {
   buildContinuationMessages,
   buildMessages,
   buildRevisionMessages,
+  getAiFallbackProfiles,
+  getAiProfileModelCandidates,
   getConfig,
+  getPublicAiProfiles,
   handleOptions,
   parseGenerationOptions,
   parseJsonBody,
+  resolveAiProfile,
   sanitizeMaterialInput,
   sendJson,
   sendSseComment,

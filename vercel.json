@@ -5,6 +5,12 @@
     "api/ai/generate-material.js": {
       "maxDuration": 60
     },
+    "api/ai/generate-rpm.js": {
+      "maxDuration": 60
+    },
+    "api/ai/model-options.js": {
+      "maxDuration": 10
+    },
     "api/ai/test-connection.js": {
       "maxDuration": 30
     },
@@ -22,8 +28,16 @@
       "destination": "/api/ai/test-connection.js"
     },
     {
+      "source": "/api/ai/model-options",
+      "destination": "/api/ai/model-options.js"
+    },
+    {
       "source": "/api/ai/generate-material",
       "destination": "/api/ai/generate-material.js"
+    },
+    {
+      "source": "/api/ai/generate-rpm",
+      "destination": "/api/ai/generate-rpm.js"
     },
     {
       "source": "/firebase/(.*)",

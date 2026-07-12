@@ -11,6 +11,8 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const result = await testUpstreamConnection();
+  const profileId = typeof req.query?.profileId === 'string' ? req.query.profileId.slice(0, 100).trim() : '';
+  const model = typeof req.query?.model === 'string' ? req.query.model.slice(0, 200).trim() : '';
+  const result = await testUpstreamConnection({ profileId, model });
   sendJson(req, res, 200, result);
 };

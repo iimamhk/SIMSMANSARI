@@ -2,13 +2,16 @@ const {
   AiServiceError,
   applyRateLimit,
   getConfig,
+  getPublicAiProfiles,
   handleOptions,
   parseGenerationOptions,
   parseJsonBody,
+  resolveAiProfile,
   sendJson,
   sendSseComment,
   sendSseEvent,
   streamChatCompletions,
+  testUpstreamConnection,
   writeSseHeaders,
 } = require('../_lib/ai');
 
@@ -194,6 +197,9 @@ module.exports = async (req, res) => {
   let sectionTitle = '';
   let context = '';
   let currentSection = '';
+  let partial = '';
+  let profileId = '';
+  let model = '';
 
   try {
     applyRateLimit(req, res);
@@ -203,6 +209,9 @@ module.exports = async (req, res) => {
     sectionTitle = typeof body.sectionTitle === 'string' ? body.sectionTitle.slice(0, 200).trim() : '';
     context = typeof body.context === 'string' ? body.context.slice(0, 30000).trim() : '';
     currentSection = typeof body.currentSection === 'string' ? body.currentSection.slice(0, 30000).trim() : '';
+    partial = typeof body.partial === 'string' ? body.partial.slice(0, 20000).trim() : '';
+    profileId = typeof body.profileId === 'string' ? body.profileId.slice(0, 100).trim() : '';
+    model = typeof body.model === 'string' ? body.model.slice(0, 200).trim() : '';
   } catch (error) {
     if (error instanceof AiServiceError) {
       sendJson(req, res, error.statusCode, { error: error.message, code: error.code });
@@ -219,6 +228,16 @@ module.exports = async (req, res) => {
 
   const messages = sectionTitle
     ? buildSectionMessages(input, sectionTitle, context, currentSection)
+    : partial
+      ? [
+        { role: 'system', content: RPM_SYSTEM },
+        { role: 'user', content: describeRpm(input) },
+        { role: 'assistant', content: partial },
+        {
+          role: 'user',
+          content: 'Teks RPM sebelumnya terpotong. LANJUTKAN dari titik terakhir tanpa mengulang bagian yang sudah ada. Pertahankan format MARKDOWN, struktur RPM resmi, dan gaya penulisan yang sama sampai dokumen selesai.',
+        },
+      ]
     : buildMessages(input);
 
   writeSseHeaders(req, res);
@@ -231,16 +250,59 @@ module.exports = async (req, res) => {
 
   let hasStreamed = false;
   try {
-    for await (const delta of streamChatCompletions(messages, {
-      temperature: options.temperature,
-      maxTokens: options.maxTokens,
-      signal: abortController.signal,
-    })) {
-      if (!delta) continue;
-      hasStreamed = true;
-      sendSseEvent(res, 'delta', { content: delta });
+    const config = getConfig();
+    const primaryProfile = resolveAiProfile(profileId);
+    const fallbackProfiles = config.aiProfiles && config.aiProfiles.length
+      ? [primaryProfile, ...config.aiProfiles.filter((profile) => profile.id !== primaryProfile.id)]
+      : [primaryProfile];
+    let requestedModel = model || primaryProfile.model || config.model;
+    let activeModel = requestedModel;
+    let activeProfileId = primaryProfile.id;
+    let modelFallbackUsed = false;
+
+    for (let index = 0; index < fallbackProfiles.length; index += 1) {
+      const profile = fallbackProfiles[index];
+      activeProfileId = profile.id;
+      if (index > 0) {
+        requestedModel = model || profile.model || config.model;
+        activeModel = requestedModel;
+        sendSseComment(res, `fallback:${profile.id}`);
+      }
+      try {
+        for await (const delta of streamChatCompletions(messages, {
+          profileId: profile.id,
+          model,
+          temperature: options.temperature,
+          maxTokens: options.maxTokens,
+          signal: abortController.signal,
+          onModelSelected: (selectedModel) => {
+            activeModel = selectedModel;
+          },
+          onModelFallback: (fromModel, toModel) => {
+            modelFallbackUsed = true;
+            activeModel = toModel;
+            sendSseComment(res, `model-fallback:${fromModel}->${toModel}`);
+          },
+        })) {
+          if (!delta) continue;
+          hasStreamed = true;
+          sendSseEvent(res, 'delta', { content: delta });
+        }
+        sendSseEvent(res, 'done', {
+          model: activeModel,
+          requestedModel,
+          profileId: activeProfileId,
+          fallbackUsed: index > 0,
+          modelFallbackUsed,
+        });
+        res.end();
+        return;
+      } catch (error) {
+        const canFallback = error instanceof AiServiceError && error.code === 'rate_limited' && !hasStreamed && index < fallbackProfiles.length - 1;
+        if (canFallback) continue;
+        throw error;
+      }
     }
-    sendSseEvent(res, 'done', { model: getConfig().model });
   } catch (error) {
     const errAny = error || {};
     let message;
