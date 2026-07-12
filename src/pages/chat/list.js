@@ -3,6 +3,7 @@ import {
   subscribeChatRooms,
   getChatContacts,
   findOrCreateChatRoom,
+  deleteChatRoomForUser,
 } from '../../firebase/data-service.js';
 import {
   avatarHtml,
@@ -33,6 +34,12 @@ export async function renderChatListPage(container) {
   let unsubscribe = () => {};
 
   const html = renderLayout('Pesan', `
+    <style>
+      .room-del { display: none; }
+      .room-row:hover .room-del,
+      .room-row.menu-open .room-del { display: flex; }
+      .room-row:hover .room-time { display: none; }
+    </style>
     <div class="rounded-3xl bg-white shadow-md ring-1 ring-slate-100 overflow-hidden">
       <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
         <h2 class="text-lg font-semibold text-slate-900">Pesan</h2>
@@ -62,9 +69,13 @@ export async function renderChatListPage(container) {
   container.innerHTML = html;
 
   const listEl = container.querySelector('#chat-list');
+  let lastRooms = [];
 
   function renderList(rooms) {
-    if (!rooms.length) {
+    lastRooms = rooms || [];
+    const visible = lastRooms.filter((r) => !(r.deleted_for && r.deleted_for[myUid]));
+
+    if (!visible.length) {
       listEl.innerHTML = `
         <div class="px-4 py-12 text-center">
           <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
@@ -76,7 +87,7 @@ export async function renderChatListPage(container) {
       return;
     }
 
-    const sorted = [...rooms].sort((a, b) =>
+    const sorted = [...visible].sort((a, b) =>
       String(b.last_at || '').localeCompare(String(a.last_at || ''))
     );
 
@@ -89,27 +100,80 @@ export async function renderChatListPage(container) {
           ? `${room.last_sender_id === myUid ? 'Anda: ' : ''}${escapeHtml(room.last_message)}`
           : 'Mulai percakapan';
         const badge = unread > 0
-          ? `<span class="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#25D366] px-1.5 text-[11px] font-semibold text-white">${unread > 99 ? '99+' : unread}</span>`
+          ? `<span class="room-time ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#25D366] px-1.5 text-[11px] font-semibold text-white">${unread > 99 ? '99+' : unread}</span>`
           : '';
         return `
-          <a href="#chat/room/${escapeHtml(room.id)}" class="flex items-center gap-3 px-4 py-3 transition hover:bg-slate-50">
-            ${avatarHtml(name)}
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center justify-between gap-2">
-                <p class="truncate text-[15px] font-semibold ${unread > 0 ? 'text-slate-900' : 'text-slate-800'}">${escapeHtml(name)}</p>
-                <span class="shrink-0 text-[11px] text-slate-400">${formatListTime(room.last_at)}</span>
+          <div class="room-row group relative" data-id="${escapeHtml(room.id)}">
+            <a href="#chat/room/${escapeHtml(room.id)}" class="flex items-center gap-3 px-4 py-3 transition hover:bg-slate-50">
+              ${avatarHtml(name)}
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="truncate text-[15px] font-semibold ${unread > 0 ? 'text-slate-900' : 'text-slate-800'}">${escapeHtml(name)}</p>
+                  <span class="room-time shrink-0 text-[11px] text-slate-400">${formatListTime(room.last_at)}</span>
+                </div>
+                <div class="mt-0.5 flex items-center justify-between gap-2">
+                  <p class="truncate text-[13px] ${unread > 0 ? 'font-medium text-slate-700' : 'text-slate-500'}">${preview}</p>
+                  ${badge}
+                </div>
               </div>
-              <div class="mt-0.5 flex items-center justify-between gap-2">
-                <p class="truncate text-[13px] ${unread > 0 ? 'font-medium text-slate-700' : 'text-slate-500'}">${preview}</p>
-                ${badge}
-              </div>
-            </div>
-          </a>`;
+            </a>
+            <button type="button" data-action="delete-room" aria-label="Hapus percakapan" class="room-del absolute right-3 top-1/2 h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white text-rose-600 shadow ring-1 ring-black/5 transition hover:bg-rose-50">
+              <svg viewBox="0 0 24 24" class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+            </button>
+          </div>`;
       })
       .join('');
   }
 
   unsubscribe = subscribeChatRooms(myUid, renderList);
+
+  function closeRoomMenus() {
+    listEl.querySelectorAll('.room-row.menu-open').forEach((r) => r.classList.remove('menu-open'));
+  }
+
+  listEl.addEventListener('click', async (e) => {
+    const delBtn = e.target.closest('[data-action="delete-room"]');
+    if (delBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const row = delBtn.closest('.room-row');
+      const id = row?.dataset.id;
+      if (id && window.confirm('Hapus percakapan ini? Hanya terlihat di perangkat Anda.')) {
+        const ok = await deleteChatRoomForUser(id, myUid);
+        if (ok) {
+          lastRooms = lastRooms.map((r) =>
+            r.id === id ? { ...r, deleted_for: { ...(r.deleted_for || {}), [myUid]: true } } : r
+          );
+          renderList(lastRooms);
+        }
+      }
+      return;
+    }
+    const row = e.target.closest('.room-row');
+    if (row) {
+      const wasOpen = row.classList.contains('menu-open');
+      closeRoomMenus();
+      if (!wasOpen) row.classList.add('menu-open');
+    }
+  });
+
+  let roomPressTimer = null;
+  listEl.addEventListener('touchstart', (e) => {
+    const row = e.target.closest('.room-row');
+    if (!row) return;
+    roomPressTimer = setTimeout(() => {
+      closeRoomMenus();
+      row.classList.add('menu-open');
+    }, 500);
+  }, { passive: true });
+  listEl.addEventListener('touchend', () => {
+    if (roomPressTimer) { clearTimeout(roomPressTimer); roomPressTimer = null; }
+  });
+
+  function onDocClick(e) {
+    if (!e.target.closest('.room-row')) closeRoomMenus();
+  }
+  document.addEventListener('click', onDocClick);
 
   // Modal kontak
   const modal = container.querySelector('#contact-modal');
@@ -190,5 +254,6 @@ export async function renderChatListPage(container) {
     } catch {
       /* noop */
     }
+    document.removeEventListener('click', onDocClick);
   };
 }

@@ -904,6 +904,17 @@ export function subscribeChatRooms(uid, callback) {
   }
 }
 
+export async function deleteChatRoomForUser(roomId, uid) {
+  if (!db || !roomId || !uid) return false;
+  try {
+    await db.collection('chat_rooms').doc(roomId).update({ [`deleted_for.${uid}`]: true });
+    return true;
+  } catch (error) {
+    console.warn('Gagal menghapus percakapan:', error);
+    return false;
+  }
+}
+
 export async function findOrCreateChatRoom(myUid, myNama, otherUser) {
   const otherUid = String(otherUser?.username || otherUser?.id || '').trim();
   const otherNama = otherUser?.nama || otherUser?.username || '';
@@ -969,6 +980,17 @@ export async function sendChatMessage(roomId, senderId, senderNama, text) {
     console.warn('Gagal memperbarui metadata ruang chat:', error);
   }
   return message;
+}
+
+export async function deleteChatMessage(roomId, messageId) {
+  if (!db || !roomId || !messageId) return false;
+  try {
+    await db.collection('chat_rooms').doc(roomId).collection('messages').doc(messageId).delete();
+    return true;
+  } catch (error) {
+    console.warn('Gagal menghapus pesan:', error);
+    return false;
+  }
 }
 
 export function subscribeChatMessages(roomId, callback) {
