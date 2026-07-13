@@ -24,6 +24,7 @@ import { renderSiswaPengumumanPage } from '../pages/siswa/pengumuman.js';
 import { renderGuruKuizPage } from '../pages/guru/kuiz.js';
 import { renderGuruPembayaranBukuPage } from '../pages/guru/pembayaran-buku.js';
 import { renderGuruWaliKelasPage } from '../pages/guru/wali-kelas.js';
+import { renderGuruPlottingJadwalPage } from '../pages/guru/plotting-jadwal.js';
 import { renderGuruKasKelasPage } from '../pages/guru/wali/kas-kelas.js';
 import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
 import { renderSiswaKasKelasPage } from '../pages/siswa/kas-kelas.js';
@@ -233,6 +234,11 @@ async function renderRoute() {
 
   if (route === '#guru/rpm-ai') {
     await renderAndFinalize(renderGuruRpmAiPage, container);
+    return;
+  }
+
+  if (route === '#guru/plotting-jadwal') {
+    await renderAndFinalize(renderGuruPlottingJadwalPage, container);
     return;
   }
 

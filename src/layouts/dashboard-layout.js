@@ -320,6 +320,7 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Pengumuman', href: '#guru/pengumuman', routes: ['#guru/pengumuman'], icon: iconMegaphone },
           { label: 'Pesan', href: '#chat', routes: ['#chat', '#chat/room'], icon: iconChat },
           ...(isWaliKelas ? [{ label: 'Wali Kelas', href: '#guru/wali-kelas', routes: ['#guru/wali-kelas'], icon: iconClassroom }] : []),
+          { label: 'Relasi Mengajar', href: '#guru/plotting-jadwal', routes: ['#guru/plotting-jadwal'], icon: iconLink },
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
       : isSiswa

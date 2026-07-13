@@ -7,6 +7,7 @@ import {
 } from '../../firebase/materi-ai-service.js';
 import { 
   savePublishedMaterial,
+  getTeachingAssignmentsForUser,
   getActiveTeachingAssignments,
 } from '../../firebase/data-service.js';
 import { streamGenerateMaterial, MaterialGenerationError, getApiBase } from '../../utils/ai-client.js';
@@ -552,7 +553,9 @@ export async function renderGuruMateriAiPage(container) {
   let selectedAiProfileId = localStorage.getItem('materi_ai_profile_id') || '';
   let selectedAiModel = localStorage.getItem('materi_ai_model_override') || '';
   try {
-    teachingAssignments = await getActiveTeachingAssignments(context);
+    teachingAssignments = userId
+      ? await getTeachingAssignmentsForUser(context, userId)
+      : await getActiveTeachingAssignments(context);
   } catch (error) {
     console.warn('Gagal memuat relasi mengajar:', error);
   }

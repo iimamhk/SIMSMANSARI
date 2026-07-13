@@ -181,13 +181,17 @@
     <div id="app" class="min-h-screen"></div>
     <script>
       (function resolveBackendBaseUrl() {
-        const hostname = window.location.hostname;
-        const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
-        const isLocalStaticPreview = isLocalHost && window.location.port && window.location.port !== '3000';
+        let storedBase = '';
+        try {
+          storedBase = String(window.localStorage.getItem('sim_backend_url') || '').trim();
+        } catch {
+          storedBase = '';
+        }
 
-        // Production di Vercel memakai origin yang sama agar /api/* langsung aktif.
-        // Saat preview lokal dibuka dari port lain, arahkan ke server Express lokal.
-        window.__SIM_BACKEND_URL__ = isLocalStaticPreview ? 'http://localhost:3000' : '';
+        // Default ke same-origin agar deploy Vercel dan preview statis tidak bergantung
+        // pada backend lokal yang belum tentu hidup. Jika ingin memaksa backend lain,
+        // simpan URL-nya ke localStorage key "sim_backend_url".
+        window.__SIM_BACKEND_URL__ = storedBase.replace(/\/+$/, '');
       })();
     </script>
     <script type="module" src="./firebase/firebase-config.js"></script>

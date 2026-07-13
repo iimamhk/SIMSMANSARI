@@ -71,9 +71,9 @@ export async function renderGuruGamePage(container) {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
   const userId = session?.user?.username || '';
 
-  const userAssignments = userId ? await getTeachingAssignmentsForUser(context, userId) : [];
-  const fallbackAssignments = userAssignments.length ? userAssignments : await getActiveTeachingAssignments(context);
-  const assignments = fallbackAssignments;
+  const assignments = userId
+    ? await getTeachingAssignmentsForUser(context, userId)
+    : await getActiveTeachingAssignments(context);
   const selectedAssignment = assignments[0] || null;
   const classOptions = assignments.reduce((result, item) => {
     if (!item?.kelas_id) {

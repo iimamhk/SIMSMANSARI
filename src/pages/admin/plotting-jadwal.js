@@ -1,65 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { saveDocument, deleteDocument, getCollectionDocs, getActiveTeachingAssignments } from '../../firebase/data-service.js';
-
-async function createPembelajaranFromPlotting(payload, context) {
-  const allUsers = await getCollectionDocs('users');
-  const siswaList = allUsers.filter((item) => item.role === 'siswa');
-  const siswaUntukKelas = siswaList
-    .filter((item) => {
-      const kelasNama = String(item.kelas_nama || item.kelas_id || '').toLowerCase();
-      const targetNama = String(payload.kelas_nama || payload.kelas_id || '').toLowerCase();
-      return !targetNama || kelasNama === targetNama;
-    })
-    .map((item) => ({
-      siswa_id: item.username,
-      siswa_nama: item.nama,
-      kelas_id: item.kelas_id || payload.kelas_id,
-      kelas_nama: item.kelas_nama || payload.kelas_nama,
-      nomor_absen: item.nomor_absen || 0,
-    }))
-    .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
-
-  const learningPayload = {
-    id: `${payload.tahun_ajaran_id}_${payload.semester_id}_${payload.guru_id}_${payload.kelas_id}_${payload.mapel_id}`,
-    tahun_ajaran_id: payload.tahun_ajaran_id,
-    semester_id: payload.semester_id,
-    guru_id: payload.guru_id,
-    guru_nama: payload.guru_nama,
-    mapel_id: payload.mapel_id,
-    mapel_nama: payload.mapel_nama,
-    kelas_id: payload.kelas_id,
-    kelas_nama: payload.kelas_nama,
-    hari: payload.hari,
-    jam_ke: payload.jam_ke,
-    siswa: siswaUntukKelas,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  await saveDocument('pembelajaran', learningPayload, learningPayload.id);
-
-  await Promise.all(
-    siswaUntukKelas.map((student, index) => {
-      const membershipId = `${payload.tahun_ajaran_id}_${payload.semester_id}_${payload.kelas_id}_${student.siswa_id}`;
-      return saveDocument('anggota_kelas', {
-        id: membershipId,
-        tahun_ajaran_id: payload.tahun_ajaran_id,
-        semester_id: payload.semester_id,
-        kelas_id: payload.kelas_id,
-        kelas_nama: payload.kelas_nama,
-        siswa_id: student.siswa_id,
-        siswa_nama: student.siswa_nama,
-        nomor_absen: student.nomor_absen || index + 1,
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }, membershipId);
-    })
-  );
-
-  return learningPayload;
-}
+import { saveDocument, deleteDocument, getCollectionDocs, getActiveTeachingAssignments, getAppConfig, saveAppConfig, createPembelajaranFromPlotting } from '../../firebase/data-service.js';
 
 export async function renderPlottingJadwalPage(container) {
   const context = getStoredContext();
@@ -67,6 +8,8 @@ export async function renderPlottingJadwalPage(container) {
   const mapelList = await getCollectionDocs('mata_pelajaran');
   const kelasList = await getCollectionDocs('kelas');
   const assignments = await getActiveTeachingAssignments(context);
+  const appConfig = await getAppConfig();
+  const guruBolehIsi = appConfig.guru_boleh_isi_relasi !== false;
 
   const guruOptions = guruList
     .map((item) => `<option value="${item.username}">${item.nama}</option>`)
@@ -102,6 +45,16 @@ export async function renderPlottingJadwalPage(container) {
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <h3 class="text-lg font-semibold text-slate-900">Pengunci Relasi Mengajar</h3>
         <p class="mt-1 text-sm text-slate-500">Tetapkan guru, mata pelajaran, dan kelas untuk periode aktif ${context.tahun_ajaran_aktif_nama || ''} / ${context.semester_aktif_nama || ''}.</p>
+      </div>
+
+      <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div>
+          <h4 class="text-sm font-semibold text-slate-900">Izinkan Guru Mengisi Relasi Sendiri</h4>
+          <p class="mt-0.5 text-xs text-slate-500">Jika aktif, guru dapat menambahkan dan mengelola relasi mengajar sendiri di halaman Mapping.</p>
+        </div>
+        <button type="button" id="toggle-guru-relasi" class="relative inline-flex h-7 w-12 items-center rounded-full transition ${guruBolehIsi ? 'bg-[#007AFF]' : 'bg-slate-300'}" aria-pressed="${guruBolehIsi}">
+          <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition ${guruBolehIsi ? 'translate-x-6' : 'translate-x-1'}"></span>
+        </button>
       </div>
 
       <form id="plotting-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -242,6 +195,26 @@ export async function renderPlottingJadwalPage(container) {
   }
   container.addEventListener('click', handlePlottingClick);
   container.plottingClickHandler = handlePlottingClick;
+
+  const toggleButton = container.querySelector('#toggle-guru-relasi');
+  if (toggleButton) {
+    const updateToggleVisual = (isOn) => {
+      toggleButton.className = `relative inline-flex h-7 w-12 items-center rounded-full transition ${isOn ? 'bg-[#007AFF]' : 'bg-slate-300'}`;
+      toggleButton.setAttribute('aria-pressed', String(isOn));
+      const thumb = toggleButton.querySelector('span');
+      if (thumb) {
+        thumb.className = `inline-block h-5 w-5 rounded-full bg-white shadow transition ${isOn ? 'translate-x-6' : 'translate-x-1'}`;
+      }
+    };
+
+    toggleButton.addEventListener('click', async () => {
+      const next = !guruBolehIsi;
+      updateToggleVisual(next);
+      await saveAppConfig({ ...(await getAppConfig()), guru_boleh_isi_relasi: next });
+      alert(next ? 'Guru sekarang diperbolehkan mengisi relasi sendiri.' : 'Guru tidak lagi diperbolehkan mengisi relasi sendiri.');
+      renderPlottingJadwalPage(container);
+    });
+  }
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

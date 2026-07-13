@@ -3878,8 +3878,9 @@ export async function renderGuruKuizPage(container) {
   state.guruNama = session?.user?.nama || '';
   state.context = context;
 
-  const userAssignments = state.guruId ? await getTeachingAssignmentsForUser(context, state.guruId) : [];
-  state.assignments = userAssignments.length ? userAssignments : await getActiveTeachingAssignments(context);
+  state.assignments = state.guruId
+    ? await getTeachingAssignmentsForUser(context, state.guruId)
+    : await getActiveTeachingAssignments(context);
 
   await Promise.all([loadPaket(), loadSesi()]);
 

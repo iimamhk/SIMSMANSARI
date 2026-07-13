@@ -14,9 +14,9 @@ export async function renderGuruInputNilaiPage(container) {
   const context = getStoredContext();
   const session = getSession();
   const userId = session?.user?.username || context?.user_logged_in || '';
-  const userAssignments = userId ? await getTeachingAssignmentsForUser(context, userId) : [];
-  const fallbackAssignments = userAssignments.length ? userAssignments : await getActiveTeachingAssignments(context);
-  const assignments = fallbackAssignments;
+  const assignments = userId
+    ? await getTeachingAssignmentsForUser(context, userId)
+    : await getActiveTeachingAssignments(context);
   const selectedAssignment = assignments[0] || null;
   const members = selectedAssignment ? await getClassMembers(context, selectedAssignment.kelas_id) : [];
 

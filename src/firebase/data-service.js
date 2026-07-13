@@ -27,6 +27,58 @@ function getCachedUsers() {
   }
 }
 
+function getDemoTeachingAssignments(context) {
+  const { year, semester } = getActivePeriod(context);
+  const users = getCachedUsers();
+  const teachers = users.filter((item) => item?.role === 'guru');
+  const students = users.filter((item) => item?.role === 'siswa');
+
+  const classesMap = new Map();
+  students.forEach((student) => {
+    const kelasId = String(student.kelas_id || student.kelas_nama || '').trim();
+    const kelasNama = String(student.kelas_nama || student.kelas_id || '').trim();
+    if (!kelasId && !kelasNama) return;
+    const key = kelasId || kelasNama;
+    if (!classesMap.has(key)) {
+      classesMap.set(key, {
+        kelas_id: kelasId || kelasNama,
+        kelas_nama: kelasNama || kelasId,
+      });
+    }
+  });
+
+  const classes = Array.from(classesMap.values());
+  if (!teachers.length || !classes.length || !year || !semester) {
+    return [];
+  }
+
+  return classes.flatMap((kelas, classIndex) => {
+    const teacher = teachers[classIndex % teachers.length];
+    const mapelNama = String(teacher?.mapel || teacher?.mapel_nama || 'Mata Pelajaran').trim() || 'Mata Pelajaran';
+    const mapelId = normalizeClassKey(mapelNama) || `mapel_${classIndex + 1}`;
+    const kelasMembers = students
+      .filter((student) => String(student.kelas_id || student.kelas_nama || '').trim() === (kelas.kelas_id || kelas.kelas_nama))
+      .map(mapStudentToMember)
+      .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+
+    return [{
+      id: `${year}_${semester}_${teacher.username || teacher.id || `guru_${classIndex + 1}`}_${kelas.kelas_id}_${mapelId}`,
+      tahun_ajaran_id: year,
+      semester_id: semester,
+      guru_id: teacher.username || teacher.id || '',
+      guru_nama: teacher.nama || 'Guru',
+      mapel_id: mapelId,
+      mapel_nama: mapelNama,
+      kelas_id: kelas.kelas_id,
+      kelas_nama: kelas.kelas_nama,
+      hari: '',
+      jam_ke: '',
+      siswa: kelasMembers,
+      is_demo: true,
+    }];
+  });
+}
+
 function readLocalPublishedMaterials() {
   try {
     return JSON.parse(localStorage.getItem(MATERIAL_PUBLISHED_KEY) || '[]');
@@ -57,6 +109,10 @@ function normalizeTrackingToken(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+function normalizeUserKey(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 function mergeMaterialsById(primaryMaterials = [], secondaryMaterials = []) {
@@ -297,8 +353,10 @@ export async function getTeachingAssignmentsForUser(context, userId) {
     return [];
   }
 
+  const normalizedUserId = normalizeUserKey(userId);
+
   if (!db) {
-    return getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
+    return getDemoTeachingAssignments(context).filter((item) => normalizeUserKey(item.guru_id) === normalizedUserId);
   }
 
   try {
@@ -308,14 +366,14 @@ export async function getTeachingAssignmentsForUser(context, userId) {
     ]);
 
     const combined = [...pengajaranData, ...pembelajaranData]
-      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester && item.guru_id === userId)
+      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester && normalizeUserKey(item.guru_id) === normalizedUserId)
       .map((item) => ({ id: item.id, ...item }))
       .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
 
-    return combined.length ? combined : getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
+    return combined;
   } catch (error) {
     console.warn('Gagal mengambil relasi guru dari Firestore, memakai data cadangan:', error);
-    return getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
+    return getDemoTeachingAssignments(context).filter((item) => normalizeUserKey(item.guru_id) === normalizedUserId);
   }
 }
 

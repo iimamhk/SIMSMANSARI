@@ -889,8 +889,9 @@ export async function renderGuruMateriPage(container) {
   const session = getSession();
   const userId = session?.user?.username || context?.user_logged_in || '';
   const userName = session?.user?.nama || 'Guru';
-  const userAssignments = userId ? await getTeachingAssignmentsForUser(context, userId) : [];
-  const assignments = userAssignments.length ? userAssignments : await getActiveTeachingAssignments(context);
+  const assignments = userId
+    ? await getTeachingAssignmentsForUser(context, userId)
+    : await getActiveTeachingAssignments(context);
   const selectedAssignment = assignments[0] || null;
   const materialReadStats = userId ? await getMaterialReadStatsForTeacher(userId) : [];
   const shortName = userName.split(' ')[0] || 'Guru';
