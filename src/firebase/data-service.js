@@ -12,6 +12,13 @@ function normalizeClassKey(value) {
     .replace(/^_+|_+$/g, '');
 }
 
+function getActivePeriod(context) {
+  return {
+    year: context?.tahun_ajaran_aktif || '',
+    semester: context?.semester_aktif || '',
+  };
+}
+
 function getCachedUsers() {
   try {
     return JSON.parse(localStorage.getItem('simguru_users') || '[]');
@@ -127,6 +134,24 @@ export async function getCollectionDocs(collectionName) {
   return getDocsFromCollection(collectionName);
 }
 
+export async function getDocumentsWhere(collectionName, filters = []) {
+  if (!db) {
+    return [];
+  }
+
+  try {
+    let query = db.collection(collectionName);
+    filters.forEach(({ field, operator = '==', value }) => {
+      query = query.where(field, operator, value);
+    });
+    const snapshot = await query.get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  } catch (error) {
+    console.warn(`Gagal query dokumen dari koleksi ${collectionName}:`, error);
+    return [];
+  }
+}
+
 export async function saveDocument(collectionName, payload, id = null) {
   if (!db) {
     return null;
@@ -135,6 +160,39 @@ export async function saveDocument(collectionName, payload, id = null) {
   const ref = id ? db.collection(collectionName).doc(id) : db.collection(collectionName).doc();
   await ref.set(payload, { merge: true });
   return { id: ref.id, ...payload };
+}
+
+export async function getAppConfig() {
+  try {
+    if (!db) {
+      return JSON.parse(localStorage.getItem('simguru_settings') || '{}');
+    }
+
+    const snapshot = await db.collection('settings').doc('app_config').get();
+    return snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : JSON.parse(localStorage.getItem('simguru_settings') || '{}');
+  } catch (error) {
+    console.warn('Gagal membaca konfigurasi aplikasi:', error);
+    return JSON.parse(localStorage.getItem('simguru_settings') || '{}');
+  }
+}
+
+export async function saveAppConfig(payload) {
+  const normalizedPayload = {
+    ...payload,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    if (db) {
+      await saveDocument('settings', normalizedPayload, 'app_config');
+    }
+    localStorage.setItem('simguru_settings', JSON.stringify(normalizedPayload));
+    return normalizedPayload;
+  } catch (error) {
+    console.warn('Gagal menyimpan konfigurasi aplikasi:', error);
+    localStorage.setItem('simguru_settings', JSON.stringify(normalizedPayload));
+    return normalizedPayload;
+  }
 }
 
 export async function getAttendanceRecords(context, pengajaranId = '') {
@@ -184,25 +242,140 @@ export function subscribeCollection(collectionName, filters = [], callback) {
     };
   }
 
-  try {
-    let query = db.collection(collectionName);
-    filters.forEach(({ field, operator = '==', value }) => {
-      query = query.where(field, operator, value);
-    });
-    const unsubscribe = query.onSnapshot(
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        callback(data);
-      },
-      (error) => {
-        console.warn(`Gagal memantau koleksi ${collectionName}:`, error);
-      }
-    );
-    return unsubscribe;
-  } catch (error) {
-    console.warn(`subscribeCollection error pada ${collectionName}:`, error);
-    return () => {};
+   try {
+     let query = db.collection(collectionName);
+     filters.forEach(({ field, operator = '==', value }) => {
+       query = query.where(field, operator, value);
+     });
+     const unsubscribe = query.onSnapshot(
+       (snapshot) => {
+         const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+         callback(data);
+       },
+       (error) => {
+         console.warn(`Gagal memantau koleksi ${collectionName}:`, error);
+       }
+     );
+     return unsubscribe;
+   } catch (error) {
+     console.warn(`Gagal memantau koleksi ${collectionName}:`, error);
+     return () => {};
   }
+}
+
+export async function getActiveTeachingAssignments(context) {
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) {
+    return [];
+  }
+
+  if (!db) {
+    return getDemoTeachingAssignments(context);
+  }
+
+  try {
+    const [pengajaranData, pembelajaranData] = await Promise.all([
+      getDocsFromCollection('pengajaran'),
+      getDocsFromCollection('pembelajaran'),
+    ]);
+
+    const combined = [...pengajaranData, ...pembelajaranData]
+      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester)
+      .map((item) => ({ id: item.id, ...item }))
+      .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+
+    return combined.length ? combined : getDemoTeachingAssignments(context);
+  } catch (error) {
+    console.warn('Gagal mengambil pengajaran dari Firestore, memakai data cadangan:', error);
+    return getDemoTeachingAssignments(context);
+  }
+}
+
+export async function getTeachingAssignmentsForUser(context, userId) {
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester || !userId) {
+    return [];
+  }
+
+  if (!db) {
+    return getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
+  }
+
+  try {
+    const [pengajaranData, pembelajaranData] = await Promise.all([
+      getDocsFromCollection('pengajaran'),
+      getDocsFromCollection('pembelajaran'),
+    ]);
+
+    const combined = [...pengajaranData, ...pembelajaranData]
+      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester && item.guru_id === userId)
+      .map((item) => ({ id: item.id, ...item }))
+      .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+
+    return combined.length ? combined : getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
+  } catch (error) {
+    console.warn('Gagal mengambil relasi guru dari Firestore, memakai data cadangan:', error);
+    return getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
+  }
+}
+
+export async function createPembelajaranFromPlotting(payload, context) {
+  const allUsers = await getCollectionDocs('users');
+  const siswaList = allUsers.filter((item) => item.role === 'siswa');
+  const siswaUntukKelas = siswaList
+    .filter((item) => {
+      const kelasNama = String(item.kelas_nama || item.kelas_id || '').toLowerCase();
+      const targetNama = String(payload.kelas_nama || payload.kelas_id || '').toLowerCase();
+      return !targetNama || kelasNama === targetNama;
+    })
+    .map((item) => ({
+      siswa_id: item.username,
+      siswa_nama: item.nama,
+      kelas_id: item.kelas_id || payload.kelas_id,
+      kelas_nama: item.kelas_nama || payload.kelas_nama,
+      nomor_absen: item.nomor_absen || 0,
+    }))
+    .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+
+  const learningPayload = {
+    id: `${payload.tahun_ajaran_id}_${payload.semester_id}_${payload.guru_id}_${payload.kelas_id}_${payload.mapel_id}`,
+    tahun_ajaran_id: payload.tahun_ajaran_id,
+    semester_id: payload.semester_id,
+    guru_id: payload.guru_id,
+    guru_nama: payload.guru_nama,
+    mapel_id: payload.mapel_id,
+    mapel_nama: payload.mapel_nama,
+    kelas_id: payload.kelas_id,
+    kelas_nama: payload.kelas_nama,
+    hari: payload.hari,
+    jam_ke: payload.jam_ke,
+    siswa: siswaUntukKelas,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  await saveDocument('pembelajaran', learningPayload, learningPayload.id);
+
+  await Promise.all(
+    siswaUntukKelas.map((student, index) => {
+      const membershipId = `${payload.tahun_ajaran_id}_${payload.semester_id}_${payload.kelas_id}_${student.siswa_id}`;
+      return saveDocument('anggota_kelas', {
+        id: membershipId,
+        tahun_ajaran_id: payload.tahun_ajaran_id,
+        semester_id: payload.semester_id,
+        kelas_id: payload.kelas_id,
+        kelas_nama: payload.kelas_nama,
+        siswa_id: student.siswa_id,
+        siswa_nama: student.siswa_nama,
+        nomor_absen: student.nomor_absen || index + 1,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, membershipId);
+    })
+  );
+
+  return learningPayload;
 }
 
 export async function getPublishedMaterials() {
@@ -384,175 +557,6 @@ export async function getMaterialReadStatsForTeacher(guruId) {
     return readLocalMaterialReads()
       .filter((item) => String(item.guru_id || '').trim().toLowerCase() === normalizedGuruId)
       .sort((a, b) => Number(b.read_count || 0) - Number(a.read_count || 0));
-  }
-}
-
-export async function getDocumentsWhere(collectionName, filters = []) {
-  if (!db || !filters.length) {
-    return [];
-  }
-
-  try {
-    let query = db.collection(collectionName);
-    
-    filters.forEach(({ field, operator = '==', value }) => {
-      query = query.where(field, operator, value);
-    });
-
-    const snapshot = await query.get();
-    return snapshot.docs.map((doc) => ({
-      ...doc.data(), // Put the data fields first
-      firestoreId: doc.id, // Explicitly safe firestore document ID so it doesn't get overwritten
-      id: doc.id // Add the standard id (will overwrite data.id if it exists, matching typical patterns)
-    }));
-  } catch (error) {
-    console.warn(`Gagal query dokumen dari koleksi ${collectionName}:`, error);
-    return [];
-  }
-}
-
-export async function getAppConfig() {
-  try {
-    if (!db) {
-      return JSON.parse(localStorage.getItem('simguru_settings') || '{}');
-    }
-
-    const snapshot = await db.collection('settings').doc('app_config').get();
-    return snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : JSON.parse(localStorage.getItem('simguru_settings') || '{}');
-  } catch (error) {
-    console.warn('Gagal membaca konfigurasi aplikasi:', error);
-    return JSON.parse(localStorage.getItem('simguru_settings') || '{}');
-  }
-}
-
-export async function saveAppConfig(payload) {
-  const normalizedPayload = {
-    ...payload,
-    updated_at: new Date().toISOString(),
-  };
-
-  try {
-    if (db) {
-      await saveDocument('settings', normalizedPayload, 'app_config');
-    }
-    localStorage.setItem('simguru_settings', JSON.stringify(normalizedPayload));
-    return normalizedPayload;
-  } catch (error) {
-    console.warn('Gagal menyimpan konfigurasi aplikasi:', error);
-    localStorage.setItem('simguru_settings', JSON.stringify(normalizedPayload));
-    return normalizedPayload;
-  }
-}
-
-function getActivePeriod(context) {
-  return {
-    year: context?.tahun_ajaran_aktif || context?.tahun_ajaran_aktif_id || '',
-    semester: context?.semester_aktif || context?.semester_aktif_id || '',
-  };
-}
-
-function getDemoTeachingAssignments(context) {
-  const { year, semester } = getActivePeriod(context);
-  const demoAssignments = [
-    {
-      id: 'demo-pengajaran-1',
-      tahun_ajaran_id: '2026_2027',
-      semester_id: '2026_2027_1',
-      guru_id: 'imambudiharto',
-      guru_nama: 'Imam Budiharto, S.Pd.',
-      mapel_id: 'MTK',
-      mapel_nama: 'MATEMATIKA UMUM',
-      kelas_id: 'X_1',
-      kelas_nama: 'X.1',
-      hari: 'Senin',
-      jam_ke: '1-3',
-    },
-    {
-      id: 'demo-pengajaran-2',
-      tahun_ajaran_id: '2026_2027',
-      semester_id: '2026_2027_1',
-      guru_id: 'tatimmatulianah',
-      guru_nama: 'Tatimmatul Ianah, S.Pd.',
-      mapel_id: 'BIND',
-      mapel_nama: 'BAHASA INDONESIA',
-      kelas_id: 'X_2',
-      kelas_nama: 'X.2',
-      hari: 'Selasa',
-      jam_ke: '4-5',
-    },
-  ];
-
-  return demoAssignments.filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester);
-}
-
-function getDemoClassMembers(context, kelasId) {
-  const { year } = getActivePeriod(context);
-  const demoMembers = {
-    X_1: [
-      { id: 'demo-member-1', tahun_ajaran_id: year, kelas_id: 'X_1', kelas_nama: 'X.1', siswa_id: 'adityabayupremana', siswa_nama: 'ADITYA BAYU PERMANA', nomor_absen: 1 },
-      { id: 'demo-member-2', tahun_ajaran_id: year, kelas_id: 'X_1', kelas_nama: 'X.1', siswa_id: 'budi', siswa_nama: 'BUDI SANTOSO', nomor_absen: 2 },
-    ],
-    X_2: [
-      { id: 'demo-member-3', tahun_ajaran_id: year, kelas_id: 'X_2', kelas_nama: 'X.2', siswa_id: 'citra', siswa_nama: 'CITRA LESTARI', nomor_absen: 1 },
-    ],
-  };
-
-  return (demoMembers[kelasId] || []).filter((item) => item.tahun_ajaran_id === year);
-}
-
-export async function getActiveTeachingAssignments(context) {
-  const { year, semester } = getActivePeriod(context);
-  if (!year || !semester) {
-    return [];
-  }
-
-  if (!db) {
-    return getDemoTeachingAssignments(context);
-  }
-
-  try {
-    const [pengajaranData, pembelajaranData] = await Promise.all([
-      getDocsFromCollection('pengajaran'),
-      getDocsFromCollection('pembelajaran'),
-    ]);
-
-    const combined = [...pengajaranData, ...pembelajaranData]
-      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester)
-      .map((item) => ({ id: item.id, ...item }))
-      .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
-
-    return combined.length ? combined : getDemoTeachingAssignments(context);
-  } catch (error) {
-    console.warn('Gagal mengambil pengajaran dari Firestore, memakai data cadangan:', error);
-    return getDemoTeachingAssignments(context);
-  }
-}
-
-export async function getTeachingAssignmentsForUser(context, userId) {
-  const { year, semester } = getActivePeriod(context);
-  if (!year || !semester || !userId) {
-    return [];
-  }
-
-  if (!db) {
-    return getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
-  }
-
-  try {
-    const [pengajaranData, pembelajaranData] = await Promise.all([
-      getDocsFromCollection('pengajaran'),
-      getDocsFromCollection('pembelajaran'),
-    ]);
-
-    const combined = [...pengajaranData, ...pembelajaranData]
-      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester && item.guru_id === userId)
-      .map((item) => ({ id: item.id, ...item }))
-      .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
-
-    return combined.length ? combined : getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
-  } catch (error) {
-    console.warn('Gagal mengambil relasi guru dari Firestore, memakai data cadangan:', error);
-    return getDemoTeachingAssignments(context).filter((item) => item.guru_id === userId);
   }
 }
 
