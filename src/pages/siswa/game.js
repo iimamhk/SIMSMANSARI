@@ -62,14 +62,17 @@ function formatDateTime(dateString) {
 
 function getGameOverlayMarkup() {
   return `
-    <section id="student-game-overlay" class="fixed inset-0 z-[120] hidden bg-slate-950/75 backdrop-blur-sm">
-      <div class="flex h-[100dvh] w-full flex-col bg-white">
-        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-6" style="padding-top: calc(0.75rem + env(safe-area-inset-top));">
+    <section id="student-game-overlay" class="fixed inset-0 z-[120] hidden overflow-hidden sg-overlay">
+      <div class="sg-blob sg-blob-1"></div>
+      <div class="sg-blob sg-blob-2"></div>
+      <div class="sg-blob sg-blob-3"></div>
+      <div class="relative z-[1] flex h-[100dvh] w-full flex-col">
+        <div class="glass-panel flex items-center justify-between gap-3 px-4 py-3 sm:px-6" style="padding-top: calc(0.75rem + env(safe-area-inset-top));">
           <div class="min-w-0">
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Mode Fokus Penuh</p>
-            <p id="student-game-overlay-title" class="mt-1 truncate text-base font-semibold text-slate-900">Game Center</p>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/90">Mode Fokus Penuh</p>
+            <p id="student-game-overlay-title" class="mt-1 truncate text-base font-semibold text-white">Game Center</p>
           </div>
-          <button id="student-game-overlay-back-btn" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+          <button id="student-game-overlay-back-btn" type="button" class="sg-btn sg-btn-ghost inline-flex items-center gap-2 px-4 py-2 text-sm">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M15 18l-6-6 6-6" />
             </svg>
@@ -208,58 +211,81 @@ export async function renderSiswaGamePage(container) {
             </div>
           </section>
 
-          <section id="game-play" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Sesi Game</p>
-                <p class="mt-1 text-sm font-semibold text-slate-800">Soal <span id="question-counter">1/10</span></p>
+          <section id="game-play" class="hidden">
+            <div class="mx-auto max-w-3xl space-y-5">
+              <div class="glass-panel flex flex-wrap items-center justify-between gap-3 rounded-[28px] px-5 py-4">
+                <div class="min-w-0">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/90">Sesi Game</p>
+                  <p class="mt-1 text-sm font-semibold text-white">Soal <span id="question-counter">1/10</span></p>
+                </div>
+                <p id="timer-pill" class="sg-timer-pill inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="13" r="8" />
+                    <path d="M12 9v4l2 2M9 2h6" />
+                  </svg>
+                  <span>Sisa waktu: <span id="timer-text">00:00</span></span>
+                </p>
               </div>
-              <p class="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700">Sisa waktu: <span id="timer-text">00:00</span></p>
-            </div>
-            <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500" id="question-operation">Operasi</p>
-              <p id="question-prompt" class="mt-3 text-3xl font-semibold text-slate-900">...</p>
-            </div>
 
-            <div id="answer-area" class="space-y-3"></div>
+              <div class="sg-progress-track">
+                <div id="question-progress" class="sg-progress-fill" style="width: 0%;"></div>
+              </div>
 
-            <div class="flex flex-wrap items-center gap-3">
-              <button id="next-question-btn" type="button" class="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-700">Simpan Jawaban</button>
-              <button id="finish-game-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700">Selesai Sekarang</button>
+              <div class="sg-question-card p-6 sm:p-8">
+                <div class="flex items-center gap-3">
+                  <span class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 px-3 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-sm" id="question-operation">Operasi</span>
+                  <span class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Soal <span id="question-index-label">1</span></span>
+                </div>
+                <p id="question-prompt" class="mt-5 text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">...</p>
+              </div>
+
+              <div id="answer-area" class="space-y-3"></div>
+
+              <div id="question-nav" class="grid grid-cols-5 gap-2 sm:grid-cols-10"></div>
+
+              <div class="flex flex-wrap items-center gap-3">
+                <button id="prev-question-btn" type="button" class="sg-btn sg-btn-ghost">Sebelumnya</button>
+                <button id="next-question-btn" type="button" class="sg-btn sg-btn-primary">Simpan & Lanjut</button>
+                <button id="finish-game-btn" type="button" class="sg-btn sg-btn-accent ml-auto">Selesai Sekarang</button>
+              </div>
             </div>
           </section>
 
-          <section id="game-result" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Hasil Game</p>
-                <h4 class="mt-1 text-xl font-semibold text-slate-900">Hasil permainan</h4>
-              </div>
-              <div class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Tersimpan</div>
-            </div>
+          <section id="game-result" class="hidden">
+            <div class="mx-auto max-w-3xl space-y-5">
+              <div class="sg-result-card p-6 sm:p-8">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Hasil Game</p>
+                    <h4 class="mt-1 text-2xl font-semibold text-slate-900">Hasil permainan</h4>
+                  </div>
+                  <div class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Tersimpan</div>
+                </div>
 
-            <div class="grid gap-3 sm:grid-cols-3">
-              <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-center">
-                <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Skor</p>
-                <p id="result-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
-              </div>
-              <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-center">
-                <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi</p>
-                <p id="result-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
-              </div>
-              <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-center">
-                <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Benar / Salah</p>
-                <p id="result-correct" class="mt-2 text-3xl font-semibold text-slate-900">0/0</p>
-              </div>
-            </div>
+                <div class="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Skor</p>
+                    <p id="result-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                  </div>
+                  <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi</p>
+                    <p id="result-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
+                  </div>
+                  <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Benar / Salah</p>
+                    <p id="result-correct" class="mt-2 text-3xl font-semibold text-slate-900">0/0</p>
+                  </div>
+                </div>
 
-            <div>
-              <p id="result-analysis-label" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Analisis Operasi</p>
-              <div id="result-by-operation" class="mt-2 space-y-2"></div>
-            </div>
+                <div class="mt-5">
+                  <p id="result-analysis-label" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Analisis Operasi</p>
+                  <div id="result-by-operation" class="mt-2 space-y-2"></div>
+                </div>
+              </div>
 
-            <div class="flex flex-wrap items-center gap-3">
-              <button id="play-again-btn" type="button" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0063CC]">Main Lagi</button>
+              <div class="flex flex-wrap items-center justify-center gap-3">
+                <button id="play-again-btn" type="button" class="sg-btn sg-btn-accent">Main Lagi</button>
+              </div>
             </div>
           </section>
         </div>
@@ -302,7 +328,9 @@ export async function renderSiswaGamePage(container) {
   const resultEl = container.querySelector('#game-result');
   const startGameBtn = container.querySelector('#start-game-btn');
   const nextQuestionBtn = playEl?.querySelector('#next-question-btn');
+  const prevQuestionBtn = playEl?.querySelector('#prev-question-btn');
   const finishGameBtn = playEl?.querySelector('#finish-game-btn');
+  const questionNavEl = playEl?.querySelector('#question-nav');
   const playAgainBtn = resultEl?.querySelector('#play-again-btn');
 
   const overlayEl = document.getElementById('student-game-overlay');
@@ -312,6 +340,7 @@ export async function renderSiswaGamePage(container) {
 
   const counterEl = container.querySelector('#question-counter');
   const timerEl = container.querySelector('#timer-text');
+  const timerPillEl = container.querySelector('#timer-pill');
   const promptEl = container.querySelector('#question-prompt');
   const operationEl = container.querySelector('#question-operation');
   const answerArea = container.querySelector('#answer-area');
@@ -636,18 +665,31 @@ export async function renderSiswaGamePage(container) {
 
     const current = gameState.questions[gameState.currentIndex];
     counterEl.textContent = `${gameState.currentIndex + 1}/${gameState.questions.length}`;
+    const indexLabelEl = document.getElementById('question-index-label');
+    if (indexLabelEl) {
+      indexLabelEl.textContent = String(gameState.currentIndex + 1);
+    }
+    const progressEl = document.getElementById('question-progress');
+    if (progressEl) {
+      const pct = gameState.questions.length ? ((gameState.currentIndex + 1) / gameState.questions.length) * 100 : 0;
+      progressEl.style.width = `${pct}%`;
+    }
     promptEl.textContent = current.prompt;
     operationEl.textContent = gameState.gameType === 'english_vocab'
       ? `${current.theme_label} • ${getVocabularyQuizTypeLabel(current.quiz_type)}`
       : `${current.operation_label} • ${quizTypes[current.quiz_type] || current.quiz_type}`;
+
+    renderQuestionNav();
+    renderNavButtons();
 
     const savedAnswer = gameState.answers[current.order] ?? '';
 
     if (gameState.gameType !== 'english_vocab' && current.quiz_type === 'short_answer') {
       answerArea.innerHTML = `
         <label class="block text-sm font-medium text-slate-700">Jawaban Anda</label>
-        <input id="answer-input" type="number" class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value="${savedAnswer}" />
+        <input id="answer-input" type="number" class="sg-input mt-2" value="${savedAnswer}" />
       `;
+      animateAnswerArea();
       return;
     }
 
@@ -658,18 +700,74 @@ export async function renderSiswaGamePage(container) {
         : 'Pilih jawaban yang benar';
     answerArea.innerHTML = `
       <p class="text-sm font-medium text-slate-700">${modeTitle}</p>
-      <div class="grid gap-2 sm:grid-cols-2">
+      <div class="grid gap-3 sm:grid-cols-2">
         ${(current.options || []).map((option) => {
           const checked = String(savedAnswer) === String(option);
           return `
-            <label class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              <input type="radio" name="answer-choice" value="${option}" class="h-4 w-4 border-slate-300 text-[#007AFF]" ${checked ? 'checked' : ''} />
-              ${option}
+            <label class="sg-choice ${checked ? 'is-selected' : ''}">
+              <input type="radio" name="answer-choice" value="${option}" ${checked ? 'checked' : ''} />
+              <span>${option}</span>
             </label>
           `;
         }).join('')}
       </div>
     `;
+
+    animateAnswerArea();
+
+    answerArea.querySelectorAll('input[name="answer-choice"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        answerArea.querySelectorAll('.sg-choice').forEach((label) => label.classList.remove('is-selected'));
+        const parent = radio.closest('.sg-choice');
+        if (parent) {
+          parent.classList.add('is-selected');
+        }
+      });
+    });
+  }
+
+  function animateAnswerArea() {
+    if (!answerArea) {
+      return;
+    }
+    answerArea.classList.remove('sg-fade-up');
+    void answerArea.offsetWidth;
+    answerArea.classList.add('sg-fade-up');
+  }
+
+  function isQuestionAnswered(question) {
+    const value = gameState.answers[question.order];
+    return value !== undefined && value !== null && value !== '';
+  }
+
+  function renderQuestionNav() {
+    if (!gameState || !questionNavEl) {
+      return;
+    }
+    questionNavEl.innerHTML = gameState.questions.map((question, index) => {
+      const isCurrent = index === gameState.currentIndex;
+      const answered = isQuestionAnswered(question);
+
+      let cls = 'sg-nav-btn';
+      if (isCurrent) {
+        cls += ' sg-nav-current';
+      } else if (answered) {
+        cls += ' sg-nav-answered';
+      }
+
+      return `<button type="button" data-question-nav="${index}" class="${cls}">${index + 1}</button>`;
+    }).join('');
+  }
+
+  function renderNavButtons() {
+    if (!prevQuestionBtn || !nextQuestionBtn) {
+      return;
+    }
+    const isFirst = gameState.currentIndex <= 0;
+    const isLast = gameState.currentIndex >= gameState.questions.length - 1;
+    prevQuestionBtn.disabled = isFirst;
+    prevQuestionBtn.classList.toggle('is-disabled', isFirst);
+    nextQuestionBtn.textContent = isLast ? 'Simpan & Selesai' : 'Simpan & Lanjut';
   }
 
   function captureCurrentAnswer() {
@@ -678,7 +776,7 @@ export async function renderSiswaGamePage(container) {
     }
     const current = gameState.questions[gameState.currentIndex];
     if (gameState.gameType !== 'english_vocab' && current.quiz_type === 'short_answer') {
-      const value = container.querySelector('#answer-input')?.value;
+      const value = answerArea.querySelector('#answer-input')?.value;
       if (value === '' || value === null || value === undefined) {
         return false;
       }
@@ -686,7 +784,7 @@ export async function renderSiswaGamePage(container) {
       return true;
     }
 
-    const selected = container.querySelector('input[name="answer-choice"]:checked');
+    const selected = answerArea.querySelector('input[name="answer-choice"]:checked');
     if (!selected) {
       return false;
     }
@@ -799,6 +897,7 @@ export async function renderSiswaGamePage(container) {
       return;
     }
     timerEl.textContent = formatTime(gameState.remainingSec);
+    updateTimerWarning();
 
     timerId = setInterval(async () => {
       if (!gameState) {
@@ -808,10 +907,18 @@ export async function renderSiswaGamePage(container) {
       }
       gameState.remainingSec -= 1;
       timerEl.textContent = formatTime(gameState.remainingSec);
+      updateTimerWarning();
       if (gameState.remainingSec <= 0) {
         await finishGame(true);
       }
     }, 1000);
+  }
+
+  function updateTimerWarning() {
+    if (!timerPillEl || !gameState) {
+      return;
+    }
+    timerPillEl.classList.toggle('is-low', gameState.remainingSec <= 10);
   }
 
   async function loadPublishedConfigs() {
@@ -927,12 +1034,7 @@ export async function renderSiswaGamePage(container) {
       return;
     }
 
-    const captured = captureCurrentAnswer();
-    if (!captured) {
-      setMessage('Jawaban belum dipilih/diisi.', true);
-      return;
-    }
-
+    captureCurrentAnswer();
     setMessage('');
 
     if (gameState.currentIndex >= gameState.questions.length - 1) {
@@ -942,6 +1044,37 @@ export async function renderSiswaGamePage(container) {
 
     gameState.currentIndex += 1;
     renderQuestion();
+  });
+
+  prevQuestionBtn?.addEventListener('click', () => {
+    if (!gameState) {
+      return;
+    }
+    if (gameState.currentIndex <= 0) {
+      return;
+    }
+
+    captureCurrentAnswer();
+    gameState.currentIndex -= 1;
+    renderQuestion();
+    setMessage('');
+  });
+
+  questionNavEl?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-question-nav]');
+    if (!btn || !gameState) {
+      return;
+    }
+
+    captureCurrentAnswer();
+    const targetIndex = Number(btn.getAttribute('data-question-nav'));
+    if (Number.isNaN(targetIndex)) {
+      return;
+    }
+
+    gameState.currentIndex = targetIndex;
+    renderQuestion();
+    setMessage('');
   });
 
   finishGameBtn?.addEventListener('click', async () => {
