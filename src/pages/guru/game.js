@@ -89,15 +89,19 @@ export async function renderGuruGamePage(container) {
     ...classOptions.map((item) => `<option value="${item.id}">${item.name}</option>`),
   ].join('');
   const availableGameCount = 2;
-  const plannedGameCount = 2;
   const gameCatalog = [
     {
       key: 'math',
       title: 'Matematika Cepat',
-      description: 'Aktif. Fokus pada operasi hitung, kuis cepat, token kelas, dan monitoring hasil.',
+      description: 'Atur operasi, token kelas, dan pantau hasil siswa.',
+      cardHint: 'Hitung cepat, token, monitoring.',
       status: 'Aktif',
-      badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      cardBadgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
       accentClass: 'from-emerald-500 to-cyan-500',
+      tileClass: 'from-emerald-500 via-teal-500 to-cyan-500',
+      iconGlyph: '∑',
+      accessTag: 'Token Guru',
       workspaceTitle: 'Workspace Game Matematika',
       workspaceCaption: 'Kelola konfigurasi, akses siswa, dan monitoring hasil tanpa meninggalkan satu halaman kerja.',
       available: true,
@@ -105,10 +109,15 @@ export async function renderGuruGamePage(container) {
     {
       key: 'english_vocab',
       title: 'English Vocabulary',
-      description: 'Aktif. Perkaya kosakata bahasa Inggris melalui tema kata, kuis arti, dan kalimat sederhana tanpa token.',
+      description: 'Atur tema kosakata, publish, dan pantau hasil kelas.',
+      cardHint: 'Kuis kosakata berdasarkan tema.',
       status: 'Aktif',
-      badgeClass: 'bg-sky-100 text-sky-700 border-sky-200',
+      badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+      cardBadgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
       accentClass: 'from-sky-500 to-blue-500',
+      tileClass: 'from-fuchsia-500 via-violet-500 to-indigo-500',
+      iconGlyph: 'Aa',
+      accessTag: 'Tanpa Token',
       workspaceTitle: 'Workspace English Vocabulary',
       workspaceCaption: 'Atur tema kosakata, mode latihan, publish langsung ke siswa, dan pantau hasil kelas tanpa token.',
       available: true,
@@ -116,10 +125,15 @@ export async function renderGuruGamePage(container) {
     {
       key: 'matching',
       title: 'Matching Quiz',
-      description: 'Siapkan pasangan istilah, definisi, gambar, atau rumus untuk latihan cepat lintas mapel.',
+      description: 'Pasangan istilah, definisi, gambar, atau rumus lintas mapel.',
+      cardHint: 'Pasangkan konsep dengan cepat.',
       status: 'Roadmap',
-      badgeClass: 'bg-amber-100 text-amber-700 border-amber-200',
+      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+      cardBadgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
       accentClass: 'from-amber-500 to-orange-500',
+      tileClass: 'from-amber-500 via-orange-500 to-rose-500',
+      iconGlyph: '⟷',
+      accessTag: 'Segera',
       workspaceTitle: 'Matching Quiz',
       workspaceCaption: 'Cocok untuk Bahasa Indonesia, Inggris, IPA, dan hafalan konsep.',
       available: false,
@@ -128,10 +142,15 @@ export async function renderGuruGamePage(container) {
     {
       key: 'battle',
       title: 'Quiz Battle Kelas',
-      description: 'Siswa bertanding menjawab soal yang sama dalam room dengan papan peringkat langsung.',
+      description: 'Room kompetisi kelas dengan leaderboard langsung.',
+      cardHint: 'Kompetisi kelas real-time.',
       status: 'Roadmap',
-      badgeClass: 'bg-violet-100 text-violet-700 border-violet-200',
+      badgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
+      cardBadgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
       accentClass: 'from-violet-500 to-fuchsia-500',
+      tileClass: 'from-violet-500 via-fuchsia-500 to-pink-500',
+      iconGlyph: '⚡',
+      accessTag: 'Segera',
       workspaceTitle: 'Quiz Battle Kelas',
       workspaceCaption: 'Model kompetisi ringan yang kuat untuk memacu motivasi belajar siswa.',
       available: false,
@@ -140,10 +159,15 @@ export async function renderGuruGamePage(container) {
     {
       key: 'daily',
       title: 'Mission Harian',
-      description: 'Tantangan singkat harian untuk membangun kebiasaan belajar yang konsisten.',
+      description: 'Tantangan singkat untuk kebiasaan belajar konsisten.',
+      cardHint: 'Target harian dan streak.',
       status: 'Roadmap',
-      badgeClass: 'bg-sky-100 text-sky-700 border-sky-200',
-      accentClass: 'from-sky-500 to-blue-500',
+      badgeClass: 'bg-slate-100 text-slate-600 border-slate-200',
+      cardBadgeClass: 'bg-slate-100 text-slate-600 border-slate-200',
+      accentClass: 'from-slate-500 to-slate-700',
+      tileClass: 'from-slate-600 via-slate-700 to-slate-900',
+      iconGlyph: '★',
+      accessTag: 'Segera',
       workspaceTitle: 'Mission Harian',
       workspaceCaption: 'Ideal untuk target kecil yang berulang dan mudah dimonitor guru.',
       available: false,
@@ -155,71 +179,94 @@ export async function renderGuruGamePage(container) {
     .map((item) => `<option value="${item.id}">${item.kelas_nama || '-'} • ${item.mapel_nama || '-'}</option>`)
     .join('');
 
+  const activeGames = gameCatalog.filter((game) => game.available);
+  const roadmapGames = gameCatalog.filter((game) => !game.available);
+
   const html = renderLayout('Game Center Guru', `
     <div class="space-y-6">
-      <section class="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-900 via-emerald-900 to-cyan-900 p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
+      <section id="game-hero" class="overflow-hidden rounded-[32px] bg-gradient-to-br from-slate-900 via-emerald-900 to-cyan-800 p-6 text-white shadow-[0_24px_80px_rgba(15,23,42,0.22)]">
         <div class="grid gap-5 xl:grid-cols-[1.2fr_0.8fr] xl:items-start">
           <div class="space-y-4">
-            <p class="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-200">Game Center Guru</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.26em] text-emerald-100">Game Center Guru</p>
             <div>
-              <h2 class="text-3xl font-semibold tracking-tight">Kelola game kelas seperti platform belajar profesional</h2>
-              <p class="mt-3 max-w-2xl text-sm leading-6 text-emerald-50/85">Gunakan satu pusat kerja untuk mengatur game aktif, menyiapkan roadmap game baru, mengelola token akses, dan memantau performa siswa per kelas.</p>
-            </div>
-            <div class="flex flex-wrap gap-2 text-xs text-emerald-50/90">
-              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">${availableGameCount} game aktif</span>
-              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">${plannedGameCount} game dalam roadmap</span>
-              <span class="rounded-full border border-white/15 bg-white/10 px-3 py-1">${assignments.length} relasi mengajar terhubung</span>
+              <h2 class="text-3xl font-semibold tracking-tight">Pilih game dan mulai kelola</h2>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-emerald-50/85">Semua game kelas aktif tersedia di satu tempat.</p>
             </div>
           </div>
           <div class="grid gap-3 sm:grid-cols-3 xl:grid-cols-2">
             <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
               <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Game Aktif</p>
-              <p class="mt-3 text-3xl font-semibold text-white" id="game-summary-available">${availableGameCount}</p>
+              <p class="mt-3 text-xl font-semibold text-white" id="game-summary-available">${availableGameCount}</p>
             </div>
             <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Kelas Terhubung</p>
-              <p class="mt-3 text-3xl font-semibold text-white" id="game-summary-assignments">${assignments.length}</p>
+              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Kelas</p>
+              <p class="mt-3 text-xl font-semibold text-white" id="game-summary-assignments">${assignments.length}</p>
             </div>
-            <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
-              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Sesi Kelas Terpilih</p>
-              <p class="mt-3 text-3xl font-semibold text-white" id="game-summary-sessions">0</p>
+            <div class="rounded-[28px] border border-white/10 bg-white/10 p-4 backdrop-blur-sm xl:col-span-2">
+              <p class="text-xs uppercase tracking-[0.18em] text-emerald-100">Sesi Terpilih</p>
+              <p class="mt-3 text-xl font-semibold text-white" id="game-summary-sessions">0</p>
             </div>
           </div>
         </div>
       </section>
 
       <section id="game-catalog-section" class="space-y-4">
-        <div>
-          <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Katalog Game</p>
-          <h3 class="mt-1 text-2xl font-semibold text-slate-900">Pilih game yang ingin dikelola</h3>
-          <p class="mt-2 text-sm text-slate-500">Klik satu game untuk membuka pengaturan. Tampilan akan tetap bersih sampai Anda memilih game.</p>
+        <div id="game-workspace-panel" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">Kelola Game</p>
+              <h3 class="mt-2 text-2xl font-semibold text-slate-900">Pilih game untuk dikonfigurasi</h3>
+              <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Atur akses, publish, lalu pantau hasil kelas.</p>
+            </div>
+            <div class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Siap dikelola</div>
+          </div>
         </div>
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          ${gameCatalog.map((game) => `
+
+        <div id="game-card-grid" class="grid grid-cols-2 gap-4">
+          ${activeGames.map((game, index) => `
             <button
               type="button"
               data-game-card="${game.key}"
-              class="game-card group rounded-[28px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(15,23,42,0.08)]"
+              class="game-card group relative overflow-hidden rounded-[30px] bg-gradient-to-br ${game.tileClass} p-4 text-left text-white shadow-[0_16px_32px_rgba(15,23,42,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_44px_rgba(15,23,42,0.28)] ${index === 0 ? 'ring-2 ring-white/80' : ''}"
             >
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br ${game.accentClass} text-lg font-bold text-white shadow-lg">${game.title.split(' ').map((word) => word[0]).slice(0, 2).join('')}</div>
-                <span class="rounded-full border px-3 py-1 text-[11px] font-semibold ${game.badgeClass}">${game.status}</span>
+              <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-white/25 blur-2xl"></div>
+              <div class="absolute -bottom-8 -left-8 h-24 w-24 rounded-full bg-white/20 blur-2xl"></div>
+              <div class="relative">
+                <div class="mb-3 flex items-start justify-between gap-2">
+                  <div class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-white/20 text-3xl font-extrabold shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-sm">${game.iconGlyph}</div>
+                  <span class="rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/95">${game.accessTag}</span>
+                </div>
+                <p class="text-base font-semibold leading-tight">${game.title}</p>
+                <p class="mt-1 text-xs leading-5 text-white/90">${game.cardHint}</p>
               </div>
-              <div class="mt-4">
-                <p class="text-lg font-semibold text-slate-900">${game.title}</p>
-                <p class="mt-2 text-sm leading-6 text-slate-500">${game.description}</p>
-              </div>
-              <p class="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">${game.available ? 'Pilih untuk atur game' : 'Siap dikembangkan berikutnya'}</p>
             </button>
           `).join('')}
         </div>
+
+        ${roadmapGames.length ? `
+          <div class="grid grid-cols-3 gap-3">
+            ${roadmapGames.map((game) => `
+              <button
+                type="button"
+                data-game-card="${game.key}"
+                class="game-card group relative overflow-hidden rounded-[24px] bg-gradient-to-br ${game.tileClass} p-3.5 text-left text-white opacity-90 shadow-[0_12px_28px_rgba(15,23,42,0.14)] transition hover:-translate-y-0.5 hover:opacity-100 hover:shadow-[0_18px_36px_rgba(15,23,42,0.22)]"
+              >
+                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/20 blur-2xl"></div>
+                <div class="relative">
+                  <div class="mb-2.5 flex items-start justify-between gap-2">
+                    <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-lg font-extrabold backdrop-blur-sm">${game.iconGlyph}</div>
+                    <span class="rounded-full border border-white/30 bg-white/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/95">${game.status}</span>
+                  </div>
+                  <p class="text-sm font-semibold leading-tight">${game.title}</p>
+                  <p class="mt-1 text-[11px] leading-4 text-white/85">${game.cardHint}</p>
+                </div>
+              </button>
+            `).join('')}
+          </div>
+        ` : ''}
       </section>
 
-      <section id="game-selection-hint" class="rounded-[28px] border border-dashed border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Pengaturan Game</p>
-        <h3 class="mt-1 text-xl font-semibold text-slate-900">Pilih game dari katalog untuk membuka pengaturan</h3>
-        <p class="mt-2 text-sm text-slate-500">Setelah game dipilih, panel pengaturan akan muncul dengan transisi halus.</p>
-      </section>
+      <section id="game-selection-hint" class="hidden" aria-hidden="true"></section>
 
       <section id="game-settings-section" class="hidden grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]" aria-hidden="true">
         <div class="space-y-4">
@@ -236,511 +283,608 @@ export async function renderGuruGamePage(container) {
           </div>
 
           <article id="game-workspace-math" data-game-workspace="math" class="game-workspace space-y-4">
-            <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="overflow-hidden rounded-[28px] border border-emerald-200/80 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-5 text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)]">
               <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">Pengaturan Game</p>
-                  <h3 id="workspace-title" class="mt-2 text-2xl font-semibold text-slate-900">Workspace Game Matematika</h3>
-                  <p id="workspace-caption" class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Kelola konfigurasi, akses siswa, dan monitoring hasil tanpa meninggalkan satu halaman kerja.</p>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/20 text-lg font-extrabold backdrop-blur-sm">∑</span>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-100">Matematika Cepat</p>
+                  </div>
+                  <h3 id="workspace-title" class="mt-3 text-2xl font-semibold tracking-tight">Workspace Game Matematika</h3>
+                  <p id="workspace-caption" class="mt-2 max-w-2xl text-sm leading-6 text-emerald-50/90">Ikuti urutan menu: lihat ringkasan → atur soal → buka akses → pantau hasil.</p>
                 </div>
-                <div id="workspace-status-badge" class="rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Aktif</div>
+                <div class="flex flex-col items-end gap-2">
+                  <div id="workspace-status-badge" class="rounded-full border border-white/25 bg-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white">Aktif</div>
+                  <p id="workspace-mode-pill" class="text-xs font-medium text-emerald-50/90">Game Matematika</p>
+                </div>
               </div>
 
-              <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+              <div class="mt-5 grid gap-3 lg:grid-cols-2">
                 <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Konfigurasi Kelas</label>
-                  <select id="game-assignment" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
+                  <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100/90">1. Pilih kelas</label>
+                  <select id="game-assignment" class="w-full rounded-2xl border border-white/20 bg-white/95 px-4 py-3 text-sm font-medium text-slate-800 shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status Game</label>
-                  <select id="game-status" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">
-                    <option value="draft">Draft</option>
-                    <option value="published">Published (siap dimainkan siswa)</option>
+                  <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-100/90">2. Status game</label>
+                  <select id="game-status" class="w-full rounded-2xl border border-white/20 bg-white/95 px-4 py-3 text-sm font-medium text-slate-800 shadow-sm">
+                    <option value="draft">Draft — belum dibuka ke siswa</option>
+                    <option value="published">Published — siap dimainkan siswa</option>
                   </select>
                 </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Mode Aktif</p>
-                  <p id="workspace-mode-pill" class="mt-2 text-sm font-semibold text-slate-900">Game Matematika</p>
-                  <p class="mt-1 text-xs text-slate-500">Terhubung dengan token dan leaderboard kelas.</p>
-                </div>
               </div>
             </div>
 
-            <div class="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
+            <div class="rounded-[24px] border border-slate-200 bg-slate-100 p-2 shadow-sm">
               <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <button type="button" data-workspace-tab="overview" class="workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition">Overview</button>
-                <button type="button" data-workspace-tab="config" class="workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Konfigurasi</button>
-                <button type="button" data-workspace-tab="access" class="workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Akses & Publish</button>
-                <button type="button" data-workspace-tab="monitoring" class="workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Monitoring</button>
+                <button type="button" data-workspace-tab="overview" class="workspace-tab group flex items-start gap-3 rounded-2xl border border-sky-300 bg-sky-600 px-3.5 py-3 text-left text-white shadow-md transition">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xs font-bold">1</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Ringkasan</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-sky-50/90">Cek status game</span>
+                  </span>
+                </button>
+                <button type="button" data-workspace-tab="config" class="workspace-tab group flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-100 px-3.5 py-3 text-left text-violet-800 transition hover:bg-violet-200/80">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-200 text-xs font-bold text-violet-800">2</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Konfigurasi</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-violet-700/80">Atur soal, token & publish</span>
+                  </span>
+                </button>
+                <button type="button" data-workspace-tab="rekap" class="workspace-tab group flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-100 px-3.5 py-3 text-left text-amber-900 transition hover:bg-amber-200/80">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-200 text-xs font-bold text-amber-900">3</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Rekap</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-amber-800/80">Tabel per kelas</span>
+                  </span>
+                </button>
+                <button type="button" data-workspace-tab="monitoring" class="workspace-tab group flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-100 px-3.5 py-3 text-left text-emerald-900 transition hover:bg-emerald-200/80">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-200 text-xs font-bold text-emerald-900">4</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Monitoring</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-emerald-800/80">Lihat hasil siswa</span>
+                  </span>
+                </button>
               </div>
             </div>
 
-            <div id="game-overview-panel" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan Konfigurasi</p>
-                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Snapshot game aktif untuk kelas terpilih</h4>
-                </div>
-                <div id="overview-status" class="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Draft</div>
-              </div>
-
-              <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Operasi</p>
-                  <p id="overview-operations" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Penjumlahan, Pengurangan</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Mode Kuis</p>
-                  <p id="overview-quiz-modes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Isian Singkat</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Durasi & Soal</p>
-                  <p id="overview-duration" class="mt-2 text-sm font-semibold leading-6 text-slate-900">10 soal • 180 detik</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Token Aktif</p>
-                  <p id="overview-token" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Belum dibuat</p>
+            <div id="game-overview-panel" class="overflow-hidden rounded-[28px] border border-sky-200 bg-white shadow-sm">
+              <div class="border-b border-sky-100 bg-sky-50 px-5 py-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Langkah 1 · Ringkasan</p>
+                    <h4 class="mt-1 text-xl font-semibold text-slate-900">Snapshot game kelas terpilih</h4>
+                    <p class="mt-1 text-sm text-slate-600">Cek pengaturan saat ini sebelum mengubah atau mem-publish.</p>
+                  </div>
+                  <div id="overview-status" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Draft</div>
                 </div>
               </div>
-
-              <div class="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 p-4">
-                <p class="text-sm font-semibold text-slate-900">Arah modul game profesional</p>
-                <div class="mt-3 grid gap-3 md:grid-cols-3">
-                  <div class="rounded-2xl bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Konten</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Bank soal dan mode kuis per game</p>
+              <div class="space-y-4 p-5">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div class="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">Operasi</p>
+                    <p id="overview-operations" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Penjumlahan, Pengurangan</p>
                   </div>
-                  <div class="rounded-2xl bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Akses</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Token, publish, dan kontrol kelas aktif</p>
+                  <div class="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-700">Mode Kuis</p>
+                    <p id="overview-quiz-modes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Isian Singkat</p>
                   </div>
-                  <div class="rounded-2xl bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Analitik</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Skor, akurasi, partisipasi, dan leaderboard</p>
+                  <div class="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">Durasi & Soal</p>
+                    <p id="overview-duration" class="mt-2 text-sm font-semibold leading-6 text-slate-900">10 soal • 180 detik</p>
                   </div>
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Token Aktif</p>
+                    <p id="overview-token" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Belum dibuat</p>
+                  </div>
+                </div>
+                <div class="rounded-2xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-3 text-sm text-slate-600">
+                  <span class="font-semibold text-sky-800">Petunjuk:</span> Lanjut ke tab <span class="font-semibold text-violet-700">Konfigurasi</span> untuk mengubah soal, lalu <span class="font-semibold text-amber-700">Akses & Publish</span> untuk membuka ke siswa.
                 </div>
               </div>
             </div>
 
-            <form id="game-config-form" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div id="game-config-panel" class="space-y-5">
-                <div>
-                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Operasi Matematika</p>
-                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    ${Object.entries(getOperationCatalog()).map(([key, item]) => `
-                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
-                        <input type="checkbox" class="game-operation h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${['add', 'sub', 'mul', 'div'].includes(key) ? 'checked' : ''} />
-                        ${item.label}
-                      </label>
-                    `).join('')}
-                  </div>
+            <form id="game-config-form" class="hidden space-y-4">
+              <div id="game-config-panel" class="overflow-hidden rounded-[28px] border border-violet-200 bg-white shadow-sm">
+                <div class="border-b border-violet-100 bg-violet-50 px-5 py-4">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-violet-700">Langkah 2 · Konfigurasi</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Atur isi game</h4>
+                  <p class="mt-1 text-sm text-slate-600">Pilih operasi, tipe kuis, rentang angka, jumlah soal, dan durasi.</p>
                 </div>
+                <div class="space-y-4 p-5">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-700">1. Pilih operasi hitung</p>
+                      <p class="mt-1 text-xs text-slate-500">Centang operasi yang akan muncul di soal siswa.</p>
+                      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        ${Object.entries(getOperationCatalog()).map(([key, item]) => `
+                          <label class="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                            <input type="checkbox" class="game-operation h-4 w-4 rounded border-slate-300 text-violet-600" value="${key}" ${['add', 'sub', 'mul', 'div'].includes(key) ? 'checked' : ''} />
+                            ${item.label}
+                          </label>
+                        `).join('')}
+                      </div>
+                    </div>
 
-                <div>
-                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tipe Kuis</p>
-                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    ${Object.entries(quizTypes).map(([key, label]) => `
-                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
-                        <input type="checkbox" class="game-quiz-mode h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${key === 'short_answer' ? 'checked' : ''} />
-                        ${label}
-                      </label>
-                    `).join('')}
+                    <div class="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-700">2. Pilih mode kuis</p>
+                      <p class="mt-1 text-xs text-slate-500">Pilih satu atau lebih cara siswa menjawab.</p>
+                      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        ${Object.entries(quizTypes).map(([key, label]) => `
+                          <label class="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                            <input type="checkbox" class="game-quiz-mode h-4 w-4 rounded border-slate-300 text-violet-600" value="${key}" ${key === 'short_answer' ? 'checked' : ''} />
+                            ${label}
+                          </label>
+                        `).join('')}
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Min</label>
-                    <input id="game-number-min" type="number" value="1" min="0" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Terkecil</label>
+                      <input id="game-number-min" type="number" value="1" min="0" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Terbesar</label>
+                      <input id="game-number-max" type="number" value="20" min="5" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
+                      <input id="game-question-count" type="number" value="10" min="5" max="50" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Waktu (detik)</label>
+                      <input id="game-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+                    </div>
                   </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Angka Max</label>
-                    <input id="game-number-max" type="number" value="20" min="5" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
-                    <input id="game-question-count" type="number" value="10" min="5" max="50" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Durasi (detik)</label>
-                    <input id="game-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                </div>
 
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Kali Min</label>
-                    <input id="game-mul-min" type="number" value="1" min="0" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Kali Max</label>
-                    <input id="game-mul-max" type="number" value="15" min="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Bagi Min</label>
-                    <input id="game-div-min" type="number" value="1" min="1" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kriteria Bagi Max</label>
-                    <input id="game-div-max" type="number" value="12" min="2" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                </div>
-
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Maks Pangkat</label>
-                    <input id="game-max-exponent" type="number" value="3" min="2" max="6" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-                  </div>
-                  <div class="flex items-end">
-                    <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 shadow-sm">
-                      <input id="game-allow-negative" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-[#007AFF]" />
-                      Izinkan hasil negatif
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div id="game-access-panel" class="hidden space-y-4">
-                <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Token Akses Game</p>
-                  <p class="mt-1 text-sm text-slate-600">Guru generate token, lalu siswa memasukkan token ini sebelum mulai bermain. Token otomatis kedaluwarsa dalam 15 menit tanpa mengganggu sesi yang sudah berjalan.</p>
-                  <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <input id="game-access-token" readonly class="w-full max-w-[240px] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold tracking-[0.14em] text-slate-800" placeholder="Belum dibuat" />
-                    <button id="generate-game-token-btn" type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700">Generate Token</button>
-                  </div>
-                  <p id="game-access-token-expiry" class="mt-2 text-xs text-slate-500">Token belum dibuat.</p>
-                </div>
-
-                <div class="grid gap-3 md:grid-cols-3">
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akses</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Gunakan token berbeda per kelas</p>
-                  </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Publish</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Draft aman untuk uji coba sebelum dibuka ke siswa</p>
-                  </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kontrol Guru</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Simpan token dan status dalam satu aksi kerja</p>
+                  <div class="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-700">3. Batasan soal</p>
+                    <p class="mt-1 text-xs text-slate-500">Atur batas angka untuk perkalian, pembagian, dan pangkat.</p>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Kali Min</label>
+                        <input id="game-mul-min" type="number" value="1" min="0" class="w-full rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Kali Max</label>
+                        <input id="game-mul-max" type="number" value="15" min="1" class="w-full rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Bagi Min</label>
+                        <input id="game-div-min" type="number" value="1" min="1" class="w-full rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm" />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Bagi Max</label>
+                        <input id="game-div-max" type="number" value="12" min="2" class="w-full rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm" />
+                      </div>
+                    </div>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      <div>
+                        <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Maks Pangkat</label>
+                        <input id="game-max-exponent" type="number" value="3" min="2" max="6" class="w-full rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm" />
+                      </div>
+                      <div class="flex items-end">
+                        <label class="inline-flex w-full items-center gap-2 rounded-xl border border-violet-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                          <input id="game-allow-negative" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-violet-600" />
+                          Izinkan hasil negatif
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
-                <button type="submit" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0063CC]">Simpan Konfigurasi</button>
-                <button id="publish-now-btn" type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">Publish Sekarang</button>
+              <div class="space-y-3 rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-semibold text-slate-800">Token Akses Siswa</p>
+                    <p class="mt-0.5 text-xs text-slate-500">Aktifkan untuk mewajibkan token. Generate menyimpan otomatis, tanpa Publish ulang.</p>
+                  </div>
+                  <label class="inline-flex cursor-pointer items-center gap-2">
+                    <span id="token-enabled-label" class="text-xs font-semibold text-slate-500">Nonaktif</span>
+                    <span class="relative inline-flex">
+                      <input id="game-token-enabled" type="checkbox" class="peer sr-only" />
+                      <span class="h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-emerald-500"></span>
+                      <span class="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5"></span>
+                    </span>
+                  </label>
+                </div>
+                <div id="game-token-controls" class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <input id="game-access-token" readonly class="w-full max-w-[180px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold tracking-[0.14em] text-slate-800" placeholder="Token kelas" />
+                    <button id="generate-game-token-btn" type="button" class="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Generate Token</button>
+                    <button id="copy-game-token-btn" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Salin</button>
+                  </div>
+                  <p id="game-access-token-expiry" class="text-xs text-slate-500">Token belum dibuat.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#0063CC]">Simpan</button>
+                  <button id="publish-now-btn" type="button" class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Publish</button>
+                </div>
                 <p id="config-message" class="text-sm text-slate-500"></p>
               </div>
             </form>
 
-            <div id="game-monitoring-panel" class="hidden rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div class="flex flex-wrap items-start justify-between gap-4">
+            <div id="game-rekap-panel" class="hidden overflow-hidden rounded-[28px] border border-amber-200 bg-white shadow-sm">
+              <div class="border-b border-amber-100 bg-amber-50 px-5 py-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-800">Langkah 3 · Rekap</p>
+                    <h4 class="mt-1 text-xl font-semibold text-slate-900">Rekap nilai per kelas</h4>
+                    <p class="mt-1 text-sm text-slate-600">Lihat percobaan siswa dalam bentuk tabel per kelas.</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button type="button" data-rekap-subtab="asli" class="rekap-subtab rounded-xl border border-amber-300 bg-amber-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition">Nilai Asli</button>
+                    <button type="button" data-rekap-subtab="rekap" class="rekap-subtab rounded-xl border border-amber-200 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-200/80">Nilai Rekap</button>
+                  </div>
+                </div>
+              </div>
+              <div class="space-y-4 p-5">
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Filter Kelas</label>
+                    <select id="math-rekap-class-filter" class="w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm">${classFilterOptions}</select>
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">Periode</label>
+                    <select id="math-rekap-range-filter" class="w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm">
+                      <option value="week">Minggu Ini</option>
+                      <option value="month">Bulan Ini</option>
+                      <option value="semester" selected>Semester Aktif</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-amber-100">
+                  <table class="min-w-full text-sm">
+                    <thead class="bg-amber-50 text-left text-xs uppercase tracking-[0.12em] text-amber-700">
+                      <tr>
+                        <th class="px-4 py-3">No</th>
+                        <th class="px-4 py-3">Nama</th>
+                        <th id="rekap-col-n1" class="px-4 py-3 text-center">N1</th>
+                        <th id="rekap-col-n2" class="px-4 py-3 text-center">N2</th>
+                        <th id="rekap-col-n3" class="px-4 py-3 text-center">N3</th>
+                        <th id="rekap-col-n4" class="px-4 py-3 text-center">N4</th>
+                        <th id="rekap-col-n5" class="px-4 py-3 text-center">N5</th>
+                        <th id="rekap-col-avg" class="px-4 py-3 text-center">Rata-rata skor</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rekap-table-body" class="divide-y divide-amber-50"></tbody>
+                  </table>
+                </div>
+                <p id="rekap-empty" class="hidden text-sm text-slate-500">Belum ada data percobaan untuk kelas ini.</p>
+              </div>
+            </div>
+
+            <div id="game-monitoring-panel" class="hidden overflow-hidden rounded-[28px] border border-emerald-200 bg-white shadow-sm">
+              <div class="border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Langkah 4 · Monitoring</p>
+                <h4 class="mt-1 text-xl font-semibold text-slate-900">Performa siswa</h4>
+                <p class="mt-1 text-sm text-slate-600">Pantau sesi, skor, akurasi, dan peringkat siswa.</p>
+              </div>
+              <div class="space-y-4 p-5">
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Filter Kelas</label>
+                    <select id="math-monitor-class-filter" class="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm">${classFilterOptions}</select>
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Periode</label>
+                    <select id="math-monitor-range-filter" class="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm">
+                      <option value="week">Minggu Ini</option>
+                      <option value="month">Bulan Ini</option>
+                      <option value="semester" selected>Semester Aktif</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Minggu Ini</p>
+                    <p id="math-recap-week" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                  </div>
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Bulan Ini</p>
+                    <p id="math-recap-month" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                  </div>
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Semester</p>
+                    <p id="math-recap-semester" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                  </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
+                    <p id="monitor-total-sessions" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
+                    <p id="monitor-average-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
+                    <p id="monitor-average-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
+                  </div>
+                </div>
                 <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Monitoring</p>
-                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Performa siswa untuk kelas terpilih</h4>
-                  <p class="mt-2 text-sm text-slate-500">Pantau sesi, akurasi, rata-rata skor, dan siswa dengan performa terbaik.</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Top Siswa</p>
+                  <div id="monitor-top-students" class="mt-2 space-y-2"></div>
                 </div>
-              </div>
-              <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Filter Kelas</label>
-                  <select id="math-monitor-class-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${classFilterOptions}</select>
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode Monitoring</label>
-                  <select id="math-monitor-range-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                    <option value="week">Minggu Ini</option>
-                    <option value="month">Bulan Ini</option>
-                    <option value="semester" selected>Semester Aktif</option>
-                  </select>
-                </div>
-              </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-3">
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Minggu Ini</p>
-                  <p id="math-recap-week" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Bulan Ini</p>
-                  <p id="math-recap-month" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Semester</p>
-                  <p id="math-recap-semester" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
-                </div>
-              </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-3">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
-                  <p id="monitor-total-sessions" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
-                  <p id="monitor-average-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
-                  <p id="monitor-average-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
-                </div>
-              </div>
-              <div class="mt-5">
-                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Top Siswa</p>
-                <div id="monitor-top-students" class="mt-2 space-y-2"></div>
               </div>
             </div>
           </article>
 
           <article id="game-workspace-english_vocab" data-game-workspace="english_vocab" class="game-workspace hidden space-y-4">
-            <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="overflow-hidden rounded-[28px] border border-sky-200/80 bg-gradient-to-br from-sky-600 via-blue-600 to-indigo-700 p-5 text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)]">
               <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Pengaturan Game</p>
-                  <h3 class="mt-2 text-2xl font-semibold text-slate-900">Workspace English Vocabulary</h3>
-                  <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Buat latihan kosakata berdasarkan tema, publish tanpa token, dan pantau penguasaan vocab siswa per kelas.</p>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/20 text-lg font-extrabold backdrop-blur-sm">Aa</span>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-sky-100">English Vocabulary</p>
+                  </div>
+                  <h3 class="mt-3 text-2xl font-semibold tracking-tight">Workspace English Vocabulary</h3>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-sky-50/90">Ikuti urutan menu: lihat ringkasan → atur tema → publish → pantau hasil.</p>
                 </div>
-                <div class="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">Aktif</div>
+                <div class="flex flex-col items-end gap-2">
+                  <div class="rounded-full border border-white/25 bg-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white">Aktif</div>
+                  <p class="text-xs font-medium text-sky-50/90">Tanpa Token</p>
+                </div>
               </div>
 
-              <div class="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)]">
+              <div class="mt-5 grid gap-3 lg:grid-cols-2">
                 <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Konfigurasi Kelas</label>
-                  <select id="english-game-assignment" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
+                  <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-100/90">1. Pilih kelas</label>
+                  <select id="english-game-assignment" class="w-full rounded-2xl border border-white/20 bg-white/95 px-4 py-3 text-sm font-medium text-slate-800 shadow-sm">${options || '<option value="">Tidak ada relasi</option>'}</select>
                 </div>
                 <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status Game</label>
-                  <select id="english-game-status" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm shadow-sm">
-                    <option value="draft">Draft</option>
-                    <option value="published">Published (langsung bisa dimainkan siswa)</option>
+                  <label class="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-100/90">2. Status game</label>
+                  <select id="english-game-status" class="w-full rounded-2xl border border-white/20 bg-white/95 px-4 py-3 text-sm font-medium text-slate-800 shadow-sm">
+                    <option value="draft">Draft — belum dibuka ke siswa</option>
+                    <option value="published">Published — siap dimainkan siswa</option>
                   </select>
                 </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Akses</p>
-                  <p class="mt-2 text-sm font-semibold text-slate-900">Tanpa Token</p>
-                  <p class="mt-1 text-xs text-slate-500">Siswa cukup masuk ke game yang sudah published.</p>
-                </div>
               </div>
             </div>
 
-            <div class="rounded-[28px] border border-slate-200 bg-white p-2 shadow-sm">
+            <div class="rounded-[24px] border border-slate-200 bg-slate-100 p-2 shadow-sm">
               <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <button type="button" data-english-tab="overview" class="english-workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition">Overview</button>
-                <button type="button" data-english-tab="config" class="english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Konfigurasi</button>
-                <button type="button" data-english-tab="publish" class="english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Publish</button>
-                <button type="button" data-english-tab="monitoring" class="english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Monitoring</button>
+                <button type="button" data-english-tab="overview" class="english-workspace-tab group flex items-start gap-3 rounded-2xl border border-sky-300 bg-sky-600 px-3.5 py-3 text-left text-white shadow-md transition">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xs font-bold">1</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Ringkasan</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-sky-50/90">Cek status game</span>
+                  </span>
+                </button>
+                <button type="button" data-english-tab="config" class="english-workspace-tab group flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-100 px-3.5 py-3 text-left text-violet-800 transition hover:bg-violet-200/80">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-200 text-xs font-bold text-violet-800">2</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Konfigurasi</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-violet-700/80">Atur tema & soal</span>
+                  </span>
+                </button>
+                <button type="button" data-english-tab="publish" class="english-workspace-tab group flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-100 px-3.5 py-3 text-left text-amber-900 transition hover:bg-amber-200/80">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-200 text-xs font-bold text-amber-900">3</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Publish</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-amber-800/80">Buka ke siswa</span>
+                  </span>
+                </button>
+                <button type="button" data-english-tab="monitoring" class="english-workspace-tab group flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-100 px-3.5 py-3 text-left text-emerald-900 transition hover:bg-emerald-200/80">
+                  <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-200 text-xs font-bold text-emerald-900">4</span>
+                  <span class="min-w-0">
+                    <span class="block text-sm font-semibold">Monitoring</span>
+                    <span class="mt-0.5 block text-[11px] leading-4 text-emerald-800/80">Lihat hasil siswa</span>
+                  </span>
+                </button>
               </div>
             </div>
 
-            <div id="english-overview-panel" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan Konfigurasi</p>
-                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Snapshot English Vocabulary untuk kelas terpilih</h4>
-                </div>
-                <div id="english-overview-status" class="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700">Draft</div>
+            <div id="english-overview-panel" class="overflow-hidden rounded-[28px] border border-sky-200 bg-white shadow-sm">
+              <div class="border-b border-sky-100 bg-sky-50 px-5 py-4">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Langkah 1 · Ringkasan</p>
+                <h4 class="mt-1 text-xl font-semibold text-slate-900">Snapshot English Vocabulary</h4>
+                <p class="mt-1 text-sm text-slate-600">Cek pengaturan saat ini sebelum mengubah atau mem-publish.</p>
               </div>
-
-              <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Tema Aktif</p>
-                  <p id="english-overview-themes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">School Objects</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Mode Kuis</p>
-                  <p id="english-overview-quiz-modes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">English ke Indonesia</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Durasi & Soal</p>
-                  <p id="english-overview-duration" class="mt-2 text-sm font-semibold leading-6 text-slate-900">10 soal • 180 detik</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Akses</p>
-                  <p id="english-overview-access" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Tanpa token</p>
-                </div>
-              </div>
-
-              <div class="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/70 p-4">
-                <p class="text-sm font-semibold text-slate-900">Fokus versi pertama</p>
-                <div class="mt-3 grid gap-3 md:grid-cols-3">
-                  <div class="rounded-2xl bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Tema</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Animals, School, Family, Food, Activities</p>
+              <div class="space-y-4 p-5">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div class="rounded-2xl border border-sky-100 bg-sky-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">Tema Aktif</p>
+                    <p id="english-overview-themes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">School Objects</p>
                   </div>
-                  <div class="rounded-2xl bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Mode</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Arti kata, reverse vocab, dan isi kalimat</p>
+                  <div class="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-700">Mode Kuis</p>
+                    <p id="english-overview-quiz-modes" class="mt-2 text-sm font-semibold leading-6 text-slate-900">English ke Indonesia</p>
                   </div>
-                  <div class="rounded-2xl bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.14em] text-slate-500">Hasil</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Skor, akurasi, mastered words, dan review words</p>
+                  <div class="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">Durasi & Soal</p>
+                    <p id="english-overview-duration" class="mt-2 text-sm font-semibold leading-6 text-slate-900">10 soal • 180 detik</p>
                   </div>
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">Akses</p>
+                    <p id="english-overview-access" class="mt-2 text-sm font-semibold leading-6 text-slate-900">Tanpa token</p>
+                  </div>
+                </div>
+                <div class="rounded-2xl border border-dashed border-sky-200 bg-sky-50/50 px-4 py-3 text-sm text-slate-600">
+                  <span class="font-semibold text-sky-800">Petunjuk:</span> Lanjut ke tab <span class="font-semibold text-violet-700">Konfigurasi</span> untuk mengatur tema dan kata, lalu <span class="font-semibold text-emerald-700">Publish</span> untuk membuka ke siswa.
                 </div>
               </div>
             </div>
 
-            <form id="english-game-config-form" class="hidden space-y-5 rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div id="english-game-config-panel" class="space-y-5">
-                <div>
-                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tema Kosakata</p>
-                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    ${Object.entries(getVocabularyThemeCatalog()).map(([key, item], index) => `
-                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
-                        <input type="checkbox" class="english-theme h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${index === 0 ? 'checked' : ''} />
-                        ${item.label}
-                      </label>
-                    `).join('')}
-                  </div>
-                  <div id="english-custom-theme-panel" class="mt-3 hidden rounded-2xl border border-dashed border-sky-200 bg-sky-50 px-4 py-3">
-                    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Tema Kustom Import</p>
-                    <div id="english-custom-theme-list" class="mt-2 flex flex-wrap gap-2"></div>
-                  </div>
+            <form id="english-game-config-form" class="hidden space-y-4">
+              <div id="english-game-config-panel" class="overflow-hidden rounded-[28px] border border-sky-200 bg-white shadow-sm">
+                <div class="border-b border-sky-100 bg-sky-50 px-5 py-4">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Langkah 2 · Konfigurasi</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Atur isi game kosakata</h4>
+                  <p class="mt-1 text-sm text-slate-600">Pilih tema, mode kuis, atur soal, dan kelola daftar kata.</p>
                 </div>
-
-                <div>
-                  <p class="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Mode Kuis</p>
-                  <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    ${Object.entries(vocabularyQuizTypes).map(([key, label], index) => `
-                      <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-700 shadow-sm">
-                        <input type="checkbox" class="english-quiz-mode h-4 w-4 rounded border-slate-300 text-[#007AFF]" value="${key}" ${index < 2 ? 'checked' : ''} />
-                        ${label}
-                      </label>
-                    `).join('')}
-                  </div>
-                </div>
-
-                <div class="space-y-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Daftar Kosakata</p>
-                      <p class="mt-1 text-sm text-slate-600">Kelola daftar kata aktif untuk game ini. Anda bisa pakai bank kata default atau ganti dengan impor Excel.</p>
+                <div class="space-y-4 p-5">
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">1. Pilih tema kosakata</p>
+                      <p class="mt-1 text-xs text-slate-500">Tema menentukan kata yang akan muncul di kuis.</p>
+                      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        ${Object.entries(getVocabularyThemeCatalog()).map(([key, item], index) => `
+                          <label class="inline-flex items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                            <input type="checkbox" class="english-theme h-4 w-4 rounded border-slate-300 text-sky-600" value="${key}" ${index === 0 ? 'checked' : ''} />
+                            ${item.label}
+                          </label>
+                        `).join('')}
+                      </div>
+                      <div id="english-custom-theme-panel" class="mt-3 hidden rounded-2xl border border-dashed border-sky-200 bg-sky-50 px-4 py-3">
+                        <p class="text-xs font-semibold uppercase tracking-[0.12em] text-sky-700">Tema Kustom Import</p>
+                        <div id="english-custom-theme-list" class="mt-2 flex flex-wrap gap-2"></div>
+                      </div>
                     </div>
-                    <span id="english-word-count" class="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">0 kata</span>
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <button id="english-download-template-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100">Download Template Excel</button>
-                    <label class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 cursor-pointer">
-                      Import Excel
-                      <input id="english-import-file" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
-                    </label>
-                    <button id="english-reset-word-bank-btn" type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-100">Kembali ke Bank Default</button>
-                  </div>
-                  <p id="english-import-message" class="text-sm text-slate-500"></p>
-                  <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-                    <table class="min-w-full text-sm">
-                      <thead class="bg-slate-50 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <tr>
-                          <th class="px-4 py-3">Tema</th>
-                          <th class="px-4 py-3">Word</th>
-                          <th class="px-4 py-3">Arti</th>
-                          <th class="px-4 py-3">Contoh Kalimat</th>
-                        </tr>
-                      </thead>
-                      <tbody id="english-word-list" class="divide-y divide-slate-100"></tbody>
-                    </table>
-                  </div>
-                </div>
 
-                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
-                    <input id="english-question-count" type="number" value="10" min="5" max="30" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                    <div class="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">2. Pilih mode kuis</p>
+                      <p class="mt-1 text-xs text-slate-500">Pilih satu atau lebih latihan kosakata.</p>
+                      <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                        ${Object.entries(vocabularyQuizTypes).map(([key, label], index) => `
+                          <label class="inline-flex items-center gap-2 rounded-xl border border-sky-100 bg-white px-3 py-2.5 text-sm text-slate-700">
+                            <input type="checkbox" class="english-quiz-mode h-4 w-4 rounded border-slate-300 text-sky-600" value="${key}" ${index < 2 ? 'checked' : ''} />
+                            ${label}
+                          </label>
+                        `).join('')}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Durasi (detik)</label>
-                    <input id="english-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+
+                  <div class="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-sky-700">3. Kelola daftar kata</p>
+                        <p class="mt-1 text-xs text-slate-500">Gunakan bank kata default atau import Excel untuk mengganti isi kuis.</p>
+                      </div>
+                      <span id="english-word-count" class="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-semibold text-sky-700">0 kata</span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button id="english-download-template-btn" type="button" class="rounded-2xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50">Download Template Excel</button>
+                      <label class="rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-700 cursor-pointer">
+                        Import Excel
+                        <input id="english-import-file" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+                      </label>
+                      <button id="english-reset-word-bank-btn" type="button" class="rounded-2xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50">Kembali ke Bank Default</button>
+                    </div>
+                    <p id="english-import-message" class="mt-2 text-xs text-slate-500"></p>
+                    <div class="mt-3 overflow-x-auto rounded-2xl border border-sky-100 bg-white">
+                      <table class="min-w-full text-sm">
+                        <thead class="bg-sky-50 text-left text-xs uppercase tracking-[0.12em] text-sky-700">
+                          <tr>
+                            <th class="px-4 py-3">Tema</th>
+                            <th class="px-4 py-3">Word</th>
+                            <th class="px-4 py-3">Arti</th>
+                            <th class="px-4 py-3">Contoh Kalimat</th>
+                          </tr>
+                        </thead>
+                        <tbody id="english-word-list" class="divide-y divide-sky-50"></tbody>
+                      </table>
+                    </div>
                   </div>
-                  <div>
-                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Level</label>
-                    <select id="english-difficulty" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                      <option value="basic">Basic</option>
-                      <option value="intermediate">Intermediate</option>
-                    </select>
+
+                  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah Soal</label>
+                      <input id="english-question-count" type="number" value="10" min="5" max="30" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Waktu (detik)</label>
+                      <input id="english-duration" type="number" value="180" min="30" max="1800" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+                    </div>
+                    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+                      <label class="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Level</label>
+                      <select id="english-difficulty" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                        <option value="basic">Basic</option>
+                        <option value="intermediate">Intermediate</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div id="english-game-publish-panel" class="hidden space-y-4">
-                <div class="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Publish Tanpa Token</p>
-                  <p class="mt-1 text-sm text-slate-600">Begitu status diubah menjadi published, siswa yang berada di kelas terkait bisa langsung membuka game ini dari Game Center siswa tanpa perlu token tambahan.</p>
+              <div id="english-game-publish-panel" class="hidden overflow-hidden rounded-[28px] border border-emerald-200 bg-white shadow-sm">
+                <div class="border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Langkah 3 · Publish</p>
+                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Buka game ke siswa</h4>
+                  <p class="mt-1 text-sm text-slate-600">Ubah status menjadi published agar siswa bisa langsung main tanpa token.</p>
                 </div>
-
-                <div class="grid gap-3 md:grid-cols-3">
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akses</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Langsung tersedia untuk siswa</p>
-                  </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kontrol</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Draft tetap aman sampai guru publish</p>
-                  </div>
-                  <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Evaluasi</p>
-                    <p class="mt-2 text-sm font-semibold text-slate-900">Hasil masuk ke monitoring seperti game lain</p>
+                <div class="space-y-4 p-5">
+                  <div class="grid gap-3 md:grid-cols-3">
+                    <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Akses</p>
+                      <p class="mt-2 text-sm font-semibold text-slate-900">Langsung tersedia untuk siswa</p>
+                    </div>
+                    <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Kontrol</p>
+                      <p class="mt-2 text-sm font-semibold text-slate-900">Draft tetap aman sampai guru publish</p>
+                    </div>
+                    <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                      <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Evaluasi</p>
+                      <p class="mt-2 text-sm font-semibold text-slate-900">Hasil masuk ke monitoring seperti game lain</p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-2">
-                <button type="submit" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white hover:bg-[#0063CC]">Simpan Konfigurasi</button>
-                <button id="english-publish-now-btn" type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700">Publish Sekarang</button>
+              <div class="flex flex-wrap items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                <button type="submit" class="rounded-2xl bg-[#007AFF] px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-[#0063CC]">Simpan Konfigurasi</button>
+                <button id="english-publish-now-btn" type="button" class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">Publish Sekarang</button>
                 <p id="english-config-message" class="text-sm text-slate-500"></p>
               </div>
             </form>
 
-            <div id="english-game-monitoring-panel" class="hidden rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-              <div class="flex flex-wrap items-start justify-between gap-4">
+            <div id="english-game-monitoring-panel" class="hidden overflow-hidden rounded-[28px] border border-emerald-200 bg-white shadow-sm">
+              <div class="border-b border-emerald-100 bg-emerald-50 px-5 py-4">
+                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Langkah 4 · Monitoring</p>
+                <h4 class="mt-1 text-xl font-semibold text-slate-900">Performa siswa</h4>
+                <p class="mt-1 text-sm text-slate-600">Pantau sesi, skor, akurasi, dan peringkat siswa.</p>
+              </div>
+              <div class="space-y-4 p-5">
+                <div class="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Filter Kelas</label>
+                    <select id="english-monitor-class-filter" class="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm">${classFilterOptions}</select>
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Periode</label>
+                    <select id="english-monitor-range-filter" class="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm">
+                      <option value="week">Minggu Ini</option>
+                      <option value="month">Bulan Ini</option>
+                      <option value="semester" selected>Semester Aktif</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Minggu Ini</p>
+                    <p id="english-recap-week" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                  </div>
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Bulan Ini</p>
+                    <p id="english-recap-month" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                  </div>
+                  <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700">Semester</p>
+                    <p id="english-recap-semester" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
+                  </div>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
+                    <p id="english-monitor-total-sessions" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
+                    <p id="english-monitor-average-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
+                  </div>
+                  <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
+                    <p id="english-monitor-average-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
+                  </div>
+                </div>
                 <div>
-                  <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Monitoring</p>
-                  <h4 class="mt-1 text-xl font-semibold text-slate-900">Performa English Vocabulary untuk kelas terpilih</h4>
-                  <p class="mt-2 text-sm text-slate-500">Lihat sesi, akurasi, rata-rata skor, dan top siswa pada latihan kosakata.</p>
+                  <p class="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">Top Siswa</p>
+                  <div id="english-monitor-top-students" class="mt-2 space-y-2"></div>
                 </div>
-              </div>
-              <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Filter Kelas</label>
-                  <select id="english-monitor-class-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${classFilterOptions}</select>
-                </div>
-                <div>
-                  <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Periode Monitoring</label>
-                  <select id="english-monitor-range-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-                    <option value="week">Minggu Ini</option>
-                    <option value="month">Bulan Ini</option>
-                    <option value="semester" selected>Semester Aktif</option>
-                  </select>
-                </div>
-              </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-3">
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Minggu Ini</p>
-                  <p id="english-recap-week" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Bulan Ini</p>
-                  <p id="english-recap-month" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rekap Semester</p>
-                  <p id="english-recap-semester" class="mt-2 text-2xl font-semibold text-slate-900">0 sesi</p>
-                </div>
-              </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-3">
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Sesi Tercatat</p>
-                  <p id="english-monitor-total-sessions" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Rata-rata Skor</p>
-                  <p id="english-monitor-average-score" class="mt-2 text-3xl font-semibold text-slate-900">0</p>
-                </div>
-                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-                  <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Akurasi Kelas</p>
-                  <p id="english-monitor-average-accuracy" class="mt-2 text-3xl font-semibold text-slate-900">0%</p>
-                </div>
-              </div>
-              <div class="mt-5">
-                <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Top Siswa</p>
-                <div id="english-monitor-top-students" class="mt-2 space-y-2"></div>
               </div>
             </div>
           </article>
@@ -753,7 +897,7 @@ export async function renderGuruGamePage(container) {
                   <h3 class="mt-2 text-2xl font-semibold text-slate-900">${game.workspaceTitle}</h3>
                   <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-500">${game.workspaceCaption}</p>
                 </div>
-                <div class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${game.badgeClass}">${game.status}</div>
+                <div class="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${game.cardBadgeClass || game.badgeClass}">${game.status}</div>
               </div>
 
               <div class="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -825,6 +969,10 @@ export async function renderGuruGamePage(container) {
   const accessTokenInput = container.querySelector('#game-access-token');
   const generateTokenBtn = container.querySelector('#generate-game-token-btn');
   const accessTokenExpiryEl = container.querySelector('#game-access-token-expiry');
+  const tokenEnabledInput = container.querySelector('#game-token-enabled');
+  const tokenEnabledLabel = container.querySelector('#token-enabled-label');
+  const tokenControlsEl = container.querySelector('#game-token-controls');
+  const copyTokenBtn = container.querySelector('#copy-game-token-btn');
   const englishAssignmentSelect = container.querySelector('#english-game-assignment');
   const englishStatusSelect = container.querySelector('#english-game-status');
   const englishConfigMessage = container.querySelector('#english-config-message');
@@ -847,6 +995,20 @@ export async function renderGuruGamePage(container) {
   const mathRecapWeekEl = container.querySelector('#math-recap-week');
   const mathRecapMonthEl = container.querySelector('#math-recap-month');
   const mathRecapSemesterEl = container.querySelector('#math-recap-semester');
+  const rekapPanelEl = container.querySelector('#game-rekap-panel');
+  const rekapTableBodyEl = container.querySelector('#rekap-table-body');
+  const rekapEmptyEl = container.querySelector('#rekap-empty');
+  const rekapClassFilterEl = container.querySelector('#math-rekap-class-filter');
+  const rekapRangeFilterEl = container.querySelector('#math-rekap-range-filter');
+  const rekapSubtabAsliBtn = container.querySelector('[data-rekap-subtab="asli"]');
+  const rekapSubtabRekapBtn = container.querySelector('[data-rekap-subtab="rekap"]');
+  const rekapColN1 = container.querySelector('#rekap-col-n1');
+  const rekapColN2 = container.querySelector('#rekap-col-n2');
+  const rekapColN3 = container.querySelector('#rekap-col-n3');
+  const rekapColN4 = container.querySelector('#rekap-col-n4');
+  const rekapColN5 = container.querySelector('#rekap-col-n5');
+  const rekapColAvg = container.querySelector('#rekap-col-avg');
+  let currentRekapMode = 'asli';
   const summarySessionsEl = container.querySelector('#game-summary-sessions');
   const workspaceTitleEl = container.querySelector('#workspace-title');
   const workspaceCaptionEl = container.querySelector('#workspace-caption');
@@ -894,6 +1056,7 @@ export async function renderGuruGamePage(container) {
   let currentAccessToken = '';
   let currentAccessTokenIssuedAt = '';
   let currentAccessTokenExpiresAt = '';
+  let currentTokenEnabled = true;
   let currentGameKey = '';
   let currentWorkspaceTab = 'overview';
   let currentEnglishWorkspaceTab = 'overview';
@@ -902,7 +1065,8 @@ export async function renderGuruGamePage(container) {
 
   function setGameSettingsVisibility(visible, animate = false) {
     if (gameSelectionHintEl) {
-      gameSelectionHintEl.classList.toggle('hidden', visible);
+      gameSelectionHintEl.classList.add('hidden');
+      gameSelectionHintEl.setAttribute('aria-hidden', 'true');
     }
     if (gameCatalogSectionEl) {
       gameCatalogSectionEl.classList.toggle('hidden', visible);
@@ -949,7 +1113,9 @@ export async function renderGuruGamePage(container) {
     }
     if (workspaceStatusBadgeEl) {
       workspaceStatusBadgeEl.textContent = selectedGame.status;
-      workspaceStatusBadgeEl.className = `rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${selectedGame.badgeClass}`;
+      workspaceStatusBadgeEl.className = selectedGame.available
+        ? 'rounded-full border border-white/25 bg-white/15 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white'
+        : `rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] ${selectedGame.cardBadgeClass || selectedGame.badgeClass}`;
     }
     if (workspaceModePillEl) {
       workspaceModePillEl.textContent = selectedGame.title;
@@ -977,7 +1143,7 @@ export async function renderGuruGamePage(container) {
       overviewDurationEl.textContent = `${settings.question_count || 0} soal • ${settings.duration_sec || 0} detik`;
     }
     if (overviewTokenEl) {
-      overviewTokenEl.textContent = token || 'Belum dibuat';
+      overviewTokenEl.textContent = !currentTokenEnabled ? 'Dimatikan' : (token || 'Belum dibuat');
     }
   }
 
@@ -1006,39 +1172,101 @@ export async function renderGuruGamePage(container) {
     }
   }
 
+  const mathTabStyles = {
+    overview: {
+      active: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-sky-300 bg-sky-600 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-100 px-3.5 py-3 text-left text-sky-900 transition hover:bg-sky-200/80',
+      badgeActive: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xs font-bold',
+      badgeIdle: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-sky-200 text-xs font-bold text-sky-900',
+      captionActive: 'mt-0.5 block text-[11px] leading-4 text-sky-50/90',
+      captionIdle: 'mt-0.5 block text-[11px] leading-4 text-sky-800/80',
+    },
+    config: {
+      active: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-violet-300 bg-violet-600 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-100 px-3.5 py-3 text-left text-violet-800 transition hover:bg-violet-200/80',
+      badgeActive: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xs font-bold',
+      badgeIdle: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-200 text-xs font-bold text-violet-800',
+      captionActive: 'mt-0.5 block text-[11px] leading-4 text-violet-50/90',
+      captionIdle: 'mt-0.5 block text-[11px] leading-4 text-violet-700/80',
+    },
+    rekap: {
+      active: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-500 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-100 px-3.5 py-3 text-left text-amber-900 transition hover:bg-amber-200/80',
+      badgeActive: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xs font-bold',
+      badgeIdle: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-200 text-xs font-bold text-amber-900',
+      captionActive: 'mt-0.5 block text-[11px] leading-4 text-amber-50/90',
+      captionIdle: 'mt-0.5 block text-[11px] leading-4 text-amber-800/80',
+    },
+    monitoring: {
+      active: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-600 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'workspace-tab group flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-100 px-3.5 py-3 text-left text-emerald-900 transition hover:bg-emerald-200/80',
+      badgeActive: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20 text-xs font-bold',
+      badgeIdle: 'flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-200 text-xs font-bold text-emerald-900',
+      captionActive: 'mt-0.5 block text-[11px] leading-4 text-emerald-50/90',
+      captionIdle: 'mt-0.5 block text-[11px] leading-4 text-emerald-800/80',
+    },
+  };
+
   function setWorkspaceTab(tabKey) {
     currentWorkspaceTab = tabKey;
     workspaceTabs.forEach((button) => {
-      const isActive = button.getAttribute('data-workspace-tab') === tabKey;
-      button.className = isActive
-        ? 'workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition'
-        : 'workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50';
+      const key = button.getAttribute('data-workspace-tab') || 'overview';
+      const isActive = key === tabKey;
+      const style = mathTabStyles[key] || mathTabStyles.overview;
+      button.className = isActive ? style.active : style.idle;
+      const badge = button.querySelector('span.flex.h-8');
+      const caption = button.querySelector('span.min-w-0 > span:last-child');
+      if (badge) {
+        badge.className = isActive ? style.badgeActive : style.badgeIdle;
+      }
+      if (caption) {
+        caption.className = isActive ? style.captionActive : style.captionIdle;
+      }
     });
 
     if (overviewPanelEl) {
       overviewPanelEl.classList.toggle('hidden', tabKey !== 'overview');
     }
     if (form) {
-      form.classList.toggle('hidden', !['config', 'access'].includes(tabKey));
+      form.classList.toggle('hidden', tabKey !== 'config');
     }
     if (configPanelEl) {
       configPanelEl.classList.toggle('hidden', tabKey !== 'config');
     }
-    if (accessPanelEl) {
-      accessPanelEl.classList.toggle('hidden', tabKey !== 'access');
+    if (rekapPanelEl) {
+      rekapPanelEl.classList.toggle('hidden', tabKey !== 'rekap');
     }
     if (monitoringPanelEl) {
       monitoringPanelEl.classList.toggle('hidden', tabKey !== 'monitoring');
     }
   }
 
+  const englishTabStyles = {
+    overview: {
+      active: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-sky-300 bg-sky-600 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-100 px-3.5 py-3 text-left text-sky-900 transition hover:bg-sky-200/80',
+    },
+    config: {
+      active: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-violet-300 bg-violet-600 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-violet-200 bg-violet-100 px-3.5 py-3 text-left text-violet-800 transition hover:bg-violet-200/80',
+    },
+    publish: {
+      active: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-500 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-100 px-3.5 py-3 text-left text-amber-900 transition hover:bg-amber-200/80',
+    },
+    monitoring: {
+      active: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-600 px-3.5 py-3 text-left text-white shadow-md transition',
+      idle: 'english-workspace-tab group flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-100 px-3.5 py-3 text-left text-emerald-900 transition hover:bg-emerald-200/80',
+    },
+  };
+
   function setEnglishWorkspaceTab(tabKey) {
     currentEnglishWorkspaceTab = tabKey;
     englishWorkspaceTabs.forEach((button) => {
-      const isActive = button.getAttribute('data-english-tab') === tabKey;
-      button.className = isActive
-        ? 'english-workspace-tab rounded-2xl border border-slate-200 bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition'
-        : 'english-workspace-tab rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50';
+      const key = button.getAttribute('data-english-tab') || 'overview';
+      const isActive = key === tabKey;
+      const style = englishTabStyles[key] || englishTabStyles.overview;
+      button.className = isActive ? style.active : style.idle;
     });
 
     if (englishOverviewPanelEl) {
@@ -1061,9 +1289,9 @@ export async function renderGuruGamePage(container) {
   function setActiveGame(gameKey, shouldAnimateWorkspace = false) {
     currentGameKey = gameKey;
     gameCards.forEach((card) => {
-      const isActive = card.getAttribute('data-game-card') === gameKey;
+      const isActive = Boolean(gameKey) && card.getAttribute('data-game-card') === gameKey;
       card.classList.toggle('ring-2', isActive);
-      card.classList.toggle('ring-emerald-200', isActive);
+      card.classList.toggle('ring-white/80', isActive);
     });
     gameWorkspaces.forEach((panel) => {
       panel.classList.toggle('hidden', panel.getAttribute('data-game-workspace') !== gameKey);
@@ -1073,6 +1301,9 @@ export async function renderGuruGamePage(container) {
       updateWorkspaceHeader();
       setWorkspaceTab(currentWorkspaceTab);
       renderMonitoring(currentAssignmentId);
+      if (currentWorkspaceTab === 'rekap') {
+        renderRekapTable();
+      }
     }
 
     if (gameKey === 'english_vocab') {
@@ -1119,6 +1350,22 @@ export async function renderGuruGamePage(container) {
     if (!configMessage) return;
     configMessage.textContent = text;
     configMessage.className = isError ? 'text-sm text-rose-600' : 'text-sm text-slate-500';
+  }
+
+  function applyTokenEnabledUI() {
+    if (tokenEnabledInput) {
+      tokenEnabledInput.checked = currentTokenEnabled;
+    }
+    if (tokenEnabledLabel) {
+      tokenEnabledLabel.textContent = currentTokenEnabled ? 'Aktif' : 'Nonaktif';
+      tokenEnabledLabel.className = currentTokenEnabled
+        ? 'text-xs font-semibold text-emerald-600'
+        : 'text-xs font-semibold text-slate-500';
+    }
+    if (tokenControlsEl) {
+      tokenControlsEl.classList.toggle('opacity-50', !currentTokenEnabled);
+      tokenControlsEl.classList.toggle('pointer-events-none', !currentTokenEnabled);
+    }
   }
 
   function setEnglishMessage(text, isError = false) {
@@ -1329,6 +1576,8 @@ export async function renderGuruGamePage(container) {
     currentAccessToken = String(config.game_access_token || '').trim();
     currentAccessTokenIssuedAt = String(config.game_access_token_issued_at || '');
     currentAccessTokenExpiresAt = String(config.game_access_token_expires_at || '');
+    currentTokenEnabled = config.token_enabled !== false;
+    applyTokenEnabledUI();
     if (accessTokenInput) {
       accessTokenInput.value = currentAccessToken;
     }
@@ -1422,6 +1671,8 @@ export async function renderGuruGamePage(container) {
       currentAccessToken = '';
       currentAccessTokenIssuedAt = '';
       currentAccessTokenExpiresAt = '';
+      currentTokenEnabled = true;
+      applyTokenEnabledUI();
       if (accessTokenInput) {
         accessTokenInput.value = '';
       }
@@ -1508,6 +1759,22 @@ export async function renderGuruGamePage(container) {
     return [...map.values()];
   }
 
+  async function getRekapForGameType(gameType = 'math') {
+    let docs = [];
+    try {
+      docs = await getDocumentsWhere('game_session_rekap', [
+        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+        { field: 'semester_id', operator: '==', value: context.semester_aktif },
+        { field: 'game_type', operator: '==', value: gameType },
+      ]);
+    } catch {
+      docs = [];
+    }
+
+    const assignmentIds = new Set(assignments.map((item) => item.id));
+    return docs.filter((item) => assignmentIds.has(item.pengajaran_id));
+  }
+
   function renderTopStudentsList(sessions, targetEl) {
     const byStudent = {};
     sessions.forEach((item) => {
@@ -1556,6 +1823,84 @@ export async function renderGuruGamePage(container) {
     }
     updateRecapCards(classSessions, mathRecapWeekEl, mathRecapMonthEl, mathRecapSemesterEl);
     renderTopStudentsList(sessions, topStudentsEl);
+  }
+
+  async function renderRekapTable() {
+    if (!rekapPanelEl || !rekapTableBodyEl) return;
+
+    const allSessions = await getSessionsForGameType('math');
+    const classId = rekapClassFilterEl?.value || 'all';
+    const scope = rekapRangeFilterEl?.value || 'semester';
+    const classSessions = getSessionsForClass(allSessions, classId);
+    const rekapDocs = getSessionsByScope(classSessions, scope);
+
+    const byStudent = {};
+    rekapDocs.forEach((item) => {
+      const key = String(item.siswa_id || '-');
+      if (!byStudent[key]) {
+        byStudent[key] = {
+          name: item.siswa_nama || key,
+          attempts: [],
+        };
+      }
+      const correct = Number(item.correct_count || 0);
+      const total = Number(item.total_questions || 0);
+      const rekapValue = Number(item.score || 0);
+      byStudent[key].attempts.push({
+        startedAt: item.started_at || item.finished_at || '',
+        raw: total ? `${correct}/${total}` : '-',
+        rekap: rekapValue,
+      });
+    });
+
+    const students = Object.values(byStudent)
+      .map((item) => ({
+        name: item.name,
+        attempts: item.attempts.sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))),
+      }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+    const maxAttempts = students.reduce((max, item) => Math.max(max, item.attempts.length), 0);
+    const cols = [rekapColN1, rekapColN2, rekapColN3, rekapColN4, rekapColN5];
+    cols.forEach((col, idx) => {
+      if (col) {
+        col.textContent = idx < maxAttempts ? `N${idx + 1}` : '';
+        col.classList.toggle('hidden', idx >= maxAttempts);
+      }
+    });
+    if (rekapColAvg) {
+      rekapColAvg.textContent = 'Rata-rata skor';
+    }
+
+    if (!students.length) {
+      rekapTableBodyEl.innerHTML = '';
+      rekapEmptyEl?.classList.remove('hidden');
+      return;
+    }
+
+    rekapEmptyEl?.classList.add('hidden');
+
+    rekapTableBodyEl.innerHTML = students
+      .map((student, idx) => {
+        const values = student.attempts.map((att) => (currentRekapMode === 'asli' ? att.raw : att.rekap));
+        const avg = student.attempts.length
+          ? (student.attempts.reduce((sum, att) => sum + att.rekap, 0) / student.attempts.length).toFixed(1)
+          : '-';
+        const cells = values.map((val) => `<td class="px-4 py-3 text-center tabular-nums">${val}</td>`).join('');
+        const emptyCells = Array.from({ length: Math.max(0, 5 - values.length) })
+          .map(() => '<td class="px-4 py-3 text-center text-slate-300">-</td>')
+          .join('');
+        return `
+          <tr class="hover:bg-amber-50/60">
+            <td class="px-4 py-3 text-xs font-semibold text-slate-500">${idx + 1}</td>
+            <td class="px-4 py-3 text-sm font-semibold text-slate-900">${student.name}</td>
+            ${cells}
+            ${emptyCells}
+            <td class="px-4 py-3 text-center text-sm font-semibold text-slate-900">${avg}</td>
+          </tr>
+        `;
+      })
+      .join('');
   }
 
   async function renderEnglishMonitoring(assignmentId) {
@@ -1620,6 +1965,7 @@ export async function renderGuruGamePage(container) {
       mapel_nama: assignment.mapel_nama,
       game_type: 'math',
       status,
+      token_enabled: currentTokenEnabled,
       game_access_token: currentAccessToken || '',
       game_access_token_issued_at: currentAccessTokenIssuedAt || '',
       game_access_token_expires_at: currentAccessTokenExpiresAt || '',
@@ -1701,12 +2047,14 @@ export async function renderGuruGamePage(container) {
     setEnglishMessage(`Konfigurasi ${status === 'published' ? 'published' : 'draft'} tersimpan. Tema: ${themeNames}. Mode kuis: ${quizNames}. Game ini tidak memerlukan token siswa.`);
   }
 
-  generateTokenBtn?.addEventListener('click', () => {
+  generateTokenBtn?.addEventListener('click', async () => {
     const now = new Date();
     const expires = new Date(now.getTime() + 15 * 60 * 1000);
     currentAccessToken = generateAccessToken(6);
     currentAccessTokenIssuedAt = now.toISOString();
     currentAccessTokenExpiresAt = expires.toISOString();
+    currentTokenEnabled = true;
+    applyTokenEnabledUI();
     if (accessTokenInput) {
       accessTokenInput.value = currentAccessToken;
     }
@@ -1714,14 +2062,72 @@ export async function renderGuruGamePage(container) {
       accessTokenExpiryEl.textContent = `Berlaku sampai: ${formatDateTime(currentAccessTokenExpiresAt)}`;
     }
     updateOverviewSnapshot(statusSelect?.value || 'draft', getSelectedSettings(), currentAccessToken);
-    setMessage(`Token baru dibuat: ${currentAccessToken}. Berlaku 15 menit. Simpan konfigurasi agar token aktif.`);
+    await saveConfig(false);
+    const isPublished = (statusSelect?.value || 'draft') === 'published';
+    setMessage(isPublished
+      ? `Token ${currentAccessToken} langsung aktif. Siswa dapat memasukkan token ini sekarang.`
+      : `Token ${currentAccessToken} tersimpan. Publish game agar siswa bisa memainkannya.`);
+  });
+
+  tokenEnabledInput?.addEventListener('change', async (event) => {
+    currentTokenEnabled = Boolean(event.target.checked);
+    applyTokenEnabledUI();
+    if (!currentTokenEnabled) {
+      currentAccessToken = '';
+      currentAccessTokenIssuedAt = '';
+      currentAccessTokenExpiresAt = '';
+      if (accessTokenInput) {
+        accessTokenInput.value = '';
+      }
+      if (accessTokenExpiryEl) {
+        accessTokenExpiryEl.textContent = 'Token dinonaktifkan.';
+      }
+      updateOverviewSnapshot(statusSelect?.value || 'draft', getSelectedSettings(), '');
+    }
+    await saveConfig(false);
+    setMessage(currentTokenEnabled
+      ? 'Token diaktifkan. Klik Generate Token untuk membuat token baru yang bisa dibagikan.'
+      : 'Token dinonaktifkan. Siswa dapat bermain tanpa token.');
+  });
+
+  copyTokenBtn?.addEventListener('click', async () => {
+    if (!currentAccessToken) {
+      setMessage('Belum ada token untuk disalin.', true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(currentAccessToken);
+      setMessage(`Token ${currentAccessToken} disalin ke clipboard.`);
+    } catch {
+      setMessage(`Token: ${currentAccessToken}`);
+    }
   });
 
   workspaceTabs.forEach((button) => {
     button.addEventListener('click', () => {
       setWorkspaceTab(button.getAttribute('data-workspace-tab') || 'overview');
+      if (button.getAttribute('data-workspace-tab') === 'rekap') {
+        renderRekapTable();
+      }
     });
   });
+
+  rekapSubtabAsliBtn?.addEventListener('click', () => {
+    currentRekapMode = 'asli';
+    rekapSubtabAsliBtn.className = 'rekap-subtab rounded-xl border border-amber-300 bg-amber-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition';
+    rekapSubtabRekapBtn.className = 'rekap-subtab rounded-xl border border-amber-200 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-200/80';
+    renderRekapTable();
+  });
+
+  rekapSubtabRekapBtn?.addEventListener('click', () => {
+    currentRekapMode = 'rekap';
+    rekapSubtabRekapBtn.className = 'rekap-subtab rounded-xl border border-amber-300 bg-amber-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition';
+    rekapSubtabAsliBtn.className = 'rekap-subtab rounded-xl border border-amber-200 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-200/80';
+    renderRekapTable();
+  });
+
+  rekapClassFilterEl?.addEventListener('change', renderRekapTable);
+  rekapRangeFilterEl?.addEventListener('change', renderRekapTable);
 
   gameCards.forEach((card) => {
     card.addEventListener('click', () => {

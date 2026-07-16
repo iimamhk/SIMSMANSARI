@@ -243,10 +243,13 @@ export async function renderSiswaGamePage(container) {
 
               <div id="question-nav" class="grid grid-cols-5 gap-2 sm:grid-cols-10"></div>
 
-              <div class="flex flex-wrap items-center gap-3">
-                <button id="prev-question-btn" type="button" class="sg-btn sg-btn-ghost">Sebelumnya</button>
-                <button id="next-question-btn" type="button" class="sg-btn sg-btn-primary">Simpan & Lanjut</button>
-                <button id="finish-game-btn" type="button" class="sg-btn sg-btn-accent ml-auto">Selesai Sekarang</button>
+              <div class="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-wrap items-center gap-3">
+                  <button id="prev-question-btn" type="button" class="sg-btn sg-btn-ghost">Sebelumnya</button>
+                  <button id="next-question-btn" type="button" class="sg-btn sg-btn-primary">Simpan & Lanjut</button>
+                </div>
+                <div class="hidden h-9 w-px bg-white/30 sm:block"></div>
+                <button id="finish-game-btn" type="button" class="sg-btn sg-btn-finish sm:ml-auto">Selesai Sekarang</button>
               </div>
             </div>
           </section>
@@ -414,7 +417,8 @@ export async function renderSiswaGamePage(container) {
       lobbyTitleEl.textContent = currentGameType === 'english_vocab' ? 'Lobby English Vocabulary' : 'Lobby Matematika Cepat';
     }
     if (tokenPanelEl) {
-      tokenPanelEl.classList.toggle('hidden', currentGameType === 'english_vocab');
+      const tokenEnabled = activeConfig ? activeConfig.token_enabled !== false : (currentGameType === 'math');
+      tokenPanelEl.classList.toggle('hidden', currentGameType === 'english_vocab' || !tokenEnabled);
     }
     if (resultAnalysisLabelEl) {
       resultAnalysisLabelEl.textContent = currentGameType === 'english_vocab' ? 'Analisis Tema & Review Kata' : 'Analisis Operasi';
@@ -553,12 +557,17 @@ export async function renderSiswaGamePage(container) {
     const operations = settings.operations.map((item) => getOperationLabel(item)).join(', ');
     const quizModes = settings.quiz_modes.map((item) => quizTypes[item]).join(', ');
 
+    const tokenEnabled = config.token_enabled !== false;
+    const tokenLine = !tokenEnabled
+      ? 'Dimatikan — main tanpa token'
+      : (config.game_access_token ? `Aktif sampai ${formatDateTime(config.game_access_token_expires_at)}` : 'Belum dibuat guru');
+
     summaryEl.innerHTML = `
       <p><span class="font-semibold text-slate-800">Status:</span> <span class="text-emerald-700 font-semibold">${config.status}</span></p>
       <p class="mt-1"><span class="font-semibold text-slate-800">Operasi:</span> ${operations}</p>
       <p class="mt-1"><span class="font-semibold text-slate-800">Tipe kuis:</span> ${quizModes}</p>
       <p class="mt-1"><span class="font-semibold text-slate-800">Jumlah soal:</span> ${settings.question_count} • <span class="font-semibold text-slate-800">Durasi:</span> ${settings.duration_sec} detik</p>
-      <p class="mt-1"><span class="font-semibold text-slate-800">Token akses:</span> ${config.game_access_token ? `Aktif sampai ${formatDateTime(config.game_access_token_expires_at)}` : 'Belum dibuat guru'}</p>
+      <p class="mt-1"><span class="font-semibold text-slate-800">Token akses:</span> ${tokenLine}</p>
     `;
   }
 
@@ -792,6 +801,67 @@ export async function renderSiswaGamePage(container) {
     return true;
   }
 
+  async function saveRekapDocument(sessionPayload) {
+    if (!sessionPayload) return;
+
+    const gameType = sessionPayload.game_type || 'math';
+    const siswaId = sessionPayload.siswa_id;
+    const pengajaranId = sessionPayload.pengajaran_id;
+    const sessionId = sessionPayload.id;
+
+    const correct = Number(sessionPayload.correct_count || 0);
+    const total = Number(sessionPayload.total_questions || 0);
+    const nilaiAsli = total ? `${correct}/${total}` : '-';
+    const nilaiRekap = total ? Math.round((correct / total) * 100) : 0;
+
+    let attemptNumber = 1;
+    try {
+      const existingRekaps = await getDocumentsWhere('game_session_rekap', [
+        { field: 'siswa_id', operator: '==', value: siswaId },
+        { field: 'game_type', operator: '==', value: gameType },
+        { field: 'pengajaran_id', operator: '==', value: pengajaranId },
+      ]);
+      attemptNumber = existingRekaps.length + 1;
+    } catch (error) {
+      console.warn('Gagal menghitung attempt_number untuk rekap:', error);
+    }
+
+    const rekapPayload = {
+      id: `rekap_${sessionId}`,
+      game_type: gameType,
+      pengajaran_id: pengajaranId,
+      kelas_id: sessionPayload.kelas_id,
+      kelas_nama: sessionPayload.kelas_nama || '',
+      siswa_id: siswaId,
+      siswa_nama: sessionPayload.siswa_nama || '',
+      tahun_ajaran_id: sessionPayload.tahun_ajaran_id,
+      semester_id: sessionPayload.semester_id,
+      session_id: sessionId,
+      started_at: sessionPayload.started_at,
+      finished_at: sessionPayload.finished_at,
+      raw_score: Number(sessionPayload.score || 0),
+      raw_correct: correct,
+      raw_total: total,
+      nilai_asli: nilaiAsli,
+      nilai_rekap: nilaiRekap,
+      attempt_number: attemptNumber,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (gameType === 'math' && sessionPayload.by_operation) {
+      rekapPayload.per_operation = sessionPayload.by_operation;
+    } else if (gameType === 'english_vocab' && sessionPayload.by_theme) {
+      rekapPayload.per_theme = sessionPayload.by_theme;
+    }
+
+    try {
+      await saveDocument('game_session_rekap', rekapPayload, rekapPayload.id);
+    } catch (error) {
+      console.warn('Gagal menyimpan rekap ke Firestore:', error);
+    }
+  }
+
   async function finishGame(isTimeout = false) {
     if (!gameState || !activeConfig) {
       return;
@@ -832,6 +902,8 @@ export async function renderSiswaGamePage(container) {
     } catch (error) {
       console.warn('Gagal menyimpan sesi game ke Firestore:', error);
     }
+
+    await saveRekapDocument(payload);
 
     const localSessions = readLocalList(LOCAL_SESSION_KEY);
     localSessions.push(payload);
@@ -964,6 +1036,10 @@ export async function renderSiswaGamePage(container) {
     activeConfig = publishedConfigs.find((item) => item.id === event.target.value) || null;
     renderConfigSummary(activeConfig);
     renderQuizTypeOptions(activeConfig);
+    const tokenEnabled = activeConfig ? activeConfig.token_enabled !== false : true;
+    if (tokenPanelEl) {
+      tokenPanelEl.classList.toggle('hidden', (activeConfig?.game_type === 'english_vocab') || !tokenEnabled);
+    }
     if (accessTokenInput) {
       accessTokenInput.value = '';
     }
@@ -984,28 +1060,36 @@ export async function renderSiswaGamePage(container) {
       quizType = quizTypeSelect?.value || settings.quiz_modes[0] || 'meaning_choice';
       questions = generateVocabularyQuestions(settings, quizType);
     } else {
-      const requiredToken = String(activeConfig.game_access_token || '').trim().toUpperCase();
-      const enteredToken = String(accessTokenInput?.value || '').trim().toUpperCase();
-      const tokenExpiresAt = String(activeConfig.game_access_token_expires_at || '').trim();
+      const tokenEnabled = activeConfig.token_enabled !== false;
 
-      if (!requiredToken) {
-        setMessage('Guru belum membuat token akses untuk game ini.', true);
-        return;
-      }
+      if (!tokenEnabled) {
+        if (accessTokenInput) {
+          accessTokenInput.value = '';
+        }
+      } else {
+        const requiredToken = String(activeConfig.game_access_token || '').trim().toUpperCase();
+        const enteredToken = String(accessTokenInput?.value || '').trim().toUpperCase();
+        const tokenExpiresAt = String(activeConfig.game_access_token_expires_at || '').trim();
 
-      if (!tokenExpiresAt || Number.isNaN(new Date(tokenExpiresAt).getTime()) || new Date(tokenExpiresAt).getTime() <= Date.now()) {
-        setMessage('Token sudah kedaluwarsa. Minta guru generate token baru.', true);
-        return;
-      }
+        if (!requiredToken) {
+          setMessage('Guru belum membuat token akses untuk game ini.', true);
+          return;
+        }
 
-      if (!enteredToken) {
-        setMessage('Masukkan token dari guru terlebih dahulu.', true);
-        return;
-      }
+        if (!tokenExpiresAt || Number.isNaN(new Date(tokenExpiresAt).getTime()) || new Date(tokenExpiresAt).getTime() <= Date.now()) {
+          setMessage('Token sudah kedaluwarsa. Minta guru generate token baru.', true);
+          return;
+        }
 
-      if (requiredToken !== enteredToken) {
-        setMessage('Token tidak valid. Periksa kembali token dari guru.', true);
-        return;
+        if (!enteredToken) {
+          setMessage('Masukkan token dari guru terlebih dahulu.', true);
+          return;
+        }
+
+        if (requiredToken !== enteredToken) {
+          setMessage('Token tidak valid. Periksa kembali token dari guru.', true);
+          return;
+        }
       }
 
       settings = normalizeGameSettings(activeConfig.settings || {});

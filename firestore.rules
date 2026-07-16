@@ -79,6 +79,51 @@ service cloud.firestore {
       allow delete: if true;
     }
 
+    match /game_sessions/{sessionId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly([
+        'id', 'config_id', 'game_type', 'tahun_ajaran_id', 'semester_id',
+        'pengajaran_id', 'guru_id', 'kelas_id', 'siswa_id', 'siswa_nama',
+        'started_at', 'finished_at', 'duration_used_sec', 'quiz_type', 'timeout',
+        'score', 'accuracy', 'correct_count', 'total_questions', 'wrong_count',
+        'by_operation', 'by_theme', 'questions', 'words_to_review',
+        'mastered_words', 'review_count'
+      ])
+      && request.resource.data.id is string
+      && request.resource.data.game_type in ['math', 'english_vocab']
+      && request.resource.data.siswa_id is string
+      && request.resource.data.pengajaran_id is string
+      && request.resource.data.score is int
+      && request.resource.data.correct_count is int
+      && request.resource.data.total_questions is int;
+      allow update, delete: if true;
+    }
+
+    match /game_session_rekap/{rekapId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly([
+        'id', 'game_type', 'pengajaran_id', 'kelas_id', 'kelas_nama',
+        'siswa_id', 'siswa_nama', 'tahun_ajaran_id', 'semester_id',
+        'session_id', 'started_at', 'finished_at',
+        'raw_score', 'raw_correct', 'raw_total',
+        'nilai_asli', 'nilai_rekap', 'attempt_number',
+        'per_operation', 'per_theme', 'per_category', 'per_round', 'per_mission',
+        'created_at', 'updated_at'
+      ])
+      && request.resource.data.id is string
+      && request.resource.data.id == rekapId
+      && request.resource.data.game_type in ['math', 'english_vocab', 'matching', 'battle', 'daily']
+      && request.resource.data.siswa_id is string
+      && request.resource.data.pengajaran_id is string
+      && request.resource.data.session_id is string
+      && request.resource.data.nilai_asli is string
+      && request.resource.data.nilai_rekap is int
+      && request.resource.data.attempt_number is int
+      && request.resource.data.raw_correct is int
+      && request.resource.data.raw_total is int;
+      allow update, delete: if true;
+    }
+
     match /{collectionName}/{documentId} {
       allow read, write: if collectionName in [
         'settings',
@@ -100,6 +145,7 @@ service cloud.firestore {
         'keaktifan_siswa',
         'game_configs',
         'game_sessions',
+        'game_session_rekap',
         'game_tokens',
         'kuiz_paket',
         'kuiz_sesi',
