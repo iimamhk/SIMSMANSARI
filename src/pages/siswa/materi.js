@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
-import { getPublishedMaterials, recordMaterialRead } from '../../firebase/data-service.js';
+import { getPublishedMaterials, recordMaterialRead, getActiveTeachingAssignments } from '../../firebase/data-service.js';
 
 const MATERIAL_READS_KEY = 'simguru_material_reads';
 
@@ -10,10 +10,6 @@ function normalizeClassToken(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
-}
-
-function isSameClass(leftValue, rightValue) {
-  return normalizeClassToken(leftValue) && normalizeClassToken(leftValue) === normalizeClassToken(rightValue);
 }
 
 function getCurrentStudent(session, context) {
@@ -29,33 +25,94 @@ function getCurrentStudent(session, context) {
   }
 }
 
-async function getStudentMaterials(session, context) {
-  const student = getCurrentStudent(session, context);
-  const studentClassId = student?.kelas_id || '';
-  const studentClassName = student?.kelas_nama || '';
-
-  const publishedMaterials = await getPublishedMaterials();
-
-  const filteredByPeriod = publishedMaterials
-    .filter((item) => item.visible_to_students !== false)
-    .filter((item) => !context.tahun_ajaran_aktif || item.tahun_ajaran_id === context.tahun_ajaran_aktif)
-    .filter((item) => !context.semester_aktif || item.semester_id === context.semester_aktif)
-    .sort((a, b) => String(b.published_at || b.updated_at || '').localeCompare(String(a.published_at || a.updated_at || '')));
-
-  if (!studentClassId && !studentClassName) {
-    return filteredByPeriod;
+function isStudentIncludedInAssignment(assignment, student) {
+  const members = Array.isArray(assignment?.siswa) ? assignment.siswa : [];
+  if (!members.length) {
+    return true;
   }
 
-  const classMatchedMaterials = filteredByPeriod.filter((item) => (
-    isSameClass(item.kelas_id, studentClassId)
-    || isSameClass(item.kelas_nama, studentClassId)
-    || isSameClass(item.kelas_token, studentClassId)
-    || isSameClass(item.kelas_id, studentClassName)
-    || isSameClass(item.kelas_nama, studentClassName)
-    || isSameClass(item.kelas_token, studentClassName)
-  ));
+  const studentKeys = new Set([
+    normalizeClassToken(student?.username),
+    normalizeClassToken(student?.id),
+    normalizeClassToken(student?.siswa_id),
+  ].filter(Boolean));
 
-  return classMatchedMaterials.length ? classMatchedMaterials : filteredByPeriod;
+  return members.some((member) => {
+    const memberKeys = [
+      normalizeClassToken(member?.siswa_id),
+      normalizeClassToken(member?.id),
+      normalizeClassToken(member?.username),
+    ].filter(Boolean);
+    return memberKeys.some((key) => studentKeys.has(key));
+  });
+}
+
+async function getStudentMaterials(session, context) {
+  const student = getCurrentStudent(session, context);
+  if (!student) {
+    return [];
+  }
+
+  const studentClassId = student?.kelas_id || '';
+  const studentClassName = student?.kelas_nama || '';
+  if (!studentClassId && !studentClassName) {
+    return [];
+  }
+
+  const [publishedMaterials, activeAssignments] = await Promise.all([
+    getPublishedMaterials(),
+    getActiveTeachingAssignments(context),
+  ]);
+
+  const studentClassTokens = new Set([
+    normalizeClassToken(studentClassId),
+    normalizeClassToken(studentClassName),
+  ].filter(Boolean));
+
+  const allowedAssignments = activeAssignments.filter((assignment) => {
+    const assignmentClassTokens = [
+      normalizeClassToken(assignment?.kelas_id),
+      normalizeClassToken(assignment?.kelas_nama),
+    ].filter(Boolean);
+    const classMatched = assignmentClassTokens.some((token) => studentClassTokens.has(token));
+    return classMatched && isStudentIncludedInAssignment(assignment, student);
+  });
+
+  const allowedAssignmentIds = new Set(
+    allowedAssignments
+      .map((assignment) => String(assignment?.id || '').trim())
+      .filter(Boolean)
+  );
+
+  const filteredByPeriod = publishedMaterials
+    .filter((item) => item.visible_to_students === true)
+    .filter((item) => !context.tahun_ajaran_aktif || item.tahun_ajaran_id === context.tahun_ajaran_aktif)
+    .filter((item) => !context.semester_aktif || item.semester_id === context.semester_aktif)
+    .filter((item) => {
+      const itemClassMatched = [
+        normalizeClassToken(item.kelas_id),
+        normalizeClassToken(item.kelas_nama),
+        normalizeClassToken(item.kelas_token),
+      ].some((token) => token && studentClassTokens.has(token));
+
+      if (!itemClassMatched) {
+        return false;
+      }
+
+      const assignmentId = String(item.pengajaran_id || '').trim();
+      if (!assignmentId) {
+        return false;
+      }
+
+      if (!allowedAssignmentIds.size) {
+        return false;
+      }
+
+      return allowedAssignmentIds.has(assignmentId);
+    })
+    .sort((a, b) => String(b.published_at || b.updated_at || '').localeCompare(String(a.published_at || a.updated_at || '')));
+
+  return filteredByPeriod;
 }
 
 function getMapelOptions(materials) {
@@ -126,6 +183,34 @@ function getSubjectCoverMeta(material) {
   return { icon: getMaterialMonogram(material), motif: 'Materi Pilihan' };
 }
 
+function getStudentThematicBookCover(material) {
+  const mapel = String(material?.mapel_nama || '').toLowerCase();
+
+  if (mapel.includes('matematika')) {
+    return { gradient: 'from-sky-600 via-cyan-600 to-blue-700', chip: 'border-sky-200 bg-sky-50 text-sky-700' };
+  }
+  if (mapel.includes('bahasa indonesia')) {
+    return { gradient: 'from-rose-500 via-orange-500 to-amber-500', chip: 'border-orange-200 bg-orange-50 text-orange-700' };
+  }
+  if (mapel.includes('bahasa inggris')) {
+    return { gradient: 'from-indigo-600 via-violet-600 to-fuchsia-600', chip: 'border-violet-200 bg-violet-50 text-violet-700' };
+  }
+  if (mapel.includes('fisika')) {
+    return { gradient: 'from-slate-700 via-slate-800 to-slate-900', chip: 'border-slate-300 bg-slate-100 text-slate-700' };
+  }
+  if (mapel.includes('kimia')) {
+    return { gradient: 'from-emerald-600 via-teal-600 to-cyan-600', chip: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
+  }
+  if (mapel.includes('biologi')) {
+    return { gradient: 'from-lime-500 via-emerald-500 to-teal-600', chip: 'border-lime-200 bg-lime-50 text-lime-700' };
+  }
+  if (mapel.includes('sejarah')) {
+    return { gradient: 'from-amber-600 via-orange-600 to-rose-700', chip: 'border-amber-200 bg-amber-50 text-amber-700' };
+  }
+
+  return { gradient: 'from-blue-600 via-indigo-600 to-violet-700', chip: 'border-indigo-200 bg-indigo-50 text-indigo-700' };
+}
+
 function readLocalMaterialReads() {
   try {
     return JSON.parse(localStorage.getItem(MATERIAL_READS_KEY) || '[]');
@@ -139,23 +224,21 @@ function getMaterialVisualStatus(material, studentId, readMap) {
 
   if (read?.completed_at || read?.completion_status === 'completed') {
     return {
-      label: 'Selesai',
-      badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      label: 'Sudah Dibaca',
+      badgeClass: 'border-emerald-200/40 bg-emerald-500/25 text-emerald-50',
     };
   }
 
   if (Number(read?.read_count || 0) > 0 || read?.last_read_at) {
     return {
-      label: 'Dibaca',
-      badgeClass: 'border-sky-200 bg-sky-50 text-sky-700',
+      label: 'Sudah Dibaca',
+      badgeClass: 'border-emerald-200/40 bg-emerald-500/25 text-emerald-50',
     };
   }
 
-  const publishedAt = new Date(material?.published_at || material?.updated_at || '').getTime();
-  const isFresh = Number.isFinite(publishedAt) && publishedAt > 0 && (Date.now() - publishedAt) <= (1000 * 60 * 60 * 24 * 10);
   return {
-    label: isFresh ? 'Baru' : 'Belum',
-    badgeClass: isFresh ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-slate-100 text-slate-600',
+    label: 'Belum Dibaca',
+    badgeClass: 'border-amber-200/40 bg-amber-500/20 text-amber-50',
   };
 }
 
@@ -322,7 +405,22 @@ export async function renderSiswaMateriPage(container) {
           </div>
         </div>
 
-        <div id="student-material-list" class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));"></div>
+        <style>
+          @keyframes studentShelfItemIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.985); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+          }
+        </style>
+        <div class="relative mx-auto w-full max-w-[1280px] overflow-hidden rounded-[22px] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100 px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:px-3 sm:py-4">
+          <div class="pointer-events-none absolute inset-x-0 top-0 h-full opacity-60">
+            <div class="absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(120,53,15,0.04)_0px,rgba(120,53,15,0.04)_1px,transparent_1px,transparent_12px)]"></div>
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_12%_22%,rgba(146,64,14,0.08),transparent_28%),radial-gradient(circle_at_84%_68%,rgba(120,53,15,0.08),transparent_28%)]"></div>
+            <div class="absolute left-0 right-0 top-[28%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
+            <div class="absolute left-0 right-0 top-[58%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
+            <div class="absolute left-0 right-0 bottom-[10%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
+          </div>
+          <div id="student-material-list" class="relative z-[1] mx-auto grid w-full grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-2.5 xl:grid-cols-6"></div>
+        </div>
       </section>
 
     </div>
@@ -483,35 +581,36 @@ export async function renderSiswaMateriPage(container) {
 
     listEl.innerHTML = filteredMaterials
       .map((material, index) => {
-        const theme = getMaterialCardTheme(material, index);
-        const coverMeta = getSubjectCoverMeta(material);
+        const coverTheme = getStudentThematicBookCover(material);
         const status = getMaterialVisualStatus(material, getCurrentStudentId(), readMap);
+        const chapterTitle = String(material.chapter || material.title || 'Bab Materi').trim();
+        const mapelTitle = String(material.mapel_nama || 'Mata Pelajaran').trim();
+        const publishDate = new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        const staggerDelay = Math.min(index, 11) * 42;
         return `
-          <button type="button" data-material-id="${material.id}" class="student-material-item group block h-full w-full text-left transition hover:-translate-y-1">
-            <article class="flex h-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition group-hover:shadow-[0_20px_36px_rgba(15,23,42,0.12)]">
-              <div class="relative h-[152px] bg-gradient-to-br ${theme.cover} p-3 text-white">
-                <div class="absolute -right-5 -top-5 h-16 w-16 rounded-full bg-white/18 blur-2xl"></div>
-                <div class="absolute bottom-2 right-2 h-12 w-12 rounded-full ${theme.glow} blur-2xl"></div>
-                <div class="relative flex h-full flex-col justify-between">
-                  <div class="flex items-start justify-between gap-2">
-                    <span class="inline-flex h-10 min-w-[40px] items-center justify-center rounded-[15px] bg-white/18 px-2 text-[11px] font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] backdrop-blur-sm">${coverMeta.icon}</span>
-                    <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${status.badgeClass}">${status.label}</span>
+          <button type="button" data-material-id="${material.id}" class="student-material-item group block h-full w-full text-left transition hover:-translate-y-0.5" style="animation: studentShelfItemIn 420ms cubic-bezier(.2,.7,.2,1) both; animation-delay: ${staggerDelay}ms;">
+            <article class="relative flex min-h-[214px] flex-col overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br ${coverTheme.gradient} text-white shadow-[0_18px_32px_-20px_rgba(15,23,42,0.6)] transition duration-300 group-hover:shadow-[0_26px_42px_-20px_rgba(15,23,42,0.62)]" style="aspect-ratio: 3/5.1;">
+              <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_14%_10%,rgba(255,255,255,0.28),transparent_42%)]"></div>
+              <span class="absolute right-2 top-2 z-[2] inline-flex items-center rounded-full border px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider backdrop-blur-[2px] ${status.badgeClass}">${status.label}</span>
+              <div class="relative flex flex-1 flex-col p-3">
+                <div class="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/18 bg-black/18 px-3 pb-2.5 pt-9 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
+                  <div class="absolute left-0 top-0 h-full w-2 bg-black/26"></div>
+                  <div class="absolute left-1.5 top-0 h-full w-[1px] bg-white/20"></div>
+                  <div class="absolute -right-4 -top-4 h-12 w-12 rounded-full bg-white/15 blur-xl"></div>
+                  <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,transparent_38%,transparent_62%,rgba(255,255,255,0.08)_100%)]"></div>
+                  <div class="relative z-[1] text-center">
+                    <p class="line-clamp-2 whitespace-normal break-words text-[10px] font-extrabold uppercase leading-tight tracking-[0.12em] text-white/95">${mapelTitle}</p>
                   </div>
-                  <div>
-                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/75">${coverMeta.motif}</p>
-                    <p class="line-clamp-3 text-[15px] font-semibold leading-snug text-white">${material.title || 'Tanpa judul'}</p>
-                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4.5 text-white/80">${material.note || 'Materi siap dibaca siswa.'}</p>
+                  <div class="relative z-[1] mt-2 flex flex-1 items-center justify-center px-1">
+                    <h3 class="line-clamp-5 max-h-[7.4rem] overflow-hidden whitespace-normal break-words text-center text-[14px] font-black leading-[1.2] text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">${chapterTitle}</h3>
                   </div>
                 </div>
-              </div>
-              <div class="flex flex-1 flex-col justify-between space-y-2.5 p-3">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${theme.chip}">${material.mapel_nama || '-'}</span>
-                  <span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">Materi</span>
-                </div>
-                <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
-                  <span class="truncate">${new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                  <span class="font-semibold uppercase tracking-[0.14em] text-slate-500">Buka</span>
+                <div class="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-white/96">
+                  <span class="inline-flex items-center gap-1">Buka <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+                  <span class="flex flex-col items-end gap-1">
+                    <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/35 bg-black/20 text-[10px] font-black">${getMaterialMonogram(material)}</span>
+                    <span class="text-[9px] font-medium normal-case tracking-normal text-right text-white/80">${publishDate}</span>
+                  </span>
                 </div>
               </div>
             </article>

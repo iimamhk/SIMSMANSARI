@@ -11,6 +11,7 @@ import {
 } from '../../firebase/data-service.js';
 
 const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
+const MATERIAL_CARD_DENSITY_KEY = 'simguru_material_card_density';
 
 function normalizeClassToken(value) {
   return String(value || '')
@@ -606,6 +607,74 @@ function getMaterialMonogram(item) {
     .toUpperCase() || 'MT';
 }
 
+function getThematicBookCover(material) {
+  const mapel = String(material?.mapel_nama || '').toLowerCase();
+
+  if (mapel.includes('matematika')) {
+    return {
+      gradient: 'from-sky-600 via-cyan-600 to-blue-700',
+      chipClass: 'border-sky-200 bg-sky-50 text-sky-700',
+      icon: '∑',
+      motif: 'Rumus dan Logika',
+    };
+  }
+  if (mapel.includes('bahasa indonesia')) {
+    return {
+      gradient: 'from-rose-500 via-orange-500 to-amber-500',
+      chipClass: 'border-orange-200 bg-orange-50 text-orange-700',
+      icon: 'Aa',
+      motif: 'Literasi dan Teks',
+    };
+  }
+  if (mapel.includes('bahasa inggris')) {
+    return {
+      gradient: 'from-indigo-600 via-violet-600 to-fuchsia-600',
+      chipClass: 'border-violet-200 bg-violet-50 text-violet-700',
+      icon: 'EN',
+      motif: 'Words and Talk',
+    };
+  }
+  if (mapel.includes('fisika')) {
+    return {
+      gradient: 'from-slate-700 via-slate-800 to-slate-900',
+      chipClass: 'border-slate-300 bg-slate-100 text-slate-700',
+      icon: 'Fx',
+      motif: 'Gerak dan Energi',
+    };
+  }
+  if (mapel.includes('kimia')) {
+    return {
+      gradient: 'from-emerald-600 via-teal-600 to-cyan-600',
+      chipClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+      icon: 'H2O',
+      motif: 'Zat dan Reaksi',
+    };
+  }
+  if (mapel.includes('biologi')) {
+    return {
+      gradient: 'from-lime-500 via-emerald-500 to-teal-600',
+      chipClass: 'border-lime-200 bg-lime-50 text-lime-700',
+      icon: 'DNA',
+      motif: 'Makhluk Hidup',
+    };
+  }
+  if (mapel.includes('sejarah')) {
+    return {
+      gradient: 'from-amber-600 via-orange-600 to-rose-700',
+      chipClass: 'border-amber-200 bg-amber-50 text-amber-700',
+      icon: '⌛',
+      motif: 'Peristiwa dan Waktu',
+    };
+  }
+
+  return {
+    gradient: 'from-blue-600 via-indigo-600 to-violet-700',
+    chipClass: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    icon: getMaterialMonogram(material),
+    motif: 'Materi Tematik',
+  };
+}
+
 const MATERIAL_BUILDER_STORAGE_KEY = 'simguru_material_builder_content';
 const MATERIAL_BUILDER_SYMBOLS = [
   '∑', '∫', '√', 'π', 'θ', 'α', 'β', 'γ', 'δ', 'λ', 'μ', 'σ', 'φ', 'ω',
@@ -942,11 +1011,27 @@ export async function renderGuruMateriPage(container) {
   const assignmentOptions = assignments
     .map((item) => `<option value="${item.id}">${item.kelas_nama || '-'} • ${item.mapel_nama || '-'}</option>`)
     .join('');
+  const assignmentCheckboxes = assignments.length
+    ? assignments.map((item, idx) => `
+        <label class="assignment-checkbox-label flex items-center gap-3 rounded-xl border-2 border-slate-200 bg-white px-4 py-3 cursor-pointer transition-all hover:border-indigo-300 hover:bg-indigo-50/40 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50/60 has-[:checked]:shadow-[0_4px_16px_-6px_rgba(99,102,241,0.2)]" data-assignment-id="${item.id}">
+          <input type="checkbox" class="assignment-checkbox peer h-5 w-5 rounded-lg border-2 border-slate-300 text-indigo-600 focus:ring-4 focus:ring-indigo-100 cursor-pointer" value="${item.id}" ${idx === 0 ? 'checked' : ''} />
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-slate-800">${item.kelas_nama || '-'}</p>
+            <p class="text-xs text-slate-500">${item.mapel_nama || '-'}</p>
+          </div>
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600 peer-checked:bg-indigo-600 peer-checked:text-white transition-all shrink-0">
+            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+          </span>
+        </label>
+      `).join('')
+    : '<div class="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500 text-center">Tidak ada relasi mengajar aktif. Hubungi admin untuk penugasan kelas.</div>';
   const templatePresetCatalog = buildTemplatePresetCatalog(assignments);
   const templatePresetOptions = buildTemplatePresetOptions(templatePresetCatalog);
   const builderSymbolButtons = MATERIAL_BUILDER_SYMBOLS
     .map((symbol) => `<button type="button" data-builder-symbol="${escapeHtml(symbol)}" class="flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-lg font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700">${escapeHtml(symbol)}</button>`)
     .join('');
+
+  let activeDraftId = '';
 
   const html = renderLayout('Materi', `
     <div class="space-y-6">
@@ -957,7 +1042,9 @@ export async function renderGuruMateriPage(container) {
         @keyframes slideUp { 0% { opacity:0; transform:translateY(16px); } 100% { opacity:1; transform:translateY(0); } }
         @keyframes slideInRight { 0% { opacity:0; transform:translateX(12px); } 100% { opacity:1; transform:translateX(0); } }
         @keyframes scaleIn { 0% { opacity:0; transform:scale(0.92); } 100% { opacity:1; transform:scale(1); } }
-        @keyframes tabGlow { 0%,100% { box-shadow:0 0 12px rgba(99,102,241,0.15); } 50% { box-shadow:0 0 24px rgba(99,102,241,0.3); } }
+        @keyframes fadeIn { 0% { opacity:0; } 100% { opacity:1; } }
+        @keyframes stepPulse { 0%,100% { box-shadow:0 0 0 0 rgba(99,102,241,0.4); } 50% { box-shadow:0 0 0 12px rgba(99,102,241,0); } }
+        @keyframes progressFill { 0% { width:0%; } 100% { width:var(--progress-width); } }
         .premium-glass {
           background: rgba(255,255,255,0.72);
           backdrop-filter: blur(20px) saturate(1.4);
@@ -976,7 +1063,8 @@ export async function renderGuruMateriPage(container) {
         .animate-slide-up { animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
         .animate-slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) both; }
         .animate-scale-in { animation: scaleIn 0.35s cubic-bezier(0.16,1,0.3,1) both; }
-        .tab-glow { animation: tabGlow 3s ease-in-out infinite; }
+        .animate-fade-in { animation: fadeIn 0.4s ease both; }
+        .step-active { animation: stepPulse 2s ease-in-out infinite; }
         .scrollbar-premium::-webkit-scrollbar { width: 6px; height: 6px; }
         .scrollbar-premium::-webkit-scrollbar-track { background: transparent; }
         .scrollbar-premium::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
@@ -992,739 +1080,270 @@ export async function renderGuruMateriPage(container) {
         .gradient-border { position:relative; }
         .gradient-border::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(135deg, #6366f1, #06b6d4, #6366f1); opacity:0; transition:opacity 0.4s; z-index:-1; }
         .gradient-border:hover::before { opacity:1; }
+        .method-card { transition: all 0.35s cubic-bezier(0.16,1,0.3,1); cursor:pointer; }
+        .method-card:hover { transform: translateY(-6px); }
+        .method-card.selected { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,0.15), 0 20px 40px -16px rgba(99,102,241,0.35); }
+        .method-card.selected .method-radio { background: #6366f1; border-color: #6366f1; }
+        .method-card.selected .method-radio::after { opacity:1; transform:scale(1); }
+        .method-radio { width:22px; height:22px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; transition:all 0.25s; flex-shrink:0; }
+        .method-radio::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; opacity:0; transform:scale(0); transition:all 0.25s; }
+        .step-indicator { display:flex; align-items:center; gap:0; }
+        .step-dot { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; transition:all 0.4s; border:2px solid #e2e8f0; background:#fff; color:#94a3b8; flex-shrink:0; }
+        .step-dot.done { background:#6366f1; border-color:#6366f1; color:#fff; }
+        .step-dot.active { background:#fff; border-color:#6366f1; color:#6366f1; }
+        .step-line { width:40px; height:2px; background:#e2e8f0; transition:background 0.4s; flex-shrink:0; }
+        .step-line.done { background:#6366f1; }
+        .step-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; margin-top:4px; transition:color 0.4s; }
+        .step-label.done { color:#6366f1; }
+        .step-label.active { color:#6366f1; }
+        .step-label.pending { color:#94a3b8; }
+        .step-nav-btn { cursor:pointer; transition:transform 0.2s; }
+        .step-nav-btn:hover .step-dot { border-color:#6366f1; color:#6366f1; transform:scale(1.08); }
+        .step-nav-btn:hover .step-label { color:#6366f1; }
+        .step-line { cursor:pointer; }
+        .stat-card { transition:all 0.3s; }
+        .stat-card:hover { transform:translateY(-2px); }
         @media (max-width: 640px) {
           .premium-glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(16px); }
           .premium-glass-strong { background: rgba(255,255,255,0.9); backdrop-filter: blur(18px); }
+          .step-line { width:24px; }
+          .step-dot { width:30px; height:30px; font-size:11px; }
         }
       </style>
 
-      <section class="animate-slide-up relative overflow-hidden rounded-[32px] bg-gradient-to-br ${materialHeroTheme.panel} p-5 text-white shadow-[0_32px_80px_-40px_rgba(99,102,241,0.4)] sm:p-7" style="animation-delay:0.05s">
-        <div class="absolute -right-8 -top-8 h-28 w-28 rounded-full ${materialHeroTheme.glowA} blur-3xl animate-float"></div>
-        <div class="absolute bottom-0 left-1/4 h-20 w-20 rounded-full ${materialHeroTheme.glowB} blur-3xl animate-pulse-glow"></div>
-        <div class="absolute right-12 top-12 h-10 w-10 rounded-full bg-white/8 blur-xl"></div>
-        <div class="absolute -left-4 bottom-4 h-14 w-14 rounded-full bg-white/6 blur-2xl"></div>
+      <section class="animate-slide-up relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-800 via-indigo-900 to-slate-900 p-5 text-white shadow-[0_32px_80px_-40px_rgba(30,41,59,0.5)] sm:p-7" style="animation-delay:0.05s">
+        <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-indigo-500/20 blur-3xl animate-float"></div>
+        <div class="absolute bottom-0 left-1/3 h-24 w-24 rounded-full bg-cyan-400/15 blur-3xl animate-pulse-glow"></div>
+        <div class="absolute right-16 top-16 h-12 w-12 rounded-full bg-white/5 blur-xl"></div>
 
-        <div class="absolute right-5 top-5 hidden h-24 w-24 items-center justify-center rounded-[24px] border border-white/20 bg-white/10 backdrop-blur-md shadow-lg sm:flex">
-          <svg viewBox="0 0 24 24" class="h-12 w-12 stroke-current text-white/90" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${materialHeroTheme.art}</svg>
+        <div class="absolute right-5 top-5 hidden h-20 w-20 items-center justify-center rounded-[20px] border border-white/15 bg-white/8 backdrop-blur-md shadow-lg sm:flex">
+          <svg viewBox="0 0 24 24" class="h-10 w-10 stroke-current text-white/80" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+          </svg>
         </div>
 
-        <div class="relative min-w-0 sm:pr-32">
+        <div class="relative min-w-0 sm:pr-28">
           <div class="flex items-center gap-2">
-            <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs">✦</span>
-            <p class="text-[10px] font-bold uppercase tracking-[0.28em] ${materialHeroTheme.eyebrow}">Perpustakaan Guru Digital</p>
+            <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-400/25 text-xs font-bold">M</span>
+            <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-indigo-200/80">Studio Materi Digital</p>
           </div>
-          <h1 class="mt-2 text-2xl font-bold leading-tight text-white sm:text-3xl">Studio Materi <span class="bg-clip-text text-transparent bg-gradient-to-r from-white to-white/70">${shortName}</span></h1>
-          <p class="mt-1.5 text-sm text-white/75 sm:text-base">Kelola, buat, dan publikasikan materi pembelajaran premium untuk siswa Anda</p>
+          <h1 class="mt-2 text-2xl font-bold leading-tight text-white sm:text-3xl">Materi <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-indigo-300">${shortName}</span></h1>
+          <p class="mt-2 text-sm text-slate-300/80 sm:text-base max-w-xl">Buat, kelola, dan publikasikan materi pembelajaran premium dengan alur kerja yang jelas dan terstruktur</p>
           <div class="mt-4 flex flex-wrap gap-2">
-            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm ${materialHeroTheme.chip}">
-              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
-              ${assignments.length} kelas aktif
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/85 backdrop-blur-sm">
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+              ${assignments.length} kelas
             </span>
-            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm ${materialHeroTheme.chip}">
-              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 12h4l3-9 4 18 3-9h4"/></svg>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/85 backdrop-blur-sm">
+              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 12h4l3-9 4 18 3-9h4"/></svg>
               ${materialReadStats.length} log baca
             </span>
-            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur-sm ${materialHeroTheme.chip}">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/85 backdrop-blur-sm">
               ${materialHeroTheme.icon} ${materialHeroTheme.badge}
             </span>
           </div>
         </div>
       </section>
 
-      <section class="animate-slide-up premium-glass-strong rounded-[28px] p-3 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.2)] sm:p-4" style="animation-delay:0.1s">
-        <div class="mb-3 flex flex-wrap items-start justify-between gap-3 px-1">
-          <div>
-            <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Navigasi Cepat</p>
-            <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Panel Kerja Materi</h2>
-          </div>
-          <span class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-600">
-            <span class="inline-flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse-glow"></span>
-            Premium
-          </span>
-        </div>
+      <section class="animate-slide-up premium-glass-strong rounded-[24px] p-3 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.15)] sm:p-4" style="animation-delay:0.1s">
         <div class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-premium sm:flex-wrap sm:gap-2 sm:overflow-visible" id="material-tab-bar">
-          <button type="button" data-material-tab="daftar" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(true)}">Daftar Materi</button>
-          <button type="button" data-material-tab="buat" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Buat Materi</button>
-          <button type="button" data-material-tab="editor" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Editor HTML</button>
-          <button type="button" data-material-tab="template" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Template</button>
-          <button type="button" data-material-tab="laporan" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">Laporan</button>
+          <button type="button" data-material-tab="koleksi" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(true)}">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            Koleksi
+          </button>
+          <button type="button" data-material-tab="buat" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            Buat Baru
+          </button>
+          <button type="button" data-material-tab="laporan" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            Laporan
+          </button>
         </div>
       </section>
 
-      <section data-material-panel="buat" class="material-tab-panel hidden space-y-4 animate-slide-up">
-        <style>
-          #material-builder-shell {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #f0f4f8;
-          }
-          #material-builder-shell *,
-          #material-builder-shell *::before,
-          #material-builder-shell *::after {
-            box-sizing: border-box;
-          }
-          #material-builder-shell .editor-wrapper {
-            width: 100%;
-            max-width: 1400px;
-            margin: 0 auto;
-            background: #ffffff;
-            border-radius: 20px;
-            box-shadow: 0 25px 60px rgba(0, 20, 50, 0.15);
-            overflow: hidden;
-            transition: all 0.3s ease;
-          }
-          #material-builder-shell .editor-wrapper.fullscreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            max-width: 100vw;
-            border-radius: 0;
-            z-index: 9999;
-            padding: 0;
-            box-shadow: none;
-          }
-          #material-builder-shell .editor-header {
-            background: linear-gradient(135deg, #0b1a33 0%, #1a2f4f 100%);
-            padding: 14px 28px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #2a4a6a;
-            flex-wrap: wrap;
-            gap: 10px;
-          }
-          #material-builder-shell .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: #fff;
-            font-weight: 700;
-            font-size: 18px;
-            letter-spacing: 0.3px;
-          }
-          #material-builder-shell .brand i {
-            font-size: 26px;
-            color: #6ab0ff;
-            background: rgba(106, 176, 255, 0.15);
-            padding: 8px;
-            border-radius: 12px;
-          }
-          #material-builder-shell .brand span {
-            color: #aacbff;
-            font-weight: 400;
-            font-size: 14px;
-            margin-left: 4px;
-          }
-          #material-builder-shell .header-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-          }
-          #material-builder-shell .header-actions button {
-            background: rgba(255, 255, 255, 0.08);
-            border: none;
-            color: #c8dfff;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            transition: all 0.2s;
-            font-family: inherit;
-          }
-          #material-builder-shell .header-actions button:hover {
-            background: rgba(255, 255, 255, 0.18);
-            color: #fff;
-            transform: translateY(-1px);
-          }
-          #material-builder-shell .header-actions button.primary {
-            background: #2d7cff;
-            color: #fff;
-          }
-          #material-builder-shell .header-actions button.primary:hover {
-            background: #3d8cff;
-          }
-          #material-builder-shell .toolbar {
-            background: #f8fafc;
-            padding: 8px 16px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 4px 2px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            min-height: 52px;
-          }
-          #material-builder-shell .toolbar .group {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-            padding: 0 6px;
-            border-right: 1px solid #e2e8f0;
-            flex-wrap: wrap;
-          }
-          #material-builder-shell .toolbar .group:last-child {
-            border-right: none;
-          }
-          #material-builder-shell .toolbar button {
-            background: transparent;
-            border: none;
-            width: 34px;
-            height: 34px;
-            border-radius: 8px;
-            color: #334155;
-            font-size: 15px;
-            cursor: pointer;
-            transition: all 0.15s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: inherit;
-            position: relative;
-          }
-          #material-builder-shell .toolbar button:hover {
-            background: #e2e8f0;
-            color: #0f172a;
-          }
-          #material-builder-shell .toolbar button.active {
-            background: #dbeafe;
-            color: #1d4ed8;
-          }
-          #material-builder-shell .toolbar button.danger {
-            color: #dc2626;
-          }
-          #material-builder-shell .toolbar select {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 4px 8px;
-            font-size: 12px;
-            font-family: inherit;
-            color: #0f172a;
-            outline: none;
-            cursor: pointer;
-            height: 30px;
-            min-width: 70px;
-          }
-          #material-builder-shell .toolbar .color-picker-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 0 4px;
-          }
-          #material-builder-shell .toolbar .color-picker-wrapper input[type="color"] {
-            width: 28px;
-            height: 28px;
-            border: 2px solid #e2e8f0;
-            border-radius: 6px;
-            padding: 2px;
-            cursor: pointer;
-            background: #fff;
-          }
-          #material-builder-shell .editor-body {
-            position: relative;
-            background: #ffffff;
-          }
-          #material-builder-shell .editor-content {
-            padding: 40px 56px;
-            min-height: 520px;
-            max-height: 680px;
-            overflow-y: auto;
-            outline: none;
-            font-size: 16px;
-            line-height: 1.8;
-            color: #0f172a;
-            font-family: 'Inter', system-ui, sans-serif;
-            transition: all 0.2s;
-            background: #fff;
-          }
-          #material-builder-shell .editor-content:empty::before {
-            content: 'Mulai menulis materi SMA di sini... Gunakan toolbar di atas untuk memformat.';
-            color: #94a3b8;
-            font-style: italic;
-            pointer-events: none;
-          }
-          #material-builder-shell .editor-content:focus {
-            box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.08);
-          }
-          #material-builder-shell .editor-content img {
-            max-width: 100%;
-            border-radius: 10px;
-            margin: 12px 0;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-          }
-          #material-builder-shell .editor-content table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 14px 0;
-            font-size: 14px;
-          }
-          #material-builder-shell .editor-content table td,
-          #material-builder-shell .editor-content table th {
-            border: 1px solid #cbd5e1;
-            padding: 8px 12px;
-            text-align: left;
-          }
-          #material-builder-shell .editor-content table th {
-            background: #f1f5f9;
-            font-weight: 600;
-          }
-          #material-builder-shell .editor-content blockquote {
-            border-left: 4px solid #3b82f6;
-            padding: 12px 20px;
-            margin: 14px 0;
-            background: #f8fafc;
-            border-radius: 0 8px 8px 0;
-            color: #1e293b;
-          }
-          #material-builder-shell .editor-content pre,
-          #material-builder-shell .code-view {
-            font-family: 'JetBrains Mono', monospace;
-          }
-          #material-builder-shell .editor-content pre {
-            background: #0f172a;
-            color: #e2e8f0;
-            padding: 16px 20px;
-            border-radius: 10px;
-            overflow-x: auto;
-            font-size: 14px;
-            line-height: 1.7;
-          }
-          #material-builder-shell .editor-content a {
-            color: #1d4ed8;
-            text-decoration: underline;
-          }
-          #material-builder-shell .editor-content .math {
-            font-family: 'Times New Roman', serif;
-            font-size: 1.15em;
-            padding: 0 2px;
-          }
-          #material-builder-shell .editor-content.hidden {
-            display: none;
-          }
-          #material-builder-shell .editor-content.preview {
-            background: #fafcfd;
-            cursor: default;
-          }
-          #material-builder-shell .code-view {
-            display: none;
-            padding: 40px 56px;
-            min-height: 420px;
-            background: #0f172a;
-            color: #e2e8f0;
-            font-size: 14px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            overflow-y: auto;
-            max-height: 680px;
-            outline: none;
-            border: none;
-            resize: none;
-            width: 100%;
-          }
-          #material-builder-shell .code-view.active {
-            display: block;
-          }
-          #material-builder-shell .status-bar {
-            background: #f8fafc;
-            border-top: 1px solid #e2e8f0;
-            padding: 8px 28px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 12px;
-            color: #64748b;
-            flex-wrap: wrap;
-            gap: 6px;
-          }
-          #material-builder-shell .stats {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-            flex-wrap: wrap;
-          }
-          #material-builder-shell .mode-indicator {
-            background: #e2e8f0;
-            padding: 2px 12px;
-            border-radius: 20px;
-            font-weight: 500;
-            font-size: 11px;
-            color: #475569;
-          }
-          #material-builder-shell .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.45);
-            backdrop-filter: blur(4px);
-            z-index: 99999;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-          }
-          #material-builder-shell .modal-overlay.open {
-            display: flex;
-          }
-          #material-builder-shell .modal-box {
-            background: #fff;
-            border-radius: 20px;
-            max-width: 560px;
-            width: 100%;
-            padding: 32px 36px;
-            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3);
-            max-height: 90vh;
-            overflow-y: auto;
-          }
-          #material-builder-shell .modal-box h3 {
-            font-size: 20px;
-            font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 6px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-          }
-          #material-builder-shell .modal-box .sub {
-            color: #64748b;
-            font-size: 14px;
-            margin-bottom: 20px;
-          }
-          #material-builder-shell .modal-box label {
-            display: block;
-            font-weight: 600;
-            font-size: 13px;
-            color: #334155;
-            margin-top: 14px;
-            margin-bottom: 4px;
-          }
-          #material-builder-shell .modal-box input,
-          #material-builder-shell .modal-box textarea,
-          #material-builder-shell .modal-box select {
-            width: 100%;
-            padding: 10px 14px;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 14px;
-            font-family: inherit;
-            transition: 0.2s;
-            background: #fafbfc;
-          }
-          #material-builder-shell .modal-box textarea {
-            resize: vertical;
-            min-height: 70px;
-          }
-          #material-builder-shell .row-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
-          }
-          #material-builder-shell .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid #eef2f6;
-          }
-          #material-builder-shell .modal-actions button {
-            padding: 10px 26px;
-            border-radius: 10px;
-            font-weight: 600;
-            font-size: 14px;
-            border: none;
-            cursor: pointer;
-            transition: 0.2s;
-            font-family: inherit;
-          }
-          #material-builder-shell .btn-cancel {
-            background: #f1f5f9;
-            color: #475569;
-          }
-          #material-builder-shell .btn-confirm {
-            background: #1d4ed8;
-            color: #fff;
-          }
-          #material-builder-shell .char-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            gap: 8px;
-            margin: 12px 0 8px;
-          }
-          #material-builder-shell .char-grid button {
-            padding: 10px 0;
-            font-size: 22px;
-            font-family: 'Times New Roman', serif;
-            border: 1.5px solid #eef2f6;
-            border-radius: 10px;
-            background: #fafbfc;
-            cursor: pointer;
-            transition: 0.15s;
-            color: #0f172a;
-            width: auto;
-            height: auto;
-          }
-          #material-builder-shell .toast {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: #0f172a;
-            color: #fff;
-            padding: 14px 28px;
-            border-radius: 14px;
-            font-weight: 500;
-            font-size: 14px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
-            z-index: 999999;
-            opacity: 0;
-            transform: translateY(20px) scale(0.95);
-            transition: all 0.3s ease;
-            pointer-events: none;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-          }
-          #material-builder-shell .toast.show {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: auto;
-          }
-          @media (max-width: 820px) {
-            #material-builder-shell .editor-content,
-            #material-builder-shell .code-view {
-              padding: 24px 28px;
-              max-height: 480px;
-              min-height: 360px;
-            }
-            #material-builder-shell .editor-header {
-              padding: 12px 18px;
-            }
-            #material-builder-shell .header-actions button {
-              font-size: 12px;
-              padding: 6px 12px;
-            }
-          }
-          @media (max-width: 480px) {
-            #material-builder-shell .editor-content,
-            #material-builder-shell .code-view {
-              padding: 16px 18px;
-              max-height: 380px;
-              min-height: 260px;
-            }
-            #material-builder-shell .row-2 {
-              grid-template-columns: 1fr;
-            }
-            #material-builder-shell .char-grid {
-              grid-template-columns: repeat(5, 1fr);
-            }
-            #material-builder-shell .brand span,
-            #material-builder-shell .header-actions button span {
-              display: none;
-            }
-          }
-        </style>
-
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:22px;padding:14px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:end;margin-bottom:14px;">
-          <div>
-            <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Relasi Mengajar</label>
-            <select id="builder-assignment" style="width:100%;height:42px;border:1px solid #dbe2ea;border-radius:12px;padding:0 12px;background:#fff;color:#0f172a;font-size:13px;outline:none;">
-              ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
-            </select>
+      <section data-material-panel="koleksi" class="material-tab-panel hidden space-y-5 animate-scale-in">
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div class="stat-card premium-glass rounded-2xl border border-slate-200/70 p-3.5 shadow-sm">
+            <div class="flex items-center gap-2.5">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </span>
+              <div>
+                <p class="text-xl font-bold text-slate-900" id="stat-published-count">0</p>
+                <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Dipublikasi</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Judul Materi</label>
-            <input id="builder-title" style="width:100%;height:42px;border:1px solid #dbe2ea;border-radius:12px;padding:0 12px;background:#fff;color:#0f172a;font-size:13px;outline:none;" placeholder="Contoh: Polinomial" />
+          <div class="stat-card premium-glass rounded-2xl border border-slate-200/70 p-3.5 shadow-sm">
+            <div class="flex items-center gap-2.5">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </span>
+              <div>
+                <p class="text-xl font-bold text-slate-900" id="stat-draft-count">0</p>
+                <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Draft Tersimpan</p>
+              </div>
+            </div>
           </div>
-          <div>
-            <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Label Kelas</label>
-            <input id="builder-level" style="width:100%;height:42px;border:1px solid #dbe2ea;border-radius:12px;padding:0 12px;background:#fff;color:#0f172a;font-size:13px;outline:none;" placeholder="Contoh: Kelas 11" />
-          </div>
-          <div>
-            <label style="display:block;font-size:12px;font-weight:700;color:#475569;margin-bottom:6px;">Bab / Unit</label>
-            <input id="builder-chapter" style="width:100%;height:42px;border:1px solid #dbe2ea;border-radius:12px;padding:0 12px;background:#fff;color:#0f172a;font-size:13px;outline:none;" placeholder="Contoh: Bab 4" />
+          <div class="stat-card premium-glass rounded-2xl border border-slate-200/70 p-3.5 shadow-sm">
+            <div class="flex items-center gap-2.5">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              </span>
+              <div>
+                <p class="text-xl font-bold text-slate-900" id="stat-reads-count">${materialReadStats.length}</p>
+                <p class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Total Log Baca</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div id="material-builder-shell">
-          <div id="builder-wrapper" class="editor-wrapper">
-            <div class="editor-header">
-              <div class="brand">
-                <i class="fas fa-graduation-cap"></i>
-                Editor Materi SMA
-                <span>· Profesional</span>
-              </div>
-              <div class="header-actions">
-                <button type="button" data-builder-action="undo"><i class="fas fa-undo"></i> <span>Undo</span></button>
-                <button type="button" data-builder-action="redo"><i class="fas fa-redo"></i> <span>Redo</span></button>
-                <button type="button" data-builder-action="toggle-code"><i class="fas fa-code"></i> <span>Code</span></button>
-                <button type="button" data-builder-action="toggle-preview"><i class="fas fa-eye"></i> <span>Preview</span></button>
-                <button type="button" data-builder-action="toggle-fullscreen"><i class="fas fa-expand"></i> <span>Full</span></button>
-                <button id="builder-import-html-btn" type="button"><i class="fas fa-file-import"></i> <span>Ambil HTML</span></button>
-                <button id="builder-apply-to-html-btn" type="button" class="primary"><i class="fas fa-share-square"></i> <span>Ke Editor HTML</span></button>
-                <button id="builder-save-draft-btn" type="button"><i class="fas fa-floppy-disk"></i> <span>Simpan Draft</span></button>
-                <button id="builder-publish-btn" type="button" class="primary"><i class="fas fa-paper-plane"></i> <span>Publish</span></button>
-                <button id="builder-export-html-btn" type="button" class="primary"><i class="fas fa-download"></i> <span>Export</span></button>
-                <button id="builder-print-btn" type="button" class="primary"><i class="fas fa-print"></i> <span>Print</span></button>
-              </div>
-            </div>
-
-            <div class="toolbar" id="builder-toolbar">
-              <div class="group">
-                <button type="button" data-builder-action="undo" title="Undo (Ctrl+Z)"><i class="fas fa-undo"></i></button>
-                <button type="button" data-builder-action="redo" title="Redo (Ctrl+Y)"><i class="fas fa-redo"></i></button>
-              </div>
-              <div class="group">
-                <button type="button" data-builder-command="bold" title="Tebal (Ctrl+B)"><i class="fas fa-bold"></i></button>
-                <button type="button" data-builder-command="italic" title="Miring (Ctrl+I)"><i class="fas fa-italic"></i></button>
-                <button type="button" data-builder-command="underline" title="Garis Bawah (Ctrl+U)"><i class="fas fa-underline"></i></button>
-                <button type="button" data-builder-command="strikeThrough" title="Coret"><i class="fas fa-strikethrough"></i></button>
-                <button type="button" data-builder-command="superscript" title="Superskrip"><i class="fas fa-superscript"></i></button>
-                <button type="button" data-builder-command="subscript" title="Subskrip"><i class="fas fa-subscript"></i></button>
-              </div>
-              <div class="group">
-                <button type="button" data-builder-command="justifyLeft" title="Rata Kiri"><i class="fas fa-align-left"></i></button>
-                <button type="button" data-builder-command="justifyCenter" title="Rata Tengah"><i class="fas fa-align-center"></i></button>
-                <button type="button" data-builder-command="justifyRight" title="Rata Kanan"><i class="fas fa-align-right"></i></button>
-                <button type="button" data-builder-command="justifyFull" title="Rata Kiri-Kanan"><i class="fas fa-align-justify"></i></button>
-              </div>
-              <div class="group">
-                <button type="button" data-builder-command="insertUnorderedList" title="Daftar Bullet"><i class="fas fa-list-ul"></i></button>
-                <button type="button" data-builder-command="insertOrderedList" title="Daftar Nomor"><i class="fas fa-list-ol"></i></button>
-                <button type="button" data-builder-command="outdent" title="Kurangi Indent"><i class="fas fa-outdent"></i></button>
-                <button type="button" data-builder-command="indent" title="Tambah Indent"><i class="fas fa-indent"></i></button>
-              </div>
-              <div class="group">
-                <select id="builder-font-family">
-                  <option value="Inter">Inter</option>
-                  <option value="Arial">Arial</option>
-                  <option value="Times New Roman">Times New Roman</option>
-                  <option value="Georgia">Georgia</option>
-                  <option value="Courier New">Courier New</option>
-                  <option value="Verdana">Verdana</option>
-                  <option value="Tahoma">Tahoma</option>
-                </select>
-                <select id="builder-font-size">
-                  <option value="1">10</option>
-                  <option value="2">12</option>
-                  <option value="3" selected>14</option>
-                  <option value="4">18</option>
-                  <option value="5">24</option>
-                  <option value="6">32</option>
-                  <option value="7">48</option>
-                </select>
-                <div class="color-picker-wrapper">
-                  <input id="builder-text-color" type="color" value="#0f172a" title="Warna Teks" />
-                  <input id="builder-bg-color" type="color" value="#ffffff" title="Warna Latar" />
-                </div>
-              </div>
-              <div class="group">
-                <button type="button" data-builder-insert="image" title="Sisipkan Gambar"><i class="fas fa-image"></i></button>
-                <button type="button" data-builder-insert="link" title="Sisipkan Link"><i class="fas fa-link"></i></button>
-                <button type="button" data-builder-insert="table" title="Sisipkan Tabel"><i class="fas fa-table"></i></button>
-                <button type="button" data-builder-action="toggle-symbols" title="Karakter Khusus"><i class="fas fa-omega"></i></button>
-                <button type="button" data-builder-insert="video" title="Sisipkan Video"><i class="fas fa-video"></i></button>
-                <button type="button" data-builder-command="removeFormat" title="Hapus Format"><i class="fas fa-eraser"></i></button>
-              </div>
-              <div class="group">
-                <button type="button" data-builder-template="h1" title="Template H1"><i class="fas fa-heading"></i></button>
-                <button type="button" data-builder-template="note" title="Template Catatan"><i class="fas fa-note-sticky"></i></button>
-                <button type="button" data-builder-template="example" title="Template Contoh"><i class="fas fa-lightbulb"></i></button>
-                <button type="button" data-builder-template="exercise" title="Template Latihan"><i class="fas fa-list-check"></i></button>
-                <button type="button" data-builder-template="task" title="Template Tugas"><i class="fas fa-clipboard-list"></i></button>
-                <button type="button" data-builder-template="tabs" title="Template Tab"><i class="fas fa-table-columns"></i></button>
-              </div>
-              <div class="group" style="border-right:none;">
-                <button type="button" data-builder-action="clear" class="danger" title="Kosongkan Konten"><i class="fas fa-trash-alt"></i></button>
-                <button type="button" data-builder-action="help" title="Bantuan"><i class="fas fa-question-circle"></i></button>
-              </div>
-            </div>
-
-            <div id="builder-symbol-panel" class="modal-box" style="display:none;max-width:none;border-radius:0;box-shadow:none;padding:16px 20px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
-              <h3><i class="fas fa-omega" style="color:#3b82f6;"></i> Karakter Khusus</h3>
-              <div class="sub">Klik simbol untuk menyisipkan ke posisi kursor.</div>
-              <div class="char-grid">
-                ${builderSymbolButtons}
-              </div>
-            </div>
-
-            <div class="editor-body">
-              <div id="builder-editor-content" class="editor-content" contenteditable="true" spellcheck="true"></div>
-              <textarea id="builder-code-view" class="code-view" spellcheck="false"></textarea>
-            </div>
-
-            <div class="status-bar">
-              <div class="stats">
-                <span><i class="fas fa-paragraph"></i> <span id="builder-word-count">0</span> kata</span>
-                <span><i class="fas fa-font"></i> <span id="builder-char-count">0</span> karakter</span>
-                <span><i class="fas fa-clock"></i> <span id="builder-last-saved">—</span></span>
-              </div>
-              <div><span id="builder-mode-indicator" class="mode-indicator">Edit</span></div>
-            </div>
-
-            <div id="builder-modal-overlay" class="modal-overlay">
-              <div class="modal-box">
-                <h3 id="builder-modal-title"><i class="fas fa-puzzle-piece"></i> Insert</h3>
-                <div id="builder-modal-subtitle" class="sub">Masukkan data</div>
-                <div id="builder-modal-body"></div>
-                <div class="modal-actions">
-                  <button id="builder-modal-cancel-btn" class="btn-cancel" type="button">Batal</button>
-                  <button id="builder-modal-confirm-btn" class="btn-confirm" type="button">Simpan</button>
-                </div>
-              </div>
-            </div>
-
-            <div id="builder-toast" class="toast"><i class="fas fa-check-circle"></i><span id="builder-toast-message">Disimpan</span></div>
-          </div>
-        </div>
-
-        <div class="overflow-hidden premium-glass rounded-[28px] border border-slate-200/70 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)]">
-          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+        <div class="premium-glass-strong rounded-2xl p-4 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.12)] sm:p-5">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 class="text-base font-semibold text-slate-900">Preview Buat Materi</h3>
-              <p class="mt-1 text-sm text-slate-500">Tampilan mandiri hasil editor ini tanpa perlu pindah ke tab Editor Materi HTML.</p>
+              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">Publikasi</p>
+              <h2 class="mt-0.5 text-base font-semibold text-slate-900 sm:text-lg">Materi Dipublikasikan</h2>
+              <p class="mt-0.5 text-xs text-slate-500">Tersedia untuk siswa</p>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <button id="builder-preview-refresh-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">
-                <i class="fas fa-rotate-right"></i>Refresh Preview
+            <div class="flex items-center gap-2">
+              <div class="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-[10px] font-bold">
+                <button id="material-card-density-compact" type="button" class="rounded-full px-2.5 py-1 text-slate-500 transition hover:text-slate-700">Compact</button>
+                <button id="material-card-density-comfortable" type="button" class="rounded-full px-2.5 py-1 text-slate-500 transition hover:text-slate-700">Comfort</button>
+              </div>
+              <span id="published-count-badge" class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">0 materi</span>
+            </div>
+          </div>
+          <style>
+            @keyframes materialShelfItemIn {
+              from { opacity: 0; transform: translateY(10px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+          </style>
+          <div class="relative mx-auto w-full max-w-[1280px] overflow-hidden rounded-[22px] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100 px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:px-3 sm:py-4">
+            <div class="pointer-events-none absolute inset-x-0 top-0 h-full opacity-60">
+              <div class="absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(120,53,15,0.04)_0px,rgba(120,53,15,0.04)_1px,transparent_1px,transparent_12px)]"></div>
+              <div class="absolute inset-0 bg-[radial-gradient(circle_at_12%_22%,rgba(146,64,14,0.08),transparent_28%),radial-gradient(circle_at_84%_68%,rgba(120,53,15,0.08),transparent_28%)]"></div>
+              <div class="absolute left-0 right-0 top-[28%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
+              <div class="absolute left-0 right-0 top-[58%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
+              <div class="absolute left-0 right-0 bottom-[10%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
+            </div>
+            <div id="material-published-list" class="relative z-[1] mx-auto grid w-full grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-2.5 xl:grid-cols-6"></div>
+          </div>
+          <div id="material-published-empty" class="hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">Belum ada materi yang dipublikasikan.</div>
+        </div>
+
+        <div class="premium-glass-strong rounded-2xl p-4 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.12)] sm:p-5">
+          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Draft Lokal</p>
+              <h2 class="mt-0.5 text-base font-semibold text-slate-900 sm:text-lg">Draft Materi</h2>
+              <p class="mt-0.5 text-xs text-slate-500">Klik untuk melanjutkan penyuntingan</p>
+            </div>
+            <span id="draft-count-badge" class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">0 draft</span>
+          </div>
+          <div id="material-draft-list" class="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3"></div>
+          <div id="material-draft-empty" class="hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">Belum ada draft materi yang tersimpan.</div>
+        </div>
+      </section>
+
+      <section data-material-panel="buat" class="material-tab-panel hidden space-y-5 animate-scale-in">
+        <div class="premium-glass-strong rounded-[24px] p-4 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.12)] sm:p-5">
+          <div class="mb-5 flex items-center justify-between">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Alur Pembuatan</p>
+              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Buat Materi Baru</h2>
+            </div>
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-violet-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-600">
+              <span class="inline-flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse-glow"></span>
+              ${activeDraftId ? 'Edit Draft' : 'Materi Baru'}
+            </span>
+          </div>
+
+          <div class="mb-6 flex items-center justify-center gap-0" id="wizard-step-nav">
+            <button type="button" data-step="1" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
+              <div class="step-dot active" id="step-dot-1">1</div>
+              <span class="step-label active mt-1.5">Pilih Metode</span>
+            </button>
+            <div class="step-line mx-1" id="step-line-1" data-step="2"></div>
+            <button type="button" data-step="2" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
+              <div class="step-dot" id="step-dot-2">2</div>
+              <span class="step-label pending mt-1.5">Metadata</span>
+            </button>
+            <div class="step-line mx-1" id="step-line-2" data-step="3"></div>
+            <button type="button" data-step="3" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
+              <div class="step-dot" id="step-dot-3">3</div>
+              <span class="step-label pending mt-1.5">Buat Konten</span>
+            </button>
+            <div class="step-line mx-1" id="step-line-3" data-step="4"></div>
+            <button type="button" data-step="4" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
+              <div class="step-dot" id="step-dot-4">4</div>
+              <span class="step-label pending mt-1.5">Review</span>
+            </button>
+          </div>
+
+          <div id="buat-step-1" class="animate-fade-in">
+            <p class="mb-4 text-sm text-slate-600">Pilih metode pembuatan materi yang paling sesuai dengan kebutuhan Anda:</p>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="method-card selected rounded-[20px] border-2 border-indigo-500 bg-white p-5 shadow-sm" data-method="editor" id="method-card-editor">
+                <div class="flex items-start justify-between">
+                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </span>
+                  <span class="method-radio"></span>
+                </div>
+                <h3 class="mt-3 text-sm font-bold text-slate-900">Buat Materi Manual</h3>
+                <p class="mt-1 text-xs leading-relaxed text-slate-500">Tulis materi langsung dengan editor visual lengkap: toolbar format, sisip gambar, tabel, video, dan template struktur materi.</p>
+                <span class="mt-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600">Tanpa AI</span>
+              </div>
+              <div class="method-card rounded-[20px] border-2 border-slate-200 bg-white p-5 shadow-sm" data-method="html" id="method-card-html">
+                <div class="flex items-start justify-between">
+                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 text-white">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l1.9 4.8L19 9l-4.5 2.5L12 16l-2.5-4.5L5 9l5.1-1.2L12 3z"/><path d="M19 14l.9 2.3L22 17l-2.1 1.2L19 20l-.9-1.8L16 17l2.1-1.7L19 14z"/></svg>
+                  </span>
+                  <span class="method-radio"></span>
+                </div>
+                <h3 class="mt-3 text-sm font-bold text-slate-900">Buat Materi dengan AI</h3>
+                <p class="mt-1 text-xs leading-relaxed text-slate-500">Susun prompt, generate di ChatGPT/DeepSeek, lalu tempel HTML hasilnya. Tersedia template prompt siap pakai agar hasil konsisten.</p>
+                <span class="mt-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-600">Terpandu & Cepat</span>
+              </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+              <button id="btn-next-to-metadata" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                Lanjut ke Metadata
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
             </div>
           </div>
-          <div class="bg-slate-100 p-3 sm:p-4">
-            <iframe id="builder-preview-frame" title="Preview Buat Materi" sandbox="allow-scripts allow-modals" class="h-[720px] w-full rounded-[24px] border border-slate-200 bg-white"></iframe>
-          </div>
-        </div>
-      </section>
 
-      <section data-material-panel="editor" class="material-tab-panel animate-slide-up grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div class="space-y-4">
-          <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">
-            <div class="mb-5">
-              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Metadata</p>
-              <h2 class="mt-1 text-lg font-semibold text-slate-900">Informasi Materi</h2>
-              <p class="mt-1 text-sm text-slate-500">Metadata ini memudahkan Anda merapikan hasil AI tanpa membongkar semua kode.</p>
+          <div id="buat-step-2" class="hidden animate-fade-in">
+            <div class="mb-4 flex items-center gap-3">
+              <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-600">2</span>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">Informasi Metadata</h3>
+                <p class="text-xs text-slate-500">Data ini akan otomatis terintegrasi dengan materi yang dibuat</p>
+              </div>
             </div>
 
-            <div class="space-y-4">
-              <div>
-                <label class="text-sm font-medium text-slate-700">Relasi Mengajar</label>
-                <select id="material-assignment" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
-                  ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
-                </select>
+            <div class="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-violet-50/50 p-4 mb-5">
+              <div class="flex items-center justify-between mb-3">
+                <div>
+                  <p class="text-sm font-bold text-indigo-800">Pilih Kelas Tujuan</p>
+                  <p class="text-xs text-indigo-600/70">Centang satu atau lebih kelas untuk mendistribusikan materi</p>
+                </div>
+                <span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-bold text-indigo-700" id="selected-classes-count">1 dipilih</span>
               </div>
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" id="material-assignment-list">
+                ${assignmentCheckboxes}
+              </div>
+            </div>
+
+            <div class="space-y-3">
               <div>
                 <label class="text-sm font-medium text-slate-700">Judul Materi</label>
                 <input id="material-title" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
+              <div class="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label class="text-sm font-medium text-slate-700">Label Kelas</label>
                   <input id="material-level" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
@@ -1743,180 +1362,489 @@ export async function renderGuruMateriPage(container) {
                 <textarea id="material-note" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: cek kembali pembahasan contoh 2 dan tambahkan soal HOTS."></textarea>
               </div>
               <div class="flex flex-wrap gap-3">
-<button id="apply-material-metadata-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Terapkan ke HTML</button>
-                 <button id="save-material-draft-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">Simpan Draft</button>
-                 <button id="publish-material-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(13,148,136,0.9)] transition hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700">Publish Materi</button>
-                 <button id="reset-material-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Draft Baru</button>
+                <button id="btn-back-to-method" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                  Kembali
+                </button>
+                <button id="btn-next-to-content" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                  Lanjut ke Konten
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
               </div>
-              <p id="material-status" class="text-sm text-slate-500">Paste HTML dari AI, lalu pilih "Muat Preview" untuk memeriksa hasilnya.</p>
             </div>
           </div>
 
-          <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div id="buat-step-3" class="hidden animate-fade-in">
+            <div class="mb-4 flex items-center gap-3">
+              <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-600">3</span>
               <div>
-                <h2 class="text-lg font-semibold text-slate-900">Sumber HTML AI</h2>
-                <p class="mt-1 text-sm text-slate-500">Paste hasil HTML lengkap dari AI di sini. Anda tetap bisa mengedit langsung sebelum preview.</p>
+                <h3 class="text-sm font-bold text-slate-900" id="step-3-title">Buat Konten Materi</h3>
+                <p class="text-xs text-slate-500" id="step-3-subtitle">Gunakan editor yang sesuai dengan metode pilihan Anda</p>
               </div>
-              <button id="load-material-preview-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Muat Preview</button>
             </div>
-            <textarea id="material-html-source" rows="24" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tempel HTML hasil AI di sini..."></textarea>
-          </div>
-        </div>
 
-        <div class="space-y-4">
-          <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-lg font-semibold text-slate-900">Preview Materi</h2>
-                <p class="mt-1 text-sm text-slate-500">Preview berjalan dalam iframe terisolasi agar kode HTML dari AI tetap bisa diuji sebelum disimpan.</p>
+            <div id="buat-content-editor" class="hidden">
+              <style>
+                #material-builder-shell {
+                  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                  background: #f0f4f8;
+                }
+                #material-builder-shell *,
+                #material-builder-shell *::before,
+                #material-builder-shell *::after {
+                  box-sizing: border-box;
+                }
+                #material-builder-shell .editor-wrapper {
+                  width: 100%;
+                  max-width: 1400px;
+                  margin: 0 auto;
+                  background: #ffffff;
+                  border-radius: 20px;
+                  box-shadow: 0 25px 60px rgba(0, 20, 50, 0.15);
+                  overflow: hidden;
+                  transition: all 0.3s ease;
+                }
+                #material-builder-shell .editor-wrapper.fullscreen {
+                  position: fixed;
+                  top: 0;
+                  left: 0;
+                  width: 100vw;
+                  height: 100vh;
+                  z-index: 9999;
+                  border-radius: 0;
+                  max-width: none;
+                }
+                #material-builder-shell .editor-header {
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 8px;
+                  padding: 12px 16px;
+                  border-bottom: 1px solid #e2e8f0;
+                  background: #fafbfc;
+                }
+                #material-builder-shell .toolbar {
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 4px;
+                  padding: 8px 12px;
+                  border-bottom: 1px solid #e2e8f0;
+                  background: #f8fafc;
+                }
+                #material-builder-shell .toolbar button {
+                  display: inline-flex;
+                  align-items: center;
+                  justify-content: center;
+                  height: 34px;
+                  min-width: 34px;
+                  padding: 0 8px;
+                  border: 1px solid #e2e8f0;
+                  border-radius: 10px;
+                  background: #fff;
+                  color: #475569;
+                  font-size: 13px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                  white-space: nowrap;
+                }
+                #material-builder-shell .toolbar button:hover {
+                  background: #f1f5f9;
+                  border-color: #cbd5e1;
+                }
+                #material-builder-shell .toolbar button.bg-sky-100 {
+                  background: #e0f2fe;
+                  border-color: #7dd3fc;
+                  color: #0369a1;
+                }
+                #material-builder-shell .toolbar .sep {
+                  width: 1px;
+                  height: 24px;
+                  background: #e2e8f0;
+                  margin: 0 4px;
+                }
+                #material-builder-shell .editor-body {
+                  display: flex;
+                  min-height: 500px;
+                }
+                #material-builder-shell .editor-content {
+                  flex: 1;
+                  padding: 24px;
+                  outline: none;
+                  min-height: 500px;
+                  font-size: 15px;
+                  line-height: 1.8;
+                  color: #1e293b;
+                }
+                #material-builder-shell .editor-content.preview {
+                  pointer-events: none;
+                  user-select: none;
+                }
+                #material-builder-shell .editor-content h1 { font-size: 2em; font-weight: 800; margin: 0.5em 0 0.3em; color: #0f172a; }
+                #material-builder-shell .editor-content h2 { font-size: 1.5em; font-weight: 700; margin: 0.5em 0 0.3em; color: #1e293b; }
+                #material-builder-shell .editor-content h3 { font-size: 1.2em; font-weight: 600; margin: 0.4em 0 0.2em; }
+                #material-builder-shell .editor-content p { margin: 0.5em 0; }
+                #material-builder-shell .editor-content ul, #material-builder-shell .editor-content ol { padding-left: 1.5em; margin: 0.5em 0; }
+                #material-builder-shell .editor-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+                #material-builder-shell .editor-content table td, #material-builder-shell .editor-content table th { border: 1px solid #e2e8f0; padding: 8px 12px; }
+                #material-builder-shell .code-view {
+                  display: none;
+                  width: 100%;
+                  min-height: 500px;
+                  padding: 20px;
+                  font-family: 'Fira Code', 'Consolas', monospace;
+                  font-size: 13px;
+                  line-height: 1.7;
+                  background: #0f172a;
+                  color: #e2e8f0;
+                  border: none;
+                  outline: none;
+                  resize: vertical;
+                }
+                #material-builder-shell .code-view.active { display: block; }
+                #material-builder-shell .status-bar {
+                  display: flex;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 8px;
+                  padding: 8px 16px;
+                  border-top: 1px solid #e2e8f0;
+                  background: #fafbfc;
+                  font-size: 11px;
+                  color: #94a3b8;
+                }
+                #material-builder-shell .modal-overlay {
+                  position: fixed;
+                  inset: 0;
+                  z-index: 10000;
+                  background: rgba(15, 23, 42, 0.6);
+                  backdrop-filter: blur(4px);
+                  display: none;
+                  align-items: center;
+                  justify-content: center;
+                }
+                #material-builder-shell .modal-overlay.open { display: flex; }
+                #material-builder-shell .modal-box {
+                  background: #fff;
+                  border-radius: 24px;
+                  padding: 24px;
+                  max-width: 480px;
+                  width: 90%;
+                  box-shadow: 0 40px 80px rgba(0,0,0,0.25);
+                }
+                #material-builder-shell .char-grid {
+                  display: grid;
+                  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+                  gap: 6px;
+                  padding: 8px;
+                }
+                #material-builder-shell .toast {
+                  position: fixed;
+                  bottom: 24px;
+                  left: 50%;
+                  transform: translateX(-50%) translateY(20px);
+                  background: #0f172a;
+                  color: #fff;
+                  padding: 10px 24px;
+                  border-radius: 999px;
+                  font-size: 13px;
+                  font-weight: 600;
+                  opacity: 0;
+                  transition: all 0.3s;
+                  z-index: 10001;
+                  pointer-events: none;
+                }
+                #material-builder-shell .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+              </style>
+              <div id="material-builder-shell">
+                <div class="editor-wrapper" id="builder-wrapper">
+                  <div class="editor-header">
+                    <input id="builder-title" class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100" placeholder="Judul materi..." />
+                    <select id="builder-assignment" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-600 outline-none focus:border-indigo-300">${assignmentOptions || '<option value="">Pilih relasi</option>'}</select>
+                    <input id="builder-level" class="w-28 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-600 outline-none focus:border-indigo-300" placeholder="Kelas" />
+                    <input id="builder-chapter" class="w-24 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-600 outline-none focus:border-indigo-300" placeholder="Bab" />
+                    <button id="builder-preview-refresh-btn" type="button" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700">Preview</button>
+                  </div>
+                  <div class="toolbar">
+                    <button type="button" data-builder-action="undo" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+                    <button type="button" data-builder-action="redo" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+                    <span class="sep"></span>
+                    <button type="button" data-builder-command="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+                    <button type="button" data-builder-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+                    <button type="button" data-builder-command="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+                    <button type="button" data-builder-command="strikeThrough" title="Strikethrough"><s>S</s></button>
+                    <button type="button" data-builder-command="superscript" title="Superscript">x<sup>2</sup></button>
+                    <button type="button" data-builder-command="subscript" title="Subscript">x<sub>2</sub></button>
+                    <span class="sep"></span>
+                    <button type="button" data-builder-command="justifyLeft" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
+                    <button type="button" data-builder-command="justifyCenter" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
+                    <button type="button" data-builder-command="justifyRight" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
+                    <button type="button" data-builder-command="justifyFull" title="Justify"><i class="fa-solid fa-align-justify"></i></button>
+                    <span class="sep"></span>
+                    <button type="button" data-builder-command="insertUnorderedList" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+                    <button type="button" data-builder-command="insertOrderedList" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+                    <button type="button" data-builder-command="indent" title="Indent"><i class="fa-solid fa-indent"></i></button>
+                    <button type="button" data-builder-command="outdent" title="Outdent"><i class="fa-solid fa-outdent"></i></button>
+                    <span class="sep"></span>
+                    <select id="builder-font-family" class="h-[34px] rounded-xl border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600">
+                      <option value="">Font</option><option value="Inter, sans-serif">Inter</option><option value="Georgia, serif">Georgia</option><option value="'Courier New', monospace">Mono</option>
+                    </select>
+                    <select id="builder-font-size" class="h-[34px] rounded-xl border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600">
+                      <option value="">Size</option><option value="1">XS</option><option value="2">S</option><option value="3">M</option><option value="4">L</option><option value="5">XL</option><option value="6">XXL</option><option value="7">XXXL</option>
+                    </select>
+                    <input type="color" id="builder-text-color" class="h-[34px] w-[34px] rounded-lg border border-slate-200 cursor-pointer" title="Text Color" />
+                    <input type="color" id="builder-bg-color" class="h-[34px] w-[34px] rounded-lg border border-slate-200 cursor-pointer" title="Background Color" />
+                    <span class="sep"></span>
+                    <button type="button" data-builder-insert="image" title="Insert Image"><i class="fa-solid fa-image"></i></button>
+                    <button type="button" data-builder-insert="link" title="Insert Link"><i class="fa-solid fa-link"></i></button>
+                    <button type="button" data-builder-insert="table" title="Insert Table"><i class="fa-solid fa-table"></i></button>
+                    <button type="button" data-builder-insert="video" title="Insert Video"><i class="fa-solid fa-video"></i></button>
+                    <button type="button" data-builder-action="toggle-symbols" title="Symbols">Ω</button>
+                    <span class="sep"></span>
+                    <button type="button" data-builder-command="removeFormat" title="Clear Format"><i class="fa-solid fa-eraser"></i></button>
+                    <span class="sep"></span>
+                    <button type="button" data-builder-template="h1" class="text-indigo-600">H1</button>
+                    <button type="button" data-builder-template="h2" class="text-indigo-600">H2</button>
+                    <button type="button" data-builder-template="note" class="text-amber-600">Note</button>
+                    <button type="button" data-builder-template="example" class="text-emerald-600">Contoh</button>
+                    <button type="button" data-builder-template="exercise" class="text-sky-600">Latihan</button>
+                    <button type="button" data-builder-template="task" class="text-rose-600">Tugas</button>
+                    <button type="button" data-builder-template="tabs" class="text-violet-600">Tabs</button>
+                    <span class="sep"></span>
+                    <button type="button" data-builder-action="toggle-code" title="Code View"><i class="fa-solid fa-code"></i> Code</button>
+                    <button type="button" data-builder-action="toggle-preview" title="Preview"><i class="fa-solid fa-eye"></i></button>
+                    <button type="button" data-builder-action="toggle-fullscreen" title="Fullscreen"><i class="fa-solid fa-expand"></i></button>
+                    <button type="button" data-builder-action="help" title="Help"><i class="fa-solid fa-circle-question"></i></button>
+                    <button type="button" data-builder-action="clear" title="Clear All" class="text-rose-600"><i class="fa-solid fa-trash-can"></i></button>
+                  </div>
+                  <div id="builder-symbol-panel" style="display:none; padding:8px 12px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+                    <div class="char-grid">${builderSymbolButtons}</div>
+                  </div>
+                  <div class="editor-body">
+                    <div id="builder-editor-content" class="editor-content scrollbar-premium" contenteditable="true"></div>
+                    <textarea id="builder-code-view" class="code-view scrollbar-premium" placeholder="HTML source..."></textarea>
+                  </div>
+                  <div class="status-bar">
+                    <span id="builder-mode-indicator" class="font-semibold text-indigo-600">Edit</span>
+                    <span>Kata: <b id="builder-word-count">0</b></span>
+                    <span>Karakter: <b id="builder-char-count">0</b></span>
+                    <span>Tersimpan: <b id="builder-last-saved">-</b></span>
+                  </div>
+                </div>
+                <div id="builder-modal-overlay" class="modal-overlay">
+                  <div class="modal-box">
+                    <h3 id="builder-modal-title" class="text-lg font-bold text-slate-900"></h3>
+                    <p id="builder-modal-subtitle" class="mt-1 text-sm text-slate-500"></p>
+                    <div id="builder-modal-body" class="mt-4"></div>
+                    <div class="mt-5 flex justify-end gap-3">
+                      <button id="builder-modal-cancel-btn" type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
+                      <button id="builder-modal-confirm-btn" type="button" class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">Simpan</button>
+                    </div>
+                  </div>
+                </div>
+                <div id="builder-toast" class="toast"><span id="builder-toast-message"></span></div>
               </div>
-              <span class="rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Review sebelum publish</span>
+              <div class="mt-4 rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="mb-3 flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-slate-800">Preview Materi</h4>
+                  <button id="builder-preview-refresh-btn-2" type="button" class="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-indigo-100">Refresh</button>
+                </div>
+                <iframe id="builder-preview-frame" title="Preview Buat Materi" sandbox="allow-scripts allow-modals" class="h-[600px] w-full rounded-[16px] border border-slate-200 bg-white"></iframe>
+              </div>
             </div>
-            <iframe id="material-preview-frame" title="Preview materi" sandbox="allow-scripts allow-modals" class="h-[820px] w-full rounded-[24px] border border-slate-200 bg-white"></iframe>
+
+            <div id="buat-content-html" class="hidden space-y-4">
+              <div class="rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50/70 to-sky-50/50 p-4">
+                <p class="text-sm font-bold text-cyan-900">Alur Membuat Materi dengan AI</p>
+                <ol class="mt-2 space-y-1.5 text-sm text-slate-600">
+                  <li class="flex gap-2"><span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">1</span> Susun prompt dengan Template Prompt (disarankan agar hasil konsisten).</li>
+                  <li class="flex gap-2"><span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">2</span> Salin prompt, lalu buka ChatGPT / DeepSeek untuk generate.</li>
+                  <li class="flex gap-2"><span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">3</span> Tempel HTML hasil AI ke kotak "Sumber HTML AI", lalu Muat Preview.</li>
+                  <li class="flex gap-2"><span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">4</span> Tinjau preview, lalu klik Lanjut ke Review untuk publish.</li>
+                </ol>
+              </div>
+
+              <div class="premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
+                <div class="mb-3 flex items-center gap-2">
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">1</span>
+                  <div>
+                    <h2 class="text-base font-semibold text-slate-900">Template Prompt (Opsional)</h2>
+                    <p class="text-xs text-slate-500">Isi form untuk menghasilkan prompt yang konsisten sebelum meminta AI membuat HTML materi.</p>
+                  </div>
+                  <button id="fill-template-from-editor-btn" type="button" class="btn-premium ml-auto inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Ambil dari Metadata</button>
+                </div>
+
+                <div class="rounded-[20px] border border-sky-100 bg-sky-50/70 p-4 mb-4">
+                  <div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Preset Template Mapel</label>
+                      <select id="template-material-preset" class="premium-input mt-1.5 w-full rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
+                        <option value="">Pilih preset mapel...</option>
+                        ${templatePresetOptions}
+                      </select>
+                    </div>
+                    <button id="apply-template-preset-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Terapkan Preset</button>
+                  </div>
+                  <p class="mt-3 text-sm text-slate-600">Preset akan mengisi pola tujuan, materi pokok, contoh, latihan, evaluasi, dan gaya visual agar konsisten untuk jenjang SMA Kurikulum Merdeka dengan pendekatan deep learning.</p>
+                </div>
+
+                <div class="grid gap-4 lg:grid-cols-2">
+                  <div class="space-y-4">
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Judul Materi</label>
+                      <input id="template-material-title" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label class="text-sm font-medium text-slate-700">Mata Pelajaran</label>
+                        <input id="template-material-mapel" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Matematika" />
+                      </div>
+                      <div>
+                        <label class="text-sm font-medium text-slate-700">Kelas/Level</label>
+                        <input id="template-material-kelas" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
+                      </div>
+                    </div>
+                    <div class="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label class="text-sm font-medium text-slate-700">Bab / Unit</label>
+                        <input id="template-material-bab" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Bab 4" />
+                      </div>
+                      <div>
+                        <label class="text-sm font-medium text-slate-700">Pertemuan</label>
+                        <input id="template-material-pertemuan" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: 6 pertemuan" />
+                      </div>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Tujuan Pembelajaran</label>
+                      <textarea id="template-material-tujuan" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan tujuan pembelajaran utama."></textarea>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Materi Pokok</label>
+                      <textarea id="template-material-pokok" rows="4" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan poin-poin materi inti yang wajib muncul."></textarea>
+                    </div>
+                  </div>
+
+                  <div class="space-y-4">
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Contoh</label>
+                      <textarea id="template-material-contoh" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh soal, contoh kasus, atau ilustrasi."></textarea>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Latihan</label>
+                      <textarea id="template-material-latihan" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan bentuk latihan bertahap yang diinginkan."></textarea>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Evaluasi / Tugas</label>
+                      <textarea id="template-material-evaluasi" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan tugas atau evaluasi akhir."></textarea>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Gaya Visual</label>
+                      <textarea id="template-material-gaya" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: modern, kartu membulat, dominan biru, rapi dan ringan.">rapi, modern, mudah dibaca siswa, dominan biru-sky/cyan, kartu membulat</textarea>
+                    </div>
+                    <div>
+                      <label class="text-sm font-medium text-slate-700">Catatan Guru Tambahan</label>
+                      <textarea id="template-material-catatan" rows="4" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan preferensi tambahan untuk AI."></textarea>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-5 flex flex-wrap gap-3">
+                  <button id="generate-template-prompt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Buat Prompt</button>
+                  <button id="copy-template-prompt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">Salin Prompt</button>
+                  <button id="open-chatgpt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 hover:border-emerald-300">ChatGPT</button>
+                  <button id="open-deepseek-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-50 hover:border-cyan-300">DeepSeek</button>
+                </div>
+                <p id="template-prompt-status" class="mt-3 text-sm text-slate-500">Isi form lalu klik Buat Prompt untuk menghasilkan template prompt HTML.</p>
+
+                <div class="mt-4 premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
+                  <div class="mb-4">
+                    <h2 class="text-lg font-semibold text-slate-900">Hasil Prompt</h2>
+                    <p class="mt-1 text-sm text-slate-500">Gunakan prompt ini pada AI Anda agar struktur HTML materi tetap konsisten.</p>
+                  </div>
+                  <textarea id="template-prompt-output" rows="12" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Prompt template akan muncul di sini..."></textarea>
+                </div>
+              </div>
+
+              <div class="premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
+                <div class="mb-3 flex items-center gap-2">
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">2</span>
+                  <div>
+                    <h2 class="text-base font-semibold text-slate-900">Sumber HTML AI</h2>
+                    <p class="text-xs text-slate-500">Tempel hasil HTML lengkap dari AI ke kotak di bawah, lalu Muat Preview.</p>
+                  </div>
+                  <button id="load-material-preview-btn" type="button" class="btn-premium ml-auto inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100">Muat Preview</button>
+                </div>
+                <textarea id="material-html-source" rows="18" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tempel HTML hasil AI di sini..."></textarea>
+              </div>
+
+              <div class="premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
+                <div class="mb-3 flex items-center gap-2">
+                  <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-600 text-[11px] font-bold text-white">3</span>
+                  <div>
+                    <h2 class="text-base font-semibold text-slate-900">Preview Materi</h2>
+                    <p class="text-xs text-slate-500">Preview berjalan dalam iframe terisolasi untuk meninjau hasil akhir.</p>
+                  </div>
+                  <span class="ml-auto rounded-full bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">Review</span>
+                </div>
+                <iframe id="material-preview-frame" title="Preview materi" sandbox="allow-scripts allow-modals" class="h-[640px] w-full rounded-[24px] border border-slate-200 bg-white"></iframe>
+                <div class="mt-4 flex flex-wrap gap-3">
+                  <button id="apply-material-metadata-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Terapkan Metadata ke HTML</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-5 flex flex-wrap gap-3">
+              <button id="btn-back-to-metadata" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                Kembali
+              </button>
+              <button id="btn-next-to-review" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                Lanjut ke Review
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="buat-step-4" class="hidden animate-fade-in">
+            <div class="mb-4 flex items-center gap-3">
+              <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-600">4</span>
+              <div>
+                <h3 class="text-sm font-bold text-slate-900">Review & Publikasi</h3>
+                <p class="text-xs text-slate-500">Periksa kembali materi sebelum menyimpan atau mempublikasikan</p>
+              </div>
+            </div>
+
+            <div class="premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
+              <div class="mb-4">
+                <h2 class="text-lg font-semibold text-slate-900">Preview Final</h2>
+                <p class="mt-1 text-sm text-slate-500">Tampilan akhir materi yang akan dilihat siswa</p>
+              </div>
+              <iframe id="material-preview-frame-final" title="Preview final materi" sandbox="allow-scripts allow-modals" class="h-[720px] w-full rounded-[24px] border border-slate-200 bg-white"></iframe>
+            </div>
+
+            <div class="mt-5 flex flex-wrap gap-3">
+              <button id="btn-back-to-content" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                Kembali
+              </button>
+              <button id="save-material-draft-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 hover:border-indigo-300">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Simpan Draft
+              </button>
+              <button id="publish-material-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(13,148,136,0.9)] transition hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                Publish Materi
+              </button>
+              <button id="reset-material-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Materi Baru</button>
+            </div>
+            <p id="material-status" class="mt-3 text-sm text-slate-500">Siap disimpan atau dipublikasikan. Klik Preview untuk melihat hasil akhir.</p>
           </div>
         </div>
       </section>
 
-      <section data-material-panel="template" class="material-tab-panel hidden space-y-4">
-        <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">          <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 class="text-lg font-semibold text-slate-900">Template Prompt HTML</h2>
-              <p class="mt-1 text-sm text-slate-500">Isi form ini untuk menghasilkan prompt yang konsisten sebelum Anda meminta AI membuat HTML materi.</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <button id="fill-template-from-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700">Ambil dari Editor</button>
-            </div>
-          </div>
-
-          <div class="rounded-[24px] border border-sky-100 bg-sky-50/70 p-4">
-            <div class="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
-              <div>
-                <label class="text-sm font-medium text-slate-700">Preset Template Mapel</label>
-                <select id="template-material-preset" class="premium-input mt-1.5 w-full rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
-                  <option value="">Pilih preset mapel...</option>
-                  ${templatePresetOptions}
-                </select>
-              </div>
-              <button id="apply-template-preset-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Terapkan Preset</button>
-            </div>
-            <p class="mt-3 text-sm text-slate-600">Preset akan mengisi pola tujuan, materi pokok, contoh, latihan, evaluasi, dan gaya visual agar konsisten untuk jenjang SMA Kurikulum Merdeka dengan pendekatan deep learning.</p>
-          </div>
-
-          <div class="grid gap-4 lg:grid-cols-2">
-            <div class="space-y-4">
-              <div>
-                <label class="text-sm font-medium text-slate-700">Judul Materi</label>
-                <input id="template-material-title" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
-              </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label class="text-sm font-medium text-slate-700">Mata Pelajaran</label>
-                  <input id="template-material-mapel" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Matematika" />
-                </div>
-                <div>
-                  <label class="text-sm font-medium text-slate-700">Kelas/Level</label>
-                  <input id="template-material-kelas" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
-                </div>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label class="text-sm font-medium text-slate-700">Bab / Unit</label>
-                  <input id="template-material-bab" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Bab 4" />
-                </div>
-                <div>
-                  <label class="text-sm font-medium text-slate-700">Pertemuan</label>
-                  <input id="template-material-pertemuan" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: 6 pertemuan" />
-                </div>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Tujuan Pembelajaran</label>
-                <textarea id="template-material-tujuan" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan tujuan pembelajaran utama."></textarea>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Materi Pokok</label>
-                <textarea id="template-material-pokok" rows="4" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan poin-poin materi inti yang wajib muncul."></textarea>
-              </div>
-            </div>
-
-            <div class="space-y-4">
-              <div>
-                <label class="text-sm font-medium text-slate-700">Contoh</label>
-                <textarea id="template-material-contoh" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh soal, contoh kasus, atau ilustrasi."></textarea>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Latihan</label>
-                <textarea id="template-material-latihan" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan bentuk latihan bertahap yang diinginkan."></textarea>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Evaluasi / Tugas</label>
-                <textarea id="template-material-evaluasi" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan tugas atau evaluasi akhir."></textarea>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Gaya Visual</label>
-                <textarea id="template-material-gaya" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: modern, kartu membulat, dominan biru, rapi dan ringan.">rapi, modern, mudah dibaca siswa, dominan biru-sky/cyan, kartu membulat</textarea>
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Catatan Guru Tambahan</label>
-                <textarea id="template-material-catatan" rows="4" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tuliskan preferensi tambahan untuk AI."></textarea>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-5 flex flex-wrap gap-3">
-<button id="generate-template-prompt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">Buat Prompt</button>
-             <button id="copy-template-prompt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">Salin Prompt</button>
-             <button id="open-chatgpt-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 hover:border-emerald-300">Menuju ChatGPT</button>
-             <button id="open-deepseek-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-cyan-200 bg-white px-5 py-2.5 text-sm font-semibold text-cyan-700 transition hover:bg-cyan-50 hover:border-cyan-300">Menuju DeepSeek</button>
-          </div>
-          <p id="template-prompt-status" class="mt-3 text-sm text-slate-500">Isi form lalu klik Buat Prompt untuk menghasilkan template prompt HTML.</p>
-        </div>
-
-        <div class="premium-glass rounded-[28px] border border-slate-200/70 p-4 shadow-[0_24px_60px_-30px_rgba(15,23,42,0.16)] sm:p-5">          <div class="mb-4">
-            <h2 class="text-lg font-semibold text-slate-900">Hasil Prompt</h2>
-            <p class="mt-1 text-sm text-slate-500">Gunakan prompt ini pada AI Anda agar struktur HTML materi tetap konsisten.</p>
-          </div>
-          <textarea id="template-prompt-output" rows="20" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Prompt template akan muncul di sini..."></textarea>
-        </div>
-      </section>
-
-      <section data-material-panel="daftar" class="material-tab-panel hidden space-y-5 animate-scale-in">
-        <div class="premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Perpustakaan</p>
-              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Koleksi Materi</h2>
-              <p class="mt-0.5 text-sm text-slate-500">Semua materi dan draft dalam satu tempat</p>
-            </div>
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-50 to-sky-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-600">
-              <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-              Terorganisir
-            </span>
-          </div>
-        </div>
-
-        <div class="premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
-          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-amber-500">Draft Lokal</p>
-              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Draft Materi Tersimpan</h2>
-              <p class="mt-0.5 text-sm text-slate-500">Klik kartu untuk melanjutkan penyuntingan</p>
-            </div>
-          </div>
-          <div id="material-draft-list" class="grid gap-3 sm:gap-4" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));"></div>
-        </div>
-
-        <div class="premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
-          <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-emerald-500">Publikasi</p>
-              <h2 class="mt-1 text-base font-semibold text-slate-900 sm:text-lg">Materi Dipublikasikan</h2>
-              <p class="mt-0.5 text-sm text-slate-500">Siap diakses siswa dan dapat dikelola ulang</p>
-            </div>
-          </div>
-          <div id="material-published-list" class="grid gap-3 sm:gap-4" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));"></div>
-        </div>
-      </section>
-
-      <section data-material-panel="laporan" class="material-tab-panel hidden animate-slide-up premium-glass-strong rounded-[28px] p-4 shadow-[0_24px_64px_-32px_rgba(15,23,42,0.15)] sm:p-5">
+      <section data-material-panel="laporan" class="material-tab-panel hidden animate-scale-in premium-glass-strong rounded-[24px] p-4 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.12)] sm:p-5">
         <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500">Analitik</p>
@@ -1983,7 +1911,8 @@ export async function renderGuruMateriPage(container) {
 
   container.innerHTML = html;
 
-  const assignmentSelect = container.querySelector('#material-assignment');
+  const assignmentListEl = container.querySelector('#material-assignment-list');
+  const selectedClassesCountEl = container.querySelector('#selected-classes-count');
   const titleInput = container.querySelector('#material-title');
   const levelInput = container.querySelector('#material-level');
   const chapterInput = container.querySelector('#material-chapter');
@@ -2071,10 +2000,52 @@ export async function renderGuruMateriPage(container) {
   const builderInsertButtons = Array.from(container.querySelectorAll('[data-builder-insert]'));
   const builderSymbolButtonsEls = Array.from(container.querySelectorAll('[data-builder-symbol]'));
 
-  let activeDraftId = '';
+  const statPublishedCount = container.querySelector('#stat-published-count');
+  const statDraftCount = container.querySelector('#stat-draft-count');
+  const statReadsCount = container.querySelector('#stat-reads-count');
+  const cardDensityCompactBtn = container.querySelector('#material-card-density-compact');
+  const cardDensityComfortableBtn = container.querySelector('#material-card-density-comfortable');
+  const previewFrameFinal = container.querySelector('#material-preview-frame-final');
+  const buatStep1 = container.querySelector('#buat-step-1');
+  const buatStep2 = container.querySelector('#buat-step-2');
+  const buatStep3 = container.querySelector('#buat-step-3');
+  const buatStep4 = container.querySelector('#buat-step-4');
+  const buatContentEditor = container.querySelector('#buat-content-editor');
+  const buatContentHtml = container.querySelector('#buat-content-html');
+  const stepDot1 = container.querySelector('#step-dot-1');
+  const stepDot2 = container.querySelector('#step-dot-2');
+  const stepDot3 = container.querySelector('#step-dot-3');
+  const stepDot4 = container.querySelector('#step-dot-4');
+  const stepLine1 = container.querySelector('#step-line-1');
+  const stepLine2 = container.querySelector('#step-line-2');
+  const stepLine3 = container.querySelector('#step-line-3');
+  const stepLabels = Array.from(container.querySelectorAll('.step-label'));
+  const methodCardEditor = container.querySelector('#method-card-editor');
+  const methodCardHtml = container.querySelector('#method-card-html');
+  const btnNextToMetadata = container.querySelector('#btn-next-to-metadata');
+  const btnBackToMethod = container.querySelector('#btn-back-to-method');
+  const btnNextToContent = container.querySelector('#btn-next-to-content');
+  const btnBackToMetadata = container.querySelector('#btn-back-to-metadata');
+  const btnNextToReview = container.querySelector('#btn-next-to-review');
+  const btnBackToContent = container.querySelector('#btn-back-to-content');
+  const builderPreviewRefreshBtn2 = container.querySelector('#builder-preview-refresh-btn-2');
+  const step3Title = container.querySelector('#step-3-title');
+  const step3Subtitle = container.querySelector('#step-3-subtitle');
+
+  if (assignmentListEl) {
+    assignmentListEl.addEventListener('change', (e) => {
+      if (e.target.classList.contains('assignment-checkbox')) {
+        updateSelectedClassesCount();
+      }
+    });
+  }
+
   let drafts = getUserDrafts(session, context);
   let publishedMaterials = await getUserPublishedMaterials(session, context);
-  let activeTab = 'daftar';
+  let activeTab = 'koleksi';
+  let materialCardDensity = localStorage.getItem(MATERIAL_CARD_DENSITY_KEY) === 'compact' ? 'compact' : 'comfortable';
+  let selectedMethod = 'editor';
+  let currentStep = 1;
   const builderStorageKey = getMaterialBuilderStorageBucket(session, context);
   let builderHistory = [];
   let builderHistoryIndex = -1;
@@ -2300,6 +2271,125 @@ export async function renderGuruMateriPage(container) {
         panel.classList.add('animate-scale-in');
       }
     });
+    if (nextTab === 'buat') {
+      renderWizardSteps();
+    }
+  }
+
+  function updateStepIndicators(step) {
+    [stepDot1, stepDot2, stepDot3, stepDot4].forEach((dot, i) => {
+      if (!dot) return;
+      dot.classList.remove('done', 'active', 'step-active');
+      if (i + 1 < step) dot.classList.add('done');
+      if (i + 1 === step) { dot.classList.add('active', 'step-active'); }
+    });
+    [stepLine1, stepLine2, stepLine3].forEach((line, i) => {
+      if (!line) return;
+      line.classList.toggle('done', i + 1 < step);
+    });
+    stepLabels.forEach((label, i) => {
+      label.classList.remove('done', 'active', 'pending');
+      if (i + 1 < step) label.classList.add('done');
+      else if (i + 1 === step) label.classList.add('active');
+      else label.classList.add('pending');
+    });
+  }
+
+  function showWizardStep(step) {
+    currentStep = step;
+    updateStepIndicators(step);
+    [buatStep1, buatStep2, buatStep3, buatStep4].forEach((panel, i) => {
+      if (!panel) return;
+      if (i + 1 === step) {
+        panel.classList.remove('hidden');
+        panel.classList.add('animate-fade-in');
+      } else {
+        panel.classList.add('hidden');
+        panel.classList.remove('animate-fade-in');
+      }
+    });
+  }
+
+  function goToStep(step) {
+    const target = Math.min(4, Math.max(1, step));
+    showWizardStep(target);
+    if (target === 3) {
+      syncMainMetadataFromBuilder();
+      updateContentPanel();
+    } else if (target === 4) {
+      updateReviewPreview();
+    }
+  }
+
+  function renderWizardSteps() {
+    showWizardStep(currentStep);
+    updateContentPanel();
+  }
+
+  function updateContentPanel() {
+    if (!buatContentEditor || !buatContentHtml) return;
+    buatContentEditor.classList.add('hidden');
+    buatContentHtml.classList.add('hidden');
+
+    if (selectedMethod === 'editor') {
+      buatContentEditor.classList.remove('hidden');
+      if (step3Title) step3Title.textContent = 'Buat Konten - Manual';
+      if (step3Subtitle) step3Subtitle.textContent = 'Tulis materi langsung dengan editor visual lengkap';
+    } else if (selectedMethod === 'html') {
+      buatContentHtml.classList.remove('hidden');
+      if (step3Title) step3Title.textContent = 'Buat Konten dengan AI';
+      if (step3Subtitle) step3Subtitle.textContent = 'Susun prompt, generate di AI, lalu tempel HTML hasilnya';
+    }
+  }
+
+  function selectMethod(method) {
+    selectedMethod = method;
+    [methodCardEditor, methodCardHtml].forEach((card) => {
+      if (!card) return;
+      card.classList.remove('selected');
+    });
+    if (method === 'editor' && methodCardEditor) methodCardEditor.classList.add('selected');
+    if (method === 'html' && methodCardHtml) methodCardHtml.classList.add('selected');
+  }
+
+  function updateStatCounters() {
+    const publishedGroupCount = getPublishedMaterialGroups().length;
+    if (statPublishedCount) statPublishedCount.textContent = String(publishedGroupCount);
+    if (statDraftCount) statDraftCount.textContent = String(drafts.length);
+    if (statReadsCount) statReadsCount.textContent = String(materialReadStats.length);
+    const publishedBadge = document.getElementById('published-count-badge');
+    const draftBadge = document.getElementById('draft-count-badge');
+    if (publishedBadge) publishedBadge.textContent = `${publishedGroupCount} materi`;
+    if (draftBadge) draftBadge.textContent = `${drafts.length} draft`;
+  }
+
+  function updateMaterialCardDensityToggleState() {
+    const activeClass = 'bg-indigo-600 text-white shadow-[0_8px_18px_-10px_rgba(79,70,229,0.8)]';
+    const idleClass = 'text-slate-500';
+    cardDensityCompactBtn?.classList.remove('bg-indigo-600', 'text-white', 'shadow-[0_8px_18px_-10px_rgba(79,70,229,0.8)]', 'text-slate-500');
+    cardDensityComfortableBtn?.classList.remove('bg-indigo-600', 'text-white', 'shadow-[0_8px_18px_-10px_rgba(79,70,229,0.8)]', 'text-slate-500');
+
+    if (materialCardDensity === 'compact') {
+      cardDensityCompactBtn?.classList.add(...activeClass.split(' '));
+      cardDensityComfortableBtn?.classList.add(...idleClass.split(' '));
+    } else {
+      cardDensityComfortableBtn?.classList.add(...activeClass.split(' '));
+      cardDensityCompactBtn?.classList.add(...idleClass.split(' '));
+    }
+  }
+
+  function updateReviewPreview() {
+    if (!previewFrameFinal) return;
+    if (selectedMethod === 'editor') {
+      previewFrameFinal.srcdoc = buildBuilderHtmlOutput();
+    } else {
+      const source = sourceInput.value.trim();
+      if (source) {
+        previewFrameFinal.srcdoc = buildPreviewSource(source);
+      } else {
+        previewFrameFinal.srcdoc = '<html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#94a3b8;"><p>Belum ada HTML yang dimuat. Kembali ke langkah Konten.</p></body></html>';
+      }
+    }
   }
 
   function setStatus(text, isError = false) {
@@ -2317,12 +2407,28 @@ export async function renderGuruMateriPage(container) {
   }
 
   function getCurrentAssignment() {
-    return assignments.find((item) => item.id === assignmentSelect?.value) || selectedAssignment || null;
+    const selected = getSelectedAssignments();
+    return selected[0] || selectedAssignment || null;
+  }
+
+  function getSelectedAssignments() {
+    if (!assignmentListEl) return [selectedAssignment].filter(Boolean);
+    const checkboxes = assignmentListEl.querySelectorAll('.assignment-checkbox:checked');
+    const ids = Array.from(checkboxes).map((cb) => cb.value);
+    return assignments.filter((item) => ids.includes(item.id));
+  }
+
+  function updateSelectedClassesCount() {
+    if (!selectedClassesCountEl) return;
+    const count = getSelectedAssignments().length;
+    selectedClassesCountEl.textContent = `${count} dipilih`;
   }
 
   function syncMainMetadataFromBuilder() {
-    if (builderAssignmentSelect?.value) {
-      assignmentSelect.value = builderAssignmentSelect.value;
+    if (builderAssignmentSelect?.value && assignmentListEl) {
+      const checkboxes = assignmentListEl.querySelectorAll('.assignment-checkbox');
+      checkboxes.forEach((cb) => { cb.checked = cb.value === builderAssignmentSelect.value; });
+      updateSelectedClassesCount();
     }
 
     if (builderTitleInput) {
@@ -2347,8 +2453,9 @@ export async function renderGuruMateriPage(container) {
   }
 
   function syncBuilderMetadataFromMain() {
-    if (builderAssignmentSelect && assignmentSelect?.value) {
-      builderAssignmentSelect.value = assignmentSelect.value;
+    const selected = getSelectedAssignments();
+    if (builderAssignmentSelect && selected.length) {
+      builderAssignmentSelect.value = selected[0].id;
     }
     if (builderTitleInput) {
       builderTitleInput.value = titleInput.value.trim();
@@ -2938,16 +3045,34 @@ export async function renderGuruMateriPage(container) {
     if (builderTitleInput) builderTitleInput.value = '';
     if (builderLevelInput) builderLevelInput.value = '';
     if (builderChapterInput) builderChapterInput.value = '';
-    if (builderAssignmentSelect && assignmentSelect?.value) {
-      builderAssignmentSelect.value = assignmentSelect.value;
+    if (builderAssignmentSelect && assignmentListEl) {
+      const checkboxes = assignmentListEl.querySelectorAll('.assignment-checkbox');
+      if (checkboxes.length) {
+        checkboxes.forEach((cb, i) => { cb.checked = i === 0; });
+        builderAssignmentSelect.value = checkboxes[0].value;
+      }
     }
+    updateSelectedClassesCount();
     previewFrame.srcdoc = '<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><style>body{font-family:Inter,Arial,sans-serif;background:#f8fafc;color:#334155;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center;}div{max-width:480px;border:1px dashed #cbd5e1;border-radius:24px;background:white;padding:24px;}h2{margin:0 0 12px;font-size:22px;color:#0f172a;}p{margin:0;line-height:1.7;}</style></head><body><div><h2>Preview materi akan muncul di sini</h2><p>Paste HTML hasil AI lalu klik Muat Preview untuk meninjau modul seperti siswa akan melihatnya.</p></div></body></html>';
+    currentStep = 1;
+    selectedMethod = 'editor';
+    selectMethod('editor');
+    showWizardStep(1);
     setStatus('Editor direset. Tempel HTML baru untuk mulai materi berikutnya.');
   }
 
   function loadDraft(draft) {
     activeDraftId = draft.id;
-    assignmentSelect.value = draft.pengajaran_id || assignmentSelect.value;
+    if (assignmentListEl && draft.published_targets?.length) {
+      const checkboxes = assignmentListEl.querySelectorAll('.assignment-checkbox');
+      checkboxes.forEach((cb) => {
+        cb.checked = draft.published_targets.some((t) => t.pengajaran_id === cb.value);
+      });
+    } else if (assignmentListEl && draft.pengajaran_id) {
+      const checkboxes = assignmentListEl.querySelectorAll('.assignment-checkbox');
+      checkboxes.forEach((cb) => { cb.checked = cb.value === draft.pengajaran_id; });
+    }
+    updateSelectedClassesCount();
     titleInput.value = draft.title || '';
     levelInput.value = draft.level || '';
     chapterInput.value = draft.chapter || '';
@@ -2956,6 +3081,9 @@ export async function renderGuruMateriPage(container) {
     sourceInput.value = draft.html_source || '';
     syncBuilderMetadataFromMain();
     renderPreview(draft.html_source || '');
+    setActiveTab('buat');
+    selectMethod('html');
+    showWizardStep(2);
     setStatus(`Draft dimuat: ${draft.title || 'Tanpa judul'}`);
   }
 
@@ -2995,15 +3123,61 @@ export async function renderGuruMateriPage(container) {
     }
     closeMaterialPreview();
     loadDraft(material);
-    setActiveTab('editor');
     setStatus(`Materi dimuat ke editor: ${material.title || 'Tanpa judul'}`);
+  }
+
+  function getMaterialBaseId(material) {
+    const sourceId = String(material?.source_id || '').trim();
+    const id = String(material?.id || '').trim();
+    if (sourceId) {
+      return sourceId;
+    }
+    return id.includes('__') ? id.split('__')[0] : id;
+  }
+
+  function getPublishedMaterialGroups() {
+    const grouped = new Map();
+
+    publishedMaterials.forEach((item) => {
+      const key = getMaterialBaseId(item) || String(item.id || '').trim();
+      if (!key) {
+        return;
+      }
+
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key).push(item);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([groupId, items]) => {
+        const sortedItems = [...items].sort((a, b) => String(b.published_at || b.updated_at || '').localeCompare(String(a.published_at || a.updated_at || '')));
+        const representative = sortedItems[0] || items[0];
+        const classNames = Array.from(new Set(sortedItems.map((item) => String(item.kelas_nama || item.kelas_id || '').trim()).filter(Boolean)));
+        const anyVisible = sortedItems.some((item) => item.visible_to_students !== false);
+        const allUnpublished = sortedItems.every((item) => item.visible_to_students === false);
+        return {
+          groupId,
+          representative,
+          items: sortedItems,
+          classNames,
+          classCount: classNames.length,
+          anyVisible,
+          allUnpublished,
+          lastPublishedAt: representative?.published_at || representative?.updated_at || '',
+        };
+      })
+      .sort((a, b) => String(b.lastPublishedAt).localeCompare(String(a.lastPublishedAt)));
   }
 
   function renderDraftList() {
     if (!drafts.length) {
-      draftListEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada draft materi yang tersimpan untuk guru ini.</div>';
+      draftListEl.innerHTML = '';
+      document.getElementById('material-draft-empty').classList.remove('hidden');
       return;
     }
+    document.getElementById('material-draft-empty').classList.add('hidden');
 
     draftListEl.innerHTML = drafts
       .slice(0, 12)
@@ -3011,49 +3185,39 @@ export async function renderGuruMateriPage(container) {
         const tone = getMaterialCardTone('draft');
         const savedDate = new Date(draft.updated_at || draft.created_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
         return `
-          <article class="card-hover-premium group flex h-full flex-col overflow-hidden rounded-[26px] border border-slate-200/70 bg-white shadow-[0_14px_30px_-12px_rgba(15,23,42,0.10)]">
-            <button type="button" data-draft-id="${draft.id}" class="material-draft-item relative flex h-full flex-col text-left">
-              <div class="relative h-[170px] overflow-hidden bg-gradient-to-br ${tone.accentClass} p-4 text-white">
-                <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-3xl transition-transform duration-500 group-hover:scale-125"></div>
-                <div class="absolute bottom-0 right-0 h-16 w-16 rounded-full ${tone.glowClass} blur-3xl"></div>
-                <div class="absolute inset-0 opacity-30" style="background-image:radial-gradient(circle at 30% 20%, rgba(255,255,255,0.5) 0%, transparent 40%);"></div>
-                <div class="relative flex h-full flex-col justify-between">
-                  <div class="flex items-start justify-between gap-2">
-                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-sm font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-sm">${getMaterialMonogram(draft)}</span>
-                    <span class="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] backdrop-blur-sm">${tone.badgeLabel}</span>
+          <article class="card-hover-premium group flex flex-col overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+            <button type="button" data-draft-id="${draft.id}" class="material-draft-item flex flex-1 flex-col text-left p-3.5">
+              <div class="flex items-start gap-3">
+                <span class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${tone.accentClass} text-sm font-bold text-white shadow-sm">${getMaterialMonogram(draft)}</span>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="inline-flex items-center rounded-full border ${tone.badgeClass} px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">${tone.badgeLabel}</span>
                   </div>
-                  <div>
-                    <p class="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/70">${tone.motif}</p>
-                    <p class="mt-1 line-clamp-2 text-[16px] font-bold leading-snug text-white">${draft.title || 'Tanpa judul'}</p>
-                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4 text-white/80">${draft.note || 'Draft siap dilanjutkan.'}</p>
+                  <p class="text-sm font-semibold text-slate-900 leading-snug line-clamp-2">${draft.title || 'Tanpa judul'}</p>
+                  <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-500">
+                    <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">
+                      <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                      ${draft.mapel_nama || '-'}
+                    </span>
+                    <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 font-medium text-slate-600">
+                      <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                      ${draft.kelas_nama || '-'}
+                    </span>
+                    <span class="inline-flex items-center gap-1 text-slate-400">
+                      <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                      ${savedDate}
+                    </span>
                   </div>
                 </div>
               </div>
-              <div class="flex flex-1 flex-col justify-between gap-3 p-4">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${tone.chipClass}">
-                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                    ${draft.mapel_nama || '-'}
-                  </span>
-                  <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    ${draft.kelas_nama || '-'}
-                  </span>
-                </div>
-                <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
-                  <span class="inline-flex items-center gap-1 truncate">
-                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-                    ${savedDate}
-                  </span>
-                  <span class="inline-flex items-center gap-1 font-bold uppercase tracking-[0.14em] text-indigo-500">Buka
-                    <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                  </span>
-                </div>
+              <div class="mt-2.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                Buka
+                <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </div>
             </button>
-            <div class="grid gap-2 border-t border-slate-100 bg-slate-50/60 p-3 sm:grid-cols-2">
-              <button type="button" data-preview-draft-id="${draft.id}" class="btn-premium preview-draft-btn inline-flex items-center justify-center gap-1.5 rounded-2xl border border-indigo-200 bg-white px-2.5 py-2 text-[10px] font-bold uppercase tracking-[0.06em] leading-tight text-indigo-700 transition hover:bg-indigo-50">Preview</button>
-              <button type="button" data-delete-draft-id="${draft.id}" class="btn-premium delete-draft-btn inline-flex items-center justify-center gap-1.5 rounded-2xl border border-rose-200 bg-white px-2.5 py-2 text-[10px] font-bold uppercase tracking-[0.06em] leading-tight text-rose-600 transition hover:bg-rose-50">Hapus</button>
+            <div class="grid grid-cols-2 gap-1.5 border-t border-slate-100 bg-slate-50/60 p-2.5">
+              <button type="button" data-preview-draft-id="${draft.id}" class="preview-draft-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 bg-white px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700 transition hover:bg-indigo-50">Preview</button>
+              <button type="button" data-delete-draft-id="${draft.id}" class="delete-draft-btn inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-200 bg-white px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-rose-600 transition hover:bg-rose-50">Hapus</button>
             </div>
           </article>
         `;
@@ -3095,66 +3259,245 @@ export async function renderGuruMateriPage(container) {
         setStatus('Draft materi berhasil dihapus.');
       });
     });
+    updateStatCounters();
   }
 
-  function renderPublishedList() {
-    if (!publishedMaterials.length) {
-      publishedListEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada materi yang dipublikasikan dari browser ini.</div>';
+  function openPublishedMaterialEditModal(material) {
+    if (!material) {
       return;
     }
 
-    publishedListEl.innerHTML = publishedMaterials
+    const assignmentOptions = assignments
+      .map((item) => ({
+        id: String(item.id || '').trim(),
+        label: `${item.mapel_nama || 'Mapel'} • ${item.kelas_nama || item.kelas_id || 'Kelas'}`,
+      }))
+      .filter((item) => item.id);
+
+    if (!assignmentOptions.length) {
+      setStatus('Tidak ada kelas pengajaran aktif untuk publish ulang.', true);
+      return;
+    }
+
+    const deriveBaseId = (item) => {
+      const sourceId = String(item?.source_id || '').trim();
+      const docId = String(item?.id || '').trim();
+      if (sourceId) {
+        return sourceId;
+      }
+      return docId.includes('__') ? docId.split('__')[0] : docId;
+    };
+
+    const baseId = deriveBaseId(material);
+    const relatedMaterials = publishedMaterials.filter((item) => deriveBaseId(item) === baseId);
+    const initiallySelectedIds = new Set(
+      (relatedMaterials.length ? relatedMaterials : [material])
+        .map((item) => String(item.pengajaran_id || '').trim())
+        .filter(Boolean)
+    );
+
+    const existingPopup = document.getElementById('material-republish-popup-overlay');
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'material-republish-popup-overlay';
+    overlay.className = 'fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 p-4';
+    overlay.innerHTML = `
+      <div class="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-5 shadow-[0_22px_70px_-30px_rgba(15,23,42,0.45)]">
+        <h3 class="text-lg font-bold text-slate-900">Edit Materi Publish</h3>
+        <p class="mt-1 text-sm text-slate-500">Ubah nama materi dan kelas tujuan, lalu publish ulang.</p>
+        <div class="mt-4 space-y-4">
+          <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Nama Materi</label>
+            <input id="republish-material-title" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100" value="${escapeHtml(material.title || '')}" placeholder="Nama materi" />
+          </div>
+          <div>
+            <label class="mb-1 block text-sm font-medium text-slate-700">Kelas Publish (boleh pilih lebih dari satu)</label>
+            <div class="max-h-56 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-2.5 space-y-2">
+              ${assignmentOptions.map((item) => `
+                <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <input type="checkbox" class="republish-material-assignment-checkbox h-4 w-4 rounded border-slate-300 text-emerald-600" value="${escapeHtml(item.id)}" ${initiallySelectedIds.has(item.id) ? 'checked' : ''} />
+                  <span>${escapeHtml(item.label)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+        <div class="mt-5 flex justify-end gap-3">
+          <button type="button" id="republish-popup-cancel" class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">Batal</button>
+          <button type="button" id="republish-popup-submit" class="rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">Publish Ulang</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.classList.add('overflow-hidden');
+
+    const closePopup = () => {
+      overlay.remove();
+      document.body.classList.remove('overflow-hidden');
+    };
+
+    overlay.querySelector('#republish-popup-cancel')?.addEventListener('click', closePopup);
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        closePopup();
+      }
+    });
+
+    overlay.querySelector('#republish-popup-submit')?.addEventListener('click', async () => {
+      try {
+        const titleValue = String(overlay.querySelector('#republish-material-title')?.value || '').trim();
+        const selectedAssignmentIds = Array.from(overlay.querySelectorAll('.republish-material-assignment-checkbox:checked'))
+          .map((input) => String(input.value || '').trim())
+          .filter(Boolean);
+
+        if (!titleValue) {
+          setStatus('Nama materi wajib diisi.', true);
+          return;
+        }
+
+        if (!selectedAssignmentIds.length) {
+          setStatus('Pilih minimal satu kelas tujuan publish.', true);
+          return;
+        }
+
+        const oldMaterialId = String(material.id || '').trim();
+        const oldSourceId = String(material.source_id || '').trim();
+        const fallbackBaseId = oldMaterialId.includes('__') ? oldMaterialId.split('__')[0] : oldMaterialId;
+        const sourceBaseId = oldSourceId || fallbackBaseId;
+        const nextPublishedAt = new Date().toISOString();
+
+        const targetAssignments = assignments.filter((item) => selectedAssignmentIds.includes(String(item.id || '').trim()));
+        if (!targetAssignments.length) {
+          setStatus('Kelas tujuan tidak valid.', true);
+          return;
+        }
+
+        const relatedByAssignment = new Map(
+          relatedMaterials
+            .map((item) => [String(item.pengajaran_id || '').trim(), item])
+            .filter(([assignmentId]) => assignmentId)
+        );
+
+        await Promise.all(targetAssignments.map((targetAssignment) => {
+          const nextMaterialId = `${sourceBaseId}__${targetAssignment.id}`;
+          return savePublishedMaterial({
+            ...material,
+            ...(relatedByAssignment.get(String(targetAssignment.id || '').trim()) || {}),
+            id: nextMaterialId,
+            source_id: sourceBaseId,
+            title: titleValue,
+            pengajaran_id: targetAssignment.id,
+            kelas_id: targetAssignment.kelas_id,
+            kelas_nama: targetAssignment.kelas_nama,
+            kelas_token: normalizeClassToken(targetAssignment.kelas_id || targetAssignment.kelas_nama),
+            mapel_id: targetAssignment.mapel_id,
+            mapel_nama: targetAssignment.mapel_nama,
+            created_at: material.created_at || material.published_at || material.updated_at || nextPublishedAt,
+            published_at: nextPublishedAt,
+            visible_to_students: true,
+            status: 'published',
+          });
+        }));
+
+        const removedIds = relatedMaterials
+          .filter((item) => !selectedAssignmentIds.includes(String(item.pengajaran_id || '').trim()))
+          .map((item) => String(item.id || '').trim())
+          .filter(Boolean);
+
+        if (!relatedMaterials.length && !selectedAssignmentIds.includes(String(material.pengajaran_id || '').trim()) && oldMaterialId) {
+          removedIds.push(oldMaterialId);
+        }
+
+        if (removedIds.length) {
+          await Promise.all(Array.from(new Set(removedIds)).map((id) => deletePublishedMaterial(id)));
+        }
+
+        closePopup();
+        publishedMaterials = await getUserPublishedMaterials(session, context);
+        renderPublishedList();
+        await renderMaterialReadReport();
+        setStatus(`Materi berhasil dipublish ulang ke ${targetAssignments.length} kelas.`);
+      } catch (error) {
+        console.error('Gagal publish ulang materi hasil edit:', error);
+        setStatus(`Gagal publish ulang: ${error?.message || 'cek data kelas dan izin Firestore.'}`, true);
+      }
+    });
+  }
+
+  function renderPublishedList() {
+    updateMaterialCardDensityToggleState();
+    const groupedMaterials = getPublishedMaterialGroups();
+
+    if (!groupedMaterials.length) {
+      publishedListEl.innerHTML = '';
+      document.getElementById('material-published-empty').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('material-published-empty').classList.add('hidden');
+
+    publishedListEl.innerHTML = groupedMaterials
       .slice(0, 12)
-      .map((material) => {
-        const tone = getMaterialCardTone('published', material.visible_to_students !== false);
-        const publishedDate = new Date(material.published_at || material.updated_at || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+      .map((group, index) => {
+        const material = group.representative;
+        const tone = getMaterialCardTone('published', group.anyVisible);
+        const cover = getThematicBookCover(material);
+        const isCompact = materialCardDensity === 'compact';
+        const cardMinHeightClass = isCompact ? 'min-h-[236px]' : 'min-h-[266px]';
+        const cardAspectRatio = isCompact ? '3/4.9' : '3/5.2';
+        const coverPaddingClass = isCompact ? 'p-2' : 'p-2.5';
+        const bodyPaddingClass = isCompact ? 'p-2.5' : 'p-3';
+        const titleClass = isCompact ? 'text-[13px]' : 'text-sm';
+        const staggerDelay = Math.min(index, 11) * 42;
+        const publishedDate = new Date(group.lastPublishedAt || Date.now()).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+        const classSummary = group.classNames.length
+          ? group.classNames.join(', ')
+          : (material.kelas_nama || material.kelas_id || '-');
         return `
-          <article class="card-hover-premium group flex h-full flex-col overflow-hidden rounded-[26px] border border-slate-200/70 bg-white shadow-[0_14px_30px_-12px_rgba(15,23,42,0.10)]">
-            <button type="button" data-material-id="${material.id}" class="material-published-item relative flex h-full flex-col text-left">
-              <div class="relative h-[170px] overflow-hidden bg-gradient-to-br ${tone.accentClass} p-4 text-white">
-                <div class="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/15 blur-3xl transition-transform duration-500 group-hover:scale-125"></div>
-                <div class="absolute bottom-0 right-0 h-16 w-16 rounded-full ${tone.glowClass} blur-3xl"></div>
-                <div class="absolute inset-0 opacity-30" style="background-image:radial-gradient(circle at 30% 20%, rgba(255,255,255,0.5) 0%, transparent 40%);"></div>
-                <div class="relative flex h-full flex-col justify-between">
-                  <div class="flex items-start justify-between gap-2">
-                    <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 text-sm font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.3)] backdrop-blur-sm">${getMaterialMonogram(material)}</span>
-                    <span class="inline-flex items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] backdrop-blur-sm">${tone.badgeLabel}</span>
-                  </div>
-                  <div>
-                    <p class="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/70">${tone.motif}</p>
-                    <p class="mt-1 line-clamp-2 text-[16px] font-bold leading-snug text-white">${material.title || 'Tanpa judul'}</p>
-                    <p class="mt-1.5 line-clamp-2 text-[11px] leading-4 text-white/80">${material.note || 'Materi siap dibuka ulang atau diperbarui.'}</p>
-                  </div>
+          <article class="card-hover-premium group relative flex ${cardMinHeightClass} flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white/95 shadow-[0_12px_24px_-18px_rgba(15,23,42,0.45)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_22px_36px_-20px_rgba(15,23,42,0.45)]" style="aspect-ratio: ${cardAspectRatio}; animation: materialShelfItemIn 420ms cubic-bezier(.2,.7,.2,1) both; animation-delay: ${staggerDelay}ms;">
+            <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_14%_10%,rgba(255,255,255,0.7),transparent_36%)]"></div>
+            <button type="button" data-material-group-id="${group.groupId}" class="material-published-item flex flex-1 flex-col text-left ${bodyPaddingClass}">
+              <div class="relative mb-2 overflow-hidden rounded-xl bg-gradient-to-br ${cover.gradient} ${coverPaddingClass} text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24),0_14px_28px_-20px_rgba(15,23,42,0.55)]">
+                <div class="absolute left-0 top-0 h-full w-2 bg-black/22"></div>
+                <div class="absolute left-1.5 top-0 h-full w-[1px] bg-white/18"></div>
+                <div class="absolute -right-4 -top-4 h-12 w-12 rounded-full bg-white/15 blur-xl"></div>
+                <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,transparent_38%,transparent_62%,rgba(255,255,255,0.08)_100%)]"></div>
+                <div class="relative flex items-start justify-between gap-2">
+                  <span class="inline-flex h-8 min-w-[32px] items-center justify-center rounded-lg bg-white/20 px-1.5 text-[11px] font-bold text-white backdrop-blur-sm">${cover.icon}</span>
+                  <span class="inline-flex items-center rounded-full border border-white/25 bg-white/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-white/95">${cover.motif}</span>
+                </div>
+                <div class="mt-2.5">
+                  <p class="line-clamp-2 ${titleClass} font-semibold leading-snug text-white drop-shadow-[0_1px_1px_rgba(15,23,42,0.25)]">${material.title || 'Tanpa judul'}</p>
+                  <p class="mt-1 text-[10px] text-white/88">${material.mapel_nama || 'Mapel'}</p>
+                  <p class="mt-1.5 rounded-md border border-white/25 bg-white/15 px-2 py-1 text-center text-[10px] font-semibold leading-snug text-white break-words">${classSummary}</p>
                 </div>
               </div>
-              <div class="flex flex-1 flex-col justify-between gap-3 p-4">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${tone.chipClass}">
-                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                    ${material.mapel_nama || '-'}
-                  </span>
-                  <span class="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    ${material.kelas_nama || '-'}
-                  </span>
-                </div>
-                <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400">
-                  <span class="inline-flex items-center gap-1 truncate">
-                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <div class="flex items-start gap-2.5">
+                <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${tone.accentClass} text-[10px] font-bold text-white shadow-[0_8px_16px_-10px_rgba(15,23,42,0.5)]">${getMaterialMonogram(material)}</span>
+                <div class="min-w-0 flex-1">
+                  <div class="mb-1 flex flex-wrap items-center gap-1.5">
+                    <span class="inline-flex items-center rounded-full border ${tone.badgeClass} px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider">${tone.badgeLabel}</span>
+                    ${group.allUnpublished ? '<span class="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-amber-700">Unpublished</span>' : ''}
+                  </div>
+                  <span class="inline-flex items-center gap-1 text-[10px] text-slate-400">
+                    <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                     ${publishedDate}
                   </span>
-                  <span class="inline-flex items-center gap-1 font-bold uppercase tracking-[0.14em] text-indigo-500">Buka
-                    <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                  </span>
                 </div>
               </div>
-            </button>
-            <div class="grid gap-2 border-t border-slate-100 bg-slate-50/60 p-3">
-              <div class="grid grid-cols-3 gap-2">
-                <button type="button" data-preview-published-id="${material.id}" class="btn-premium preview-published-btn inline-flex items-center justify-center gap-1 rounded-2xl border border-indigo-200 bg-white px-2 py-2 text-[9px] font-bold uppercase tracking-[0.04em] leading-tight text-indigo-700 transition hover:bg-indigo-50">Preview</button>
-                <button type="button" data-toggle-published-id="${material.id}" class="btn-premium toggle-published-btn inline-flex items-center justify-center gap-1 rounded-2xl border ${material.visible_to_students === false ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'} bg-white px-2 py-2 text-[9px] font-bold uppercase tracking-[0.04em] leading-tight transition">${material.visible_to_students === false ? 'Publish' : 'Unpub'}</button>
-                <button type="button" data-delete-published-id="${material.id}" class="btn-premium delete-published-btn inline-flex items-center justify-center gap-1 rounded-2xl border border-rose-200 bg-white px-2 py-2 text-[9px] font-bold uppercase tracking-[0.04em] leading-tight text-rose-600 transition hover:bg-rose-50">Hapus</button>
+              <div class="mt-auto flex items-center justify-between pt-1 text-[10px] font-bold uppercase tracking-wider text-indigo-600">
+                <span class="inline-flex items-center gap-1">Buka <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
+                <span class="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[8px] text-indigo-700">Book</span>
               </div>
+            </button>
+            <div class="grid grid-cols-4 gap-1.5 border-t border-slate-100 bg-slate-50/60 p-2.5">
+              <button type="button" data-preview-group-id="${group.groupId}" class="preview-published-btn inline-flex items-center justify-center gap-1 rounded-xl border border-indigo-200 bg-white px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700 transition hover:bg-indigo-50">Preview</button>
+              <button type="button" data-edit-group-id="${group.groupId}" class="edit-published-btn inline-flex items-center justify-center gap-1 rounded-xl border border-sky-200 bg-white px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-sky-700 transition hover:bg-sky-50">Edit</button>
+              <button type="button" data-toggle-group-id="${group.groupId}" class="toggle-published-btn inline-flex items-center justify-center gap-1 rounded-xl border ${group.allUnpublished ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'border-amber-200 text-amber-700 hover:bg-amber-50'} bg-white px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider transition">${group.allUnpublished ? 'Publish' : 'Unpub'}</button>
+              <button type="button" data-delete-group-id="${group.groupId}" class="delete-published-btn inline-flex items-center justify-center gap-1 rounded-xl border border-rose-200 bg-white px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-rose-600 transition hover:bg-rose-50">Hapus</button>
             </div>
           </article>
         `;
@@ -3163,106 +3506,134 @@ export async function renderGuruMateriPage(container) {
 
     publishedListEl.querySelectorAll('.material-published-item').forEach((button) => {
       button.addEventListener('click', () => {
-        const material = publishedMaterials.find((item) => item.id === button.getAttribute('data-material-id'));
-        if (material) {
-          openMaterialPreview(material);
+        const groupId = button.getAttribute('data-material-group-id');
+        const group = groupedMaterials.find((item) => item.groupId === groupId);
+        if (group?.representative) {
+          openMaterialPreview(group.representative);
         }
       });
     });
 
     publishedListEl.querySelectorAll('.preview-published-btn').forEach((button) => {
       button.addEventListener('click', () => {
-        const material = publishedMaterials.find((item) => item.id === button.getAttribute('data-preview-published-id'));
-        if (material) {
-          openMaterialPreview(material);
+        const groupId = button.getAttribute('data-preview-group-id');
+        const group = groupedMaterials.find((item) => item.groupId === groupId);
+        if (group?.representative) {
+          openMaterialPreview(group.representative);
+        }
+      });
+    });
+
+    publishedListEl.querySelectorAll('.edit-published-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const groupId = button.getAttribute('data-edit-group-id');
+        const group = groupedMaterials.find((item) => item.groupId === groupId);
+        if (group?.representative) {
+          openPublishedMaterialEditModal(group.representative);
         }
       });
     });
 
     publishedListEl.querySelectorAll('.toggle-published-btn').forEach((button) => {
       button.addEventListener('click', async () => {
-        const materialId = button.getAttribute('data-toggle-published-id');
-        const material = publishedMaterials.find((item) => item.id === materialId);
-        if (!material) {
-          return;
+        try {
+          const groupId = button.getAttribute('data-toggle-group-id');
+          const group = groupedMaterials.find((item) => item.groupId === groupId);
+          if (!group?.items?.length) {
+            return;
+          }
+
+          const material = group.representative;
+
+          const confirmed = window.confirm(
+            group.allUnpublished
+              ? `Publish lagi materi "${material.title || 'Tanpa judul'}" untuk siswa?`
+              : `Unpublish materi "${material.title || 'Tanpa judul'}" dari tampilan siswa?`
+          );
+          if (!confirmed) {
+            return;
+          }
+
+          const nextVisibility = group.allUnpublished;
+          await Promise.all(group.items.map((item) => savePublishedMaterial({
+            ...item,
+            created_at: item.created_at || item.published_at || item.updated_at || new Date().toISOString(),
+            visible_to_students: nextVisibility,
+            status: nextVisibility ? 'published' : 'unpublished',
+          })));
+
+          publishedMaterials = await getUserPublishedMaterials(session, context);
+          renderPublishedList();
+          await renderMaterialReadReport();
+          setStatus(nextVisibility ? `Materi dipublikasikan kembali untuk ${group.items.length} kelas.` : `Materi berhasil di-unpublish untuk ${group.items.length} kelas.`);
+        } catch (error) {
+          console.error('Gagal mengubah status publish materi:', error);
+          setStatus(`Gagal mengubah status publish: ${error?.message || 'cek izin Firestore.'}`, true);
         }
-
-        const confirmed = window.confirm(
-          material.visible_to_students === false
-            ? `Publish lagi materi "${material.title || 'Tanpa judul'}" untuk siswa?`
-            : `Unpublish materi "${material.title || 'Tanpa judul'}" dari tampilan siswa?`
-        );
-        if (!confirmed) {
-          return;
-        }
-
-        const nextVisibility = material.visible_to_students === false;
-        await savePublishedMaterial({
-          ...material,
-          visible_to_students: nextVisibility,
-          status: nextVisibility ? 'published' : 'unpublished',
-        });
-
-        publishedMaterials = await getUserPublishedMaterials(session, context);
-        renderPublishedList();
-        await renderMaterialReadReport();
-        setStatus(nextVisibility ? 'Materi dipublikasikan kembali untuk siswa.' : 'Materi berhasil di-unpublish tanpa dihapus permanen.');
       });
     });
 
     publishedListEl.querySelectorAll('.delete-published-btn').forEach((button) => {
       button.addEventListener('click', async () => {
-        const materialId = button.getAttribute('data-delete-published-id');
-        if (!materialId) {
-          return;
-        }
+        try {
+          const groupId = button.getAttribute('data-delete-group-id');
+          const group = groupedMaterials.find((item) => item.groupId === groupId);
+          if (!group?.items?.length) {
+            return;
+          }
 
-        const material = publishedMaterials.find((item) => item.id === materialId);
-        const confirmed = window.confirm(`Hapus permanen materi "${material?.title || 'Tanpa judul'}" dari penyimpanan? Tindakan ini tidak dapat dibatalkan.`);
-        if (!confirmed) {
-          return;
-        }
+          const material = group.representative;
+          const confirmed = window.confirm(`Hapus permanen materi "${material?.title || 'Tanpa judul'}" dari penyimpanan? Tindakan ini tidak dapat dibatalkan.`);
+          if (!confirmed) {
+            return;
+          }
 
-        await deletePublishedMaterial(materialId);
-        publishedMaterials = await getUserPublishedMaterials(session, context);
-        renderPublishedList();
-        await renderMaterialReadReport();
-        setStatus('Materi publish dihapus permanen dari penyimpanan.');
+          await Promise.all(group.items.map((item) => deletePublishedMaterial(item.id)));
+          publishedMaterials = await getUserPublishedMaterials(session, context);
+          renderPublishedList();
+          await renderMaterialReadReport();
+          setStatus(`Materi publish dihapus permanen dari ${group.items.length} kelas.`);
+        } catch (error) {
+          console.error('Gagal menghapus materi publish:', error);
+          setStatus(`Gagal menghapus materi: ${error?.message || 'cek izin Firestore.'}`, true);
+        }
       });
     });
+    updateStatCounters();
   }
 
   function buildMaterialPayload() {
     syncMainMetadataFromBuilder();
-    const source = sourceInput.value.trim();
-    const assignment = getCurrentAssignment();
+    let source;
+    if (selectedMethod === 'editor') {
+      source = buildBuilderHtmlOutput();
+    } else {
+      source = sourceInput.value.trim();
+    }
+
+    const selectedAssignments = getSelectedAssignments();
 
     if (!source) {
-      setStatus('HTML sumber masih kosong.', true);
+      setStatus('Konten materi masih kosong.', true);
       return null;
     }
 
-    if (!assignment) {
-      setStatus('Relasi mengajar belum tersedia.', true);
+    if (!selectedAssignments.length) {
+      setStatus('Pilih minimal satu kelas tujuan.', true);
       return null;
     }
+
+    const baseId = activeDraftId || `${selectedAssignments[0].id}_${Date.now()}`;
 
     return {
-      id: activeDraftId || `${assignment.id}_${Date.now()}`,
-      pengajaran_id: assignment.id,
-      kelas_id: assignment.kelas_id,
-      kelas_nama: assignment.kelas_nama,
-      kelas_token: normalizeClassToken(assignment.kelas_id || assignment.kelas_nama),
-      mapel_id: assignment.mapel_id,
-      mapel_nama: assignment.mapel_nama,
-      guru_id: String(session?.user?.username || context?.user_logged_in || '').trim().toLowerCase(),
-      guru_nama: session?.user?.nama || 'Guru',
+      baseId,
+      selectedAssignments,
+      source,
       title: titleInput.value.trim() || 'Materi Tanpa Judul',
       level: levelInput.value.trim(),
       chapter: chapterInput.value.trim(),
       meetings: meetingsInput.value.trim(),
       note: noteInput.value.trim(),
-      html_source: source,
       updated_at: new Date().toISOString(),
       tahun_ajaran_id: context.tahun_ajaran_aktif,
       semester_id: context.semester_aktif,
@@ -3312,59 +3683,139 @@ export async function renderGuruMateriPage(container) {
   });
 
   saveDraftBtn?.addEventListener('click', () => {
-    const draft = buildMaterialPayload();
-    if (!draft) {
+    const payload = buildMaterialPayload();
+    if (!payload) {
       return;
     }
 
+    const guruId = String(session?.user?.username || context?.user_logged_in || '').trim().toLowerCase();
+    const guruNama = session?.user?.nama || 'Guru';
     const allDrafts = readDrafts();
-    const existingIndex = allDrafts.findIndex((item) => item.id === draft.id);
+    const existingIndex = allDrafts.findIndex((item) => item.id === payload.baseId);
+
+    const draft = {
+      id: payload.baseId,
+      guru_id: guruId,
+      guru_nama: guruNama,
+      title: payload.title,
+      level: payload.level,
+      chapter: payload.chapter,
+      meetings: payload.meetings,
+      note: payload.note,
+      html_source: payload.source,
+      updated_at: payload.updated_at,
+      tahun_ajaran_id: payload.tahun_ajaran_id,
+      semester_id: payload.semester_id,
+      published_targets: payload.selectedAssignments.map((a) => ({
+        pengajaran_id: a.id,
+        kelas_id: a.kelas_id,
+        kelas_nama: a.kelas_nama,
+        mapel_id: a.mapel_id,
+        mapel_nama: a.mapel_nama,
+      })),
+      pengajaran_id: payload.selectedAssignments[0].id,
+      kelas_id: payload.selectedAssignments[0].kelas_id,
+      kelas_nama: payload.selectedAssignments[0].kelas_nama,
+      kelas_token: normalizeClassToken(payload.selectedAssignments[0].kelas_id || payload.selectedAssignments[0].kelas_nama),
+      mapel_id: payload.selectedAssignments[0].mapel_id,
+      mapel_nama: payload.selectedAssignments[0].mapel_nama,
+    };
+
     if (existingIndex >= 0) {
       allDrafts[existingIndex] = draft;
     } else {
       allDrafts.push(draft);
     }
     writeDrafts(allDrafts);
-    activeDraftId = draft.id;
+    activeDraftId = payload.baseId;
     drafts = getUserDrafts(session, context);
     renderDraftList();
-    setStatus('Draft materi HTML berhasil disimpan di browser ini.');
+    updateStatCounters();
+    setActiveTab('koleksi');
+    setStatus(`Draft materi disimpan untuk ${payload.selectedAssignments.length} kelas.`);
   });
 
   publishMaterialBtn?.addEventListener('click', async () => {
-    const material = buildMaterialPayload();
-    if (!material) {
-      return;
-    }
+    try {
+      const payload = buildMaterialPayload();
+      if (!payload) {
+        return;
+      }
 
-    const publishedMaterial = {
-      ...material,
-      status: 'published',
-      visible_to_students: true,
-      published_at: new Date().toISOString(),
-    };
+      const guruId = String(session?.user?.username || context?.user_logged_in || '').trim().toLowerCase();
+      const guruNama = session?.user?.nama || 'Guru';
+      const publishedAt = new Date().toISOString();
 
-    await savePublishedMaterial(publishedMaterial);
-
-    const allDrafts = readDrafts();
-    const draftIndex = allDrafts.findIndex((item) => item.id === material.id);
-    if (draftIndex >= 0) {
-      allDrafts[draftIndex] = {
-        ...allDrafts[draftIndex],
-        ...material,
+      const baseMaterial = {
+        source_id: payload.baseId,
+        guru_id: guruId,
+        guru_nama: guruNama,
+        title: payload.title,
+        level: payload.level,
+        chapter: payload.chapter,
+        meetings: payload.meetings,
+        note: payload.note,
+        html_source: payload.source,
+        visible_to_students: true,
         status: 'published',
-        published_at: publishedMaterial.published_at,
+        created_at: publishedAt,
+        published_at: publishedAt,
+        updated_at: payload.updated_at,
+        tahun_ajaran_id: payload.tahun_ajaran_id,
+        semester_id: payload.semester_id,
       };
-      writeDrafts(allDrafts);
-    }
 
-    activeDraftId = publishedMaterial.id;
-    drafts = getUserDrafts(session, context);
-  publishedMaterials = await getUserPublishedMaterials(session, context);
-    renderDraftList();
-    renderPublishedList();
-    await renderMaterialReadReport();
-    setStatus('Materi berhasil dipublikasikan dan masuk ke daftar materi tersimpan.');
+      const publishedTargets = payload.selectedAssignments.map((a) => ({
+        pengajaran_id: a.id,
+        kelas_id: a.kelas_id,
+        kelas_nama: a.kelas_nama,
+        mapel_id: a.mapel_id,
+        mapel_nama: a.mapel_nama,
+      }));
+
+      await Promise.all(payload.selectedAssignments.map((assignment) => savePublishedMaterial({
+        ...baseMaterial,
+        id: `${payload.baseId}__${assignment.id}`,
+        pengajaran_id: assignment.id,
+        kelas_id: assignment.kelas_id,
+        kelas_nama: assignment.kelas_nama,
+        kelas_token: normalizeClassToken(assignment.kelas_id || assignment.kelas_nama),
+        mapel_id: assignment.mapel_id,
+        mapel_nama: assignment.mapel_nama,
+      })));
+
+      const allDrafts = readDrafts();
+      const draftIndex = allDrafts.findIndex((item) => item.id === payload.baseId);
+      if (draftIndex >= 0) {
+        allDrafts[draftIndex] = {
+          ...allDrafts[draftIndex],
+          ...baseMaterial,
+          pengajaran_id: payload.selectedAssignments[0].id,
+          kelas_id: payload.selectedAssignments[0].kelas_id,
+          kelas_nama: payload.selectedAssignments[0].kelas_nama,
+          kelas_token: normalizeClassToken(payload.selectedAssignments[0].kelas_id || payload.selectedAssignments[0].kelas_nama),
+          mapel_id: payload.selectedAssignments[0].mapel_id,
+          mapel_nama: payload.selectedAssignments[0].mapel_nama,
+          status: 'published',
+          published_at: publishedAt,
+          published_targets: publishedTargets,
+        };
+        writeDrafts(allDrafts);
+      }
+
+      activeDraftId = payload.baseId;
+      drafts = getUserDrafts(session, context);
+      publishedMaterials = await getUserPublishedMaterials(session, context);
+      renderDraftList();
+      renderPublishedList();
+      await renderMaterialReadReport();
+      updateStatCounters();
+      setActiveTab('koleksi');
+      setStatus(`Materi berhasil dipublikasikan ke ${payload.selectedAssignments.length} kelas.`);
+    } catch (error) {
+      console.error('Gagal publish materi:', error);
+      setStatus(`Publish gagal: ${error?.message || 'cek izin Firestore dan data pengajaran.'}`, true);
+    }
   });
 
   resetEditorBtn?.addEventListener('click', resetEditor);
@@ -3480,7 +3931,11 @@ export async function renderGuruMateriPage(container) {
     });
   });
   builderAssignmentSelect?.addEventListener('change', () => {
-    assignmentSelect.value = builderAssignmentSelect.value;
+    if (assignmentListEl) {
+      const checkboxes = assignmentListEl.querySelectorAll('.assignment-checkbox');
+      checkboxes.forEach((cb) => { cb.checked = cb.value === builderAssignmentSelect.value; });
+      updateSelectedClassesCount();
+    }
     const assignment = getCurrentAssignment();
     if (assignment && builderLevelInput && !builderLevelInput.value.trim()) {
       builderLevelInput.value = assignment.kelas_nama || '';
@@ -3526,18 +3981,45 @@ export async function renderGuruMateriPage(container) {
   builderApplyToHtmlBtn?.addEventListener('click', () => {
     syncBuilderToHtmlEditor();
     setStatus('Konten dari Buat Materi dikirim ke Editor Materi HTML dan preview diperbarui.');
-    setActiveTab('editor');
+    setActiveTab('buat');
   });
   builderSaveDraftBtn?.addEventListener('click', () => {
     syncBuilderToHtmlEditor();
-    const draft = buildMaterialPayload();
-    if (!draft) {
+    const payload = buildMaterialPayload();
+    if (!payload) {
       showBuilderToast('Lengkapi relasi mengajar dan judul materi sebelum menyimpan draft.', true);
       return;
     }
 
+    const guruId = String(session?.user?.username || context?.user_logged_in || '').trim().toLowerCase();
+    const guruNama = session?.user?.nama || 'Guru';
     const allDrafts = readDrafts();
-    const existingIndex = allDrafts.findIndex((item) => item.id === draft.id);
+    const existingIndex = allDrafts.findIndex((item) => item.id === payload.baseId);
+
+    const draft = {
+      id: payload.baseId,
+      guru_id: guruId,
+      guru_nama: guruNama,
+      title: payload.title,
+      level: payload.level,
+      chapter: payload.chapter,
+      meetings: payload.meetings,
+      note: payload.note,
+      html_source: payload.source,
+      updated_at: payload.updated_at,
+      tahun_ajaran_id: payload.tahun_ajaran_aktif,
+      semester_id: payload.semester_aktif,
+      published_targets: payload.selectedAssignments.map((a) => ({
+        pengajaran_id: a.id, kelas_id: a.kelas_id, kelas_nama: a.kelas_nama, mapel_id: a.mapel_id, mapel_nama: a.mapel_nama,
+      })),
+      pengajaran_id: payload.selectedAssignments[0].id,
+      kelas_id: payload.selectedAssignments[0].kelas_id,
+      kelas_nama: payload.selectedAssignments[0].kelas_nama,
+      kelas_token: normalizeClassToken(payload.selectedAssignments[0].kelas_id || payload.selectedAssignments[0].kelas_nama),
+      mapel_id: payload.selectedAssignments[0].mapel_id,
+      mapel_nama: payload.selectedAssignments[0].mapel_nama,
+    };
+
     if (existingIndex >= 0) {
       allDrafts[existingIndex] = draft;
     } else {
@@ -3545,7 +4027,7 @@ export async function renderGuruMateriPage(container) {
     }
 
     writeDrafts(allDrafts);
-    activeDraftId = draft.id;
+    activeDraftId = payload.baseId;
     drafts = getUserDrafts(session, context);
     renderDraftList();
     setStatus('Draft materi HTML berhasil disimpan dari tab Buat Materi.');
@@ -3553,40 +4035,72 @@ export async function renderGuruMateriPage(container) {
   });
   builderPublishBtn?.addEventListener('click', async () => {
     syncBuilderToHtmlEditor();
-    const material = buildMaterialPayload();
-    if (!material) {
+    const payload = buildMaterialPayload();
+    if (!payload) {
       showBuilderToast('Lengkapi relasi mengajar dan judul materi sebelum publish.', true);
       return;
     }
 
-    const publishedMaterial = {
-      ...material,
-      status: 'published',
+    const guruId = String(session?.user?.username || context?.user_logged_in || '').trim().toLowerCase();
+    const guruNama = session?.user?.nama || 'Guru';
+    const publishedAt = new Date().toISOString();
+
+    const baseMaterial = {
+      source_id: payload.baseId,
+      guru_id: guruId,
+      guru_nama: guruNama,
+      title: payload.title,
+      level: payload.level,
+      chapter: payload.chapter,
+      meetings: payload.meetings,
+      note: payload.note,
+      html_source: payload.source,
       visible_to_students: true,
-      published_at: new Date().toISOString(),
+      status: 'published',
+      published_at: publishedAt,
+      updated_at: payload.updated_at,
+      tahun_ajaran_id: payload.tahun_ajaran_aktif,
+      semester_id: payload.semester_aktif,
     };
 
-    await savePublishedMaterial(publishedMaterial);
+    const publishedTargets = payload.selectedAssignments.map((a) => ({
+      pengajaran_id: a.id, kelas_id: a.kelas_id, kelas_nama: a.kelas_nama, mapel_id: a.mapel_id, mapel_nama: a.mapel_nama,
+    }));
+
+    await Promise.all(payload.selectedAssignments.map((assignment) => savePublishedMaterial({
+      ...baseMaterial,
+      id: `${payload.baseId}__${assignment.id}`,
+      pengajaran_id: assignment.id,
+      kelas_id: assignment.kelas_id,
+      kelas_nama: assignment.kelas_nama,
+      kelas_token: normalizeClassToken(assignment.kelas_id || assignment.kelas_nama),
+      mapel_id: assignment.mapel_id,
+      mapel_nama: assignment.mapel_nama,
+    })));
 
     const allDrafts = readDrafts();
-    const draftIndex = allDrafts.findIndex((item) => item.id === material.id);
+    const draftIndex = allDrafts.findIndex((item) => item.id === payload.baseId);
+    const draftEntry = {
+      ...baseMaterial,
+      id: payload.baseId,
+      pengajaran_id: payload.selectedAssignments[0].id,
+      kelas_id: payload.selectedAssignments[0].kelas_id,
+      kelas_nama: payload.selectedAssignments[0].kelas_nama,
+      kelas_token: normalizeClassToken(payload.selectedAssignments[0].kelas_id || payload.selectedAssignments[0].kelas_nama),
+      mapel_id: payload.selectedAssignments[0].mapel_id,
+      mapel_nama: payload.selectedAssignments[0].mapel_nama,
+      status: 'published',
+      published_at: publishedAt,
+      published_targets: publishedTargets,
+    };
     if (draftIndex >= 0) {
-      allDrafts[draftIndex] = {
-        ...allDrafts[draftIndex],
-        ...material,
-        status: 'published',
-        published_at: publishedMaterial.published_at,
-      };
+      allDrafts[draftIndex] = draftEntry;
     } else {
-      allDrafts.push({
-        ...material,
-        status: 'published',
-        published_at: publishedMaterial.published_at,
-      });
+      allDrafts.push(draftEntry);
     }
 
     writeDrafts(allDrafts);
-    activeDraftId = publishedMaterial.id;
+    activeDraftId = payload.baseId;
     drafts = getUserDrafts(session, context);
     publishedMaterials = await getUserPublishedMaterials(session, context);
     renderDraftList();
@@ -3594,7 +4108,7 @@ export async function renderGuruMateriPage(container) {
     await renderMaterialReadReport();
     setStatus('Materi berhasil dipublikasikan langsung dari tab Buat Materi.');
     showBuilderToast('Materi berhasil dipublish.');
-    setActiveTab('daftar');
+    setActiveTab('koleksi');
   });
   builderExportHtmlBtn?.addEventListener('click', exportBuilderHtml);
   builderPrintBtn?.addEventListener('click', printBuilderHtml);
@@ -3614,7 +4128,6 @@ export async function renderGuruMateriPage(container) {
     reportFilters.status = reportStatusFilterEl.value;
     await renderMaterialReadReport();
   });
-  assignmentSelect?.addEventListener('change', syncBuilderMetadataFromMain);
   titleInput?.addEventListener('input', syncBuilderMetadataFromMain);
   levelInput?.addEventListener('input', syncBuilderMetadataFromMain);
   chapterInput?.addEventListener('input', syncBuilderMetadataFromMain);
@@ -3644,10 +4157,22 @@ export async function renderGuruMateriPage(container) {
     openPromptAssistant('https://chat.deepseek.com/', 'DeepSeek');
   });
 
-  materialTabButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      setActiveTab(button.getAttribute('data-material-tab') || 'editor');
-    });
+  cardDensityCompactBtn?.addEventListener('click', () => {
+    if (materialCardDensity === 'compact') {
+      return;
+    }
+    materialCardDensity = 'compact';
+    localStorage.setItem(MATERIAL_CARD_DENSITY_KEY, materialCardDensity);
+    renderPublishedList();
+  });
+
+  cardDensityComfortableBtn?.addEventListener('click', () => {
+    if (materialCardDensity === 'comfortable') {
+      return;
+    }
+    materialCardDensity = 'comfortable';
+    localStorage.setItem(MATERIAL_CARD_DENSITY_KEY, materialCardDensity);
+    renderPublishedList();
   });
 
   readerBackBtn?.addEventListener('click', closeMaterialPreview);
@@ -3667,11 +4192,44 @@ export async function renderGuruMateriPage(container) {
   loadBuilderContent(localStorage.getItem(builderStorageKey) || getMaterialBuilderStarterContent());
   syncBuilderMetadataFromMain();
   renderBuilderStandalonePreview();
+  updateMaterialCardDensityToggleState();
   renderDraftList();
   renderPublishedList();
   await renderMaterialReadReport();
   renderTemplatePrompt();
   setBuilderModeLabel();
   updateBuilderStats();
+  updateStatCounters();
   setActiveTab(activeTab);
+
+  if (methodCardEditor) methodCardEditor.addEventListener('click', () => selectMethod('editor'));
+  if (methodCardHtml) methodCardHtml.addEventListener('click', () => selectMethod('html'));
+
+  if (btnNextToMetadata) btnNextToMetadata.addEventListener('click', () => goToStep(2));
+  if (btnBackToMethod) btnBackToMethod.addEventListener('click', () => goToStep(1));
+  if (btnNextToContent) btnNextToContent.addEventListener('click', () => goToStep(3));
+  if (btnBackToMetadata) btnBackToMetadata.addEventListener('click', () => goToStep(2));
+  if (btnNextToReview) btnNextToReview.addEventListener('click', () => goToStep(4));
+  if (btnBackToContent) btnBackToContent.addEventListener('click', () => goToStep(3));
+
+  const wizardStepNav = container.querySelector('#wizard-step-nav');
+  if (wizardStepNav) {
+    wizardStepNav.querySelectorAll('[data-step]').forEach((navEl) => {
+      navEl.addEventListener('click', () => {
+        const target = Number(navEl.getAttribute('data-step')) || 1;
+        goToStep(target);
+      });
+    });
+  }
+
+  if (builderPreviewRefreshBtn2) builderPreviewRefreshBtn2.addEventListener('click', () => renderBuilderStandalonePreview());
+
+  if (materialTabButtons.length) {
+    materialTabButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-material-tab');
+        setActiveTab(tab);
+      });
+    });
+  }
 }

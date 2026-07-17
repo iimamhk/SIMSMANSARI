@@ -188,7 +188,7 @@ function getEffectivePaketForSesi(sesi, paket = null) {
   return {
     ...(paket || {}),
     id: paket?.id || sesi?.paket_id || generateId('paket_fallback'),
-    judul: paket?.judul || sesi?.paket_judul || 'Kuiz',
+    judul: paket?.judul || sesi?.paket_judul || 'Ujian',
     mapel_id: paket?.mapel_id || sesi?.mapel_id || '',
     mapel_nama: paket?.mapel_nama || sesi?.mapel_nama || '',
     kelas_id: paket?.kelas_id || sesi?.kelas_id || '',
@@ -629,10 +629,10 @@ function renderDaftarKuiz() {
         ? `
           <div class="space-y-2">
             <input id="kode-input-${s.id}" type="text" maxlength="8" placeholder="Masukkan kode akses" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm uppercase font-mono text-center tracking-widest focus:outline-none focus:border-indigo-400"/>
-            <button type="button" data-action="mulai-kuiz" data-sesi-id="${s.id}" data-perlu-kode="true" class="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 active:scale-95 transition">Masuk & Mulai Kuiz</button>
+            <button type="button" data-action="mulai-kuiz" data-sesi-id="${s.id}" data-perlu-kode="true" class="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 active:scale-95 transition">Masuk & Mulai Ujian</button>
           </div>
         `
-        : `<button type="button" data-action="mulai-kuiz" data-sesi-id="${s.id}" class="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 active:scale-95 transition">Mulai Kuiz</button>`;
+        : `<button type="button" data-action="mulai-kuiz" data-sesi-id="${s.id}" class="w-full rounded-2xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 active:scale-95 transition">Mulai Ujian</button>`;
     } else if (s.status === 'selesai' || s.status === 'diarsipkan') {
       actionBtn = `<div class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm text-slate-500">Sesi telah berakhir</div>`;
     } else {
@@ -647,7 +647,7 @@ function renderDaftarKuiz() {
               <svg viewBox="0 0 24 24" class="h-6 w-6 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-base font-semibold leading-6 text-slate-900">${paket?.judul || s.paket_judul || 'Kuiz'}</p>
+               <p class="text-base font-semibold leading-6 text-slate-900">${paket?.judul || s.paket_judul || 'Ujian'}</p>
               <p class="mt-1 text-xs text-slate-500">${paket?.mapel_nama || '-'} • ${s.guru_nama || 'Guru'}</p>
               <div class="mt-2 inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-1 text-[11px] font-medium text-slate-600 ring-1 ring-white/60">
                 <span class="h-2 w-2 rounded-full bg-gradient-to-r ${theme.pulse}"></span>
@@ -695,8 +695,8 @@ function renderDaftarKuiz() {
     <div class="space-y-6">
       <section class="space-y-4">
         <div>
-          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Kuiz Tersedia</p>
-          <h3 class="text-2xl font-semibold text-slate-900">Kuiz Saya</h3>
+          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Ujian Tersedia</p>
+          <h3 class="text-2xl font-semibold text-slate-900">Ujian Saya</h3>
         </div>
         ${active.length === 0 ? `
           <div class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
@@ -713,7 +713,7 @@ function renderDaftarKuiz() {
           <details class="group overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
             <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 sm:px-5">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Riwayat Kuiz</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Riwayat Ujian</p>
                 <p class="mt-1 text-sm text-slate-600">Riwayat kuiz yang sudah dikerjakan. Tampilkan untuk melihat detail.</p>
               </div>
               <div class="flex items-center gap-3">
@@ -766,7 +766,7 @@ function renderPengerjaanKuiz() {
     <div class="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur px-4 py-3 sm:px-6">
       <div class="flex items-center justify-between gap-4">
         <div class="flex-1 min-w-0">
-          <p class="truncate text-sm font-semibold text-slate-700">${state.activePaket?.judul || 'Kuiz'}</p>
+          <p class="truncate text-sm font-semibold text-slate-700">${state.activePaket?.judul || 'Ujian'}</p>
           <p class="mt-1 text-[11px] text-rose-600">Mode pengawasan aktif: fullscreen wajib, pindah tab atau minimize akan mengumpulkan jawaban otomatis.</p>
           <div class="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div class="h-1.5 rounded-full bg-indigo-500 transition-all" style="width: ${progress}%"></div>
@@ -950,7 +950,7 @@ function renderReviewHasil() {
     return `
       <div class="text-center py-16 space-y-4">
         <p class="text-5xl">📋</p>
-        <p class="text-lg font-semibold text-slate-800">Kuiz Selesai</p>
+        <p class="text-lg font-semibold text-slate-800">Ujian Selesai</p>
         <p class="text-sm text-slate-500">Jawaban kamu sudah dikumpulkan. Tunggu guru mempublikasi nilai.</p>
         <button type="button" id="btn-kembali-list" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition">Kembali ke Daftar</button>
       </div>
@@ -962,6 +962,8 @@ function renderReviewHasil() {
 
   const scoreColor = nilaiAkhir >= 75 ? 'text-emerald-600' : nilaiAkhir >= 60 ? 'text-amber-600' : 'text-red-600';
   const scoreBg = nilaiAkhir >= 75 ? 'from-emerald-500 to-teal-500' : nilaiAkhir >= 60 ? 'from-amber-500 to-orange-500' : 'from-red-500 to-rose-500';
+  const adaEssay = (paket.soal || []).some((s) => s.tipe === 'essay');
+  const essayBelumDikoreksi = adaEssay && Object.values(jawabanku.nilai_manual || {}).every((v) => v === undefined || v === null || v === '');
 
   const soalReview = hasilDipublish ? (paket.soal || []).map((s, i) => {
     const d = detail[s.id] || {};
@@ -1031,8 +1033,12 @@ function renderReviewHasil() {
     <div class="space-y-5">
       <div class="overflow-hidden rounded-[32px] bg-gradient-to-br ${scoreBg} p-8 text-white text-center shadow-[0_24px_64px_rgba(15,23,42,0.18)]">
         <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/70">Nilai Akhir</p>
-        <p class="mt-4 text-7xl font-bold tracking-tight">${nilaiAkhir}</p>
-        <p class="mt-2 text-white/80">${total} / ${maxTotal} poin</p>
+        <div class="mt-4 flex items-baseline justify-center gap-2">
+          <p class="text-7xl font-bold tracking-tight">${nilaiAkhir}</p>
+          <p class="text-3xl font-semibold text-white/70">/100</p>
+        </div>
+        <p class="mt-2 text-white/80">Skor total: ${total} / ${maxTotal} poin</p>
+        ${essayBelumDikoreksi ? '<p class="mt-1 text-xs text-white/60">Skor essay belum dikoreksi, nilai dapat berubah.</p>' : ''}
         <p class="mt-1 text-sm text-white/60">${paket.judul}</p>
       </div>
 
@@ -1048,7 +1054,7 @@ function renderReviewHasil() {
       `}
 
       <button type="button" id="btn-kembali-list" class="w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white hover:bg-slate-700 transition">
-        Kembali ke Daftar Kuiz
+        Kembali ke Daftar Ujian
       </button>
     </div>
   `;
@@ -1060,11 +1066,11 @@ function renderPage() {
   const mainEl = document.querySelector('#siswa-kuiz-view') || document.querySelector('#app main');
   if (!mainEl) return;
 
-  let title = 'Kuiz';
+  let title = 'Ujian';
   let content = '';
-  if (state.view === 'list') { title = 'Kuiz Saya'; content = renderDaftarKuiz(); }
+  if (state.view === 'list') { title = 'Ujian Saya'; content = renderDaftarKuiz(); }
   else if (state.view === 'quiz') { title = 'Sedang Mengerjakan'; content = renderPengerjaanKuiz(); }
-  else if (state.view === 'review') { title = 'Hasil Kuiz'; content = renderReviewHasil(); }
+  else if (state.view === 'review') { title = 'Hasil Ujian'; content = renderReviewHasil(); }
 
   mainEl.innerHTML = content;
   attachViewListeners();
@@ -1274,7 +1280,7 @@ async function submitAndFinish(message = 'Jawaban berhasil dikumpulkan!', messag
 // ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
 
 export async function renderSiswaKuizPage(container) {
-  container.innerHTML = renderLayout('Kuiz', '<div class="py-20 text-center text-slate-500 text-sm">Memuat kuiz…</div>');
+  container.innerHTML = renderLayout('Ujian', '<div class="py-20 text-center text-slate-500 text-sm">Memuat ujian…</div>');
   await ensureKaTeXReady();
 
   const context = getStoredContext();
@@ -1320,12 +1326,12 @@ export async function renderSiswaKuizPage(container) {
   // Load semua jawaban siswa
   await loadAllJawabanSaya();
 
-  const html = renderLayout('Kuiz', `
+  const html = renderLayout('Ujian', `
     <div class="space-y-5">
       <section class="overflow-hidden rounded-[28px] bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-800 px-5 py-4 text-white shadow-[0_18px_48px_rgba(15,23,42,0.18)]">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div class="space-y-2">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-200">Kuiz Saya</p>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-200">Ujian Saya</p>
             <h2 class="text-xl font-semibold tracking-tight">Hai, ${state.siswaNama.split(' ')[0] || 'Siswa'}!</h2>
             <p class="text-xs leading-5 text-indigo-50/80">Kerjakan kuiz dari guru dan pantau progres pengerjaanmu dari satu panel yang ringkas.</p>
           </div>

@@ -594,16 +594,23 @@ async function removeSesiGroup(eventGroupId) {
   return groupSessions.length;
 }
 
-async function saveEssayGrading(jawabanId, nilaiManual, komentar) {
+async function saveEssayGrading(jawabanId, nilaiManual, komentar, sesiId, paket) {
   if (!db()) return;
   try {
+    const jawabanDoc = (await loadJawabanForSesi(sesiId)).find((j) => j.id === jawabanId);
+    const { nilaiAkhir, total, maxTotal } = hitungSkorJawaban(paket, jawabanDoc?.jawaban || {}, nilaiManual);
+
     await db().collection(COLLECTION_JAWABAN).doc(jawabanId).set({
       nilai_manual: nilaiManual,
       komentar_guru: komentar,
       essay_graded: true,
       graded_at: new Date().toISOString(),
+      nilai_akhir: nilaiAkhir,
+      skor: total,
+      skor_max: maxTotal,
     }, { merge: true });
-    if (state.hasilSesiId) delete state.jawabanCache[state.hasilSesiId];
+    delete state.jawabanCache[sesiId];
+    if (state.hasilSesiId && state.hasilSesiId !== sesiId) delete state.jawabanCache[state.hasilSesiId];
   } catch (e) {
     console.warn('saveEssayGrading error', e);
   }
@@ -795,109 +802,109 @@ function buildKirimPenilaianForm(model) {
   const tugasOptions = firstBabTasks.map((task) => `<option value="${task.tugas_id || task.id}">${task.tugas_nama || task.nama || 'Tugas'}</option>`).join('');
 
   return `
-    <form id="form-kirim-penilaian" class="space-y-5" data-tugas-map="${encodeURIComponent(JSON.stringify(targets.tugasMap || {}))}">
-      <div class="rounded-[24px] border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-5">
-        <div class="grid gap-3 sm:grid-cols-3">
+    <form id="form-kirim-penilaian" class="space-y-4" data-tugas-map="${encodeURIComponent(JSON.stringify(targets.tugasMap || {}))}">
+      <div class="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Paket</p>
-            <p class="mt-1 text-sm font-semibold text-slate-900">${paket?.judul || '-'}</p>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Paket Ujian</p>
+            <p class="mt-0.5 text-sm font-semibold text-slate-900">${paket?.judul || '-'}</p>
           </div>
-          <div>
+          <div class="text-right">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Kelas</p>
-            <p class="mt-1 text-sm font-semibold text-slate-900">${sesi?.kelas_nama || '-'}</p>
+            <p class="mt-0.5 text-sm font-semibold text-slate-900">${sesi?.kelas_nama || '-'}</p>
           </div>
-          <div>
+          <div class="text-right">
             <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Nilai Siap Kirim</p>
-            <p class="mt-1 text-sm font-semibold text-slate-900">${nilaiData.length} siswa submit</p>
+            <p class="mt-0.5 text-sm font-semibold text-slate-900">${nilaiData.length} siswa</p>
           </div>
         </div>
-        <p class="mt-3 text-xs text-slate-500">Pengajaran tujuan: ${assignment?.kelas_nama || sesi?.kelas_nama || '-'} • ${assignment?.mapel_nama || paket?.mapel_nama || '-'}</p>
+        <p class="mt-2 text-xs text-slate-500">Pengajaran: ${assignment?.kelas_nama || sesi?.kelas_nama || '-'} • ${assignment?.mapel_nama || paket?.mapel_nama || '-'}</p>
       </div>
 
-      <div class="rounded-[24px] border border-slate-200 bg-white p-5">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-sm font-semibold text-slate-900">Tujuan Kirim Nilai</p>
-            <p class="text-xs text-slate-500 mt-1">Pilih satu atau beberapa format penilaian yang sudah ada.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Pilih satu atau beberapa format penilaian.</p>
           </div>
-          <select name="overwrite_mode" id="sync-overwrite-mode" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <select name="overwrite_mode" id="sync-overwrite-mode" class="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700">
             <option value="skip">Lewati nilai yang sudah ada</option>
             <option value="replace">Timpa nilai lama</option>
           </select>
         </div>
 
-        <div class="mt-4 grid gap-3">
-          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <input type="checkbox" name="destinations" value="tugas" checked class="mt-1 h-4 w-4 rounded accent-indigo-600">
-            <div>
+        <div class="mt-3 grid gap-2.5">
+          <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 cursor-pointer hover:border-indigo-200 hover:bg-indigo-50/40 transition">
+            <input type="checkbox" name="destinations" value="tugas" class="mt-0.5 h-4 w-4 rounded accent-indigo-600">
+            <div class="flex-1">
               <p class="text-sm font-semibold text-slate-900">Nilai Tugas</p>
-              <p class="text-xs text-slate-500">Akan masuk ke tab Nilai Tugas. Sistem bisa membuat BAB dan tugas kuiz otomatis bila belum ada.</p>
+              <p class="text-[11px] text-slate-500 leading-relaxed">Masuk ke tab Nilai Tugas. Sistem bisa membuat BAB dan tugas ujian otomatis bila belum ada.</p>
             </div>
           </label>
 
-          <div id="sync-section-tugas" class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="block text-sm text-slate-700">
-                <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">BAB Tujuan</span>
-                <select name="tugas_bab_id" id="sync-tugas-bab-id" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <div id="sync-section-tugas" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+            <div class="grid gap-2.5 sm:grid-cols-2">
+              <label class="block text-xs text-slate-700">
+                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">BAB Tujuan</span>
+                <select name="tugas_bab_id" id="sync-tugas-bab-id" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
                   <option value="__new__">Buat / pakai BAB "${getDefaultKuizBabName()}"</option>
                   ${babOptions}
                 </select>
               </label>
-              <label class="block text-sm text-slate-700">
-                <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nama BAB Baru</span>
-                <input type="text" name="tugas_bab_name" id="sync-tugas-bab-name" value="${getDefaultKuizBabName()}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+              <label class="block text-xs text-slate-700">
+                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nama BAB Baru</span>
+                <input type="text" name="tugas_bab_name" id="sync-tugas-bab-name" value="${getDefaultKuizBabName()}" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
               </label>
-              <label class="block text-sm text-slate-700 sm:col-span-2">
-                <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Tugas Yang Sudah Ada</span>
-                <select name="tugas_existing_id" id="sync-tugas-existing-id" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+              <label class="block text-xs text-slate-700 sm:col-span-2">
+                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Tugas Yang Sudah Ada</span>
+                <select name="tugas_existing_id" id="sync-tugas-existing-id" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
                   <option value="__new__">Buat tugas baru</option>
                   ${tugasOptions}
                 </select>
               </label>
-              <label class="block text-sm text-slate-700 sm:col-span-2">
-                <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Tugas / Kolom Nilai</span>
-                <input type="text" name="tugas_name" id="sync-tugas-name" value="${defaultLabel}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+              <label class="block text-xs text-slate-700 sm:col-span-2">
+                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nama Tugas / Kolom Nilai</span>
+                <input type="text" name="tugas_name" id="sync-tugas-name" value="${defaultLabel}" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
               </label>
             </div>
           </div>
 
-          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <input type="checkbox" name="destinations" value="uh" checked class="mt-1 h-4 w-4 rounded accent-sky-600">
-            <div>
+          <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 cursor-pointer hover:border-sky-200 hover:bg-sky-50/40 transition">
+            <input type="checkbox" name="destinations" value="uh" class="mt-0.5 h-4 w-4 rounded accent-sky-600">
+            <div class="flex-1">
               <p class="text-sm font-semibold text-slate-900">Ulangan Harian</p>
-              <p class="text-xs text-slate-500">Akan masuk ke tab UH dan terbaca sebagai nilai murni pada kolom yang dipilih.</p>
+              <p class="text-[11px] text-slate-500 leading-relaxed">Masuk ke tab UH dan terbaca sebagai nilai murni pada kolom yang dipilih.</p>
             </div>
           </label>
 
-          <div id="sync-section-uh" class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label class="block text-sm text-slate-700">
-                <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Kolom UH</span>
-                <select name="uh_column_id" id="sync-uh-column-id" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <div id="sync-section-uh" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+            <div class="grid gap-2.5 sm:grid-cols-2">
+              <label class="block text-xs text-slate-700">
+                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Kolom UH</span>
+                <select name="uh_column_id" id="sync-uh-column-id" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
                   <option value="__new__">Buat kolom UH baru</option>
                   ${uhOptions}
                 </select>
               </label>
-              <label class="block text-sm text-slate-700">
-                <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nama Kolom Baru</span>
-                <input type="text" name="uh_column_name" id="sync-uh-column-name" value="${defaultLabel}" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+              <label class="block text-xs text-slate-700">
+                <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Nama Kolom Baru</span>
+                <input type="text" name="uh_column_name" id="sync-uh-column-name" value="${defaultLabel}" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
               </label>
             </div>
           </div>
 
-          <label class="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <input type="checkbox" name="destinations" value="pts" checked class="mt-1 h-4 w-4 rounded accent-violet-600">
-            <div>
+          <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 cursor-pointer hover:border-violet-200 hover:bg-violet-50/40 transition">
+            <input type="checkbox" name="destinations" value="pts" class="mt-0.5 h-4 w-4 rounded accent-violet-600">
+            <div class="flex-1">
               <p class="text-sm font-semibold text-slate-900">PTS</p>
-              <p class="text-xs text-slate-500">Akan mengisi kolom PTS bagian nilai murni. Cocok hanya jika kuiz ini memang diperlakukan sebagai tes PTS.</p>
+              <p class="text-[11px] text-slate-500 leading-relaxed">Mengisi kolom PTS bagian nilai murni. Cocok jika ujian ini diperlakukan sebagai tes PTS.</p>
             </div>
           </label>
 
-          <div id="sync-section-pts" class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <label class="block text-sm text-slate-700">
-              <span class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Slot Nilai PTS</span>
-              <select name="pts_tipe" id="sync-pts-tipe" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+          <div id="sync-section-pts" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2.5">
+            <label class="block text-xs text-slate-700">
+              <span class="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Slot Nilai PTS</span>
+              <select name="pts_tipe" id="sync-pts-tipe" class="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs">
                 <option value="murni">PTS Murni</option>
                 <option value="remidi">PTS Remidi</option>
               </select>
@@ -906,20 +913,20 @@ function buildKirimPenilaianForm(model) {
         </div>
       </div>
 
-      <div class="rounded-[24px] border border-slate-200 bg-white p-5">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-sm font-semibold text-slate-900">Riwayat Kirim</p>
-            <p class="text-xs text-slate-500 mt-1">Menampilkan 5 impor terakhir dari sesi ini.</p>
+            <p class="text-xs text-slate-500 mt-0.5">5 impor terakhir dari sesi ini.</p>
           </div>
         </div>
-        <div class="mt-4">${renderKuizSyncHistory(history)}</div>
+        <div class="mt-3">${renderKuizSyncHistory(history)}</div>
       </div>
 
-      <div class="flex flex-wrap justify-end gap-3">
-        <button type="button" id="btn-sync-cancel" class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Batal</button>
-        <button type="submit" id="btn-sync-submit" class="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition">
-          <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      <div class="flex flex-wrap justify-end gap-2.5">
+        <button type="button" id="btn-sync-cancel" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Batal</button>
+        <button type="submit" id="btn-sync-submit" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
           Kirim ke Penilaian
         </button>
       </div>
@@ -1599,7 +1606,7 @@ function renderTabBank() {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Buat Soal</p>
-          <h3 class="text-2xl font-semibold text-slate-900">Paket Kuiz Saya</h3>
+           <h3 class="text-2xl font-semibold text-slate-900">Paket Ujian Saya</h3>
         </div>
         <button type="button" id="btn-buat-paket" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">
           <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -2428,7 +2435,7 @@ function renderTabSesi() {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Kelola Sesi</p>
-          <h3 class="text-2xl font-semibold text-slate-900">Sesi Kuiz Saya</h3>
+           <h3 class="text-2xl font-semibold text-slate-900">Sesi Ujian Saya</h3>
         </div>
         <button type="button" id="btn-buat-sesi" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">
           <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -2733,7 +2740,7 @@ function renderSesiGroupCard(sessions) {
             <span class="rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${tone.badgeClass}">Batch ${sessions.length} Kelas</span>
           </div>
           <div>
-            <p class="line-clamp-2 text-[15px] font-semibold leading-snug text-white">${paket?.judul || primary.paket_judul || 'Batch Kuiz'}</p>
+            <p class="line-clamp-2 text-[15px] font-semibold leading-snug text-white">${paket?.judul || primary.paket_judul || 'Batch Ujian'}</p>
             <p class="mt-0.5 text-[11px] text-white/80">${primary.mapel_nama || paket?.mapel_nama || '-'} • ${primary.event_group_label || 'Batch ujian bersama'}</p>
           </div>
         </div>
@@ -3147,7 +3154,7 @@ function openModalSesi(sesi = null, prefilledPaketId = null) {
         <button type="submit" class="flex-1 rounded-2xl bg-slate-900 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition">${isEdit ? 'Simpan' : 'Buat Sesi'}</button>
       </div>
     </form>
-  `, { title: isEdit ? 'Edit Sesi Kuiz' : 'Buat Sesi Kuiz Baru' });
+  `, { title: isEdit ? 'Edit Sesi Ujian' : 'Buat Sesi Ujian Baru' });
 
   document.getElementById('btn-sesi-cancel')?.addEventListener('click', closeModal);
   document.getElementById('btn-gen-kode')?.addEventListener('click', () => {
@@ -3220,7 +3227,7 @@ function openModalSesi(sesi = null, prefilledPaketId = null) {
       mapel_id: assignment.mapel_id || '',
       mapel_nama: assignment.mapel_nama || '',
       event_group_id: eventGroupId,
-      event_group_label: `${paket?.judul || 'Kuiz'} • ${baseData.waktu_mulai ? formatDateTime(baseData.waktu_mulai) : 'Multi Kelas'}`,
+        event_group_label: `${paket?.judul || 'Ujian'} • ${baseData.waktu_mulai ? formatDateTime(baseData.waktu_mulai) : 'Multi Kelas'}`,
       ...baseData,
     })));
     rerender();
@@ -3266,22 +3273,22 @@ async function refreshMonitor(sesiId) {
     return map[type] || type || '-';
   };
 
-  const rows = participants.map((m) => {
+  const rows = participants.map((m, idx) => {
     const j = m.jawabanDoc || jawaban.find((jw) => jw.siswa_id === m.siswa_id);
     let statusBadge = '<span class="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">Belum Mulai</span>';
     let skor = '-';
     if (j?.submitted_at) {
       statusBadge = '<span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Selesai</span>';
       if (paket) {
-        const { nilaiAkhir } = hitungSkorJawaban(paket, j.jawaban || {}, j.nilai_manual || {});
-        skor = `${nilaiAkhir}`;
+        const r = hitungSkorJawaban(paket, j.jawaban || {}, j.nilai_manual || {});
+        skor = `${r.nilaiAkhir}/100 <span class="text-slate-400 font-normal">(${r.total}/${r.maxTotal} poin)</span>`;
       }
     } else if (j?.started_at) {
       statusBadge = '<span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Sedang Mengerjakan</span>';
     }
     return `
       <tr class="border-b border-slate-100">
-        <td class="py-3 pr-3 text-sm font-medium text-slate-800">${m.nomor_absen || '-'}</td>
+        <td class="py-3 pr-3 text-sm font-medium text-slate-800">${idx + 1}</td>
         <td class="py-3 pr-3 text-sm text-slate-700">${m.siswa_nama || '-'}</td>
         <td class="py-3 pr-3">${statusBadge}</td>
         <td class="py-3 text-sm font-semibold text-slate-800 text-right">${skor}</td>
@@ -3346,7 +3353,7 @@ async function refreshMonitor(sesiId) {
           <th class="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">No</th>
           <th class="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Nama</th>
           <th class="pb-2 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-          <th class="pb-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Nilai</th>
+          <th class="pb-2 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Nilai (/100)</th>
         </tr></thead>
         <tbody>${rows || '<tr><td colspan="4" class="py-4 text-center text-sm text-slate-500">Tidak ada data anggota kelas.</td></tr>'}</tbody>
       </table>
@@ -3411,7 +3418,7 @@ function renderTabHasil() {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Rekap Hasil</p>
-          <h3 class="text-2xl font-semibold text-slate-900">Analitik Kuiz</h3>
+           <h3 class="text-2xl font-semibold text-slate-900">Analitik Ujian</h3>
         </div>
       </div>
       <div>
@@ -3487,10 +3494,10 @@ async function loadAndRenderHasil(sesiId) {
       <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
         <td class="py-3 pr-3 text-sm text-slate-500">${i + 1}</td>
         <td class="py-3 pr-3 text-sm font-medium text-slate-900">${participant.siswa_nama || '-'}</td>
-        <td class="py-3 pr-3 text-sm text-slate-700">${nilaiItem ? `${nilaiItem.total}/${nilaiItem.maxTotal}` : '-'}</td>
+        <td class="py-3 pr-3 text-sm text-slate-700">${nilaiItem ? `${nilaiItem.total}/${nilaiItem.maxTotal} poin` : '-'}</td>
         <td class="py-3 pr-3">
           ${nilaiItem
-            ? `<span class="inline-block rounded-full px-3 py-1 text-sm font-bold ${nilaiItem.nilaiAkhir >= 75 ? 'bg-emerald-50 text-emerald-700' : nilaiItem.nilaiAkhir >= 60 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}">${nilaiItem.nilaiAkhir}</span>`
+            ? `<span class="inline-block rounded-full px-3 py-1 text-sm font-bold ${nilaiItem.nilaiAkhir >= 75 ? 'bg-emerald-50 text-emerald-700' : nilaiItem.nilaiAkhir >= 60 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}">${nilaiItem.nilaiAkhir}/100</span>`
             : '<span class="inline-block rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-500">-</span>'}
         </td>
         <td class="py-3 pr-3 text-sm text-slate-500">${durasi}</td>
@@ -3537,16 +3544,16 @@ async function loadAndRenderHasil(sesiId) {
           <p class="text-xs text-slate-500 mt-1">Peserta Submit</p>
         </div>
         <div class="rounded-[20px] border border-slate-200 bg-white p-4 text-center shadow-sm">
-          <p class="text-2xl font-semibold text-slate-900">${avg}</p>
-          <p class="text-xs text-slate-500 mt-1">Rata-rata</p>
+          <p class="text-2xl font-semibold text-slate-900">${avg}<span class="text-base text-slate-400">/100</span></p>
+          <p class="text-xs text-slate-500 mt-1">Rata-rata Nilai</p>
         </div>
         <div class="rounded-[20px] border border-slate-200 bg-white p-4 text-center shadow-sm">
-          <p class="text-2xl font-semibold text-emerald-600">${highest}</p>
-          <p class="text-xs text-slate-500 mt-1">Tertinggi</p>
+          <p class="text-2xl font-semibold text-emerald-600">${highest}<span class="text-base text-emerald-400">/100</span></p>
+          <p class="text-xs text-slate-500 mt-1">Nilai Tertinggi</p>
         </div>
         <div class="rounded-[20px] border border-slate-200 bg-white p-4 text-center shadow-sm">
-          <p class="text-2xl font-semibold ${lowest < 60 ? 'text-red-600' : 'text-slate-900'}">${lowest}</p>
-          <p class="text-xs text-slate-500 mt-1">Terendah</p>
+          <p class="text-2xl font-semibold ${lowest < 60 ? 'text-red-600' : 'text-slate-900'}">${lowest}<span class="text-base ${lowest < 60 ? 'text-red-400' : 'text-slate-400'}">/100</span></p>
+          <p class="text-xs text-slate-500 mt-1">Nilai Terendah</p>
         </div>
       </div>
 
@@ -3558,6 +3565,10 @@ async function loadAndRenderHasil(sesiId) {
       ` : ''}
 
       <div class="flex flex-wrap gap-2">
+        <button id="btn-refresh-hasil" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="1.8"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+          Refresh
+        </button>
         <button id="btn-export-csv" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
           <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Export CSV
@@ -3577,8 +3588,8 @@ async function loadAndRenderHasil(sesiId) {
             <tr>
               <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">No</th>
               <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Nama</th>
-              <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Skor</th>
-              <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Nilai</th>
+              <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Skor (X/Y)</th>
+              <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Nilai (/100)</th>
               <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Durasi</th>
               <th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Submit</th>
               <th class="px-5 py-3"></th>
@@ -3610,6 +3621,10 @@ async function loadAndRenderHasil(sesiId) {
       </div>
     </div>
   `;
+
+  document.getElementById('btn-refresh-hasil')?.addEventListener('click', () => {
+    if (state.hasilSesiId) loadAndRenderHasil(state.hasilSesiId);
+  });
 
   document.getElementById('btn-export-csv')?.addEventListener('click', () => {
     const csvRows = [['No', 'Nama Siswa', 'Skor', 'Nilai Akhir', 'Durasi (mnt)', 'Status / Submit']];
@@ -3708,7 +3723,7 @@ async function openModalKoreksiEssay(jawabanId, sesiId) {
     document.querySelectorAll('.essay-komentar-input').forEach((inp) => {
       komentarGuru[inp.dataset.soalId] = inp.value.trim();
     });
-    await saveEssayGrading(jawabanId, nilaiManual, komentarGuru);
+    await saveEssayGrading(jawabanId, nilaiManual, komentarGuru, sesiId, paket);
     closeModal();
     showNotif('Penilaian essay disimpan.');
     await loadAndRenderHasil(sesiId);
@@ -3869,7 +3884,7 @@ function attachTabContentListeners() {
 // ─── MAIN EXPORT ─────────────────────────────────────────────────────────────
 
 export async function renderGuruKuizPage(container) {
-  container.innerHTML = renderLayout('Kuiz Pro', '<div id="kuiz-loading" class="py-20 text-center text-slate-500 text-sm">Memuat modul kuiz…</div>');
+  container.innerHTML = renderLayout('Ujian Pro', '<div id="kuiz-loading" class="py-20 text-center text-slate-500 text-sm">Memuat modul ujian…</div>');
   await ensureKaTeXReady();
 
   const context = getStoredContext();
@@ -3887,12 +3902,12 @@ export async function renderGuruKuizPage(container) {
   // Pre-load jawaban counts for sesi list
   await Promise.all(state.sesiList.map((s) => loadJawabanForSesi(s.id)));
 
-  const html = renderLayout('Kuiz Pro', `
+  const html = renderLayout('Ujian Pro', `
     <div class="space-y-5">
       <section class="overflow-hidden rounded-[28px] bg-gradient-to-r from-slate-900 via-indigo-900 to-slate-800 px-5 py-4 text-white shadow-[0_18px_48px_rgba(15,23,42,0.18)]">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div class="space-y-2">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-200">Kuiz Pro</p>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] text-indigo-200">Ujian Pro</p>
             <h2 class="text-xl font-semibold tracking-tight">Kelola kuiz, analitik, dan nilai dari satu panel</h2>
             <p class="text-xs leading-5 text-indigo-50/80">Buat paket soal, jadwalkan sesi, monitor langsung, dan kirim hasil ke rapor.</p>
           </div>

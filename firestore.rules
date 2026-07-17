@@ -31,16 +31,34 @@ service cloud.firestore {
         'published_at'
       ])
       && request.resource.data.id is string
+      && request.resource.data.id == materialId
       && request.resource.data.id.size() > 0
+      && request.resource.data.pengajaran_id is string
+      && request.resource.data.pengajaran_id.size() > 0
       && request.resource.data.kelas_id is string
+      && request.resource.data.kelas_nama is string
+      && request.resource.data.kelas_token is string
+      && request.resource.data.mapel_id is string
       && request.resource.data.mapel_nama is string
       && request.resource.data.guru_id is string
+      && request.resource.data.guru_nama is string
       && request.resource.data.title is string
+      && request.resource.data.level is string
+      && request.resource.data.chapter is string
+      && request.resource.data.meetings is string
+      && request.resource.data.note is string
       && request.resource.data.html_source is string
       && request.resource.data.html_source.size() <= 200000
+      && request.resource.data.tahun_ajaran_id is string
+      && request.resource.data.semester_id is string
+      && request.resource.data.status is string
+      && request.resource.data.status in ['published', 'unpublished']
+      && request.resource.data.created_at is string
+      && request.resource.data.updated_at is string
       && (!('markdown_source' in request.resource.data) || request.resource.data.markdown_source is string)
       && (!('source_id' in request.resource.data) || request.resource.data.source_id is string)
       && (!('source' in request.resource.data) || request.resource.data.source is string)
+      && (!('published_at' in request.resource.data) || request.resource.data.published_at is string)
       && request.resource.data.visible_to_students is bool;
 
       allow delete: if true;
@@ -71,11 +89,30 @@ service cloud.firestore {
         'semester_id'
       ])
       && request.resource.data.id is string
+      && request.resource.data.id == readId
       && request.resource.data.material_id is string
       && request.resource.data.siswa_id is string
+      && request.resource.data.siswa_nama is string
+      && request.resource.data.kelas_id is string
+      && request.resource.data.kelas_nama is string
+      && request.resource.data.guru_id is string
+      && request.resource.data.guru_nama is string
+      && request.resource.data.mapel_nama is string
       && request.resource.data.material_title is string
+      && request.resource.data.event_type is string
       && request.resource.data.read_count is int
-      && request.resource.data.read_count >= 1;
+      && request.resource.data.read_count >= 0
+      && request.resource.data.first_read_at is string
+      && request.resource.data.last_read_at is string
+      && request.resource.data.last_duration_seconds is int
+      && request.resource.data.last_duration_seconds >= 0
+      && request.resource.data.total_duration_seconds is int
+      && request.resource.data.total_duration_seconds >= 0
+      && request.resource.data.completion_status is string
+      && request.resource.data.completion_status in ['unopened', 'opened', 'completed']
+      && request.resource.data.tahun_ajaran_id is string
+      && request.resource.data.semester_id is string
+      && (!('completed_at' in request.resource.data) || request.resource.data.completed_at is string);
       allow delete: if true;
     }
 

@@ -144,10 +144,6 @@ export function hitungSkorJawaban(paket, jawabanMap, nilaiManualMap = {}) {
     switch (soal.tipe) {
       case 'pg':
       case 'bs':
-        if (jawaban && String(jawaban).trim().toLowerCase() === String(soal.jawaban_benar || '').trim().toLowerCase()) {
-          poin = max;
-        }
-        break;
       case 'isian':
         if (jawaban && String(jawaban).trim().toLowerCase() === String(soal.jawaban_benar || '').trim().toLowerCase()) {
           poin = max;
@@ -176,8 +172,9 @@ export function hitungSkorJawaban(paket, jawabanMap, nilaiManualMap = {}) {
     detail[soal.id] = { poin, max, jawaban, tipe: soal.tipe, benar };
   });
 
-  const nilaiAkhir = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
-  return { total: Math.round(total * 100) / 100, maxTotal, nilaiAkhir, detail };
+  const totalBulat = Math.round(total * 100) / 100;
+  const nilaiAkhir = maxTotal > 0 ? Math.round((totalBulat / maxTotal) * 100) : 0;
+  return { total: totalBulat, maxTotal, nilaiAkhir, detail };
 }
 
 export function hitungStatistikSoal(paket, allJawaban) {

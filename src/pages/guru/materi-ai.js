@@ -541,8 +541,32 @@ function publishModalHtml() {
   `;
 }
 
+function successPopupHtml() {
+  return `
+    <div id="mai-success-popup" class="mai-modal-overlay" aria-hidden="true">
+      <div class="mai-modal-box !max-w-[420px] !text-center" role="dialog" aria-modal="true" aria-labelledby="mai-success-title">
+        <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+          <i class="fas fa-check text-2xl"></i>
+        </div>
+        <h3 id="mai-success-title" class="text-center">Materi Berhasil Dipublikasikan</h3>
+        <p id="mai-success-message" class="mai-modal-sub text-center">Materi sudah dibagikan ke siswa.</p>
+        <div class="mai-modal-actions !justify-center">
+          <button type="button" id="mai-success-close" class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-700">Selesai</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export async function renderGuruMateriAiPage(container) {
-  const context = getStoredContext();
+  const storedContext = getStoredContext();
+  const context = {
+    ...storedContext,
+    tahun_ajaran_aktif: storedContext?.tahun_ajaran_aktif || '2026_2027',
+    tahun_ajaran_aktif_nama: storedContext?.tahun_ajaran_aktif_nama || '2026/2027',
+    semester_aktif: storedContext?.semester_aktif || '2026_2027_1',
+    semester_aktif_nama: storedContext?.semester_aktif_nama || 'Semester 1 (Ganjil)',
+  };
   const session = getSession();
   const userId = session?.user?.username || context?.user_logged_in || '';
   const userName = session?.user?.nama || 'Guru';
@@ -615,6 +639,7 @@ export async function renderGuruMateriAiPage(container) {
       </section>
     </div>
     ${publishModalHtml()}
+    ${successPopupHtml()}
   `,
     { accentPanel: 'from-violet-500 via-indigo-500 to-fuchsia-500' }
   );
@@ -657,6 +682,9 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context, ai
   const publishSelectAllBtn = root.querySelector('#mai-publish-select-all');
   const publishCancelBtn = root.querySelector('#mai-publish-cancel');
   const publishConfirmBtn = root.querySelector('#mai-publish-confirm');
+  const successPopup = root.querySelector('#mai-success-popup');
+  const successMessage = root.querySelector('#mai-success-message');
+  const successCloseBtn = root.querySelector('#mai-success-close');
 
   let abortController = null;
   let isGenerating = false;
@@ -665,6 +693,39 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context, ai
   let promptTouched = false;
   let lastGenerationMeta = null;
   const availableAssignments = dedupeAssignments(teachingAssignments);
+  // Daftar target publish aktif. Bisa berasal dari relasi mengajar, atau
+  // target manual yang diturunkan dari form bila relasi mengajar kosong.
+  let publishTargets = availableAssignments;
+
+  function buildManualTarget() {
+    const currentInput = readForm();
+    const kelasNama = String(currentInput.kelas || '').trim() || 'Kelas';
+    const mapelNama = String(currentInput.mapel || '').trim() || 'Materi AI';
+    const kelasToken = normalizeClassToken(kelasNama);
+    const mapelToken = normalizeClassToken(mapelNama);
+    return {
+      id: `manual_${kelasToken || 'kelas'}_${mapelToken || 'mapel'}`,
+      kelas_id: kelasNama,
+      kelas_nama: kelasNama,
+      kelas_token: kelasToken,
+      mapel_id: mapelToken,
+      mapel_nama: mapelNama,
+      is_manual: true,
+    };
+  }
+
+  function showSuccessPopup(message) {
+    if (!successPopup) return;
+    if (successMessage && message) successMessage.textContent = message;
+    successPopup.classList.add('open');
+    successPopup.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeSuccessPopup() {
+    if (!successPopup) return;
+    successPopup.classList.remove('open');
+    successPopup.setAttribute('aria-hidden', 'true');
+  }
 
   const actionButtons = [saveBtn, publishBtn, wordBtn, pdfBtn, copyBtn];
 
@@ -915,7 +976,7 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context, ai
   function getSelectedAssignments() {
     if (!publishClassList) return [];
     const selectedIds = Array.from(publishClassList.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
-    return availableAssignments.filter((assignment) => selectedIds.includes(String(assignment.id)));
+    return publishTargets.filter((assignment) => selectedIds.includes(String(assignment.id)));
   }
 
   function updatePublishCount() {
@@ -928,11 +989,30 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context, ai
 
   function openPublishModal() {
     if (!publishModal || !publishClassList) return;
+
+    // Bila tidak ada relasi mengajar aktif, turunkan satu target manual dari form
+    // (kelas & mapel yang diisi guru) agar materi tetap bisa dipublikasikan.
     if (!availableAssignments.length) {
-      showError('Belum ada relasi mengajar aktif. Tambahkan kelas mengajar terlebih dahulu.');
+      const manualTarget = buildManualTarget();
+      publishTargets = [manualTarget];
+      publishClassList.innerHTML = `
+        <label class="mai-publish-item">
+          <input type="checkbox" value="${escapeHtml(manualTarget.id)}" checked />
+          <div>
+            <strong>${escapeHtml(manualTarget.kelas_nama)}</strong>
+            <span>${escapeHtml(manualTarget.mapel_nama)} • Manual (dari form)</span>
+          </div>
+        </label>`;
+      publishClassList.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.addEventListener('change', updatePublishCount);
+      });
+      updatePublishCount();
+      publishModal.classList.add('open');
+      publishModal.setAttribute('aria-hidden', 'false');
       return;
     }
 
+    publishTargets = availableAssignments;
     const currentInput = readForm();
     const currentMapel = String(currentInput.mapel || '').trim().toLowerCase();
     const suggestedAssignments = availableAssignments.filter((assignment) => {
@@ -1263,6 +1343,13 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context, ai
     }
   });
 
+  successCloseBtn?.addEventListener('click', closeSuccessPopup);
+  successPopup?.addEventListener('click', (event) => {
+    if (event.target === successPopup) {
+      closeSuccessPopup();
+    }
+  });
+
   publishConfirmBtn?.addEventListener('click', async () => {
     await ensureKaTeXReady();
     const draftPayload = buildDraftPayloadFromAI();
@@ -1335,23 +1422,29 @@ function initMateriAi(root, { userId, userName, teachingAssignments, context, ai
         updated_at: nextDraft.updated_at,
       })));
 
-      await saveMateriAi({
-        id: currentRecordId,
-        guru_id: userId,
-        guru_nama: userName,
-        title,
-        markdown,
-        ...input,
-        published: true,
-        published_targets: nextDraft.published_targets,
-        created_at: new Date().toISOString(),
-      });
+      try {
+        await saveMateriAi({
+          id: currentRecordId,
+          guru_id: userId,
+          guru_nama: userName,
+          title,
+          markdown,
+          ...input,
+          published: true,
+          published_targets: nextDraft.published_targets,
+          created_at: new Date().toISOString(),
+        });
+      } catch (historyErr) {
+        // Riwayat AI gagal disimpan tidak boleh membatalkan publish.
+        console.warn('Gagal menyimpan riwayat materi AI:', historyErr);
+      }
 
       closePublishModal();
       saveStatus.textContent = `Berhasil dipublikasikan ke ${selectedAssignments.length} kelas.`;
       saveStatus.className = 'text-xs text-emerald-600';
       setTimeout(() => (saveStatus.textContent = ''), 4000);
       loadHistory(root, userId);
+      showSuccessPopup(`Materi "${nextDraft.title}" berhasil dibagikan ke ${selectedAssignments.length} kelas dan sudah bisa diakses siswa.`);
     } catch (err) {
       console.error('Error publishing material:', err);
       saveStatus.textContent = 'Gagal memublikasikan materi ke kelas terpilih.';

@@ -12,6 +12,26 @@ function normalizeClassKey(value) {
     .replace(/^_+|_+$/g, '');
 }
 
+// Firestore menolak field bernilai undefined. Bersihkan payload agar aman
+// disimpan ke Firestore (undefined dihilangkan, null tetap diizinkan).
+function sanitizeForFirestore(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForFirestore(item));
+  }
+  if (value && typeof value === 'object') {
+    const cleaned = {};
+    Object.keys(value).forEach((key) => {
+      const nested = value[key];
+      if (nested === undefined) {
+        return;
+      }
+      cleaned[key] = sanitizeForFirestore(nested);
+    });
+    return cleaned;
+  }
+  return value;
+}
+
 function getActivePeriod(context) {
   return {
     year: context?.tahun_ajaran_aktif || '',
@@ -213,9 +233,10 @@ export async function saveDocument(collectionName, payload, id = null) {
     return null;
   }
 
+  const safePayload = sanitizeForFirestore(payload);
   const ref = id ? db.collection(collectionName).doc(id) : db.collection(collectionName).doc();
-  await ref.set(payload, { merge: true });
-  return { id: ref.id, ...payload };
+  await ref.set(safePayload, { merge: true });
+  return { id: ref.id, ...safePayload };
 }
 
 export async function getAppConfig() {
@@ -442,18 +463,11 @@ export async function getPublishedMaterials() {
   }
 
   try {
-    const localMaterials = readLocalPublishedMaterials();
     const snapshot = await db.collection(MATERIAL_PUBLISHED_COLLECTION).get();
     const firestoreMaterials = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const missingLocalMaterials = localMaterials.filter((item) => !firestoreMaterials.some((entry) => entry.id === item.id));
-
-    if (missingLocalMaterials.length) {
-      await Promise.all(
-        missingLocalMaterials.map((item) => saveDocument(MATERIAL_PUBLISHED_COLLECTION, item, item.id))
-      );
-    }
-
-    const materials = mergeMaterialsById(firestoreMaterials, localMaterials);
+    // Firestore adalah sumber kebenaran utama saat online.
+    // Ini mencegah materi yang sudah dihapus di Firestore hidup lagi dari cache lokal.
+    const materials = mergeMaterialsById(firestoreMaterials, []);
     writeLocalPublishedMaterials(materials);
     return materials;
   } catch (error) {
@@ -471,9 +485,14 @@ export async function getPublishedMaterialsForTeacher(guruId) {
 }
 
 export async function savePublishedMaterial(material) {
+  const nowIso = new Date().toISOString();
+  const nextVisibility = material?.visible_to_students !== false;
   const payload = {
     ...material,
-    updated_at: new Date().toISOString(),
+    created_at: material?.created_at || material?.published_at || material?.updated_at || nowIso,
+    updated_at: nowIso,
+    visible_to_students: nextVisibility,
+    status: nextVisibility ? 'published' : 'unpublished',
   };
 
   if (!db) {
@@ -508,10 +527,30 @@ export async function deletePublishedMaterial(id) {
 
   if (db) {
     await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(materialId).delete();
+
+    // Bersihkan jejak baca yang terkait materi agar penghapusan benar-benar bersih.
+    try {
+      const relatedReads = await getDocumentsWhere(MATERIAL_READS_COLLECTION, [
+        { field: 'material_id', operator: '==', value: materialId },
+      ]);
+      if (relatedReads.length) {
+        await Promise.all(
+          relatedReads
+            .map((item) => String(item.id || '').trim())
+            .filter(Boolean)
+            .map((readId) => db.collection(MATERIAL_READS_COLLECTION).doc(readId).delete())
+        );
+      }
+    } catch (error) {
+      console.warn('Gagal menghapus jejak baca materi dari Firestore:', error);
+    }
   }
 
   const localMaterials = readLocalPublishedMaterials().filter((item) => item.id !== materialId);
   writeLocalPublishedMaterials(localMaterials);
+
+  const localReads = readLocalMaterialReads().filter((item) => String(item.material_id || '').trim() !== materialId);
+  writeLocalMaterialReads(localReads);
   return true;
 }
 
