@@ -1045,6 +1045,8 @@ export async function renderGuruMateriPage(container) {
         @keyframes fadeIn { 0% { opacity:0; } 100% { opacity:1; } }
         @keyframes stepPulse { 0%,100% { box-shadow:0 0 0 0 rgba(99,102,241,0.4); } 50% { box-shadow:0 0 0 12px rgba(99,102,241,0); } }
         @keyframes progressFill { 0% { width:0%; } 100% { width:var(--progress-width); } }
+        @keyframes wizardCardIn { 0% { opacity:0; transform:translateY(20px) scale(0.97); } 100% { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes checkPop { 0% { transform:scale(0); } 50% { transform:scale(1.2); } 100% { transform:scale(1); } }
         .premium-glass {
           background: rgba(255,255,255,0.72);
           backdrop-filter: blur(20px) saturate(1.4);
@@ -1064,6 +1066,8 @@ export async function renderGuruMateriPage(container) {
         .animate-slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) both; }
         .animate-scale-in { animation: scaleIn 0.35s cubic-bezier(0.16,1,0.3,1) both; }
         .animate-fade-in { animation: fadeIn 0.4s ease both; }
+        .animate-wizard-card { animation: wizardCardIn 0.45s cubic-bezier(0.16,1,0.3,1) both; }
+        .animate-check-pop { animation: checkPop 0.35s cubic-bezier(0.16,1,0.3,1) both; }
         .step-active { animation: stepPulse 2s ease-in-out infinite; }
         .scrollbar-premium::-webkit-scrollbar { width: 6px; height: 6px; }
         .scrollbar-premium::-webkit-scrollbar-track { background: transparent; }
@@ -1081,33 +1085,60 @@ export async function renderGuruMateriPage(container) {
         .gradient-border::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(135deg, #6366f1, #06b6d4, #6366f1); opacity:0; transition:opacity 0.4s; z-index:-1; }
         .gradient-border:hover::before { opacity:1; }
         .method-card { transition: all 0.35s cubic-bezier(0.16,1,0.3,1); cursor:pointer; }
-        .method-card:hover { transform: translateY(-6px); }
-        .method-card.selected { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,0.15), 0 20px 40px -16px rgba(99,102,241,0.35); }
+        .method-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px -16px rgba(15,23,42,0.18); }
+        .method-card.selected { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,0.15), 0 20px 40px -16px rgba(99,102,241,0.35); background: linear-gradient(135deg, rgba(99,102,241,0.04), rgba(139,92,246,0.04)); }
         .method-card.selected .method-radio { background: #6366f1; border-color: #6366f1; }
         .method-card.selected .method-radio::after { opacity:1; transform:scale(1); }
+        .method-card.selected .method-icon-wrap { background: linear-gradient(135deg, #6366f1, #8b5cf6); box-shadow: 0 8px 24px -6px rgba(99,102,241,0.45); }
+        .method-card.selected .method-check { opacity:1; transform:scale(1); }
         .method-radio { width:22px; height:22px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; transition:all 0.25s; flex-shrink:0; }
         .method-radio::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; opacity:0; transform:scale(0); transition:all 0.25s; }
-        .step-indicator { display:flex; align-items:center; gap:0; }
-        .step-dot { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; transition:all 0.4s; border:2px solid #e2e8f0; background:#fff; color:#94a3b8; flex-shrink:0; }
-        .step-dot.done { background:#6366f1; border-color:#6366f1; color:#fff; }
-        .step-dot.active { background:#fff; border-color:#6366f1; color:#6366f1; }
-        .step-line { width:40px; height:2px; background:#e2e8f0; transition:background 0.4s; flex-shrink:0; }
-        .step-line.done { background:#6366f1; }
-        .step-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; margin-top:4px; transition:color 0.4s; }
-        .step-label.done { color:#6366f1; }
-        .step-label.active { color:#6366f1; }
-        .step-label.pending { color:#94a3b8; }
-        .step-nav-btn { cursor:pointer; transition:transform 0.2s; }
-        .step-nav-btn:hover .step-dot { border-color:#6366f1; color:#6366f1; transform:scale(1.08); }
-        .step-nav-btn:hover .step-label { color:#6366f1; }
-        .step-line { cursor:pointer; }
+        .method-icon-wrap { width:56px; height:56px; border-radius:16px; display:flex; align-items:center; justify-content:center; transition:all 0.35s cubic-bezier(0.16,1,0.3,1); }
+        .method-check { width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0); transition:all 0.3s cubic-bezier(0.16,1,0.3,1); position:absolute; top:12px; right:12px; }
+        .method-check svg { width:14px; height:14px; stroke:#fff; stroke-width:3; fill:none; }
+
+        .wizard-stepper { display:flex; align-items:flex-start; justify-content:center; gap:0; position:relative; padding:16px 0; }
+        .wizard-stepper-item { display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; z-index:2; cursor:pointer; transition:all 0.3s; flex:1; max-width:140px; }
+        .wizard-stepper-item:hover .ws-circle { transform:scale(1.08); border-color:#6366f1; }
+        .ws-circle { width:48px; height:48px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; transition:all 0.4s cubic-bezier(0.16,1,0.3,1); border:2px solid #e2e8f0; background:#fff; color:#94a3b8; position:relative; }
+        .ws-circle svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+        .ws-circle .ws-num { font-size:14px; font-weight:800; }
+        .ws-circle .ws-icon { display:none; }
+        .wizard-stepper-item.done .ws-circle .ws-num { display:none; }
+        .wizard-stepper-item.done .ws-circle .ws-icon { display:block; }
+        .wizard-stepper-item.done .ws-circle { background:linear-gradient(135deg,#6366f1,#8b5cf6); border-color:transparent; color:#fff; box-shadow:0 8px 20px -6px rgba(99,102,241,0.4); }
+        .ws-circle.done { background:linear-gradient(135deg,#6366f1,#8b5cf6); border-color:transparent; color:#fff; box-shadow:0 8px 20px -6px rgba(99,102,241,0.4); }
+        .wizard-stepper-item.done .ws-circle .ws-num { display:none; }
+        .wizard-stepper-item.done .ws-circle .ws-icon { display:block; }
+        .wizard-stepper-item.active .ws-circle { background:#fff; border-color:#6366f1; color:#6366f1; box-shadow:0 0 0 4px rgba(99,102,241,0.12), 0 8px 20px -6px rgba(99,102,241,0.2); animation:stepPulse 2s ease-in-out infinite; }
+        .ws-circle.active { background:#fff; border-color:#6366f1; color:#6366f1; box-shadow:0 0 0 4px rgba(99,102,241,0.12), 0 8px 20px -6px rgba(99,102,241,0.2); }
+        .wizard-stepper-item.pending .ws-circle { background:#f8fafc; border-color:#e2e8f0; color:#cbd5e1; }
+        .ws-circle.pending { background:#f8fafc; border-color:#e2e8f0; color:#cbd5e1; }
+        .ws-info { text-align:center; min-height:36px; }
+        .ws-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#94a3b8; transition:color 0.3s; line-height:1.3; }
+        .ws-desc { font-size:9px; color:#cbd5e1; margin-top:2px; transition:color 0.3s; line-height:1.3; }
+        .wizard-stepper-item.done .ws-title { color:#6366f1; }
+        .wizard-stepper-item.done .ws-desc { color:#a5b4fc; }
+        .wizard-stepper-item.active .ws-title { color:#6366f1; font-weight:800; }
+        .wizard-stepper-item.active .ws-desc { color:#a5b4fc; }
+        .wizard-stepper-item.pending .ws-title { color:#94a3b8; }
+        .wizard-stepper-item.pending .ws-desc { color:#cbd5e1; }
+        .wizard-stepper-line { width:100%; max-width:60px; height:3px; background:#e2e8f0; transition:background 0.4s; margin-top:22px; border-radius:999px; flex-shrink:0; }
+        .wizard-stepper-line.done { background:linear-gradient(90deg,#6366f1,#8b5cf6); }
+
+        .step-section-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+        .step-section-badge { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; color:#fff; flex-shrink:0; }
+        .step-section-badge svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
         .stat-card { transition:all 0.3s; }
         .stat-card:hover { transform:translateY(-2px); }
         @media (max-width: 640px) {
           .premium-glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(16px); }
           .premium-glass-strong { background: rgba(255,255,255,0.9); backdrop-filter: blur(18px); }
-          .step-line { width:24px; }
-          .step-dot { width:30px; height:30px; font-size:11px; }
+          .wizard-stepper-line { max-width:28px; margin-top:22px; }
+          .ws-circle { width:42px; height:42px; border-radius:14px; font-size:12px; }
+          .ws-title { font-size:9px; }
+          .ws-desc { display:none; }
         }
       </style>
 
@@ -1260,56 +1291,106 @@ export async function renderGuruMateriPage(container) {
             </span>
           </div>
 
-          <div class="mb-6 flex items-center justify-center gap-0" id="wizard-step-nav">
-            <button type="button" data-step="1" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
-              <div class="step-dot active" id="step-dot-1">1</div>
-              <span class="step-label active mt-1.5">Pilih Metode</span>
+          <div class="wizard-stepper" id="wizard-step-nav">
+            <button type="button" data-step="1" class="wizard-stepper-item active outline-none" id="ws-item-1">
+              <div class="ws-circle" id="step-dot-1">
+                <span class="ws-num">1</span>
+                <svg class="ws-icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+              <div class="ws-info">
+                <div class="ws-title">Pilih Metode</div>
+                <div class="ws-desc">Manual atau AI</div>
+              </div>
             </button>
-            <div class="step-line mx-1" id="step-line-1" data-step="2"></div>
-            <button type="button" data-step="2" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
-              <div class="step-dot" id="step-dot-2">2</div>
-              <span class="step-label pending mt-1.5">Metadata</span>
+            <div class="wizard-stepper-line" id="step-line-1" data-step="2"></div>
+            <button type="button" data-step="2" class="wizard-stepper-item pending outline-none" id="ws-item-2">
+              <div class="ws-circle" id="step-dot-2">
+                <span class="ws-num">2</span>
+                <svg class="ws-icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+              <div class="ws-info">
+                <div class="ws-title">Metadata</div>
+                <div class="ws-desc">Info materi & kelas</div>
+              </div>
             </button>
-            <div class="step-line mx-1" id="step-line-2" data-step="3"></div>
-            <button type="button" data-step="3" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
-              <div class="step-dot" id="step-dot-3">3</div>
-              <span class="step-label pending mt-1.5">Buat Konten</span>
+            <div class="wizard-stepper-line" id="step-line-2" data-step="3"></div>
+            <button type="button" data-step="3" class="wizard-stepper-item pending outline-none" id="ws-item-3">
+              <div class="ws-circle" id="step-dot-3">
+                <span class="ws-num">3</span>
+                <svg class="ws-icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+              <div class="ws-info">
+                <div class="ws-title">Buat Konten</div>
+                <div class="ws-desc">Tulis materi</div>
+              </div>
             </button>
-            <div class="step-line mx-1" id="step-line-3" data-step="4"></div>
-            <button type="button" data-step="4" class="step-nav-btn group flex flex-col items-center gap-1.5 outline-none">
-              <div class="step-dot" id="step-dot-4">4</div>
-              <span class="step-label pending mt-1.5">Review</span>
+            <div class="wizard-stepper-line" id="step-line-3" data-step="4"></div>
+            <button type="button" data-step="4" class="wizard-stepper-item pending outline-none" id="ws-item-4">
+              <div class="ws-circle" id="step-dot-4">
+                <span class="ws-num">4</span>
+                <svg class="ws-icon" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+              </div>
+              <div class="ws-info">
+                <div class="ws-title">Review</div>
+                <div class="ws-desc">Preview & publish</div>
+              </div>
             </button>
           </div>
 
           <div id="buat-step-1" class="animate-fade-in">
-            <p class="mb-4 text-sm text-slate-600">Pilih metode pembuatan materi yang paling sesuai dengan kebutuhan Anda:</p>
+            <div class="mb-5 animate-wizard-card" style="animation-delay:0.05s">
+              <p class="text-sm font-semibold text-slate-600">Pilih metode pembuatan materi yang paling sesuai dengan kebutuhan Anda:</p>
+            </div>
             <div class="grid gap-4 sm:grid-cols-2">
-              <div class="method-card selected rounded-[20px] border-2 border-indigo-500 bg-white p-5 shadow-sm" data-method="editor" id="method-card-editor">
-                <div class="flex items-start justify-between">
-                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
-                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  </span>
-                  <span class="method-radio"></span>
+              <div class="method-card selected relative overflow-hidden rounded-[24px] border-2 border-indigo-500 bg-white p-6 shadow-sm" data-method="editor" id="method-card-editor">
+                <div class="method-check">
+                  <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
                 </div>
-                <h3 class="mt-3 text-sm font-bold text-slate-900">Buat Materi Manual</h3>
-                <p class="mt-1 text-xs leading-relaxed text-slate-500">Tulis materi langsung dengan editor visual lengkap: toolbar format, sisip gambar, tabel, video, dan template struktur materi.</p>
-                <span class="mt-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600">Tanpa AI</span>
+                <div class="flex items-start gap-4">
+                  <div class="method-icon-wrap bg-gradient-to-br from-indigo-500 to-violet-500 text-white">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-base font-bold text-slate-900">Buat Materi Manual</h3>
+                    <p class="mt-1.5 text-xs leading-relaxed text-slate-500">Tulis materi langsung dengan editor visual lengkap: toolbar format, sisip gambar, tabel, video, dan template struktur materi.</p>
+                    <div class="mt-3 flex flex-wrap gap-1.5">
+                      <span class="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">Editor Visual</span>
+                      <span class="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">Template Struktur</span>
+                      <span class="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">Tanpa AI</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-4 flex items-center gap-2 text-[11px] font-semibold text-indigo-600">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                  Pilihan paling populer
+                </div>
               </div>
-              <div class="method-card rounded-[20px] border-2 border-slate-200 bg-white p-5 shadow-sm" data-method="html" id="method-card-html">
-                <div class="flex items-start justify-between">
-                  <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 text-white">
-                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l1.9 4.8L19 9l-4.5 2.5L12 16l-2.5-4.5L5 9l5.1-1.2L12 3z"/><path d="M19 14l.9 2.3L22 17l-2.1 1.2L19 20l-.9-1.8L16 17l2.1-1.7L19 14z"/></svg>
-                  </span>
-                  <span class="method-radio"></span>
+              <div class="method-card relative overflow-hidden rounded-[24px] border-2 border-slate-200 bg-white p-6 shadow-sm" data-method="html" id="method-card-html">
+                <div class="method-check">
+                  <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
                 </div>
-                <h3 class="mt-3 text-sm font-bold text-slate-900">Buat Materi dengan AI</h3>
-                <p class="mt-1 text-xs leading-relaxed text-slate-500">Susun prompt, generate di ChatGPT/DeepSeek, lalu tempel HTML hasilnya. Tersedia template prompt siap pakai agar hasil konsisten.</p>
-                <span class="mt-3 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.12em] text-cyan-600">Terpandu & Cepat</span>
+                <div class="flex items-start gap-4">
+                  <div class="method-icon-wrap bg-gradient-to-br from-cyan-500 to-blue-500 text-white">
+                    <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3l1.9 4.8L19 9l-4.5 2.5L12 16l-2.5-4.5L5 9l5.1-1.2L12 3z"/><path d="M19 14l.9 2.3L22 17l-2.1 1.2L19 20l-.9-1.8L16 17l2.1-1.7L19 14z"/></svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="text-base font-bold text-slate-900">Buat Materi dengan AI</h3>
+                    <p class="mt-1.5 text-xs leading-relaxed text-slate-500">Susun prompt, generate di ChatGPT/DeepSeek, lalu tempel HTML hasilnya. Tersedia template prompt siap pakai agar hasil konsisten.</p>
+                    <div class="mt-3 flex flex-wrap gap-1.5">
+                      <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold text-cyan-700">Template Prompt</span>
+                      <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold text-cyan-700">ChatGPT</span>
+                      <span class="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[10px] font-bold text-cyan-700">DeepSeek</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-4 flex items-center gap-2 text-[11px] font-semibold text-cyan-600">
+                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  Lebih cepat dengan bantuan AI
+                </div>
               </div>
             </div>
-            <div class="mt-5 flex justify-end">
-              <button id="btn-next-to-metadata" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+            <div class="mt-6 flex justify-end animate-wizard-card" style="animation-delay:0.15s">
+              <button id="btn-next-to-metadata" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-7 py-3.5 text-sm font-bold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
                 Lanjut ke Metadata
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
@@ -1317,73 +1398,94 @@ export async function renderGuruMateriPage(container) {
           </div>
 
           <div id="buat-step-2" class="hidden animate-fade-in">
-            <div class="mb-4 flex items-center gap-3">
-              <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-600">2</span>
-              <div>
-                <h3 class="text-sm font-bold text-slate-900">Informasi Metadata</h3>
-                <p class="text-xs text-slate-500">Data ini akan otomatis terintegrasi dengan materi yang dibuat</p>
+            <div class="animate-wizard-card" style="animation-delay:0.05s">
+              <div class="step-section-header">
+                <div class="step-section-badge bg-gradient-to-br from-indigo-500 to-violet-500">
+                  <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-slate-900">Informasi Metadata</h3>
+                  <p class="text-xs text-slate-500">Data ini akan otomatis terintegrasi dengan materi yang dibuat</p>
+                </div>
               </div>
             </div>
 
-            <div class="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-violet-50/50 p-4 mb-5">
-              <div class="flex items-center justify-between mb-3">
-                <div>
-                  <p class="text-sm font-bold text-indigo-800">Pilih Kelas Tujuan</p>
-                  <p class="text-xs text-indigo-600/70">Centang satu atau lebih kelas untuk mendistribusikan materi</p>
+            <div class="animate-wizard-card rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-violet-50/50 p-5 mb-5" style="animation-delay:0.1s">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <div class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600">
+                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                  <div>
+                    <p class="text-sm font-bold text-indigo-800">Pilih Kelas Tujuan</p>
+                    <p class="text-[11px] text-indigo-600/70">Centang satu atau lebih kelas untuk mendistribusikan materi</p>
+                  </div>
                 </div>
-                <span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-bold text-indigo-700" id="selected-classes-count">1 dipilih</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-3 py-1.5 text-[11px] font-bold text-indigo-700" id="selected-classes-count">1 dipilih</span>
               </div>
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3" id="material-assignment-list">
                 ${assignmentCheckboxes}
               </div>
             </div>
 
-            <div class="space-y-3">
-              <div>
-                <label class="text-sm font-medium text-slate-700">Judul Materi</label>
-                <input id="material-title" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
+            <div class="animate-wizard-card rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" style="animation-delay:0.15s">
+              <div class="flex items-center gap-2 mb-4">
+                <div class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </div>
+                <p class="text-sm font-bold text-slate-800">Detail Materi</p>
               </div>
-              <div class="grid gap-3 sm:grid-cols-2">
+              <div class="space-y-4">
                 <div>
-                  <label class="text-sm font-medium text-slate-700">Label Kelas</label>
-                  <input id="material-level" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
+                  <label class="text-sm font-semibold text-slate-700 mb-1.5 block">Judul Materi <span class="text-rose-500">*</span></label>
+                  <input id="material-title" class="premium-input w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Polinomial" />
+                </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label class="text-sm font-semibold text-slate-700 mb-1.5 block">Label Kelas</label>
+                    <input id="material-level" class="premium-input w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Kelas 11" />
+                  </div>
+                  <div>
+                    <label class="text-sm font-semibold text-slate-700 mb-1.5 block">Bab / Unit</label>
+                    <input id="material-chapter" class="premium-input w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Bab 4" />
+                  </div>
                 </div>
                 <div>
-                  <label class="text-sm font-medium text-slate-700">Bab / Unit</label>
-                  <input id="material-chapter" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: Bab 4" />
+                  <label class="text-sm font-semibold text-slate-700 mb-1.5 block">Pertemuan</label>
+                  <input id="material-meetings" class="premium-input w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: 6 pertemuan" />
+                </div>
+                <div>
+                  <label class="text-sm font-semibold text-slate-700 mb-1.5 block">Catatan Guru</label>
+                  <textarea id="material-note" rows="3" class="premium-input w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: cek kembali pembahasan contoh 2 dan tambahkan soal HOTS."></textarea>
                 </div>
               </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Pertemuan</label>
-                <input id="material-meetings" class="premium-input mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: 6 pertemuan" />
-              </div>
-              <div>
-                <label class="text-sm font-medium text-slate-700">Catatan Guru</label>
-                <textarea id="material-note" rows="3" class="premium-input mt-1.5 w-full rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Contoh: cek kembali pembahasan contoh 2 dan tambahkan soal HOTS."></textarea>
-              </div>
-              <div class="flex flex-wrap gap-3">
-                <button id="btn-back-to-method" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
-                  Kembali
-                </button>
-                <button id="btn-next-to-content" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
-                  Lanjut ke Konten
-                  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                </button>
-              </div>
+            </div>
+            <div class="mt-5 flex flex-wrap gap-3 animate-wizard-card" style="animation-delay:0.2s">
+              <button id="btn-back-to-method" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                Kembali
+              </button>
+              <button id="btn-next-to-content" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-2.5 text-sm font-bold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                Lanjut ke Konten
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
             </div>
           </div>
 
           <div id="buat-step-3" class="hidden animate-fade-in">
-            <div class="mb-4 flex items-center gap-3">
-              <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-600">3</span>
-              <div>
-                <h3 class="text-sm font-bold text-slate-900" id="step-3-title">Buat Konten Materi</h3>
-                <p class="text-xs text-slate-500" id="step-3-subtitle">Gunakan editor yang sesuai dengan metode pilihan Anda</p>
+            <div class="animate-wizard-card" style="animation-delay:0.05s">
+              <div class="step-section-header">
+                <div class="step-section-badge bg-gradient-to-br from-violet-500 to-indigo-500">
+                  <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-slate-900" id="step-3-title">Buat Konten Materi</h3>
+                  <p class="text-xs text-slate-500" id="step-3-subtitle">Gunakan editor yang sesuai dengan metode pilihan Anda</p>
+                </div>
               </div>
             </div>
 
-            <div id="buat-content-editor" class="hidden">
+            <div id="buat-content-editor" class="hidden animate-wizard-card" style="animation-delay:0.1s">
               <style>
                 #material-builder-shell {
                   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1655,7 +1757,7 @@ export async function renderGuruMateriPage(container) {
               </div>
             </div>
 
-            <div id="buat-content-html" class="hidden space-y-4">
+            <div id="buat-content-html" class="hidden space-y-4 animate-wizard-card" style="animation-delay:0.1s">
               <div class="rounded-2xl border border-cyan-200 bg-gradient-to-br from-cyan-50/70 to-sky-50/50 p-4">
                 <p class="text-sm font-bold text-cyan-900">Alur Membuat Materi dengan AI</p>
                 <ol class="mt-2 space-y-1.5 text-sm text-slate-600">
@@ -1808,38 +1910,51 @@ export async function renderGuruMateriPage(container) {
           </div>
 
           <div id="buat-step-4" class="hidden animate-fade-in">
-            <div class="mb-4 flex items-center gap-3">
-              <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-600">4</span>
-              <div>
-                <h3 class="text-sm font-bold text-slate-900">Review & Publikasi</h3>
-                <p class="text-xs text-slate-500">Periksa kembali materi sebelum menyimpan atau mempublikasikan</p>
+            <div class="animate-wizard-card" style="animation-delay:0.05s">
+              <div class="step-section-header">
+                <div class="step-section-badge bg-gradient-to-br from-emerald-500 to-teal-500">
+                  <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </div>
+                <div>
+                  <h3 class="text-base font-bold text-slate-900">Review & Publikasi</h3>
+                  <p class="text-xs text-slate-500">Periksa kembali materi sebelum menyimpan atau mempublikasikan</p>
+                </div>
               </div>
             </div>
 
-            <div class="premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
-              <div class="mb-4">
-                <h2 class="text-lg font-semibold text-slate-900">Preview Final</h2>
-                <p class="mt-1 text-sm text-slate-500">Tampilan akhir materi yang akan dilihat siswa</p>
+            <div class="animate-wizard-card premium-glass rounded-[24px] border border-slate-200/70 p-5 shadow-sm sm:p-6" style="animation-delay:0.1s">
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <h2 class="text-lg font-bold text-slate-900">Preview Final</h2>
+                  <p class="mt-1 text-sm text-slate-500">Tampilan akhir materi yang akan dilihat siswa</p>
+                </div>
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-[11px] font-bold text-emerald-700">
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  Final Check
+                </span>
               </div>
               <iframe id="material-preview-frame-final" title="Preview final materi" sandbox="allow-scripts allow-modals" class="h-[720px] w-full rounded-[24px] border border-slate-200 bg-white"></iframe>
             </div>
 
-            <div class="mt-5 flex flex-wrap gap-3">
-              <button id="btn-back-to-content" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+            <div class="mt-5 flex flex-wrap gap-3 animate-wizard-card" style="animation-delay:0.15s">
+              <button id="btn-back-to-content" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                 Kembali
               </button>
-              <button id="save-material-draft-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 hover:border-indigo-300">
+              <button id="save-material-draft-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-5 py-2.5 text-sm font-bold text-indigo-700 transition hover:bg-indigo-100 hover:border-indigo-300">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 Simpan Draft
               </button>
-              <button id="publish-material-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(13,148,136,0.9)] transition hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700">
+              <button id="publish-material-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-[0_16px_30px_-16px_rgba(13,148,136,0.9)] transition hover:-translate-y-0.5 hover:from-emerald-700 hover:to-teal-700">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
                 Publish Materi
               </button>
-              <button id="reset-material-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Materi Baru</button>
+              <button id="reset-material-editor-btn" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/></svg>
+                Materi Baru
+              </button>
             </div>
-            <p id="material-status" class="mt-3 text-sm text-slate-500">Siap disimpan atau dipublikasikan. Klik Preview untuk melihat hasil akhir.</p>
+            <p id="material-status" class="mt-3 text-sm text-slate-500 animate-wizard-card" style="animation-delay:0.2s">Siap disimpan atau dipublikasikan. Klik Preview untuk melihat hasil akhir.</p>
           </div>
         </div>
       </section>
@@ -2019,7 +2134,7 @@ export async function renderGuruMateriPage(container) {
   const stepLine1 = container.querySelector('#step-line-1');
   const stepLine2 = container.querySelector('#step-line-2');
   const stepLine3 = container.querySelector('#step-line-3');
-  const stepLabels = Array.from(container.querySelectorAll('.step-label'));
+  const stepLabels = Array.from(container.querySelectorAll('.ws-title'));
   const methodCardEditor = container.querySelector('#method-card-editor');
   const methodCardHtml = container.querySelector('#method-card-html');
   const btnNextToMetadata = container.querySelector('#btn-next-to-metadata');
@@ -2286,6 +2401,13 @@ export async function renderGuruMateriPage(container) {
     [stepLine1, stepLine2, stepLine3].forEach((line, i) => {
       if (!line) return;
       line.classList.toggle('done', i + 1 < step);
+    });
+    const stepperItems = container.querySelectorAll('.wizard-stepper-item');
+    stepperItems.forEach((item, i) => {
+      item.classList.remove('done', 'active', 'pending');
+      if (i + 1 < step) item.classList.add('done');
+      else if (i + 1 === step) item.classList.add('active');
+      else item.classList.add('pending');
     });
     stepLabels.forEach((label, i) => {
       label.classList.remove('done', 'active', 'pending');
