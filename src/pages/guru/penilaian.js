@@ -242,7 +242,7 @@ async function loadBabsFromFirestore(context, assignment) {
         nama: doc.nama || doc.bab_nama || 'Tanpa Nama',
         bab_nama: doc.bab_nama || doc.nama || 'Tanpa Nama',
         // Pass up firestoreId explicitly
-        firestoreId: doc.firestoreId
+        firestoreId: doc.id
       };
     }).sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
   } catch (e) {
@@ -269,7 +269,7 @@ async function loadTugasFromFirestore(context, assignment) {
         tugas_id: doc.tugas_id || doc.id || doc.firestoreId,
         nama: doc.nama || doc.tugas_nama || 'Tanpa Nama',
         tugas_nama: doc.tugas_nama || doc.nama || 'Tanpa Nama',
-        firestoreId: doc.firestoreId
+        firestoreId: doc.id
       });
     });
     
@@ -404,7 +404,7 @@ async function loadNilaiPASFromFirestore(context, assignment) {
 // DELETE FUNCTIONS WITH CASCADE
 // ============================================================================
 
-async function deleteBabWithCascade(context, assignment, firestoreBabDocId) {
+async function deleteBabWithCascade(context, assignment, firestoreBabDocId, logicalBabId = '') {
   try {
     // Get the BAB document to find its bab_id field
     const babDocs = await getDocumentsWhere('bab', [
@@ -413,12 +413,8 @@ async function deleteBabWithCascade(context, assignment, firestoreBabDocId) {
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
     ]);
     
-    const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId);
-    if (!babDoc) {
-      throw new Error('BAB document not found');
-    }
-    
-    const babId = babDoc.bab_id || babDoc.id; // Get the bab_id field from the document
+    const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId || doc.bab_id === logicalBabId);
+    const babId = babDoc?.bab_id || logicalBabId || firestoreBabDocId;
     
     // Step 1: Load and delete all nilai_tugas for this BAB
     const nilaiDocs = await getDocumentsWhere('nilai_tugas', [
@@ -445,7 +441,9 @@ async function deleteBabWithCascade(context, assignment, firestoreBabDocId) {
     }
     
     // Step 3: Delete the BAB itself using the Firestore document ID
-    await deleteDocument('bab', firestoreBabDocId);
+    if (babDoc?.id) {
+      await deleteDocument('bab', babDoc.id);
+    }
     
     return true;
   } catch (e) {
@@ -454,7 +452,7 @@ async function deleteBabWithCascade(context, assignment, firestoreBabDocId) {
   }
 }
 
-async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, firestoreTugasDocId) {
+async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, firestoreTugasDocId, logicalBabId = '', logicalTugasId = '') {
   try {
     // Get the BAB document to find its bab_id field
     const babDocs = await getDocumentsWhere('bab', [
@@ -463,12 +461,11 @@ async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, fi
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
     ]);
     
-    const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId);
-    if (!babDoc) {
-      throw new Error('BAB document not found');
+    const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId || doc.bab_id === logicalBabId);
+    const babId = babDoc?.bab_id || logicalBabId;
+    if (!babId) {
+      throw new Error('BAB ID tidak tersedia');
     }
-    
-    const babId = babDoc.bab_id; // Get the bab_id field from the document
     
     // Get the TUGAS document to find its tugas_id field
     const tugasDocs = await getDocumentsWhere('tugas_bab', [
@@ -478,12 +475,11 @@ async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, fi
       { field: 'bab_id', operator: '==', value: babId },
     ]);
     
-    const tugasDoc = tugasDocs.find(doc => doc.id === firestoreTugasDocId);
-    if (!tugasDoc) {
-      throw new Error('TUGAS document not found');
+    const tugasDoc = tugasDocs.find(doc => doc.id === firestoreTugasDocId || doc.tugas_id === logicalTugasId);
+    const tugasId = tugasDoc?.tugas_id || logicalTugasId;
+    if (!tugasId) {
+      throw new Error('TUGAS ID tidak tersedia');
     }
-    
-    const tugasId = tugasDoc.tugas_id; // Get the tugas_id field from the document
     
     // Step 1: Load and delete all nilai_tugas for this TUGAS
     const nilaiDocs = await getDocumentsWhere('nilai_tugas', [
@@ -499,7 +495,9 @@ async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, fi
     }
     
     // Step 2: Delete the TUGAS itself using the Firestore document ID
-    await deleteDocument('tugas_bab', firestoreTugasDocId);
+    if (tugasDoc?.id) {
+      await deleteDocument('tugas_bab', tugasDoc.id);
+    }
     
     return true;
   } catch (e) {
@@ -1071,7 +1069,7 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
     // Delete dari Firestore dengan cascade, we must pass the firestoreId not the logical id
     try {
       const docIdToDelete = deletedBab.firestoreId || deletedBab.id;
-      await deleteBabWithCascade(context, assignment, docIdToDelete);
+      await deleteBabWithCascade(context, assignment, docIdToDelete, deletedBab.id);
       
       // Clear cache untuk force reload dari Firestore
       clearCache(cacheKey);
@@ -1204,7 +1202,14 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
 
       // Delete dari Firestore dengan cascade
       try {
-        await deleteTugasWithCascade(context, assignment, firestoreBabId, firestoreTugasId);
+        await deleteTugasWithCascade(
+          context,
+          assignment,
+          firestoreBabId,
+          firestoreTugasId,
+          selectedBab.id,
+          selectedTugas.id
+        );
         
         // Clear cache untuk force reload dari Firestore
         clearCache(cacheKey);
@@ -1226,18 +1231,19 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
     await renderTabNilaiTugas(context, assignment, members, tabContent);
   });
 
-  // Input Nilai - Real-time update with debounce
-  let saveTimeout;
+  // Each input owns its timer so fast navigation never cancels another score save.
+  const saveTimeouts = new Map();
   container.querySelectorAll('.nilai-input')?.forEach(input => {
-    input.addEventListener('change', () => {
+    const syncAndScheduleSave = () => {
       const babId = input.getAttribute('data-bab');
       const tugasId = input.getAttribute('data-tugas');
       const siswaId = input.getAttribute('data-siswa');
       const val = Number(input.value) || 0;
+      const inputKey = `${babId}_${tugasId}_${siswaId}`;
 
       const cached = getFromCache(cacheKey);
       if (!cached.nilai) cached.nilai = {};
-      cached.nilai[`${babId}_${tugasId}_${siswaId}`] = val;
+      cached.nilai[inputKey] = val;
       saveToCache(cacheKey, cached);
 
       // Immediate average update
@@ -1248,8 +1254,8 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
       setTimeout(() => input.classList.remove('bg-green-100'), 300);
 
       // Debounced Firestore save
-      clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(async () => {
+      clearTimeout(saveTimeouts.get(inputKey));
+      saveTimeouts.set(inputKey, setTimeout(async () => {
         try {
           const docId = `${assignment.id}_${babId}_${tugasId}_${siswaId}`;
           await saveDocument('nilai_tugas', {
@@ -1267,9 +1273,15 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
           }, docId);
         } catch (e) {
           console.error('Error saving nilai:', e);
+          input.classList.add('bg-rose-100');
+        } finally {
+          saveTimeouts.delete(inputKey);
         }
-      }, 1000);
-    });
+      }, 400));
+    };
+
+    input.addEventListener('input', syncAndScheduleSave);
+    input.addEventListener('change', syncAndScheduleSave);
   });
 
   // Save Button
@@ -1429,7 +1441,7 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
   // Event Listeners
   const cached_ = getFromCache(cacheKey);
   const session = getSession();
-  let saveTimeout;
+  const saveTimeouts = new Map();
 
   const persistNilaiUH = async (siswaId, uhKey, rawValue) => {
     try {
@@ -1572,17 +1584,21 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
 
   container.querySelectorAll('.nilai-uh')?.forEach((input) => {
     input.addEventListener('input', () => {
-      clearTimeout(saveTimeout);
       const { siswaId, uhKey, rawValue } = syncNilaiUHInput(input);
+      const inputKey = `${siswaId}_${uhKey}`;
 
-      saveTimeout = setTimeout(async () => {
+      clearTimeout(saveTimeouts.get(inputKey));
+      saveTimeouts.set(inputKey, setTimeout(async () => {
         await persistNilaiUH(siswaId, uhKey, rawValue);
-      }, 300);
+        saveTimeouts.delete(inputKey);
+      }, 300));
     });
 
     input.addEventListener('change', async () => {
-      clearTimeout(saveTimeout);
       const { siswaId, uhKey, rawValue } = syncNilaiUHInput(input);
+      const inputKey = `${siswaId}_${uhKey}`;
+      clearTimeout(saveTimeouts.get(inputKey));
+      saveTimeouts.delete(inputKey);
       await persistNilaiUH(siswaId, uhKey, rawValue);
     });
   });
@@ -2082,7 +2098,7 @@ async function renderTabPTSPAS(context, assignment, members, container) {
 
   // Event Listeners
   const session = getSession();
-  let saveTimeout;
+  const saveTimeouts = new Map();
 
   container.querySelectorAll('.btn-exam-subtab')?.forEach((button) => {
     button.addEventListener('click', async () => {
@@ -2098,10 +2114,10 @@ async function renderTabPTSPAS(context, assignment, members, container) {
 
   container.querySelectorAll('.nilai-pts')?.forEach((input) => {
     input.addEventListener('change', () => {
-      clearTimeout(saveTimeout);
       const siswa = input.getAttribute('data-siswa');
       const tipe = input.getAttribute('data-tipe'); // murni or remidi
       const val = Number(input.value) || 0;
+      const inputKey = `pts_${siswa}_${tipe}`;
 
       const cached_ = getFromCache(cacheKey);
       cached_.nilaiPTS = cached_.nilaiPTS || {};
@@ -2112,7 +2128,8 @@ async function renderTabPTSPAS(context, assignment, members, container) {
       setTimeout(() => input.classList.remove('bg-green-100'), 500);
 
       // Debounced real-time Firestore save
-      saveTimeout = setTimeout(async () => {
+      clearTimeout(saveTimeouts.get(inputKey));
+      saveTimeouts.set(inputKey, setTimeout(async () => {
         try {
           const docId = `${assignment.id}_${siswa}_pts_${tipe}`;
           await saveDocument('nilai_ujian', {
@@ -2129,20 +2146,22 @@ async function renderTabPTSPAS(context, assignment, members, container) {
             updated_at: new Date().toISOString(),
           }, docId);
 
-          await renderTabPTSPAS(context, assignment, members, container);
         } catch (e) {
           console.error('Error saving nilai PTS:', e);
+          input.classList.add('bg-rose-100');
+        } finally {
+          saveTimeouts.delete(inputKey);
         }
-      }, 1000);
+      }, 400));
     });
   });
 
   container.querySelectorAll('.nilai-pas')?.forEach((input) => {
     input.addEventListener('change', () => {
-      clearTimeout(saveTimeout);
       const siswa = input.getAttribute('data-siswa');
       const tipe = input.getAttribute('data-tipe'); // murni or remidi
       const val = Number(input.value) || 0;
+      const inputKey = `pas_${siswa}_${tipe}`;
 
       const cached_ = getFromCache(cacheKey);
       cached_.nilaiPAS = cached_.nilaiPAS || {};
@@ -2153,7 +2172,8 @@ async function renderTabPTSPAS(context, assignment, members, container) {
       setTimeout(() => input.classList.remove('bg-green-100'), 500);
 
       // Debounced real-time Firestore save
-      saveTimeout = setTimeout(async () => {
+      clearTimeout(saveTimeouts.get(inputKey));
+      saveTimeouts.set(inputKey, setTimeout(async () => {
         try {
           const docId = `${assignment.id}_${siswa}_pas_${tipe}`;
           await saveDocument('nilai_ujian', {
@@ -2170,11 +2190,13 @@ async function renderTabPTSPAS(context, assignment, members, container) {
             updated_at: new Date().toISOString(),
           }, docId);
 
-          await renderTabPTSPAS(context, assignment, members, container);
         } catch (e) {
           console.error('Error saving nilai PAS:', e);
+          input.classList.add('bg-rose-100');
+        } finally {
+          saveTimeouts.delete(inputKey);
         }
-      }, 1000);
+      }, 400));
     });
   });
 

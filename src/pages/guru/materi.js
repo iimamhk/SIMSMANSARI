@@ -203,8 +203,8 @@ function getUserPublishedMaterials(session, context) {
 
 function getTabButtonClass(isActive) {
   return isActive
-    ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_8px_24px_-6px_rgba(99,102,241,0.4)] scale-[1.02]'
-    : 'border border-slate-200/70 bg-white/70 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-700 hover:shadow-[0_4px_12px_-6px_rgba(99,102,241,0.15)]';
+    ? 'material-tab-active bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_8px_24px_-6px_rgba(99,102,241,0.4)] scale-[1.02]'
+    : 'material-tab-inactive border border-slate-200/70 bg-white/70 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50/80 hover:text-indigo-700 hover:shadow-[0_4px_12px_-6px_rgba(99,102,241,0.15)]';
 }
 
 function buildMaterialPromptTemplate(values = {}) {
@@ -1034,7 +1034,7 @@ export async function renderGuruMateriPage(container) {
   let activeDraftId = '';
 
   const html = renderLayout('Materi', `
-    <div class="space-y-6">
+    <div class="material-library-page space-y-6">
       <style>
         @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
         @keyframes floatSoft { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-8px) scale(1.02); } }
@@ -1084,18 +1084,23 @@ export async function renderGuruMateriPage(container) {
         .gradient-border { position:relative; }
         .gradient-border::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(135deg, #6366f1, #06b6d4, #6366f1); opacity:0; transition:opacity 0.4s; z-index:-1; }
         .gradient-border:hover::before { opacity:1; }
-        .method-card { transition: all 0.35s cubic-bezier(0.16,1,0.3,1); cursor:pointer; }
-        .method-card:hover { transform: translateY(-6px); box-shadow: 0 20px 40px -16px rgba(15,23,42,0.18); }
-        .method-card.selected { border-color: #6366f1 !important; box-shadow: 0 0 0 4px rgba(99,102,241,0.15), 0 20px 40px -16px rgba(99,102,241,0.35); background: linear-gradient(135deg, rgba(99,102,241,0.04), rgba(139,92,246,0.04)); }
-        .method-card.selected .method-radio { background: #6366f1; border-color: #6366f1; }
+        .method-card { transition: all 0.28s cubic-bezier(0.22,1,0.36,1); cursor:pointer; position:relative; }
+        .method-card:hover { transform: translateY(-3px); box-shadow: 0 16px 36px -18px rgba(15,23,42,0.22); border-color: #cbd5e1; }
+        .method-card.selected { border-color: #0f172a !important; box-shadow: 0 0 0 2px rgba(15,23,42,0.16), 0 18px 40px -18px rgba(15,23,42,0.38); background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(250,250,250,0.96) 100%); }
+        .method-card.selected::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(125deg, rgba(15,23,42,0.04), rgba(30,41,59,0.03)); pointer-events:none; }
+        .method-card.selected .method-radio { background: #0f172a; border-color: #0f172a; }
         .method-card.selected .method-radio::after { opacity:1; transform:scale(1); }
-        .method-card.selected .method-icon-wrap { background: linear-gradient(135deg, #6366f1, #8b5cf6); box-shadow: 0 8px 24px -6px rgba(99,102,241,0.45); }
-        .method-card.selected .method-check { opacity:1; transform:scale(1); }
-        .method-radio { width:22px; height:22px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; transition:all 0.25s; flex-shrink:0; }
-        .method-radio::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; opacity:0; transform:scale(0); transition:all 0.25s; }
-        .method-icon-wrap { width:56px; height:56px; border-radius:16px; display:flex; align-items:center; justify-content:center; transition:all 0.35s cubic-bezier(0.16,1,0.3,1); }
-        .method-check { width:24px; height:24px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0); transition:all 0.3s cubic-bezier(0.16,1,0.3,1); position:absolute; top:12px; right:12px; }
-        .method-check svg { width:14px; height:14px; stroke:#fff; stroke-width:3; fill:none; }
+        .method-card.selected .method-icon-wrap { background: linear-gradient(135deg, #0f172a, #1e293b); box-shadow: 0 12px 28px -6px rgba(15,23,42,0.45); }
+        .method-card.selected .method-check { opacity:1; transform:scale(1); background:linear-gradient(135deg,#0f172a,#334155); }
+        .method-card.selected h3 { color: #0f172a; }
+        .method-card.selected .method-selected-label { opacity:1; transform:translateY(0); background: linear-gradient(135deg,#0f172a,#334155); }
+        .method-radio { width:22px; height:22px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; transition:all 0.22s; flex-shrink:0; background:#fff; }
+        .method-radio::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; opacity:0; transform:scale(0); transition:all 0.22s; }
+        .method-icon-wrap { width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center; transition:all 0.28s cubic-bezier(0.22,1,0.36,1); }
+        .method-check { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0); transition:all 0.28s cubic-bezier(0.22,1,0.36,1); position:absolute; top:10px; right:10px; }
+        .method-check svg { width:12px; height:12px; stroke:#fff; stroke-width:3; fill:none; }
+        .method-selected-label { position:absolute; left:10px; top:10px; display:inline-flex; align-items:center; gap:4px; border-radius:999px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-size:9px; font-weight:700; padding:3px 9px; letter-spacing:.05em; opacity:0; transform:translateY(-4px); transition:all 0.22s; pointer-events:none; }
+        .method-selected-label svg { width:11px; height:11px; stroke-width:2.5; }
 
         .wizard-stepper { display:flex; align-items:flex-start; justify-content:center; gap:0; position:relative; padding:16px 0; }
         .wizard-stepper-item { display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; z-index:2; cursor:pointer; transition:all 0.3s; flex:1; max-width:140px; }
@@ -1131,16 +1136,130 @@ export async function renderGuruMateriPage(container) {
         .step-section-badge svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
         .stat-card { transition:all 0.3s; }
-        .stat-card:hover { transform:translateY(-2px); }
-        @media (max-width: 640px) {
+         .stat-card:hover { transform:translateY(-2px); }
+         .material-library-page {
+           --library-ink: #172033;
+           --library-muted: #64748b;
+           --library-paper: rgba(255,255,255,0.84);
+           position: relative;
+         }
+         .material-library-page::before {
+           content: '';
+           position: absolute;
+           inset: -2rem -1.5rem auto;
+           height: 34rem;
+           z-index: -1;
+           pointer-events: none;
+           background:
+             radial-gradient(circle at 8% 18%, rgba(14,165,233,0.14), transparent 24%),
+             radial-gradient(circle at 90% 6%, rgba(99,102,241,0.13), transparent 22%),
+             linear-gradient(180deg, rgba(248,250,252,0.9), transparent 72%);
+         }
+         .material-library-page > section:first-child {
+           min-height: 252px;
+           display: flex;
+           align-items: flex-end;
+           background:
+             linear-gradient(112deg, rgba(15,23,42,0.98), rgba(30,41,59,0.96) 44%, rgba(37,99,235,0.9)),
+             radial-gradient(circle at 85% 10%, rgba(34,211,238,0.25), transparent 30%);
+           box-shadow: 0 30px 80px -34px rgba(15,23,42,0.6);
+         }
+         .material-library-page > section:first-child::after {
+           content: 'DIGITAL LIBRARY  /  TEACHER EDITION';
+           position: absolute;
+           right: 1.5rem;
+           bottom: 1.5rem;
+           color: rgba(255,255,255,0.38);
+           font-size: 9px;
+           font-weight: 800;
+           letter-spacing: .22em;
+         }
+         .material-library-page .material-tab-btn {
+           border: 1px solid transparent;
+         }
+         .material-library-page .material-tab-btn.material-tab-inactive:hover {
+           background: rgba(241,245,249,0.9);
+           border-color: #e2e8f0;
+         }
+         .material-library-page .material-tab-btn.material-tab-active,
+         .material-library-page .material-tab-btn.material-tab-active:hover,
+         .material-library-page .material-tab-btn.material-tab-active:focus-visible {
+           color: #fff;
+           background-image: linear-gradient(to right, #4f46e5, #7c3aed);
+           border-color: transparent;
+           box-shadow: 0 12px 26px -8px rgba(79,70,229,.52);
+         }
+         .material-library-page [data-material-panel="koleksi"] > .premium-glass-strong:first-of-type {
+           background: linear-gradient(135deg, rgba(255,255,255,.9), rgba(239,246,255,.78));
+         }
+         .material-library-page #material-published-list {
+           grid-template-columns: repeat(2, minmax(0, 1fr));
+           gap: 1rem;
+           padding: .6rem;
+         }
+         .material-library-page #material-published-list article {
+           min-height: 0;
+           aspect-ratio: auto !important;
+           border-radius: 1.35rem;
+           background: var(--library-paper);
+           box-shadow: 0 18px 34px -24px rgba(15,23,42,.55);
+         }
+         .material-library-page #material-published-list article:hover {
+           transform: translateY(-6px) rotate(-.35deg);
+         }
+         .material-library-page #material-published-list article > button:first-child {
+           padding: 1rem;
+         }
+         .material-library-page #material-published-list article > button:first-child > div:first-child {
+           min-height: 190px;
+           display: flex;
+           flex-direction: column;
+           justify-content: space-between;
+           border-radius: 1rem;
+           padding: .8rem;
+         }
+         .material-library-page #material-published-list article > div:last-child {
+           padding: .65rem;
+           background: rgba(248,250,252,.88);
+         }
+         .material-library-page #material-published-list article > div:last-child button {
+           min-height: 2.2rem;
+           font-size: 9px;
+         }
+         .material-library-page #material-draft-list article {
+           background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(255,251,235,.7));
+         }
+         .material-library-page .wizard-stepper {
+           padding: 1.15rem .75rem;
+           border-radius: 1.25rem;
+           background: linear-gradient(90deg, #f8fafc, #eef2ff, #f8fafc);
+         }
+         .material-library-page .step-section-header {
+           padding: .9rem 1rem;
+           border-radius: 1rem;
+           background: linear-gradient(100deg, rgba(239,246,255,.9), rgba(255,255,255,.6));
+         }
+         @media (max-width: 640px) {
           .premium-glass { background: rgba(255,255,255,0.82); backdrop-filter: blur(16px); }
           .premium-glass-strong { background: rgba(255,255,255,0.9); backdrop-filter: blur(18px); }
           .wizard-stepper-line { max-width:28px; margin-top:22px; }
           .ws-circle { width:42px; height:42px; border-radius:14px; font-size:12px; }
           .ws-title { font-size:9px; }
-          .ws-desc { display:none; }
-        }
-      </style>
+           .ws-desc { display:none; }
+           .material-library-page::before { inset-inline: -1rem; }
+           .material-library-page > section:first-child { min-height: 290px; }
+           .material-library-page > section:first-child::after { right: 1rem; bottom: 1rem; font-size: 7px; }
+           .material-library-page #material-published-list { gap: .7rem; padding: .25rem; }
+           .material-library-page #material-published-list article > button:first-child { padding: .7rem; }
+           .material-library-page #material-published-list article > button:first-child > div:first-child { min-height: 150px; padding: .6rem; }
+           .material-library-page #material-published-list article > div:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+           .material-library-page #material-published-list article > div:last-child button:nth-child(3),
+           .material-library-page #material-published-list article > div:last-child button:nth-child(4) { grid-column: span 1; }
+         }
+         @media (min-width: 640px) { .material-library-page #material-published-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+         @media (min-width: 1024px) { .material-library-page #material-published-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+         @media (min-width: 1280px) { .material-library-page #material-published-list { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+       </style>
 
       <section class="animate-slide-up relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-800 via-indigo-900 to-slate-900 p-5 text-white shadow-[0_32px_80px_-40px_rgba(30,41,59,0.5)] sm:p-7" style="animation-delay:0.05s">
         <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-indigo-500/20 blur-3xl animate-float"></div>
@@ -1158,8 +1277,8 @@ export async function renderGuruMateriPage(container) {
             <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-400/25 text-xs font-bold">M</span>
             <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-indigo-200/80">Studio Materi Digital</p>
           </div>
-          <h1 class="mt-2 text-2xl font-bold leading-tight text-white sm:text-3xl">Materi <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-indigo-300">${shortName}</span></h1>
-          <p class="mt-2 text-sm text-slate-300/80 sm:text-base max-w-xl">Buat, kelola, dan publikasikan materi pembelajaran premium dengan alur kerja yang jelas dan terstruktur</p>
+           <h1 class="mt-2 text-2xl font-bold leading-tight text-white sm:text-3xl">Perpustakaan Materi <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 to-indigo-300">${shortName}</span></h1>
+           <p class="mt-2 max-w-xl text-sm leading-6 text-slate-300/85 sm:text-base">Satu ruang untuk merancang, menyusun, membaca ulang, dan menerbitkan materi pembelajaran yang siap digunakan siswa.</p>
           <div class="mt-4 flex flex-wrap gap-2">
             <span class="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/8 px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/85 backdrop-blur-sm">
               <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
@@ -1180,15 +1299,15 @@ export async function renderGuruMateriPage(container) {
         <div class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-premium sm:flex-wrap sm:gap-2 sm:overflow-visible" id="material-tab-bar">
           <button type="button" data-material-tab="koleksi" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(true)}">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            Koleksi
+             Daftar Materi
           </button>
           <button type="button" data-material-tab="buat" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
-            Buat Baru
+             Buat Materi
           </button>
           <button type="button" data-material-tab="laporan" class="material-tab-btn relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all duration-300 ${getTabButtonClass(false)}">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-            Laporan
+             Jejak Belajar
           </button>
         </div>
       </section>
@@ -1233,9 +1352,9 @@ export async function renderGuruMateriPage(container) {
         <div class="premium-glass-strong rounded-2xl p-4 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.12)] sm:p-5">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">Publikasi</p>
-              <h2 class="mt-0.5 text-base font-semibold text-slate-900 sm:text-lg">Materi Dipublikasikan</h2>
-              <p class="mt-0.5 text-xs text-slate-500">Tersedia untuk siswa</p>
+               <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-500">Rak Utama</p>
+               <h2 class="mt-0.5 text-base font-semibold text-slate-900 sm:text-lg">Materi Siap Baca</h2>
+               <p class="mt-0.5 text-xs text-slate-500">Koleksi yang sudah tersedia untuk siswa</p>
             </div>
             <div class="flex items-center gap-2">
               <div class="inline-flex items-center rounded-full border border-slate-200 bg-white p-0.5 text-[10px] font-bold">
@@ -1267,9 +1386,9 @@ export async function renderGuruMateriPage(container) {
         <div class="premium-glass-strong rounded-2xl p-4 shadow-[0_16px_48px_-24px_rgba(15,23,42,0.12)] sm:p-5">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Draft Lokal</p>
-              <h2 class="mt-0.5 text-base font-semibold text-slate-900 sm:text-lg">Draft Materi</h2>
-              <p class="mt-0.5 text-xs text-slate-500">Klik untuk melanjutkan penyuntingan</p>
+               <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-500">Meja Kerja</p>
+               <h2 class="mt-0.5 text-base font-semibold text-slate-900 sm:text-lg">Draft Sedang Disusun</h2>
+               <p class="mt-0.5 text-xs text-slate-500">Lanjutkan penyuntingan dari titik terakhir</p>
             </div>
             <span id="draft-count-badge" class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">0 draft</span>
           </div>
@@ -1342,7 +1461,11 @@ export async function renderGuruMateriPage(container) {
               <p class="text-sm font-semibold text-slate-600">Pilih metode pembuatan materi yang paling sesuai dengan kebutuhan Anda:</p>
             </div>
             <div class="grid gap-4 sm:grid-cols-2">
-              <div class="method-card selected relative overflow-hidden rounded-[24px] border-2 border-indigo-500 bg-white p-6 shadow-sm" data-method="editor" id="method-card-editor">
+              <div class="method-card selected relative overflow-hidden rounded-[24px] border-2 bg-white p-6 shadow-sm" data-method="editor" id="method-card-editor">
+                <div class="method-selected-label">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+                  Dipilih
+                </div>
                 <div class="method-check">
                   <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
                 </div>
@@ -1366,6 +1489,10 @@ export async function renderGuruMateriPage(container) {
                 </div>
               </div>
               <div class="method-card relative overflow-hidden rounded-[24px] border-2 border-slate-200 bg-white p-6 shadow-sm" data-method="html" id="method-card-html">
+                <div class="method-selected-label">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg>
+                  Dipilih
+                </div>
                 <div class="method-check">
                   <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
                 </div>
@@ -1878,8 +2005,15 @@ export async function renderGuruMateriPage(container) {
                   </div>
                   <button id="load-material-preview-btn" type="button" class="btn-premium ml-auto inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100">Muat Preview</button>
                 </div>
-                <textarea id="material-html-source" rows="18" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tempel HTML hasil AI di sini..."></textarea>
-              </div>
+                 <textarea id="material-html-source" rows="18" class="w-full rounded-[24px] border border-slate-200 bg-slate-950 px-4 py-4 font-mono text-xs leading-6 text-indigo-100 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100" placeholder="Tempel HTML hasil AI di sini..."></textarea>
+                 <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-3 py-3 sm:px-4">
+                   <p class="text-xs font-medium text-indigo-700">HTML sudah ditempel? Lanjutkan untuk meninjau materi.</p>
+                   <button id="btn-next-to-review" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
+                     Lanjut ke Review
+                     <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                   </button>
+                 </div>
+               </div>
 
               <div class="premium-glass rounded-[20px] border border-slate-200/70 p-4 shadow-sm sm:p-5">
                 <div class="mb-3 flex items-center gap-2">
@@ -1901,10 +2035,6 @@ export async function renderGuruMateriPage(container) {
               <button id="btn-back-to-metadata" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                 Kembali
-              </button>
-              <button id="btn-next-to-review" type="button" class="btn-premium inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-16px_rgba(99,102,241,0.9)] transition hover:-translate-y-0.5 hover:from-indigo-700 hover:to-violet-700">
-                Lanjut ke Review
-                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
             </div>
           </div>

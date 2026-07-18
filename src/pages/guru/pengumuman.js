@@ -160,11 +160,18 @@ export async function renderGuruPengumumanPage(container) {
         const item = daftarPengumuman.find((p) => p.id === id);
         if (!item) return;
         if (!confirm(`Hapus pengumuman "${item.judul}"? Tindakan ini tidak dapat dibatalkan.`)) return;
-        await deletePengumuman(id);
-        daftarPengumuman = daftarPengumuman.filter((p) => p.id !== id);
-        readCounts = await getPengumumanReadCounts();
-        renderDaftar();
-        tampilkanToast('Pengumuman dihapus.');
+        btn.disabled = true;
+        try {
+          await deletePengumuman(id);
+          daftarPengumuman = daftarPengumuman.filter((p) => p.id !== id);
+          readCounts = await getPengumumanReadCounts();
+          renderDaftar();
+          tampilkanToast('Pengumuman dihapus.');
+        } catch (error) {
+          console.error('Gagal menghapus pengumuman:', error);
+          btn.disabled = false;
+          tampilkanToast('Gagal menghapus pengumuman. Periksa koneksi atau izin Firestore.');
+        }
       });
     });
   }

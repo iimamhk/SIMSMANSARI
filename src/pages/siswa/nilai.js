@@ -106,7 +106,19 @@ export async function renderSiswaNilaiPage(container) {
     ]),
   ]);
 
-  const filteredNilaiTugasDocs = nilaiTugasDocs.filter((doc) => siswaKeys.includes(normalizeUserKey(doc.siswa_id)));
+  const activeBabKeys = new Set(
+    babDocs.map((doc) => `${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id || doc.id)}`)
+  );
+  const activeTugasKeys = new Set(
+    tugasDocs
+      .filter((doc) => activeBabKeys.has(`${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id)}`))
+      .map((doc) => `${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id)}::${normalizeId(doc.tugas_id || doc.id)}`)
+  );
+  const filteredNilaiTugasDocs = nilaiTugasDocs.filter((doc) => {
+    const belongsToStudent = siswaKeys.includes(normalizeUserKey(doc.siswa_id));
+    const tugasKey = `${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id)}::${normalizeId(doc.tugas_id)}`;
+    return belongsToStudent && activeTugasKeys.has(tugasKey);
+  });
   const filteredNilaiUjianDocs = nilaiUjianDocs.filter((doc) => siswaKeys.includes(normalizeUserKey(doc.siswa_id)));
 
   const mapelNameMap = new Map(

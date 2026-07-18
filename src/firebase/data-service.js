@@ -778,10 +778,9 @@ export async function getAllPengumuman() {
   try {
     const snapshot = await db.collection(PENGUMUMAN_COLLECTION).get();
     const firestoreItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    const localItems = readLocalPengumuman();
-    const merged = mergeMaterialsById(firestoreItems, localItems);
-    writeLocalPengumuman(merged);
-    return merged;
+    // Firestore is authoritative. Do not resurrect deleted announcements from local cache.
+    writeLocalPengumuman(firestoreItems);
+    return firestoreItems;
   } catch (error) {
     console.warn('Gagal mengambil pengumuman dari Firestore, memakai data cadangan:', error);
     return readLocalPengumuman();
@@ -866,11 +865,13 @@ export async function deletePengumuman(id) {
   }
 
   if (db) {
-    try {
-      await db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId).delete();
-    } catch (error) {
-      console.warn('Gagal menghapus pengumuman dari Firestore:', error);
-    }
+    const readsSnapshot = await db.collection(PENGUMUMAN_READS_COLLECTION)
+      .where('pengumuman_id', '==', pengumumanId)
+      .get();
+    const batch = db.batch();
+    batch.delete(db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId));
+    readsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
   }
 
   writeLocalPengumuman(readLocalPengumuman().filter((item) => item.id !== pengumumanId));
