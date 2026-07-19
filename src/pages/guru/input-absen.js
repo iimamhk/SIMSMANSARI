@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecords, saveAttendanceRecord, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecords, saveAttendanceRecord, saveAttendanceRecordsBatch, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
 
 const statusLabels = ['H', 'S', 'I', 'A', 'K'];
 const statusClasses = {
@@ -10,8 +10,8 @@ const statusClasses = {
   A: 'border-[#EF4444] bg-[#FECACA] text-[#991B1B]',
   K: 'border-[#7C3AED] bg-[#EDE9FE] text-[#5B21B6]',
 };
-const attendanceTabActiveClass = 'bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_14px_30px_-18px_rgba(14,165,233,0.95)]';
-const attendanceTabIdleClass = 'bg-white/80 text-slate-700 hover:bg-white hover:text-slate-900';
+const attendanceTabActiveClass = 'bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_16px_36px_-16px_rgba(15,23,42,0.75)] ring-1 ring-white/20';
+const attendanceTabIdleClass = 'bg-white/75 text-slate-600 ring-1 ring-slate-200/80 hover:bg-white hover:text-slate-900 hover:ring-emerald-200';
 
 function getWeekStart(dateString) {
   const date = new Date(dateString);
@@ -205,8 +205,8 @@ export async function renderGuruInputAbsenPage(container) {
       <section id="tab-input" class="space-y-4">
         <div class="rounded-[24px] border border-amber-100 bg-gradient-to-r from-amber-50 via-white to-rose-50 p-1 shadow-[0_12px_30px_-24px_rgba(120,53,15,0.22)]">
           <div class="flex flex-wrap gap-2">
-            <button type="button" data-absensi-subtab="absensi" class="absensi-subtab-btn rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 text-xs font-semibold text-white shadow-sm">Absensi</button>
-            <button type="button" data-absensi-subtab="keluar-kelas" class="absensi-subtab-btn rounded-full border border-transparent bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white">Siswa Keluar Kelas</button>
+            <button type="button" data-absensi-subtab="absensi" class="absensi-subtab-btn rounded-full bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_24px_-14px_rgba(15,23,42,0.8)]">Absensi</button>
+            <button type="button" data-absensi-subtab="keluar-kelas" class="absensi-subtab-btn rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white hover:border-emerald-100">Siswa Keluar Kelas</button>
           </div>
         </div>
 
@@ -219,7 +219,7 @@ export async function renderGuruInputAbsenPage(container) {
             <div class="grid gap-3 sm:grid-cols-2">
               <div>
                 <label class="text-sm font-medium text-slate-700">Relasi Mengajar</label>
-                <select id="assignment-select" class="mt-1.5 w-full rounded-2xl border border-sky-100 bg-gradient-to-r from-white to-sky-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
+                <select id="assignment-select" class="mt-1.5 w-full appearance-none rounded-2xl border-2 border-slate-800 bg-gradient-to-r from-slate-900 via-emerald-800 to-teal-700 px-3.5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.75)] outline-none transition hover:from-slate-800 hover:via-emerald-700 hover:to-teal-600 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-200/70">
                   ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
                 </select>
               </div>
@@ -372,8 +372,8 @@ export async function renderGuruInputAbsenPage(container) {
       <section id="tab-rekap" class="hidden space-y-6">
         <div class="rounded-[24px] border border-sky-100 bg-gradient-to-r from-sky-50 via-white to-cyan-50 p-1 shadow-[0_12px_30px_-24px_rgba(14,165,233,0.22)]">
           <div class="flex flex-wrap gap-2">
-            <button type="button" data-rekap-subtab="rekap-absensi" class="rekap-subtab-btn rounded-full bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-2 text-xs font-semibold text-white shadow-sm">Rekap Absensi</button>
-            <button type="button" data-rekap-subtab="rekap-catatan-keluar-kelas" class="rekap-subtab-btn rounded-full border border-transparent bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white">Rekap Catatan Siswa Keluar Kelas</button>
+            <button type="button" data-rekap-subtab="rekap-absensi" class="rekap-subtab-btn rounded-full bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-[0_12px_24px_-14px_rgba(15,23,42,0.8)]">Rekap Absensi</button>
+            <button type="button" data-rekap-subtab="rekap-catatan-keluar-kelas" class="rekap-subtab-btn rounded-full border border-slate-200/80 bg-white/90 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-white hover:border-emerald-100">Rekap Catatan Siswa Keluar Kelas</button>
           </div>
         </div>
 
@@ -831,7 +831,7 @@ export async function renderGuruInputAbsenPage(container) {
 
     absensiSubtabButtons.forEach((button) => {
       const isActive = button.getAttribute('data-absensi-subtab') === activeAbsensiSubtab;
-      button.className = `absensi-subtab-btn rounded-full border px-4 py-2 text-xs font-semibold transition ${isActive ? 'border-amber-400 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_10px_22px_-14px_rgba(245,158,11,0.9)]' : 'border-transparent bg-white/90 text-slate-700 hover:bg-white hover:border-amber-100'}`;
+      button.className = `absensi-subtab-btn rounded-full border px-4 py-2 text-xs font-semibold transition ${isActive ? 'border-emerald-500 bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_12px_24px_-14px_rgba(15,23,42,0.8)]' : 'border-transparent bg-white/90 text-slate-700 hover:bg-white hover:border-emerald-100'}`;
     });
 
     absensiSubtabAbsensi?.classList.toggle('hidden', activeAbsensiSubtab !== 'absensi');
@@ -843,7 +843,7 @@ export async function renderGuruInputAbsenPage(container) {
 
     rekapSubtabButtons.forEach((button) => {
       const isActive = button.getAttribute('data-rekap-subtab') === activeRekapSubtab;
-      button.className = `rekap-subtab-btn rounded-full border px-4 py-2 text-xs font-semibold transition ${isActive ? 'border-sky-400 bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-[0_10px_22px_-14px_rgba(14,165,233,0.9)]' : 'border-transparent bg-white/90 text-slate-700 hover:bg-white hover:border-sky-100'}`;
+      button.className = `rekap-subtab-btn rounded-full border px-4 py-2 text-xs font-semibold transition ${isActive ? 'border-emerald-500 bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_12px_24px_-14px_rgba(15,23,42,0.8)]' : 'border-transparent bg-white/90 text-slate-700 hover:bg-white hover:border-emerald-100'}`;
     });
 
     rekapSubtabAbsensi?.classList.toggle('hidden', activeRekapSubtab !== 'rekap-absensi');
@@ -1457,9 +1457,7 @@ export async function renderGuruInputAbsenPage(container) {
       };
     });
 
-    await Promise.all(
-      payloads.map((item) => saveAttendanceRecord(item))
-    );
+    await saveAttendanceRecordsBatch(payloads);
 
     alert(`Absensi tanggal ${formatAttendanceDate(selectedDate)} berhasil disimpan.`);
     await refreshCurrentData();

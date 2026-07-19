@@ -157,8 +157,23 @@ async function loadSesiUntukSiswa() {
     return;
   }
   try {
-    const remote = await fsQuery(COLLECTION_SESI, []);
-    state.sesiList = remote.filter((s) => isVisibleToStudent(s) && filterByContext(s));
+    // Prefer class-scoped query when available to avoid full-collection reads.
+    let remote = [];
+    if (state.kelasId) {
+      remote = await fsQuery(COLLECTION_SESI, [{ field: 'kelas_id', value: state.kelasId }]);
+    }
+    if (!remote.length && state.context?.tahun_ajaran_aktif && state.context?.semester_aktif) {
+      remote = await fsQuery(COLLECTION_SESI, [
+        { field: 'tahun_ajaran_id', value: state.context.tahun_ajaran_aktif },
+        { field: 'semester_id', value: state.context.semester_aktif },
+      ]);
+    }
+    if (!remote.length) {
+      remote = await fsQuery(COLLECTION_SESI, []);
+    }
+    state.sesiList = remote
+      .filter((s) => isVisibleToStudent(s) && filterByContext(s))
+      .filter((s) => ['aktif', 'selesai', 'diarsipkan'].includes(String(s.status || '')));
   } catch {
     state.sesiList = readLocal(LS_SESI).filter((s) => isVisibleToStudent(s) && filterByContext(s));
   }
@@ -212,6 +227,28 @@ async function loadJawabanSaya(sesiId) {
 
 async function loadAllJawabanSaya() {
   const map = {};
+  if (!state.siswaId) {
+    state.jawabanSaya = map;
+    return;
+  }
+
+  // One query for all answers of this student instead of N queries per session.
+  if (db()) {
+    try {
+      const docs = await fsQuery(COLLECTION_JAWABAN, [{ field: 'siswa_id', value: state.siswaId }]);
+      const sesiIds = new Set(state.sesiList.map((s) => s.id));
+      docs.forEach((doc) => {
+        if (doc?.sesi_id && (!sesiIds.size || sesiIds.has(doc.sesi_id))) {
+          map[doc.sesi_id] = doc;
+        }
+      });
+      state.jawabanSaya = map;
+      return;
+    } catch {
+      // fallback below
+    }
+  }
+
   await Promise.all(state.sesiList.map(async (s) => {
     const j = await loadJawabanSaya(s.id);
     if (j) map[s.id] = j;
@@ -1319,10 +1356,8 @@ export async function renderSiswaKuizPage(container) {
 
   await loadSesiUntukSiswa();
 
-  // Pre-load paket untuk sesi
-  await Promise.all(state.sesiList.map((s) => loadPaket(s.paket_id)));
-
-  // Load semua jawaban siswa
+  // List view only needs session metadata + student answers.
+  // Packages are loaded on-demand when a quiz is opened.
   await loadAllJawabanSaya();
 
   const html = renderLayout('Ujian', `

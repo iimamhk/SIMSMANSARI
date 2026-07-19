@@ -1186,16 +1186,33 @@ export async function renderGuruGamePage(container) {
     const localRoom = readBattleRooms().find((item) => item.id === activeBattleRoom.id);
     if (localRoom) renderBattleRoom(localRoom);
     try {
-      const docs = await getDocumentsWhere('battle_rooms', [{ field: 'id', operator: '==', value: activeBattleRoom.id }]);
-      if (docs[0]) {
-        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, docs[0]);
-        renderBattleRoom(docs[0]);
+      let roomDoc = null;
+      if (window.firebaseDb && activeBattleRoom.id) {
+        const snap = await window.firebaseDb.collection('battle_rooms').doc(activeBattleRoom.id).get();
+        if (snap.exists) roomDoc = { id: snap.id, ...snap.data() };
       }
-      const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: activeBattleRoom.id }]);
-      if (participantDocs.length) {
-        const mergedRoom = { ...(docs[0] || activeBattleRoom), participants: participantDocs.reduce((result, item) => ({ ...result, [item.id?.replace(`${activeBattleRoom.id}_`, '') || item.id]: item }), {}) };
-        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, mergedRoom);
-        renderBattleRoom(mergedRoom);
+      if (!roomDoc) {
+        const docs = await getDocumentsWhere('battle_rooms', [{ field: 'id', operator: '==', value: activeBattleRoom.id }]);
+        roomDoc = docs[0] || null;
+      }
+      if (roomDoc) {
+        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, roomDoc);
+        renderBattleRoom(roomDoc);
+      }
+      // Prefer participants embedded in room document. Query only when missing.
+      if (!Object.keys((roomDoc || activeBattleRoom).participants || {}).length) {
+        const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: activeBattleRoom.id }]);
+        if (participantDocs.length) {
+          const mergedRoom = {
+            ...(roomDoc || activeBattleRoom),
+            participants: participantDocs.reduce((result, item) => ({
+              ...result,
+              [item.id?.replace(`${activeBattleRoom.id}_`, '') || item.id]: item,
+            }), {}),
+          };
+          upsertLocalById(BATTLE_ROOM_LOCAL_KEY, mergedRoom);
+          renderBattleRoom(mergedRoom);
+        }
       }
     } catch {}
   }
@@ -2296,7 +2313,7 @@ export async function renderGuruGamePage(container) {
     stopBattlePolling();
     battlePollId = setInterval(() => {
       if (!document.hidden) refreshBattleRoom();
-    }, 5000);
+    }, 8000);
   });
 
   battleCopyCodeBtn?.addEventListener('click', async () => {

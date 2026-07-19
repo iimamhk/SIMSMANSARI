@@ -127,7 +127,13 @@ export function todayInput() {
 }
 
 export function subscribeKas(kasId, callback) {
-  return subscribeCollection('kas_transaksi', [{ field: 'kas_id', value: kasId }], callback);
+  // Only stream recent transactions to avoid loading full history on every open.
+  return subscribeCollection(
+    'kas_transaksi',
+    [{ field: 'kas_id', value: kasId }],
+    callback,
+    { limit: 100, orderBy: 'created_at', orderDirection: 'desc' }
+  );
 }
 
 export async function getKasConfig(kasId) {

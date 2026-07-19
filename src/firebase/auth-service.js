@@ -36,22 +36,54 @@ async function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+const managedUsersCache = new Map();
+const chatDirectoryCache = { at: 0, promise: null, data: null };
+const MANAGED_USERS_TTL_MS = 60000;
+const CHAT_DIRECTORY_TTL_MS = 300000;
+
 export async function getManagedUsers(role = '', kelasId = '') {
+  const cacheKey = `${role || 'all'}|${kelasId || ''}`;
+  const cached = managedUsersCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < MANAGED_USERS_TTL_MS) return cached.data;
+  if (cached?.promise) return cached.promise;
+
   const params = new URLSearchParams();
   if (role) params.set('role', role);
   if (kelasId) params.set('kelas', kelasId);
   const query = params.size ? `?${params.toString()}` : '';
-  const response = await fetch(backendUrl(`/api/auth/users${query}`), { headers: await getAuthHeaders() });
-  if (!response.ok) throw new Error('Data user tidak dapat dimuat.');
-  const result = await response.json();
-  return Array.isArray(result.users) ? result.users : [];
+  const promise = (async () => {
+    const response = await fetch(backendUrl(`/api/auth/users${query}`), { headers: await getAuthHeaders() });
+    if (!response.ok) throw new Error('Data user tidak dapat dimuat.');
+    const result = await response.json();
+    const users = Array.isArray(result.users) ? result.users : [];
+    managedUsersCache.set(cacheKey, { at: Date.now(), data: users });
+    return users;
+  })().finally(() => {
+    const current = managedUsersCache.get(cacheKey);
+    if (current?.promise) managedUsersCache.set(cacheKey, { at: current.at || Date.now(), data: current.data || [] });
+  });
+  managedUsersCache.set(cacheKey, { at: Date.now(), promise });
+  return promise;
 }
 
 export async function getChatDirectory() {
-  const response = await fetch(backendUrl('/api/auth/contacts'), { headers: await getAuthHeaders() });
-  if (!response.ok) throw new Error('Daftar kontak tidak dapat dimuat.');
-  const result = await response.json();
-  return Array.isArray(result.users) ? result.users : [];
+  if (chatDirectoryCache.data && Date.now() - chatDirectoryCache.at < CHAT_DIRECTORY_TTL_MS) {
+    return chatDirectoryCache.data;
+  }
+  if (chatDirectoryCache.promise) return chatDirectoryCache.promise;
+
+  chatDirectoryCache.promise = (async () => {
+    const response = await fetch(backendUrl('/api/auth/contacts'), { headers: await getAuthHeaders() });
+    if (!response.ok) throw new Error('Daftar kontak tidak dapat dimuat.');
+    const result = await response.json();
+    const users = Array.isArray(result.users) ? result.users : [];
+    chatDirectoryCache.at = Date.now();
+    chatDirectoryCache.data = users;
+    return users;
+  })().finally(() => {
+    chatDirectoryCache.promise = null;
+  });
+  return chatDirectoryCache.promise;
 }
 
 export async function saveManagedUser(userData, existingUsername = '') {
@@ -62,6 +94,9 @@ export async function saveManagedUser(userData, existingUsername = '') {
   });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(result.error || 'Data user tidak dapat disimpan.');
+  managedUsersCache.clear();
+  chatDirectoryCache.at = 0;
+  chatDirectoryCache.data = null;
   return result.user;
 }
 
@@ -71,6 +106,9 @@ export async function deleteManagedUser(username) {
     headers: await getAuthHeaders(),
   });
   if (!response.ok) throw new Error('Data user tidak dapat dihapus.');
+  managedUsersCache.clear();
+  chatDirectoryCache.at = 0;
+  chatDirectoryCache.data = null;
 }
 
 export async function changePassword(password) {

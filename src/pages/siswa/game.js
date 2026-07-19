@@ -757,16 +757,38 @@ export async function renderSiswaGamePage(container) {
     const localRoom = readBattleRooms().find((item) => item.id === battleRoom.id || item.code === battleRoom.code);
     if (localRoom) battleRoom = localRoom;
     try {
-      const docs = await getDocumentsWhere('battle_rooms', [{ field: 'code', operator: '==', value: battleRoom.code }]);
-      if (docs[0]) {
-        const remoteUpdatedAt = new Date(docs[0].updated_at || 0).getTime();
-        const localUpdatedAt = new Date(battleRoom.updated_at || 0).getTime();
-        if (remoteUpdatedAt >= localUpdatedAt) battleRoom = docs[0];
-        localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(readBattleRooms().filter((item) => item.id !== battleRoom.id).concat(battleRoom)));
+      // Prefer direct document read when room id is known (1 read vs query).
+      if (battleRoom.id && window.firebaseDb) {
+        const roomSnap = await window.firebaseDb.collection('battle_rooms').doc(battleRoom.id).get();
+        if (roomSnap.exists) {
+          const remote = { id: roomSnap.id, ...roomSnap.data() };
+          const remoteUpdatedAt = new Date(remote.updated_at || 0).getTime();
+          const localUpdatedAt = new Date(battleRoom.updated_at || 0).getTime();
+          if (remoteUpdatedAt >= localUpdatedAt) battleRoom = remote;
+          localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(readBattleRooms().filter((item) => item.id !== battleRoom.id).concat(battleRoom)));
+        }
+      } else {
+        const docs = await getDocumentsWhere('battle_rooms', [{ field: 'code', operator: '==', value: battleRoom.code }]);
+        if (docs[0]) {
+          const remoteUpdatedAt = new Date(docs[0].updated_at || 0).getTime();
+          const localUpdatedAt = new Date(battleRoom.updated_at || 0).getTime();
+          if (remoteUpdatedAt >= localUpdatedAt) battleRoom = docs[0];
+          localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(readBattleRooms().filter((item) => item.id !== battleRoom.id).concat(battleRoom)));
+        }
       }
-      const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: battleRoom.id }]);
-      if (participantDocs.length) {
-        battleRoom = { ...battleRoom, participants: participantDocs.reduce((result, item) => ({ ...result, [item.id?.replace(`${battleRoom.id}_`, '') || item.participant_id || item.id]: item }), { ...(battleRoom.participants || {}) }) };
+      // Participants are already stored in room document for most flows.
+      // Query participants only when room has no embedded participants.
+      if (!Object.keys(battleRoom.participants || {}).length) {
+        const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: battleRoom.id }]);
+        if (participantDocs.length) {
+          battleRoom = {
+            ...battleRoom,
+            participants: participantDocs.reduce((result, item) => ({
+              ...result,
+              [item.id?.replace(`${battleRoom.id}_`, '') || item.participant_id || item.id]: item,
+            }), { ...(battleRoom.participants || {}) }),
+          };
+        }
       }
     } catch {}
     return battleRoom;
@@ -1691,7 +1713,7 @@ export async function renderSiswaGamePage(container) {
     if (battlePollId) clearInterval(battlePollId);
     battlePollId = setInterval(() => {
       if (!document.hidden) syncBattle();
-    }, 5000);
+    }, 8000);
     await syncBattle();
     startBattleArenaMotion();
   });

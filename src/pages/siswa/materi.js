@@ -55,7 +55,11 @@ async function getStudentMaterials(session, context) {
   }
 
   const [publishedMaterials, activeAssignments] = await Promise.all([
-    getPublishedMaterials(),
+    getPublishedMaterials({
+      kelasId: studentClassId,
+      tahunAjaranId: context?.tahun_ajaran_aktif,
+      semesterId: context?.semester_aktif,
+    }),
     getActiveTeachingAssignments(context),
   ]);
 

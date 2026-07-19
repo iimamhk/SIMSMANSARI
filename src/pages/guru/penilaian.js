@@ -7,6 +7,7 @@ import {
   saveDocument,
   getDocumentsWhere,
   deleteDocument,
+  deleteDocumentsBatch,
 } from '../../firebase/data-service.js';
 
 function getSession() {
@@ -24,6 +25,8 @@ function getSession() {
 function generateId(prefix = '') {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
+
+const routeAssignmentCache = new Map();
 
 function getOrCreateCacheKey(context, assignment) {
   return `penilaian_${context.tahun_ajaran_aktif}_${context.semester_aktif}_${assignment.id}`;
@@ -43,16 +46,73 @@ function getFromCache(key) {
 
 function clearCache(key) {
   localStorage.removeItem(key);
+  // Route memory cache stores datasets by assignment id, not localStorage key.
+  // Clear all route datasets so the next load fetches fresh values after mutation.
+  routeAssignmentCache.clear();
+}
+
+function invalidateRouteCache(assignmentId = '') {
+  if (assignmentId) {
+    routeAssignmentCache.delete(assignmentId);
+    return;
+  }
+  routeAssignmentCache.clear();
 }
 
 function invalidateAllCaches() {
-  // Clear all penilaian cache entries
-  const keys = Object.keys(localStorage);
-  keys.forEach(key => {
-    if (key.startsWith('penilaian_')) {
-      localStorage.removeItem(key);
-    }
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('penilaian_')) localStorage.removeItem(key);
   });
+  routeAssignmentCache.clear();
+}
+
+function getAssignmentCacheBucket(assignmentId) {
+  if (!routeAssignmentCache.has(assignmentId)) {
+    routeAssignmentCache.set(assignmentId, { promises: new Map(), data: new Map() });
+  }
+  return routeAssignmentCache.get(assignmentId);
+}
+
+function setRouteData(assignmentId, dataKey, data) {
+  getAssignmentCacheBucket(assignmentId).data.set(dataKey, data);
+}
+
+function syncLocalScoreCache(assignment, cacheKey, uiCache) {
+  // Keep both localStorage UI cache and in-memory route cache aligned after save.
+  // This lets other tabs (Nilai Akhir/Laporan) see updates without full Firestore reload.
+  saveToCache(cacheKey, uiCache);
+  if (uiCache.babs) setRouteData(assignment.id, 'babs', uiCache.babs);
+  if (uiCache.tugas) setRouteData(assignment.id, 'tugas', uiCache.tugas);
+  if (uiCache.nilai) setRouteData(assignment.id, 'nilaiTugas', uiCache.nilai);
+  if (uiCache.nilaiUH) setRouteData(assignment.id, 'nilaiUH', uiCache.nilaiUH);
+  if (uiCache.uhColumns) setRouteData(assignment.id, 'uhColumns', uiCache.uhColumns);
+  if (uiCache.nilaiPTS) setRouteData(assignment.id, 'nilaiPTS', uiCache.nilaiPTS);
+  if (uiCache.nilaiPAS) setRouteData(assignment.id, 'nilaiPAS', uiCache.nilaiPAS);
+}
+
+function markInputsSaved(container, selector = 'input.nilai-input, input[data-uh], input[data-siswa]') {
+  container.querySelectorAll(selector).forEach((input) => {
+    input.classList.remove('bg-rose-100');
+    input.classList.add('bg-emerald-50');
+    setTimeout(() => input.classList.remove('bg-emerald-50'), 700);
+  });
+}
+
+async function ensureDataLoaded(assignment, dataKey, loaderFunction, context) {
+  const assignmentCache = getAssignmentCacheBucket(assignment.id);
+  if (assignmentCache.data.has(dataKey)) return assignmentCache.data.get(dataKey);
+  if (assignmentCache.promises.has(dataKey)) return assignmentCache.promises.get(dataKey);
+
+  const promise = loaderFunction(context, assignment)
+    .then((data) => {
+      assignmentCache.data.set(dataKey, data);
+      return data;
+    })
+    .finally(() => {
+      assignmentCache.promises.delete(dataKey);
+    });
+  assignmentCache.promises.set(dataKey, promise);
+  return promise;
 }
 
 // Show notification toast
@@ -406,45 +466,32 @@ async function loadNilaiPASFromFirestore(context, assignment) {
 
 async function deleteBabWithCascade(context, assignment, firestoreBabDocId, logicalBabId = '') {
   try {
-    // Get the BAB document to find its bab_id field
     const babDocs = await getDocumentsWhere('bab', [
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ]);
-    
+    ], { cacheMs: 60000 });
     const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId || doc.bab_id === logicalBabId);
     const babId = babDoc?.bab_id || logicalBabId || firestoreBabDocId;
-    
-    // Step 1: Load and delete all nilai_tugas for this BAB
-    const nilaiDocs = await getDocumentsWhere('nilai_tugas', [
-      { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-      { field: 'semester_id', operator: '==', value: context.semester_aktif },
-      { field: 'pengajaran_id', operator: '==', value: assignment.id },
-      { field: 'bab_id', operator: '==', value: babId },
+
+    const [nilaiDocs, tugasDocs] = await Promise.all([
+      getDocumentsWhere('nilai_tugas', [
+        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+        { field: 'semester_id', operator: '==', value: context.semester_aktif },
+        { field: 'pengajaran_id', operator: '==', value: assignment.id },
+        { field: 'bab_id', operator: '==', value: babId },
+      ]),
+      getDocumentsWhere('tugas_bab', [
+        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
+        { field: 'semester_id', operator: '==', value: context.semester_aktif },
+        { field: 'pengajaran_id', operator: '==', value: assignment.id },
+        { field: 'bab_id', operator: '==', value: babId },
+      ]),
     ]);
-    
-    for (const doc of nilaiDocs) {
-      await deleteDocument('nilai_tugas', doc.id);
-    }
-    
-    // Step 2: Load and delete all tugas_bab for this BAB
-    const tugasDocs = await getDocumentsWhere('tugas_bab', [
-      { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-      { field: 'semester_id', operator: '==', value: context.semester_aktif },
-      { field: 'pengajaran_id', operator: '==', value: assignment.id },
-      { field: 'bab_id', operator: '==', value: babId },
-    ]);
-    
-    for (const doc of tugasDocs) {
-      await deleteDocument('tugas_bab', doc.id);
-    }
-    
-    // Step 3: Delete the BAB itself using the Firestore document ID
-    if (babDoc?.id) {
-      await deleteDocument('bab', babDoc.id);
-    }
-    
+
+    await deleteDocumentsBatch('nilai_tugas', nilaiDocs.map((doc) => doc.id));
+    await deleteDocumentsBatch('tugas_bab', tugasDocs.map((doc) => doc.id));
+    if (babDoc?.id) await deleteDocument('bab', babDoc.id);
     return true;
   } catch (e) {
     console.error('Error in cascade delete BAB:', e);
@@ -454,34 +501,25 @@ async function deleteBabWithCascade(context, assignment, firestoreBabDocId, logi
 
 async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, firestoreTugasDocId, logicalBabId = '', logicalTugasId = '') {
   try {
-    // Get the BAB document to find its bab_id field
     const babDocs = await getDocumentsWhere('bab', [
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ]);
-    
+    ], { cacheMs: 60000 });
     const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId || doc.bab_id === logicalBabId);
     const babId = babDoc?.bab_id || logicalBabId;
-    if (!babId) {
-      throw new Error('BAB ID tidak tersedia');
-    }
-    
-    // Get the TUGAS document to find its tugas_id field
+    if (!babId) throw new Error('BAB ID tidak tersedia');
+
     const tugasDocs = await getDocumentsWhere('tugas_bab', [
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'bab_id', operator: '==', value: babId },
-    ]);
-    
+    ], { cacheMs: 60000 });
     const tugasDoc = tugasDocs.find(doc => doc.id === firestoreTugasDocId || doc.tugas_id === logicalTugasId);
     const tugasId = tugasDoc?.tugas_id || logicalTugasId;
-    if (!tugasId) {
-      throw new Error('TUGAS ID tidak tersedia');
-    }
-    
-    // Step 1: Load and delete all nilai_tugas for this TUGAS
+    if (!tugasId) throw new Error('TUGAS ID tidak tersedia');
+
     const nilaiDocs = await getDocumentsWhere('nilai_tugas', [
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
@@ -489,16 +527,8 @@ async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, fi
       { field: 'bab_id', operator: '==', value: babId },
       { field: 'tugas_id', operator: '==', value: tugasId },
     ]);
-    
-    for (const doc of nilaiDocs) {
-      await deleteDocument('nilai_tugas', doc.id);
-    }
-    
-    // Step 2: Delete the TUGAS itself using the Firestore document ID
-    if (tugasDoc?.id) {
-      await deleteDocument('tugas_bab', tugasDoc.id);
-    }
-    
+    await deleteDocumentsBatch('nilai_tugas', nilaiDocs.map((doc) => doc.id));
+    if (tugasDoc?.id) await deleteDocument('tugas_bab', tugasDoc.id);
     return true;
   } catch (e) {
     console.error('Error in cascade delete TUGAS:', e);
@@ -513,19 +543,15 @@ async function deleteUlanganHarianColumnWithCascade(context, assignment, uhColum
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'jenis_nilai', operator: '==', value: 'ulangan_harian' },
-    ]);
-
-    for (const doc of nilaiDocs) {
-      const tipe = String(doc.tipe || '');
-      if (tipe === uhColumnId || tipe.startsWith(`${uhColumnId}_`)) {
-        await deleteDocument('nilai_ujian', doc.id);
-      }
-    }
-
-    if (firestoreDocId) {
-      await deleteDocument('ulangan_harian_kolom', firestoreDocId);
-    }
-
+    ], { cacheMs: 60000 });
+    const toDelete = nilaiDocs
+      .filter((doc) => {
+        const tipe = String(doc.tipe || '');
+        return tipe === uhColumnId || tipe.startsWith(`${uhColumnId}_`);
+      })
+      .map((doc) => doc.id);
+    await deleteDocumentsBatch('nilai_ujian', toDelete);
+    if (firestoreDocId) await deleteDocument('ulangan_harian_kolom', firestoreDocId);
     return true;
   } catch (e) {
     console.error('Error deleting kolom UH:', e);
@@ -697,20 +723,19 @@ async function saveAllNilaiExamToFirestore(context, assignment, cacheKey, jenisN
 
 async function renderTabNilaiTugas(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
-  
-  // ALWAYS load fresh from Firestore to ensure sync across browsers
-  const firestoreBabs = await loadBabsFromFirestore(context, assignment);
-  const firestoreTugas = await loadTugasFromFirestore(context, assignment);
-  const firestoreNilai = await loadNilaiTugasFromFirestore(context, assignment);
-  
-  // Save fresh data to cache
+  const [firestoreBabs, firestoreTugas, firestoreNilai] = await Promise.all([
+    ensureDataLoaded(assignment, 'babs', loadBabsFromFirestore, context),
+    ensureDataLoaded(assignment, 'tugas', loadTugasFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiTugas', loadNilaiTugasFromFirestore, context),
+  ]);
+  const existing = getFromCache(cacheKey);
   const cached = {
+    ...existing,
     babs: firestoreBabs,
     tugas: firestoreTugas,
     nilai: firestoreNilai,
   };
   saveToCache(cacheKey, cached);
-  
   const babs = firestoreBabs || [];
   const tugas = firestoreTugas || {};
   const nilai = firestoreNilai || {};
@@ -1290,11 +1315,25 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
     btn.disabled = true;
     btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4"></path></svg> Menyimpan...';
 
+    // Capture latest input values into cache first, then save.
+    const latest = getFromCache(cacheKey);
+    if (!latest.nilai) latest.nilai = {};
+    container.querySelectorAll('.nilai-input').forEach((input) => {
+      const babId = input.getAttribute('data-bab');
+      const tugasId = input.getAttribute('data-tugas');
+      const siswaId = input.getAttribute('data-siswa');
+      if (!babId || !tugasId || !siswaId) return;
+      latest.nilai[`${babId}_${tugasId}_${siswaId}`] = Number(input.value) || 0;
+    });
+    syncLocalScoreCache(assignment, cacheKey, latest);
+
     const success = await saveAllNilaiTugasToFirestore(context, assignment, cacheKey);
-    
     if (success) {
-      // Clear cache untuk force reload data fresh dari Firestore
-      clearCache(cacheKey);
+      // Keep UI cache; no full reload needed.
+      syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
+      updateAverages();
+      markInputsSaved(container, '.nilai-input');
+      showNotification('✓ Nilai tugas tersimpan dan diperbarui di layar', 'success');
     }
 
     btn.disabled = false;
@@ -1308,14 +1347,14 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
 
 async function renderTabUlanganHarian(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
-  
-  // ALWAYS load fresh from Firestore
-  const firestoreNilaiUH = await loadNilaiUHFromFirestore(context, assignment);
-  const firestoreUhColumns = await loadUlanganHarianColumnsFromFirestore(context, assignment);
+  const [firestoreNilaiUH, firestoreUhColumns] = await Promise.all([
+    ensureDataLoaded(assignment, 'nilaiUH', loadNilaiUHFromFirestore, context),
+    ensureDataLoaded(assignment, 'uhColumns', loadUlanganHarianColumnsFromFirestore, context),
+  ]);
   const uhColumns = normalizeUlanganHarianColumns(firestoreUhColumns);
-  const cached = { nilaiUH: firestoreNilaiUH, uhColumns };
+  const existing = getFromCache(cacheKey);
+  const cached = { ...existing, nilaiUH: firestoreNilaiUH, uhColumns };
   saveToCache(cacheKey, cached);
-  
   const nilaiUH = firestoreNilaiUH || {};
   const sortedMembers = sortMembersByName(members);
 
@@ -1608,8 +1647,24 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
     btn.disabled = true;
     const originalHTML = btn.innerHTML;
     btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4"></path></svg> Menyimpan...';
-    
-    await saveAllNilaiUHToFirestore(context, assignment, cacheKey);
+
+    const latest = getFromCache(cacheKey);
+    if (!latest.nilaiUH) latest.nilaiUH = {};
+    container.querySelectorAll('input[data-uh][data-siswa]').forEach((input) => {
+      const siswaId = input.getAttribute('data-siswa');
+      const uhKey = input.getAttribute('data-uh');
+      if (!siswaId || !uhKey) return;
+      latest.nilaiUH[`${siswaId}_${uhKey}`] = input.value === '' ? '' : Number(input.value);
+      updateUlanganHarianRow(input);
+    });
+    syncLocalScoreCache(assignment, cacheKey, latest);
+
+    const success = await saveAllNilaiUHToFirestore(context, assignment, cacheKey);
+    if (success) {
+      syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
+      markInputsSaved(container, 'input[data-uh][data-siswa]');
+      showNotification('✓ Nilai UH tersimpan dan diperbarui di layar', 'success');
+    }
     
     btn.disabled = false;
     btn.innerHTML = originalHTML;
@@ -1994,12 +2049,13 @@ async function renderTabPTSPAS(context, assignment, members, container) {
     renderActivityRecap();
     updateActivityFormPreview();
   }
-  // ALWAYS load fresh from Firestore
-  const firestoreNilaiPTS = await loadNilaiPTSFromFirestore(context, assignment);
-  const firestoreNilaiPAS = await loadNilaiPASFromFirestore(context, assignment);
-  const cached = { nilaiPTS: firestoreNilaiPTS, nilaiPAS: firestoreNilaiPAS };
+  const [firestoreNilaiPTS, firestoreNilaiPAS] = await Promise.all([
+    ensureDataLoaded(assignment, 'nilaiPTS', loadNilaiPTSFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiPAS', loadNilaiPASFromFirestore, context),
+  ]);
+  const existing = getFromCache(cacheKey);
+  const cached = { ...existing, nilaiPTS: firestoreNilaiPTS, nilaiPAS: firestoreNilaiPAS };
   saveToCache(cacheKey, cached);
-  
   const nilaiPTS = firestoreNilaiPTS || {};
   const nilaiPAS = firestoreNilaiPAS || {};
   const sortedMembers = sortMembersByName(members);
@@ -2205,11 +2261,40 @@ async function renderTabPTSPAS(context, assignment, members, container) {
     btn.disabled = true;
     const originalHTML = btn.innerHTML;
     btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4"></path></svg> Menyimpan...';
-    
-    await Promise.all([
+
+    const latest = getFromCache(cacheKey);
+    if (!latest.nilaiPTS) latest.nilaiPTS = {};
+    if (!latest.nilaiPAS) latest.nilaiPAS = {};
+    container.querySelectorAll('input[data-siswa][data-tipe]').forEach((input) => {
+      const siswaId = input.getAttribute('data-siswa');
+      const tipe = input.getAttribute('data-tipe') || 'murni';
+      const examType = input.closest('[data-exam-type]')?.getAttribute('data-exam-type')
+        || (input.classList.contains('pts-input') ? 'pts' : input.classList.contains('pas-input') ? 'pas' : activeExamTab);
+      if (!siswaId) return;
+      const key = `${siswaId}_${tipe}`;
+      const value = input.value === '' ? '' : Number(input.value);
+      if (examType === 'pas') latest.nilaiPAS[key] = value;
+      else latest.nilaiPTS[key] = value;
+    });
+    // Also capture simple single-value inputs used by some layouts.
+    container.querySelectorAll('input[data-siswa]:not([data-tipe])').forEach((input) => {
+      const siswaId = input.getAttribute('data-siswa');
+      if (!siswaId) return;
+      const value = input.value === '' ? '' : Number(input.value);
+      if (activeExamTab === 'pas') latest.nilaiPAS[siswaId] = value;
+      else latest.nilaiPTS[siswaId] = value;
+    });
+    syncLocalScoreCache(assignment, cacheKey, latest);
+
+    const [okPts, okPas] = await Promise.all([
       saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pts'),
       saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pas'),
     ]);
+    if (okPts || okPas) {
+      syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
+      markInputsSaved(container, 'input[data-siswa]');
+      showNotification('✓ Nilai PTS/PAS tersimpan dan diperbarui di layar', 'success');
+    }
     
     btn.disabled = false;
     btn.innerHTML = originalHTML;
@@ -2962,16 +3047,24 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
     renderActivityRecap();
     updateActivityFormPreview();
   }
-  // ALWAYS load fresh from Firestore
-  const firestoreBabs = await loadBabsFromFirestore(context, assignment);
-  const firestoreTugas = await loadTugasFromFirestore(context, assignment);
-  const firestoreNilai = await loadNilaiTugasFromFirestore(context, assignment);
-  const firestoreNilaiUH = await loadNilaiUHFromFirestore(context, assignment);
-  const firestoreUhColumns = await loadUlanganHarianColumnsFromFirestore(context, assignment);
-  const firestoreNilaiPTS = await loadNilaiPTSFromFirestore(context, assignment);
-  const firestoreNilaiPAS = await loadNilaiPASFromFirestore(context, assignment);
+  const [
+    firestoreBabs,
+    firestoreTugas,
+    firestoreNilai,
+    firestoreNilaiUH,
+    firestoreUhColumns,
+    firestoreNilaiPTS,
+    firestoreNilaiPAS,
+  ] = await Promise.all([
+    ensureDataLoaded(assignment, 'babs', loadBabsFromFirestore, context),
+    ensureDataLoaded(assignment, 'tugas', loadTugasFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiTugas', loadNilaiTugasFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiUH', loadNilaiUHFromFirestore, context),
+    ensureDataLoaded(assignment, 'uhColumns', loadUlanganHarianColumnsFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiPTS', loadNilaiPTSFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiPAS', loadNilaiPASFromFirestore, context),
+  ]);
   const uhColumns = normalizeUlanganHarianColumns(firestoreUhColumns);
-  
   const existingCache = getFromCache(cacheKey);
 
   // Bobot default: Tugas 20%, UH 20%, PTS 30%, PAS 30%
@@ -3484,13 +3577,19 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
     const btn = container.querySelector('#btn-simpan-semua-akhir');
     btn.disabled = true;
     btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4"></path></svg> Menyimpan...';
-    
-    await Promise.all([
+
+    // Persist current cached scores without forcing full page reload.
+    syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
+    const results = await Promise.all([
       saveAllNilaiTugasToFirestore(context, assignment, cacheKey),
       saveAllNilaiUHToFirestore(context, assignment, cacheKey),
       saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pts'),
       saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pas'),
     ]);
+    if (results.some(Boolean)) {
+      syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
+      showNotification('✓ Semua nilai tersimpan. Tampilan diperbarui tanpa reload.', 'success');
+    }
     
     btn.disabled = false;
     btn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V3"></path></svg> Simpan Semua Data';
@@ -3503,13 +3602,14 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
 
 async function renderTabLaporan(context, assignment, members, container) {
   const cacheKey = getOrCreateCacheKey(context, assignment);
-  
-  // ALWAYS load fresh from Firestore
-  const firestoreBabs = await loadBabsFromFirestore(context, assignment);
-  const firestoreTugas = await loadTugasFromFirestore(context, assignment);
-  const firestoreNilai = await loadNilaiTugasFromFirestore(context, assignment);
-  
+  const [firestoreBabs, firestoreTugas, firestoreNilai] = await Promise.all([
+    ensureDataLoaded(assignment, 'babs', loadBabsFromFirestore, context),
+    ensureDataLoaded(assignment, 'tugas', loadTugasFromFirestore, context),
+    ensureDataLoaded(assignment, 'nilaiTugas', loadNilaiTugasFromFirestore, context),
+  ]);
+  const existing = getFromCache(cacheKey);
   const cached = {
+    ...existing,
     babs: firestoreBabs,
     tugas: firestoreTugas,
     nilai: firestoreNilai,
@@ -3712,13 +3812,13 @@ async function renderTabBackupNilai(context, assignment, members, container) {
       await ensureXlsxLoaded();
 
       const [babs, tugasMap, nilaiTugas, nilaiUH, nilaiPTS, nilaiPAS, uhColsRaw] = await Promise.all([
-        loadBabsFromFirestore(context, assignment),
-        loadTugasFromFirestore(context, assignment),
-        loadNilaiTugasFromFirestore(context, assignment),
-        loadNilaiUHFromFirestore(context, assignment),
-        loadNilaiPTSFromFirestore(context, assignment),
-        loadNilaiPASFromFirestore(context, assignment),
-        loadUlanganHarianColumnsFromFirestore(context, assignment),
+        ensureDataLoaded(assignment, 'babs', loadBabsFromFirestore, context),
+        ensureDataLoaded(assignment, 'tugas', loadTugasFromFirestore, context),
+        ensureDataLoaded(assignment, 'nilaiTugas', loadNilaiTugasFromFirestore, context),
+        ensureDataLoaded(assignment, 'nilaiUH', loadNilaiUHFromFirestore, context),
+        ensureDataLoaded(assignment, 'nilaiPTS', loadNilaiPTSFromFirestore, context),
+        ensureDataLoaded(assignment, 'nilaiPAS', loadNilaiPASFromFirestore, context),
+        ensureDataLoaded(assignment, 'uhColumns', loadUlanganHarianColumnsFromFirestore, context),
       ]);
 
       const uhCols = normalizeUlanganHarianColumns(uhColsRaw || []);
@@ -3978,8 +4078,8 @@ export async function renderGuruPenilaianPage(container) {
               <p class="mt-2 text-xs leading-5 text-slate-600 sm:text-sm sm:max-w-2xl">Pilih relasi mengajar yang sedang dinilai agar tabel nilai, ulangan harian, dan rekap akhir tetap fokus pada kelas aktif.</p>
             </div>
             <div class="w-full lg:max-w-xl">
-              <div class="rounded-2xl border border-white/80 bg-white/85 p-2 shadow-[0_12px_30px_-20px_rgba(16,185,129,0.65)] backdrop-blur-sm">
-                <select id="assignment-select" class="w-full rounded-xl border border-emerald-200 bg-gradient-to-r from-orange-100 via-lime-50 to-emerald-100 px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-orange-300 focus:ring-4 focus:ring-emerald-100">
+              <div class="rounded-2xl border border-emerald-200/80 bg-white p-2 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.35)]">
+                <select id="assignment-select" class="w-full appearance-none rounded-xl border-2 border-slate-800 bg-gradient-to-r from-slate-900 via-emerald-800 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.75)] outline-none transition hover:from-slate-800 hover:via-emerald-700 hover:to-teal-600 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-200/70">
                   ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
                 </select>
               </div>
@@ -3999,13 +4099,13 @@ export async function renderGuruPenilaianPage(container) {
             <div class="hidden rounded-full border border-emerald-100 bg-white/90 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm sm:block">Sinkron ke kelas aktif</div>
           </div>
           <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-1">
-          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap active border-b-[#10B981] bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
-          <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
-          <button id="tab-keaktifan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="keaktifan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"></path><circle cx="5" cy="19" r="1.2" fill="currentColor"></circle><circle cx="12" cy="6" r="1.2" fill="currentColor"></circle><circle cx="19" cy="13" r="1.2" fill="currentColor"></circle></svg><span>Keaktifan</span></button>
-          <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
-          <button id="tab-akhir" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="akhir"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><span>Nilai Akhir</span></button>
-          <button id="tab-backup" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="backup"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg><span>Backup Nilai</span></button>
-          <button id="tab-laporan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-white/70 px-3 py-2.5 text-center text-xs font-semibold text-slate-700 transition hover:bg-white sm:rounded-full sm:border-b-2 sm:bg-transparent sm:px-4 whitespace-normal sm:whitespace-nowrap" data-tab="laporan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Laporan</span></button>
+          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(15,23,42,0.8)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
+          <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
+          <button id="tab-keaktifan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="keaktifan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"></path><circle cx="5" cy="19" r="1.2" fill="currentColor"></circle><circle cx="12" cy="6" r="1.2" fill="currentColor"></circle><circle cx="19" cy="13" r="1.2" fill="currentColor"></circle></svg><span>Keaktifan</span></button>
+          <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
+          <button id="tab-akhir" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="akhir"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><span>Nilai Akhir</span></button>
+          <button id="tab-backup" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="backup"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg><span>Backup Nilai</span></button>
+          <button id="tab-laporan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="laporan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Laporan</span></button>
           </div>
         </div>
 
@@ -4043,24 +4143,27 @@ export async function renderGuruPenilaianPage(container) {
     }
   };
 
+  const setActiveMainTab = (activeBtn) => {
+    tabButtons.forEach((button) => {
+      const isActive = button === activeBtn;
+      button.className = isActive
+        ? 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(15,23,42,0.8)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap'
+        : 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap';
+      if (isActive) button.dataset.active = 'true';
+      else delete button.dataset.active;
+    });
+  };
+
   tabButtons.forEach((btn) => {
     btn.addEventListener('click', async () => {
-      // Remove active state dari semua button
-      tabButtons.forEach((b) => {
-        b.classList.remove('border-b-[#10B981]', 'text-[#10B981]', 'bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'text-white', 'shadow-sm');
-        b.classList.add('border-transparent', 'text-slate-700', 'bg-white/70');
-      });
-
-      // Add active state ke button yang diklik
-      btn.classList.remove('border-transparent', 'text-slate-700', 'bg-white/70');
-      btn.classList.add('border-b-[#10B981]', 'text-white', 'bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'shadow-sm');
-
+      setActiveMainTab(btn);
       const tabName = btn.getAttribute('data-tab');
       await renderTabByName(tabName);
     });
   });
 
   // Load default tab: Nilai Tugas
+  setActiveMainTab(container.querySelector('#tab-tugas'));
   await renderTabByName('tugas');
 
   // Assignment change
@@ -4070,8 +4173,9 @@ export async function renderGuruPenilaianPage(container) {
     if (nextAssignment) {
       activeAssignment = nextAssignment;
       activeMembers = await getClassMembers(context, nextAssignment.kelas_id);
-      const activeBtn = Array.from(tabButtons).find((b) => b.classList.contains('border-b-[#10B981]'));
+      const activeBtn = Array.from(tabButtons).find((b) => b.dataset.active === 'true') || container.querySelector('#tab-tugas');
       const activeTab = activeBtn?.getAttribute('data-tab') || 'tugas';
+      setActiveMainTab(activeBtn);
       await renderTabByName(activeTab);
     }
   });

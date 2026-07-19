@@ -41,11 +41,11 @@ export function renderLayout(title, content, opts = {}) {
   const accentPanel = opts?.accentPanel || 'from-emerald-500 via-cyan-500 to-sky-500';
 
   const isRouteActive = (routes) => routes.some((route) => currentHash === route || currentHash.startsWith(`${route}/`));
-  const activeItemClass = 'text-[#4F46E5]';
-  const inactiveItemClass = 'text-slate-500';
+  const activeNavIconClass = 'text-white';
+  const inactiveNavIconClass = 'text-slate-500';
 
   const iconWallet = (active) => `
-    <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="3" y="6" width="18" height="13" rx="3" stroke="currentColor" stroke-width="1.8"/>
       <path d="M3 10h18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       <circle cx="16.5" cy="13.5" r="1.4" fill="currentColor"/>
@@ -202,20 +202,20 @@ export function renderLayout(title, content, opts = {}) {
     .join('');
 
   const iconHome = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M3.5 10.5L12 4l8.5 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-4.5v-5h-5v5H5a1.5 1.5 0 0 1-1.5-1.5v-8z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `;
 
   const iconCalendar = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8"/>
       <path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
 
   const iconChart = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       <circle cx="5" cy="19" r="1.2" fill="currentColor"/>
       <circle cx="12" cy="6" r="1.2" fill="currentColor"/>
@@ -224,41 +224,41 @@ export function renderLayout(title, content, opts = {}) {
   `;
 
   const iconBook = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
       <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
 
   const iconUser = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="12" cy="8" r="3" stroke="currentColor" stroke-width="1.8"/>
       <path d="M5 19a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
 
   const iconSettings = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" stroke="currentColor" stroke-width="1.8"/>
       <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `;
 
   const iconClassroom = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="3.5" y="5" width="17" height="11" rx="2" stroke="currentColor" stroke-width="1.8"/>
       <path d="M8 20h8M12 16v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
 
   const iconLink = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M10 14l4-4M8.5 16.5l-2 2a3 3 0 1 1-4.2-4.2l2-2M15.5 7.5l2-2a3 3 0 0 1 4.2 4.2l-2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
 
   const iconMegaphone = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 11l14-7v16L3 13z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
       <path d="M3 11v2a2 2 0 0 0 2 2h2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       <path d="M19 8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -266,27 +266,27 @@ export function renderLayout(title, content, opts = {}) {
   `;
 
   const iconChat = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-3.5-.6L3 21l1.3-4A8.4 8.4 0 1 1 21 11.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
     </svg>
   `;
 
   const iconGame = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="3" y="8" width="18" height="8" rx="4" stroke="currentColor" stroke-width="1.8"/>
       <path d="M8 12h4M10 10v4M16.5 11.5h.01M18 12.5h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
     </svg>
   `;
 
   const iconSparkle = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
       <path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
     </svg>
   `;
 
   const iconBookSpark = (active) => `
-    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
       <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
       <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -342,9 +342,12 @@ export function renderLayout(title, content, opts = {}) {
     .map((item) => {
       const active = isRouteActive(item.routes);
       return `
-        <a href="${item.href}" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${active ? 'bg-indigo-50 text-[#4F46E5]' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}">
-          ${item.icon(active)}
-          <span>${item.label}</span>
+        <a href="${item.href}" class="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition duration-200 ${active ? 'bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_14px_28px_-16px_rgba(15,23,42,0.75)] ring-1 ring-white/15' : 'text-slate-600 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-[0_10px_24px_-18px_rgba(15,23,42,0.45)] hover:ring-1 hover:ring-emerald-100'}">
+          <span class="relative z-10 inline-flex h-7 w-7 items-center justify-center rounded-xl ${active ? 'bg-white/15 ring-1 ring-white/20' : 'bg-slate-100/90 ring-1 ring-slate-200/70 group-hover:bg-emerald-50 group-hover:ring-emerald-100'}">
+            ${item.icon(active)}
+          </span>
+          <span class="relative z-10 whitespace-nowrap">${item.label}</span>
+          ${active ? '<span class="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/10 to-transparent"></span>' : ''}
         </a>
       `;
     })
@@ -355,8 +358,10 @@ export function renderLayout(title, content, opts = {}) {
         .map((item) => {
           const active = isRouteActive(item.routes);
           return `
-            <a href="${item.href}" class="inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-xs font-semibold transition ${active ? 'bg-indigo-50 text-[#4F46E5]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}">
-              ${item.icon(active)}
+            <a href="${item.href}" class="inline-flex items-center gap-2 whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold transition ${active ? 'bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_12px_24px_-16px_rgba(15,23,42,0.7)]' : 'bg-white/90 text-slate-600 ring-1 ring-slate-200/80 hover:bg-white hover:text-slate-900'}">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-lg ${active ? 'bg-white/15' : 'bg-slate-100'}">
+                ${item.icon(active)}
+              </span>
               <span>${item.label}</span>
             </a>
           `;
@@ -449,12 +454,16 @@ export function renderLayout(title, content, opts = {}) {
           </div>
         </header>
 
-        <nav class="hidden md:flex flex-wrap gap-2 rounded-[24px] border border-slate-200 bg-white p-2 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-          ${navItems}
+        <nav class="hidden md:block overflow-hidden rounded-[28px] border border-white/70 bg-white/90 p-2 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.35)] ring-1 ring-white/60 backdrop-blur-xl">
+          <div class="rounded-[24px] bg-gradient-to-r from-slate-50 via-white to-emerald-50/70 p-1.5">
+            <div class="flex flex-wrap gap-1.5">
+              ${navItems}
+            </div>
+          </div>
         </nav>
 
         ${isAdmin ? `
-          <nav class="md:hidden overflow-x-auto rounded-[20px] border border-slate-200 bg-white p-2 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <nav class="md:hidden overflow-x-auto rounded-[24px] border border-white/70 bg-white/90 p-2 shadow-[0_14px_36px_-24px_rgba(15,23,42,0.28)] ring-1 ring-white/60 backdrop-blur-xl">
             <div class="flex w-max items-center gap-2 pr-1">
               ${mobilePrimaryNav}
             </div>

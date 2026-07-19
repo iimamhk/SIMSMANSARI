@@ -202,14 +202,14 @@ export async function renderGuruJurnalPage(container) {
           <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Jurnal Mengajar Guru</h2>
           <div class="mt-4 md:sticky md:top-4 md:z-20 md:rounded-2xl md:bg-white/70 md:p-1 md:backdrop-blur">
             <div class="grid grid-cols-2 gap-2 rounded-[24px] border border-white/80 bg-white/70 p-1 shadow-[0_14px_32px_-24px_rgba(15,23,42,0.5)] sm:flex sm:flex-wrap sm:rounded-full">
-              <button data-tab="input" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-[0_14px_30px_-18px_rgba(79,70,229,0.95)]">
+              <button data-tab="input" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition bg-gradient-to-r from-slate-900 via-indigo-700 to-violet-600 text-white shadow-[0_16px_36px_-16px_rgba(15,23,42,0.75)] ring-1 ring-white/20">
                 <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
                   <path d="M8 11h8M8 15h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                 </svg>
                 Isi Jurnal
               </button>
-              <button data-tab="rekap" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition bg-white/80 text-slate-700 hover:bg-white hover:text-slate-900">
+              <button data-tab="rekap" type="button" class="tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition bg-white/75 text-slate-600 ring-1 ring-slate-200/80 hover:bg-white hover:text-slate-900 hover:ring-indigo-200">
                 <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 6h16M8 11h8M8 16h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                 </svg>
@@ -225,7 +225,7 @@ export async function renderGuruJurnalPage(container) {
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
               <label class="text-sm font-medium text-slate-700">Kelas</label>
-              <select id="assignment-select" class="mt-1.5 w-full rounded-2xl border border-indigo-100 bg-gradient-to-r from-white to-indigo-50 px-3.5 py-2.5 text-sm font-medium text-slate-700 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100">
+              <select id="assignment-select" class="mt-1.5 w-full appearance-none rounded-2xl border-2 border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-800 to-violet-700 px-3.5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.75)] outline-none transition hover:from-slate-800 hover:via-indigo-700 hover:to-violet-600 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/70">
                 ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
               </select>
             </div>
@@ -536,7 +536,7 @@ export async function renderGuruJurnalPage(container) {
 
     tabButtons.forEach((button) => {
       const active = button.getAttribute('data-tab') === key;
-      button.className = `tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition ${active ? 'bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-[0_14px_30px_-18px_rgba(79,70,229,0.95)]' : 'bg-white/80 text-slate-700 hover:bg-white hover:text-slate-900'}`;
+      button.className = `tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition ${active ? 'bg-gradient-to-r from-slate-900 via-indigo-700 to-violet-600 text-white shadow-[0_16px_36px_-16px_rgba(15,23,42,0.75)] ring-1 ring-white/20' : 'bg-white/75 text-slate-600 ring-1 ring-slate-200/80 hover:bg-white hover:text-slate-900 hover:ring-indigo-200'}`;
     });
 
     if (key === 'rekap') {
