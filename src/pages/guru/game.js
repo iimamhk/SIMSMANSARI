@@ -2294,7 +2294,9 @@ export async function renderGuruGamePage(container) {
     renderBattleRoom(room);
     setBattleMessage('Room siap. Bagikan kode kepada siswa di kelas.');
     stopBattlePolling();
-    battlePollId = setInterval(refreshBattleRoom, 3000);
+    battlePollId = setInterval(() => {
+      if (!document.hidden) refreshBattleRoom();
+    }, 5000);
   });
 
   battleCopyCodeBtn?.addEventListener('click', async () => {
@@ -2489,6 +2491,10 @@ export async function renderGuruGamePage(container) {
   await renderEnglishMonitoring(currentEnglishAssignmentId);
 
   if (battleAssignmentEl && selectedAssignment) battleAssignmentEl.value = selectedAssignment.id;
+
+  container.routeCleanup = () => {
+    stopBattlePolling();
+  };
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

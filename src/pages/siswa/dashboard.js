@@ -1,7 +1,7 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
+import { getStoredContext, getSessionUserKeys } from '../../utils/helpers.js';
 import {
-  getDocumentsWhere,
+  getAttendanceSummary,
   getPengumumanForSiswa,
   recordPengumumanRead,
   getPengumumanReadMap,
@@ -102,12 +102,8 @@ export async function renderSiswaDashboardPage(container) {
   const kelasId = session?.user?.kelas_id || session?.user?.kelas || '';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Selamat pagi' : hour < 15 ? 'Selamat siang' : hour < 18 ? 'Selamat sore' : 'Selamat malam';
-  const absensiDocs = await getDocumentsWhere('absensi', [
-    { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-    { field: 'semester_id', operator: '==', value: context.semester_aktif },
-  ]);
-  const currentStudentAbsensi = absensiDocs.filter((item) => siswaKeys.includes(normalizeUserKey(item.siswa_id)));
-  const totalAlpa = currentStudentAbsensi.filter((item) => item.status === 'A').length;
+  const attendanceSummary = await getAttendanceSummary(context, siswaId, siswaKeys);
+  const totalAlpa = Number(attendanceSummary?.total_alpa || 0);
   const hasAlpaWarning = totalAlpa >= ALPA_ALERT_THRESHOLD;
   const heroTheme = hour < 12
     ? {

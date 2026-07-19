@@ -3899,8 +3899,10 @@ export async function renderGuruKuizPage(container) {
 
   await Promise.all([loadPaket(), loadSesi()]);
 
-  // Pre-load jawaban counts for sesi list
-  await Promise.all(state.sesiList.map((s) => loadJawabanForSesi(s.id)));
+  // Ringkasan awal hanya membutuhkan sesi aktif. Jawaban sesi historis dimuat
+  // ketika guru membuka monitor, hasil, koreksi, atau sinkronisasi nilai.
+  const activeSessions = state.sesiList.filter((sesi) => sesi.status === 'aktif');
+  await Promise.all(activeSessions.map((sesi) => loadJawabanForSesi(sesi.id)));
 
   const html = renderLayout('Ujian Pro', `
     <div class="space-y-5">

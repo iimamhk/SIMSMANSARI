@@ -5,6 +5,27 @@ const MATERIAL_PUBLISHED_KEY = 'simguru_material_html_published';
 const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
 const MATERIAL_READS_KEY = 'simguru_material_reads';
 const MATERIAL_READS_COLLECTION = 'materi_reads';
+const QUERY_CACHE_TTL_MS = 60000;
+const queryCache = new Map();
+
+async function withQueryCache(key, loader, ttlMs = QUERY_CACHE_TTL_MS) {
+  const now = Date.now();
+  const cached = queryCache.get(key);
+  if (cached && now - cached.createdAt < ttlMs) {
+    return cached.promise;
+  }
+
+  const promise = Promise.resolve().then(loader).catch((error) => {
+    queryCache.delete(key);
+    throw error;
+  });
+  queryCache.set(key, { createdAt: now, promise });
+  return promise;
+}
+
+function invalidateQueryCache() {
+  queryCache.clear();
+}
 
 function normalizeClassKey(value) {
   return String(value || '')
@@ -209,18 +230,26 @@ export async function getCollectionDocs(collectionName) {
   return getDocsFromCollection(collectionName);
 }
 
-export async function getDocumentsWhere(collectionName, filters = []) {
+export async function getDocumentsWhere(collectionName, filters = [], options = {}) {
   if (!db) {
     return [];
   }
 
-  try {
+  const load = async () => {
     let query = db.collection(collectionName);
     filters.forEach(({ field, operator = '==', value }) => {
       query = query.where(field, operator, value);
     });
     const snapshot = await query.get();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  };
+
+  try {
+    const cacheMs = Number(options.cacheMs || 0);
+    if (cacheMs > 0) {
+      return withQueryCache(`query:${collectionName}:${JSON.stringify(filters)}`, load, cacheMs);
+    }
+    return await load();
   } catch (error) {
     console.warn(`Gagal query dokumen dari koleksi ${collectionName}:`, error);
     return [];
@@ -235,6 +264,7 @@ export async function saveDocument(collectionName, payload, id = null) {
   const safePayload = sanitizeForFirestore(payload);
   const ref = id ? db.collection(collectionName).doc(id) : db.collection(collectionName).doc();
   await ref.set(safePayload, { merge: true });
+  invalidateQueryCache();
   return { id: ref.id, ...safePayload };
 }
 
@@ -278,10 +308,12 @@ export async function getAttendanceRecords(context, pengajaranId = '') {
   }
 
   try {
-    const absensiData = await getDocsFromCollection('absensi');
-    return absensiData
-      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester && (!pengajaranId || item.pengajaran_id === pengajaranId))
-      .map((item) => ({ id: item.id, ...item }));
+    const filters = [
+      { field: 'tahun_ajaran_id', value: year },
+      { field: 'semester_id', value: semester },
+    ];
+    if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
+    return getDocumentsWhere('absensi', filters);
   } catch (error) {
     console.warn('Gagal mengambil data absensi dari Firestore, memakai data cadangan:', error);
     return [];
@@ -294,7 +326,124 @@ export async function deleteDocument(collectionName, id) {
   }
 
   await db.collection(collectionName).doc(id).delete();
+  invalidateQueryCache();
   return true;
+}
+
+function buildAttendanceSummaryId(context, siswaId) {
+  const { year, semester } = getActivePeriod(context);
+  return `${year}__${semester}__${normalizeUserKey(siswaId)}`;
+}
+
+function attendanceCounterField(status) {
+  return ({ H: 'total_hadir', S: 'total_sakit', I: 'total_izin', A: 'total_alpa', K: 'total_keluar_kelas' })[status] || '';
+}
+
+function buildAttendanceCounts(records = []) {
+  const counts = { total_hadir: 0, total_sakit: 0, total_izin: 0, total_alpa: 0, total_keluar_kelas: 0, total_catatan: 0 };
+  records.forEach((record) => {
+    const field = attendanceCounterField(record.status);
+    if (field) counts[field] += 1;
+    counts.total_catatan += 1;
+  });
+  return counts;
+}
+
+export async function saveAttendanceRecord(payload) {
+  if (!db || !payload?.id || !payload?.siswa_id) return null;
+  const context = { tahun_ajaran_aktif: payload.tahun_ajaran_id, semester_aktif: payload.semester_id };
+  const attendanceRef = db.collection('absensi').doc(payload.id);
+  const summaryRef = db.collection('absensi_ringkasan_siswa').doc(buildAttendanceSummaryId(context, payload.siswa_id));
+  const safePayload = sanitizeForFirestore(payload);
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const [previousSnapshot, summarySnapshot] = await Promise.all([
+        transaction.get(attendanceRef),
+        transaction.get(summaryRef),
+      ]);
+    const previous = previousSnapshot.exists ? previousSnapshot.data() : null;
+    const summary = summarySnapshot.exists ? summarySnapshot.data() : {};
+    const counts = {
+      total_hadir: Number(summary.total_hadir || 0),
+      total_sakit: Number(summary.total_sakit || 0),
+      total_izin: Number(summary.total_izin || 0),
+      total_alpa: Number(summary.total_alpa || 0),
+      total_keluar_kelas: Number(summary.total_keluar_kelas || 0),
+      total_catatan: Number(summary.total_catatan || 0),
+    };
+    const previousField = attendanceCounterField(previous?.status);
+    const nextField = attendanceCounterField(safePayload.status);
+    if (previousField && previousField !== nextField) counts[previousField] = Math.max(0, counts[previousField] - 1);
+    if (nextField && previousField !== nextField) counts[nextField] += 1;
+    if (!previous) counts.total_catatan += 1;
+
+      transaction.set(attendanceRef, safePayload, { merge: true });
+      transaction.set(summaryRef, {
+        id: summaryRef.id,
+        tahun_ajaran_id: payload.tahun_ajaran_id,
+        semester_id: payload.semester_id,
+        siswa_id: normalizeUserKey(payload.siswa_id),
+        siswa_nama: payload.siswa_nama || summary.siswa_nama || '',
+        kelas_id: payload.kelas_id || summary.kelas_id || '',
+        kelas_nama: payload.kelas_nama || summary.kelas_nama || '',
+        ...counts,
+        complete: summary.complete === true,
+        last_attendance_date: payload.tanggal || summary.last_attendance_date || '',
+        updated_at: new Date().toISOString(),
+      }, { merge: true });
+    });
+  } catch (error) {
+    // Allow attendance to keep working while older deployed Rules do not yet
+    // know the new summary collection. The summary will be backfilled later.
+    if (error?.code !== 'permission-denied') throw error;
+    console.warn('Ringkasan absensi belum diizinkan Rules; menyimpan absensi detail saja.');
+    await saveDocument('absensi', safePayload, payload.id);
+  }
+  invalidateQueryCache();
+  return { id: payload.id, ...safePayload };
+}
+
+export async function getAttendanceSummary(context, siswaId, aliases = []) {
+  if (!db || !siswaId) return null;
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) return null;
+  const summaryRef = db.collection('absensi_ringkasan_siswa').doc(buildAttendanceSummaryId(context, siswaId));
+  let snapshot = null;
+  try {
+    snapshot = await summaryRef.get();
+    if (snapshot.exists && snapshot.data()?.complete === true) return { id: snapshot.id, ...snapshot.data() };
+  } catch (error) {
+    if (error?.code !== 'permission-denied') throw error;
+    console.warn('Ringkasan absensi belum diizinkan Rules; memakai data absensi detail.');
+  }
+
+  const siswaKeys = Array.from(new Set([siswaId, ...aliases].map(normalizeUserKey).filter(Boolean))).slice(0, 10);
+  const records = siswaKeys.length
+    ? await getDocumentsWhere('absensi', [{ field: 'siswa_id', operator: 'in', value: siswaKeys }])
+    : [];
+  const periodRecords = records.filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester);
+  const counts = buildAttendanceCounts(periodRecords);
+  const latest = periodRecords.slice().sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')))[0] || {};
+  const summary = {
+    id: summaryRef.id,
+    tahun_ajaran_id: year,
+    semester_id: semester,
+    siswa_id: normalizeUserKey(siswaId),
+    siswa_nama: latest.siswa_nama || '',
+    kelas_id: latest.kelas_id || '',
+    kelas_nama: latest.kelas_nama || '',
+    ...counts,
+    complete: true,
+    last_attendance_date: latest.tanggal || '',
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    await summaryRef.set(summary, { merge: true });
+  } catch (error) {
+    if (error?.code !== 'permission-denied') throw error;
+  }
+  return summary;
 }
 
 export function subscribeCollection(collectionName, filters = [], callback) {
@@ -350,17 +499,22 @@ export async function getActiveTeachingAssignments(context) {
   }
 
   try {
-    const [pengajaranData, pembelajaranData] = await Promise.all([
-      getDocsFromCollection('pengajaran'),
-      getDocsFromCollection('pembelajaran'),
-    ]);
+    return withQueryCache(`assignments:${year}:${semester}`, async () => {
+      const filters = [
+        { field: 'tahun_ajaran_id', value: year },
+        { field: 'semester_id', value: semester },
+      ];
+      const [pengajaranData, pembelajaranData] = await Promise.all([
+        getDocumentsWhere('pengajaran', filters),
+        getDocumentsWhere('pembelajaran', filters),
+      ]);
 
-    const combined = [...pengajaranData, ...pembelajaranData]
-      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester)
-      .map((item) => ({ id: item.id, ...item }))
-      .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+      const combined = [...pengajaranData, ...pembelajaranData]
+        .map((item) => ({ id: item.id, ...item }))
+        .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
 
-    return combined.length ? combined : getDemoTeachingAssignments(context);
+      return combined.length ? combined : getDemoTeachingAssignments(context);
+    });
   } catch (error) {
     console.warn('Gagal mengambil pengajaran dari Firestore, memakai data cadangan:', error);
     return getDemoTeachingAssignments(context);
@@ -380,17 +534,21 @@ export async function getTeachingAssignmentsForUser(context, userId) {
   }
 
   try {
-    const [pengajaranData, pembelajaranData] = await Promise.all([
-      getDocsFromCollection('pengajaran'),
-      getDocsFromCollection('pembelajaran'),
-    ]);
+    return withQueryCache(`assignments:${year}:${semester}:${normalizedUserId}`, async () => {
+      const filters = [
+        { field: 'tahun_ajaran_id', value: year },
+        { field: 'semester_id', value: semester },
+      ];
+      const [pengajaranData, pembelajaranData] = await Promise.all([
+        getDocumentsWhere('pengajaran', filters),
+        getDocumentsWhere('pembelajaran', filters),
+      ]);
 
-    const combined = [...pengajaranData, ...pembelajaranData]
-      .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester && normalizeUserKey(item.guru_id) === normalizedUserId)
-      .map((item) => ({ id: item.id, ...item }))
-      .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
-
-    return combined;
+      return [...pengajaranData, ...pembelajaranData]
+        .filter((item) => normalizeUserKey(item.guru_id) === normalizedUserId)
+        .map((item) => ({ id: item.id, ...item }))
+        .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+    });
   } catch (error) {
     console.warn('Gagal mengambil relasi guru dari Firestore, memakai data cadangan:', error);
     return getDemoTeachingAssignments(context).filter((item) => normalizeUserKey(item.guru_id) === normalizedUserId);
@@ -662,58 +820,45 @@ export async function getClassMembers(context, kelasId) {
   }
 
   try {
-    const [anggotaKelasData, pembelajaranData, usersData] = await Promise.all([
-      getDocsFromCollection('anggota_kelas'),
-      getDocsFromCollection('pembelajaran'),
-      getDocsFromCollection('users'),
-    ]);
-
     const normalizedKelasId = normalizeClassKey(kelasId);
-
-    const classMemberDocs = anggotaKelasData
-      .filter((item) => item.tahun_ajaran_id === year && normalizeClassKey(item.kelas_id) === normalizedKelasId)
-      .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
-
-    if (classMemberDocs.length) {
-      return classMemberDocs;
-    }
-
-    const pembelajaranDoc = pembelajaranData.find((item) => item.tahun_ajaran_id === year && normalizeClassKey(item.kelas_id) === normalizedKelasId);
-    if (pembelajaranDoc?.siswa?.length) {
-      return pembelajaranDoc.siswa
-        .map((student) => ({
-          id: student.siswa_id || student.id,
-          siswa_id: student.siswa_id || student.id,
-          siswa_nama: student.siswa_nama || student.nama || '-',
-          nomor_absen: student.nomor_absen || 0,
-          kelas_id: pembelajaranDoc.kelas_id,
-          kelas_nama: pembelajaranDoc.kelas_nama,
-        }))
+    return withQueryCache(`class-members:${year}:${normalizedKelasId}`, async () => {
+      const anggotaKelasData = await getDocumentsWhere('anggota_kelas', [
+        { field: 'tahun_ajaran_id', value: year },
+        { field: 'kelas_id', value: kelasId },
+      ]);
+      const classMemberDocs = anggotaKelasData
+        .filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId)
         .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
-    }
+      if (classMemberDocs.length) return classMemberDocs;
 
-    const fireStoreUsers = usersData.filter((item) => item.role === 'siswa');
-    const classSpecificUsers = fireStoreUsers.filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId || normalizeClassKey(item.kelas_nama) === normalizedKelasId);
-    const userMembers = classSpecificUsers
-      .map(mapStudentToMember)
-      .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+      const pembelajaranData = await getDocumentsWhere('pembelajaran', [
+        { field: 'tahun_ajaran_id', value: year },
+        { field: 'kelas_id', value: kelasId },
+      ]);
+      const pembelajaranDoc = pembelajaranData.find((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId);
+      if (pembelajaranDoc?.siswa?.length) {
+        return pembelajaranDoc.siswa
+          .map((student) => ({
+            id: student.siswa_id || student.id,
+            siswa_id: student.siswa_id || student.id,
+            siswa_nama: student.siswa_nama || student.nama || '-',
+            nomor_absen: student.nomor_absen || 0,
+            kelas_id: pembelajaranDoc.kelas_id,
+            kelas_nama: pembelajaranDoc.kelas_nama,
+          }))
+          .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+      }
 
-    if (userMembers.length) {
-      return userMembers;
-    }
+      const cachedUsers = getCachedUsers()
+        .filter((item) => item.role === 'siswa')
+        .filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId || normalizeClassKey(item.kelas_nama) === normalizedKelasId)
+        .map(mapStudentToMember)
+        .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+      if (cachedUsers.length) return cachedUsers;
 
-    const cachedUsers = getCachedUsers()
-      .filter((item) => item.role === 'siswa')
-      .filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId || normalizeClassKey(item.kelas_nama) === normalizedKelasId)
-      .map(mapStudentToMember)
-      .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
-
-    if (cachedUsers.length) {
-      return cachedUsers;
-    }
-
-    const fallbackStudents = getFallbackClassMembersFor(kelasId);
-    return fallbackStudents.length ? fallbackStudents : getDemoClassMembers(context, kelasId);
+      const fallbackStudents = getFallbackClassMembersFor(kelasId);
+      return fallbackStudents.length ? fallbackStudents : getDemoClassMembers(context, kelasId);
+    });
   } catch (error) {
     console.warn('Gagal mengambil anggota kelas dari Firestore, memakai data cadangan:', error);
     return getDemoClassMembers(context, kelasId);

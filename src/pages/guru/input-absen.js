@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecords, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecords, saveAttendanceRecord, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
 
 const statusLabels = ['H', 'S', 'I', 'A', 'K'];
 const statusClasses = {
@@ -1023,6 +1023,13 @@ export async function renderGuruInputAbsenPage(container) {
   }
 
   function renderRecap() {
+    const totalRecordsEl = container.querySelector('#summary-total-records');
+    const totalStudentsEl = container.querySelector('#summary-total-students');
+    const tableHead = container.querySelector('#rekap-table-head');
+    if (!rekapSummaryPresent || !rekapSummarySick || !rekapSummaryPermission || !rekapSummaryAbsent || !totalRecordsEl || !totalStudentsEl || !tableHead || !rekapTableBody) {
+      return;
+    }
+
     const period = getRecapPeriod();
     const dates = getDatesInRange(period.start, period.end);
     const records = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
@@ -1040,11 +1047,10 @@ export async function renderGuruInputAbsenPage(container) {
     if (rekapSummaryKeluar) {
       rekapSummaryKeluar.textContent = keluar;
     }
-    container.querySelector('#summary-total-records').textContent = records.length;
-    container.querySelector('#summary-total-students').textContent = currentMembers.length;
+    totalRecordsEl.textContent = String(records.length);
+    totalStudentsEl.textContent = String(currentMembers.length);
 
     // Generate header row with all columns
-    const tableHead = container.querySelector('#rekap-table-head');
     const dateHeaderCells = dates
       .map((date) => {
         const day = new Date(date).getDay();
@@ -1279,7 +1285,7 @@ export async function renderGuruInputAbsenPage(container) {
       }, docId);
 
       const attendanceId = `${assignment.id}_${target.siswaId}_${selectedDate}`;
-      await saveDocument('absensi', {
+      await saveAttendanceRecord({
         id: attendanceId,
         tahun_ajaran_id: context.tahun_ajaran_aktif,
         semester_id: context.semester_aktif,
@@ -1296,7 +1302,7 @@ export async function renderGuruInputAbsenPage(container) {
         hari: getDayName(selectedDate),
         status: 'K',
         updated_at: new Date().toISOString(),
-      }, attendanceId);
+      });
 
       specialNoteText.value = '';
       setSpecialNoteMessage('Catatan khusus berhasil disimpan dan absensi diberi kode K.');
@@ -1378,7 +1384,7 @@ export async function renderGuruInputAbsenPage(container) {
         }, docId);
 
         const attendanceId = `${assignment.id}_${item.studentId}_${selectedDate}`;
-        await saveDocument('absensi', {
+        await saveAttendanceRecord({
           id: attendanceId,
           tahun_ajaran_id: context.tahun_ajaran_aktif,
           semester_id: context.semester_aktif,
@@ -1395,7 +1401,7 @@ export async function renderGuruInputAbsenPage(container) {
           hari: getDayName(selectedDate),
           status: 'K',
           updated_at: new Date().toISOString(),
-        }, attendanceId);
+        });
 
         if (item.rowMessageEl) {
           item.rowMessageEl.textContent = 'Siap disimpan';
@@ -1452,7 +1458,7 @@ export async function renderGuruInputAbsenPage(container) {
     });
 
     await Promise.all(
-      payloads.map((item) => saveDocument('absensi', item, item.id))
+      payloads.map((item) => saveAttendanceRecord(item))
     );
 
     alert(`Absensi tanggal ${formatAttendanceDate(selectedDate)} berhasil disimpan.`);

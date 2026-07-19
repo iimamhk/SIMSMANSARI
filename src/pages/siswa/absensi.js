@@ -27,13 +27,12 @@ export async function renderSiswaAbsensiPage(container) {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
   const siswaKeys = getSessionUserKeys(session, context);
 
-  const docs = await getDocumentsWhere('absensi', [
-    { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-    { field: 'semester_id', operator: '==', value: context.semester_aktif },
-  ]);
+  const docs = siswaKeys.length
+    ? await getDocumentsWhere('absensi', [{ field: 'siswa_id', operator: 'in', value: siswaKeys.slice(0, 10) }], { cacheMs: 60000 })
+    : [];
 
   const records = docs
-    .filter((item) => siswaKeys.includes(normalizeUserKey(item.siswa_id)))
+    .filter((item) => item.tahun_ajaran_id === context.tahun_ajaran_aktif && item.semester_id === context.semester_aktif && siswaKeys.includes(normalizeUserKey(item.siswa_id)))
     .sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
   const summary = {
     H: records.filter((item) => item.status === 'H').length,

@@ -149,6 +149,9 @@ export async function renderSiswaKasKelasPage(container) {
     state.transaksi = (data || []).slice().sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
     renderContent();
   });
+  container.routeCleanup = () => {
+    if (typeof unsubscribe === 'function') unsubscribe();
+  };
 
   const tabBar = container.querySelector('#kas-tabs');
   tabBar.addEventListener('click', (event) => {

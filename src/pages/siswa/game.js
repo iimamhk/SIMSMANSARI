@@ -657,10 +657,14 @@ export async function renderSiswaGamePage(container) {
   function closeBattleArena() {
     battleLobbyOverlayEl?.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
-    if (battleArenaMotionId) cancelAnimationFrame(battleArenaMotionId);
-    battleArenaMotionId = null;
+    stopBattleArenaMotion();
     if (battleSoundboardCooldownId) window.clearTimeout(battleSoundboardCooldownId);
     battleSoundboardCooldownId = null;
+  }
+
+  function stopBattleArenaMotion() {
+    if (battleArenaMotionId) cancelAnimationFrame(battleArenaMotionId);
+    battleArenaMotionId = null;
   }
 
   function startBattleArenaMotion() {
@@ -1685,7 +1689,9 @@ export async function renderSiswaGamePage(container) {
     setBattleStudentStatus(battleRoom.status === 'live' ? 'Battle sedang berlangsung. Bersiap menjawab!' : `Berhasil bergabung ke ${battleRoom.title || 'room'}. Menunggu guru memulai...`);
     openLobby();
     if (battlePollId) clearInterval(battlePollId);
-    battlePollId = setInterval(syncBattle, 1000);
+    battlePollId = setInterval(() => {
+      if (!document.hidden) syncBattle();
+    }, 5000);
     await syncBattle();
     startBattleArenaMotion();
   });
@@ -1738,6 +1744,16 @@ export async function renderSiswaGamePage(container) {
   renderBattleAvatarPicker();
   renderBattleSoundboard();
   if (battleAvatarLabelEl) battleAvatarLabelEl.textContent = selectedBattleAvatar.label;
+
+  container.routeCleanup = () => {
+    if (timerId) clearInterval(timerId);
+    if (battlePollId) clearInterval(battlePollId);
+    if (battleTimerId) clearInterval(battleTimerId);
+    stopBattleArenaMotion();
+    timerId = null;
+    battlePollId = null;
+    battleTimerId = null;
+  };
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');
