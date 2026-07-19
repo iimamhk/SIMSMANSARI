@@ -2,27 +2,6 @@ import { loginUser, saveSession, normalizeUsername, normalizePassword } from '..
 import { getAppConfig, getDocumentsWhere } from '../firebase/data-service.js';
 import { getStoredContext } from '../utils/helpers.js';
 
-const demoUsers = {
-  iimamhk: {
-    username: 'iimamhk',
-    password: 'iimamhk',
-    role: 'admin',
-    nama: 'Admin Utama SIMGURU',
-  },
-  imambudiharto: {
-    username: 'imambudiharto',
-    password: '123456',
-    role: 'guru',
-    nama: 'Imam Budiharto, S.Pd.',
-  },
-  tatimmatulianah: {
-    username: 'tatimmatulianah',
-    password: '123456',
-    role: 'guru',
-    nama: 'Tatimmatul Ianah, S.Pd.',
-  },
-};
-
 function buildContext(user, baseContext) {
   return {
     ...baseContext,
@@ -142,10 +121,7 @@ export function renderLoginPage(container) {
     const password = container.querySelector('#password').value.trim();
     const normalizedUsername = normalizeUsername(username);
     const normalizedPassword = normalizePassword(password);
-    const fallbackUser = demoUsers[normalizedUsername];
-    const user = fallbackUser && normalizePassword(fallbackUser.password) === normalizedPassword
-      ? fallbackUser
-      : await loginUser(username, password);
+    const user = await loginUser(normalizedUsername, normalizedPassword);
 
     if (!user) {
       alert('Username atau password salah.');

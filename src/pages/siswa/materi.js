@@ -13,16 +13,11 @@ function normalizeClassToken(value) {
 }
 
 function getCurrentStudent(session, context) {
-  try {
-    const sessionKeys = new Set(getSessionUserKeys(session, context));
-    const localUsers = JSON.parse(localStorage.getItem('simguru_users') || '[]');
-    return localUsers.find((item) => {
-      const candidateKeys = [normalizeUserKey(item.username), normalizeUserKey(item.id)].filter(Boolean);
-      return candidateKeys.some((key) => sessionKeys.has(key));
-    }) || null;
-  } catch {
-    return null;
-  }
+  const user = session?.user || {};
+  return {
+    ...user,
+    username: user.username || getSessionUserKeys(session, context)[0] || '',
+  };
 }
 
 function isStudentIncludedInAssignment(assignment, student) {

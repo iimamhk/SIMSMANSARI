@@ -41,7 +41,8 @@ import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
 
 function getSession() {
   const raw = localStorage.getItem('simguru_session');
-  return raw ? JSON.parse(raw) : null;
+  const session = raw ? JSON.parse(raw) : null;
+  return session?.firebase_uid ? session : null;
 }
 
 function getDefaultRouteByRole(role) {
@@ -300,5 +301,26 @@ async function renderRoute() {
   await renderAndFinalize(renderLoginPage, container);
 }
 
-window.addEventListener('hashchange', renderRoute);
-window.addEventListener('DOMContentLoaded', renderRoute);
+function showBootstrapError(error) {
+  const container = document.getElementById('app');
+  const message = error instanceof Error ? error.message : String(error || 'Kesalahan tidak diketahui.');
+  console.error('SIM SMANSARI gagal memuat halaman:', error);
+  if (container) {
+    container.innerHTML = `
+      <main class="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+        <section class="w-full max-w-lg rounded-2xl border border-rose-200 bg-white p-6 shadow-sm">
+          <h1 class="text-lg font-bold text-rose-700">Aplikasi gagal dimuat</h1>
+          <p class="mt-2 text-sm text-slate-600">Muat ulang halaman. Jika masalah berlanjut, periksa pesan error di Console browser.</p>
+          <pre class="mt-4 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-900 p-3 text-xs text-rose-200">${String(message).replace(/[<>&]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character]))}</pre>
+          <button type="button" class="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onclick="location.reload()">Muat ulang</button>
+        </section>
+      </main>`;
+  }
+}
+
+window.addEventListener('error', (event) => {
+  if (event.error) showBootstrapError(event.error);
+});
+window.addEventListener('unhandledrejection', (event) => showBootstrapError(event.reason));
+window.addEventListener('hashchange', () => renderRoute().catch(showBootstrapError));
+window.addEventListener('DOMContentLoaded', () => renderRoute().catch(showBootstrapError));

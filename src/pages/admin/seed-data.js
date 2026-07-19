@@ -1,4 +1,5 @@
 import { saveDocument } from '../../firebase/data-service.js';
+import { saveManagedUser } from '../../firebase/auth-service.js';
 
 export async function seedInitialData() {
   const mataPelajaran = [
@@ -47,7 +48,7 @@ export async function seedInitialData() {
   }
 
   for (const item of users) {
-    await saveDocument('users', item, item.username);
+    await saveManagedUser(item);
   }
 
   const waliKelasSeed = [

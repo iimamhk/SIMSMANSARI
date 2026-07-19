@@ -9,6 +9,7 @@ const firebaseConfig = {
 };
 
 let app = null;
+let auth = null;
 let db = null;
 
 if (window.firebase) {
@@ -19,9 +20,11 @@ if (window.firebase) {
       app = window.firebase.apps[0];
     }
 
+    auth = window.firebase.auth(app);
     db = window.firebase.firestore(app);
 
     window.firebaseApp = app;
+    window.firebaseAuth = auth;
     window.firebaseDb = db;
     window.firebaseConfig = firebaseConfig;
   } catch (error) {
@@ -31,4 +34,4 @@ if (window.firebase) {
   console.warn('Firebase SDK is not available. The app will continue in demo mode.');
 }
 
-export { firebaseConfig, app, db };
+export { firebaseConfig, app, auth, db };

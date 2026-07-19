@@ -219,6 +219,282 @@
         background: rgba(255, 255, 255, 0.16);
         overflow: hidden;
       }
+
+      /* Quiz Battle: compact mobile surface with a calm desktop dashboard. */
+      #battle-student-panel {
+        animation: battlePanelIn 0.35s ease-out both;
+      }
+      @keyframes battlePanelIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      [data-battle-answer]:disabled {
+        cursor: default;
+        opacity: 0.92;
+      }
+      .sg-battle-choice {
+        min-height: 68px;
+        border-width: 2px;
+        border-color: #dbe4f0;
+        background: #ffffff;
+        box-shadow: 0 12px 24px -16px rgba(15, 23, 42, 0.55);
+        transition: transform 0.16s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+      }
+      .sg-battle-choice.is-selected {
+        border-color: #7c3aed;
+        background: linear-gradient(135deg, #ede9fe, #f5f3ff);
+        box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.24), 0 14px 30px -16px rgba(91, 33, 182, 0.55);
+        transform: translateY(-2px);
+      }
+      .sg-battle-choice.is-selected .sg-battle-choice-letter {
+        background: #7c3aed;
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+      }
+      .sg-battle-choice.is-correct {
+        border-color: #059669;
+        background: linear-gradient(135deg, #d1fae5, #ecfdf5);
+        box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.2);
+      }
+      .sg-battle-choice.is-incorrect {
+        border-color: #e11d48;
+        background: linear-gradient(135deg, #ffe4e6, #fff1f2);
+        box-shadow: 0 0 0 4px rgba(225, 29, 72, 0.18);
+      }
+      .sg-battle-choice.is-correct .sg-battle-choice-mark {
+        background: #059669;
+      }
+      .sg-battle-choice.is-incorrect .sg-battle-choice-mark {
+        background: #e11d48;
+      }
+      .battle-avatar-option {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+        border: 2px solid transparent;
+        border-radius: 1rem;
+        padding: 0.35rem;
+        color: #64748b;
+        font-size: 0.65rem;
+        font-weight: 700;
+        transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+      }
+      .battle-avatar-option img {
+        width: 3.25rem;
+        height: 3.25rem;
+        border-radius: 1rem;
+        background: #f8fafc;
+      }
+      .battle-avatar-option:hover {
+        transform: translateY(-2px);
+        background: #f5f3ff;
+      }
+      .battle-avatar-option.is-selected {
+        border-color: #7c3aed;
+        background: #ede9fe;
+        color: #6d28d9;
+        box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16);
+      }
+      .battle-lobby-player {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.6rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 1rem;
+        background: #f8fafc;
+        padding: 0.55rem;
+      }
+      .battle-lobby-player img {
+        width: 2.6rem;
+        height: 2.6rem;
+        flex: none;
+        border-radius: 0.8rem;
+        background: #e0e7ff;
+      }
+      .battle-lobby-player.is-ready {
+        border-color: #6ee7b7;
+        background: #ecfdf5;
+      }
+      .battle-live-scoreboard {
+        max-height: 390px;
+        overflow-y: auto;
+        padding-right: 0.2rem;
+      }
+      .battle-live-score-row {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 1rem;
+        background: linear-gradient(105deg, #ffffff, #f8fafc);
+        padding: 0.7rem 0.75rem;
+        transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .battle-live-score-row.is-leading {
+        border-color: #c4b5fd;
+        background: linear-gradient(105deg, #f5f3ff, #ffffff);
+        box-shadow: 0 10px 24px -18px rgba(124, 58, 237, 0.75);
+      }
+      .battle-live-score-row:hover { transform: translateY(-1px); }
+      .battle-rank-badge {
+        display: flex;
+        width: 2rem;
+        height: 2rem;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.75rem;
+        background: #eef2ff;
+        color: #4f46e5;
+        font-size: 0.75rem;
+        font-weight: 900;
+      }
+      .battle-live-score-row:nth-child(1) .battle-rank-badge { background: #fef3c7; color: #b45309; }
+      .battle-live-score-row:nth-child(2) .battle-rank-badge { background: #e2e8f0; color: #475569; }
+      .battle-live-score-row:nth-child(3) .battle-rank-badge { background: #ffedd5; color: #c2410c; }
+      .live-score-pulse { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; background: #ecfdf5; padding: 0.35rem 0.55rem; color: #047857; font-size: 0.6rem; font-weight: 900; letter-spacing: 0.12em; }
+      .live-score-pulse span { width: 0.4rem; height: 0.4rem; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 4px rgba(16,185,129,0.14); animation: liveScorePulse 1.2s ease-in-out infinite; }
+      @keyframes liveScorePulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+      .battle-lobby-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 140;
+        overflow: hidden;
+        background: radial-gradient(circle at 50% 8%, rgba(99, 102, 241, 0.42), transparent 35%), linear-gradient(145deg, #11133a 0%, #1e1b4b 52%, #312e81 100%);
+        color: #fff;
+      }
+      .battle-lobby-shell {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        height: 100%;
+        flex-direction: column;
+      }
+      .battle-lobby-header, .battle-lobby-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1rem 1.1rem;
+        background: rgba(15, 23, 42, 0.35);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(18px);
+      }
+      .battle-lobby-footer {
+        border-top: 1px solid rgba(255, 255, 255, 0.12);
+        border-bottom: 0;
+        padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+      }
+      .battle-lobby-kicker {
+        color: #a5b4fc;
+        font-size: 0.65rem;
+        font-weight: 900;
+        letter-spacing: 0.22em;
+      }
+      .battle-room-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 0.9rem;
+        background: rgba(255,255,255,0.1);
+        padding: 0.4rem 0.65rem;
+      }
+      .battle-room-chip span { color: #c7d2fe; font-size: 0.55rem; font-weight: 800; letter-spacing: 0.14em; }
+      .battle-room-chip strong { font-size: 0.95rem; letter-spacing: 0.17em; }
+      .battle-arena-stage {
+        position: relative;
+        min-height: 0;
+        flex: 1;
+        overflow: hidden;
+        background: linear-gradient(180deg, rgba(49, 46, 129, 0.1), rgba(8, 47, 73, 0.42));
+      }
+      .battle-arena-stage::before {
+        content: '';
+        position: absolute;
+        inset: 15% 0 0;
+        background: repeating-linear-gradient(90deg, transparent 0 48px, rgba(255,255,255,0.035) 49px 50px), repeating-linear-gradient(0deg, transparent 0 48px, rgba(255,255,255,0.035) 49px 50px);
+        transform: perspective(450px) rotateX(58deg) scale(1.45) translateY(20%);
+        transform-origin: bottom;
+        opacity: 0.8;
+      }
+      .battle-arena-sign {
+        position: absolute;
+        top: 1rem;
+        left: 50%;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        border: 1px solid rgba(255,255,255,0.16);
+        border-radius: 1rem;
+        background: rgba(15, 23, 42, 0.42);
+        padding: 0.55rem 0.85rem;
+        box-shadow: 0 18px 40px rgba(2, 6, 23, 0.2);
+        transform: translateX(-50%);
+        backdrop-filter: blur(12px);
+      }
+      .battle-arena-platform {
+        position: absolute;
+        bottom: 9%;
+        left: 50%;
+        width: min(86vw, 760px);
+        height: 24%;
+        border: 1px solid rgba(165, 180, 252, 0.25);
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, rgba(129, 140, 248, 0.32), rgba(67, 56, 202, 0.14) 55%, transparent 72%);
+        box-shadow: 0 0 80px rgba(99, 102, 241, 0.3), inset 0 0 40px rgba(255,255,255,0.08);
+        transform: translateX(-50%) rotateX(62deg);
+      }
+      .battle-arena-players { position: absolute; inset: 0; z-index: 3; }
+      .battle-arena-player {
+        position: absolute;
+        display: flex;
+        width: 78px;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        animation: battleAvatarWalk 2.1s ease-in-out infinite alternate;
+        animation-delay: var(--walk-delay, 0s);
+        transition: left 0.55s ease, bottom 0.55s ease;
+      }
+      .battle-arena-player img { width: 3.8rem; height: 3.8rem; border-radius: 1.25rem; background: #e0e7ff; box-shadow: 0 10px 20px rgba(2, 6, 23, 0.28); }
+      .battle-arena-player.is-ready img { border: 3px solid #34d399; box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.18), 0 10px 20px rgba(2, 6, 23, 0.28); }
+      .battle-arena-nameplate { display: flex; max-width: 100px; align-items: center; gap: 0.25rem; border: 1px solid rgba(255,255,255,0.2); border-radius: 0.55rem; background: rgba(15, 23, 42, 0.72); padding: 0.22rem 0.4rem; color: #fff; font-size: 0.62rem; font-weight: 800; backdrop-filter: blur(8px); }
+      .battle-arena-nameplate span { max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .battle-arena-nameplate b { color: #6ee7b7; font-size: 0.48rem; }
+      .battle-soundboard { max-width: min(100%, 760px); }
+      .battle-soundboard-label { margin-bottom: 0.35rem; color: rgba(224, 231, 255, 0.78); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+      .battle-soundboard-buttons { display: flex; max-width: min(86vw, 760px); flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; }
+      .battle-sound-button, .battle-note-button { border: 1px solid rgba(255,255,255,0.18); border-radius: 0.7rem; background: rgba(255,255,255,0.12); padding: 0.42rem 0.62rem; color: #fff; font-size: 0.68rem; font-weight: 800; transition: transform 0.16s ease, background 0.16s ease, opacity 0.16s ease; }
+      .battle-note-button { min-width: 2.4rem; background: rgba(129, 140, 248, 0.32); }
+      .battle-sound-button:hover, .battle-note-button:hover { transform: translateY(-2px); background: rgba(255,255,255,0.24); }
+      .battle-sound-button:disabled, .battle-note-button:disabled { cursor: not-allowed; opacity: 0.38; transform: none; }
+      .battle-floating-cheer { position: absolute; left: 50%; bottom: 100%; z-index: 8; width: max-content; max-width: 170px; border: 1px solid rgba(255,255,255,0.25); border-radius: 999px; background: rgba(15, 23, 42, 0.86); padding: 0.38rem 0.65rem; color: #fff; font-size: 0.68rem; font-weight: 900; white-space: nowrap; pointer-events: none; transform: translateX(-50%); animation: battleCheerFloat 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+      @keyframes battleCheerFloat { 0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -72px) scale(1.04); } }
+      @keyframes battleAvatarWalk { 0% { margin-left: -5px; } 100% { margin-left: 7px; } }
+      .battle-arena-countdown { position: absolute; top: 50%; left: 50%; z-index: 6; color: #fff; font-size: clamp(5rem, 22vw, 10rem); font-weight: 1000; text-shadow: 0 10px 40px rgba(129, 140, 248, 0.65); transform: translate(-50%, -50%); animation: battleCountdownPulse 0.85s ease-in-out; }
+      @keyframes battleCountdownPulse { 0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); } 45% { opacity: 1; transform: translate(-50%, -50%) scale(1.12); } 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+      @media (max-width: 767px) {
+        .battle-lobby-header { padding-top: calc(0.8rem + env(safe-area-inset-top)); }
+        .battle-arena-player { width: 66px; }
+        .battle-arena-player img { width: 3.2rem; height: 3.2rem; }
+        .battle-arena-nameplate { font-size: 0.55rem; }
+        .battle-arena-platform { bottom: 12%; height: 18%; }
+        .battle-lobby-footer { align-items: flex-start; flex-direction: column; }
+        .battle-soundboard { width: 100%; }
+        .battle-soundboard-buttons { max-width: 100%; justify-content: flex-start; }
+      }
+      #battle-room-code {
+        text-shadow: 0 8px 24px rgba(124, 58, 237, 0.18);
+      }
+      @media (max-width: 767px) {
+        #battle-room-code { font-size: 2rem; letter-spacing: 0.14em; }
+        #battle-host-panel, #battle-room-form { border-radius: 1.25rem; }
+      }
       .sg-progress-fill {
         height: 100%;
         border-radius: 9999px;
@@ -382,6 +658,7 @@
       }
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -393,6 +670,21 @@
   <body class="min-h-screen bg-[linear-gradient(145deg,_#10b981_0%,_#5eead4_28%,_#67e8f9_56%,_#93c5fd_76%,_#c4b5fd_100%)] text-slate-900 antialiased">
     <div id="app" class="min-h-screen"></div>
     <script>
+      (function installBootstrapErrorHandler() {
+        const escapeHtml = (value) => String(value || '').replace(/[<>&]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character]));
+        const showError = (error) => {
+          const message = error instanceof Error ? error.message : String(error || 'Kesalahan tidak diketahui.');
+          console.error('SIM SMANSARI gagal memuat aplikasi:', error);
+          const app = document.getElementById('app');
+          if (!app || app.dataset.bootstrapError === 'true') return;
+          app.dataset.bootstrapError = 'true';
+          app.innerHTML = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f1f5f9;padding:24px;font-family:Arial,sans-serif"><section style="max-width:620px;width:100%;background:#fff;border:1px solid #fecdd3;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(15,23,42,.08)"><h1 style="color:#be123c;font-size:20px;margin:0 0 8px">Aplikasi gagal dimuat</h1><p style="color:#475569;font-size:14px;margin:0 0 16px">Periksa pesan error berikut atau buka Console browser untuk detailnya.</p><pre style="white-space:pre-wrap;overflow:auto;background:#0f172a;color:#fecdd3;padding:12px;border-radius:8px;font-size:12px">' + escapeHtml(message) + '</pre><button onclick="location.reload()" style="margin-top:16px;background:#0f172a;color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer">Muat ulang</button></section></main>';
+        };
+        window.addEventListener('error', (event) => showError(event.error || event.message));
+        window.addEventListener('unhandledrejection', (event) => showError(event.reason));
+      })();
+    </script>
+    <script>
       (function resolveBackendBaseUrl() {
         let storedBase = '';
         try {
@@ -401,10 +693,10 @@
           storedBase = '';
         }
 
-        // Default ke same-origin agar deploy Vercel dan preview statis tidak bergantung
-        // pada backend lokal yang belum tentu hidup. Jika ingin memaksa backend lain,
-        // simpan URL-nya ke localStorage key "sim_backend_url".
-        window.__SIM_BACKEND_URL__ = storedBase.replace(/\/+$/, '');
+        // Live Server frontend berjalan di 5500, sedangkan API lokal berjalan di 3000.
+        // Pada deployment same-origin, backend tetap dikosongkan agar memakai URL saat ini.
+        const defaultBase = window.location.port === '5500' ? 'http://127.0.0.1:3000' : '';
+        window.__SIM_BACKEND_URL__ = (storedBase || defaultBase).replace(/\/+$/, '');
       })();
     </script>
     <script type="module" src="./firebase/firebase-config.js"></script>

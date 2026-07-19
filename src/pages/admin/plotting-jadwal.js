@@ -1,10 +1,11 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import { saveDocument, deleteDocument, getCollectionDocs, getActiveTeachingAssignments, getAppConfig, saveAppConfig, createPembelajaranFromPlotting } from '../../firebase/data-service.js';
+import { getManagedUsers } from '../../firebase/auth-service.js';
 
 export async function renderPlottingJadwalPage(container) {
   const context = getStoredContext();
-  const guruList = (await getCollectionDocs('users')).filter((item) => item.role === 'guru');
+  const guruList = await getManagedUsers('guru');
   const mapelList = await getCollectionDocs('mata_pelajaran');
   const kelasList = await getCollectionDocs('kelas');
   const assignments = await getActiveTeachingAssignments(context);

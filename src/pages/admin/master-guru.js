@@ -1,18 +1,16 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
-import { saveDocument, getCollectionDocs, deleteDocument } from '../../firebase/data-service.js';
-import { upsertLocalUser, removeLocalUser } from '../../firebase/auth-service.js';
+import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
 export async function renderMasterGuruPage(container) {
   const context = getStoredContext();
-  const guruList = await getCollectionDocs('users');
+  const guruList = await getManagedUsers('guru');
   const guruRows = guruList
-    .filter((item) => item.role === 'guru')
     .map((item) => `
       <tr class="border-t border-slate-100 text-sm text-slate-600">
         <td class="px-3 py-2">${item.nama}</td>
         <td class="px-3 py-2">${item.username}</td>
-        <td class="px-3 py-2">${item.password || '-'}</td>
+        <td class="px-3 py-2">Tersimpan aman</td>
         <td class="px-3 py-2">${item.status || 'active'}</td>
         <td class="px-3 py-2">
           <div class="flex flex-wrap gap-2">
@@ -28,7 +26,7 @@ export async function renderMasterGuruPage(container) {
     <div class="space-y-5">
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <h3 id="guru-form-title" class="text-lg font-semibold text-slate-900">Tambah Guru</h3>
-        <p class="mt-1 text-sm text-slate-500">Username otomatis dibuat dari nama, password dapat diatur langsung, dan data dapat diedit atau dihapus.</p>
+         <p class="mt-1 text-sm text-slate-500">Password hanya diproses server dan tidak pernah ditampilkan kembali.</p>
       </div>
 
       <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -143,9 +141,8 @@ export async function renderMasterGuruPage(container) {
         const username = String(row.username || generateUsername(nama)).trim();
         const password = String(row.password || '12345').trim();
         if (!nama) continue;
-        const payload = { username, password, nama, role: 'guru', status: 'active', created_at: new Date().toISOString(), tahun_ajaran_id: context.tahun_ajaran_aktif, semester_id: context.semester_aktif };
-        upsertLocalUser(payload);
-        await saveDocument('users', payload, username);
+         const payload = { username, password, nama, role: 'guru', status: 'active', created_at: new Date().toISOString(), tahun_ajaran_id: context.tahun_ajaran_aktif, semester_id: context.semester_aktif };
+         await saveManagedUser(payload);
         saved += 1;
       }
       setProgressState(3, 'done');
@@ -194,11 +191,11 @@ export async function renderMasterGuruPage(container) {
       username_lower: username.toLowerCase().replace(/\s+/g, ''),
     };
 
-    upsertLocalUser(payload);
     try {
-      await saveDocument('users', payload, username);
+      await saveManagedUser(payload, editingUsername || '');
     } catch (error) {
-      console.warn('Gagal menyimpan guru ke Firestore, akun tetap disimpan lokal:', error);
+      alert(error.message || 'Gagal menyimpan guru.');
+      return;
     }
     setEditMode(false);
     alert(editingUsername ? `Guru berhasil diperbarui.` : `Guru berhasil disimpan dengan username ${username}`);
@@ -214,7 +211,7 @@ export async function renderMasterGuruPage(container) {
       if (!item) return;
       container.querySelector('#guru-nama').value = item.nama || '';
       container.querySelector('#guru-username').value = item.username || '';
-      container.querySelector('#guru-password').value = item.password || '12345';
+       container.querySelector('#guru-password').value = '';
       setEditMode(true, username);
     });
   });
@@ -226,11 +223,11 @@ export async function renderMasterGuruPage(container) {
       if (!item) return;
       const confirmed = confirm(`Hapus akun guru ${item.nama}?`);
       if (!confirmed) return;
-      removeLocalUser(username);
-      try {
-        await deleteDocument('users', username);
-      } catch (error) {
-        console.warn('Gagal menghapus guru dari Firestore:', error);
+       try {
+         await deleteManagedUser(username);
+       } catch (error) {
+         alert(error.message || 'Gagal menghapus guru.');
+         return;
       }
       alert('Guru berhasil dihapus.');
       renderMasterGuruPage(container);

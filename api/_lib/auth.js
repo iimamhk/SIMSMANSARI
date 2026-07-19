@@ -1,0 +1,117 @@
+const bcrypt = require('bcryptjs');
+const { getAuth, getFirestore } = require('./firebase-admin');
+const admin = require('firebase-admin');
+
+const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
+
+function normalizeUsername(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
+}
+
+function normalizePassword(value) {
+  return String(value || '').trim();
+}
+
+function safeUser(data, id) {
+  return {
+    id: id || data.id || data.username,
+    username: String(data.username || id || '').trim(),
+    username_lower: normalizeUsername(data.username || id),
+    role: data.role || 'siswa',
+    nama: data.nama || '',
+    status: data.status || 'active',
+    kelas_id: data.kelas_id || data.kelas || '',
+    kelas_nama: data.kelas_nama || data.kelas || '',
+    kelas: data.kelas || data.kelas_nama || data.kelas_id || '',
+    nis: data.nis || '',
+    nisn: data.nisn || '',
+    mapel: data.mapel || '',
+  };
+}
+
+function validateUserInput(input) {
+  const username = normalizeUsername(input.username);
+  const password = normalizePassword(input.password);
+  if (!USERNAME_PATTERN.test(username)) throw new Error('Username tidak valid.');
+  if (!password || password.length > 200) throw new Error('Password tidak valid.');
+  return { username, password };
+}
+
+async function verifyPassword(userData, password) {
+  if (userData.password_hash) return bcrypt.compare(password, userData.password_hash);
+  // One-time compatibility path for existing legacy records. The plaintext field
+  // is removed immediately after a successful login.
+  return Boolean(userData.password) && userData.password === password;
+}
+
+async function migrateLegacyPassword(ref, userData, password) {
+  if (userData.password_hash || !userData.password) return;
+  const passwordHash = await bcrypt.hash(password, 12);
+  await ref.update({ password_hash: passwordHash, password: admin.firestore.FieldValue.delete(), updated_at: new Date().toISOString() });
+}
+
+async function login(usernameInput, passwordInput) {
+  const { username, password } = validateUserInput({ username: usernameInput, password: passwordInput });
+  const db = getFirestore();
+  let ref = db.collection('users').doc(username);
+  let snapshot = await ref.get();
+  if (!snapshot.exists) {
+    const byLower = await db.collection('users').where('username_lower', '==', username).limit(1).get();
+    const byUsername = byLower.empty
+      ? await db.collection('users').where('username', '==', username).limit(1).get()
+      : byLower;
+    if (byUsername.empty) return null;
+    snapshot = byUsername.docs[0];
+    ref = snapshot.ref;
+  }
+  const data = snapshot.data() || {};
+  if (data.status && data.status !== 'active') return null;
+  if (!(await verifyPassword(data, password))) return null;
+  await migrateLegacyPassword(ref, data, password);
+
+  const user = safeUser(data, snapshot.id);
+  const token = await getAuth().createCustomToken(user.id, { role: user.role, username: user.username });
+  return { token, user };
+}
+
+async function listUsers(role, kelasId = '') {
+  let query = getFirestore().collection('users');
+  if (role) query = query.where('role', '==', role);
+  if (kelasId) query = query.where('kelas_id', '==', kelasId);
+  const snapshot = await query.get();
+  return snapshot.docs
+    .map((doc) => safeUser(doc.data() || {}, doc.id))
+    .filter((user) => !role || user.role === role);
+}
+
+async function saveUser(input, existingUsername) {
+  const username = normalizeUsername(input.username);
+  if (!USERNAME_PATTERN.test(username)) throw new Error('Username tidak valid.');
+  const password = input.password ? normalizePassword(input.password) : '';
+  if (password && (password.length < 6 || password.length > 200)) throw new Error('Password harus 6-200 karakter.');
+  const db = getFirestore();
+  const id = normalizeUsername(existingUsername || username);
+  const ref = db.collection('users').doc(id);
+  const oldSnapshot = await ref.get();
+  const oldData = oldSnapshot.exists ? oldSnapshot.data() || {} : {};
+  const { password: ignoredPassword, password_hash: ignoredPasswordHash, existing_username: ignoredExistingUsername, ...profile } = input;
+  const payload = {
+    ...oldData,
+    ...profile,
+    ...safeUser({ ...profile, username }, id),
+    username,
+    username_lower: username,
+    updated_at: new Date().toISOString(),
+  };
+  delete payload.id;
+  delete payload.password;
+  delete payload.password_hash;
+  if (password) payload.password_hash = await bcrypt.hash(password, 12);
+  else if (oldData.password_hash) payload.password_hash = oldData.password_hash;
+  else if (oldData.password) payload.password_hash = await bcrypt.hash(oldData.password, 12);
+  else if (!oldSnapshot.exists) throw new Error('Password wajib diisi untuk akun baru.');
+  await ref.set(payload, { merge: true });
+  return safeUser(payload, id);
+}
+
+module.exports = { login, listUsers, saveUser, safeUser, normalizeUsername };

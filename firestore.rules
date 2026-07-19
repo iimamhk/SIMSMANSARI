@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /materi_publish/{materialId} {
       allow read: if true;
-      allow create, update: if request.resource.data.keys().hasOnly([
+      allow create, update: if request.auth != null && request.resource.data.keys().hasOnly([
         'id',
         'source_id',
         'pengajaran_id',
@@ -61,11 +61,11 @@ service cloud.firestore {
       && (!('published_at' in request.resource.data) || request.resource.data.published_at is string)
       && request.resource.data.visible_to_students is bool;
 
-      allow delete: if true;
+      allow delete: if request.auth != null;
     }
 
     match /materi_reads/{readId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow create, update: if request.resource.data.keys().hasOnly([
         'id',
         'material_id',
@@ -113,11 +113,11 @@ service cloud.firestore {
       && request.resource.data.tahun_ajaran_id is string
       && request.resource.data.semester_id is string
       && (!('completed_at' in request.resource.data) || request.resource.data.completed_at is string);
-      allow delete: if true;
+      allow delete: if request.auth != null;
     }
 
     match /game_sessions/{sessionId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow create: if request.resource.data.keys().hasOnly([
         'id', 'config_id', 'game_type', 'tahun_ajaran_id', 'semester_id',
         'pengajaran_id', 'guru_id', 'kelas_id', 'siswa_id', 'siswa_nama',
@@ -133,11 +133,11 @@ service cloud.firestore {
       && request.resource.data.score is int
       && request.resource.data.correct_count is int
       && request.resource.data.total_questions is int;
-      allow update, delete: if true;
+       allow update, delete: if request.auth != null;
     }
 
     match /game_session_rekap/{rekapId} {
-      allow read: if true;
+      allow read: if request.auth != null;
       allow create: if request.resource.data.keys().hasOnly([
         'id', 'game_type', 'pengajaran_id', 'kelas_id', 'kelas_nama',
         'siswa_id', 'siswa_nama', 'tahun_ajaran_id', 'semester_id',
@@ -158,13 +158,86 @@ service cloud.firestore {
       && request.resource.data.attempt_number is int
       && request.resource.data.raw_correct is int
       && request.resource.data.raw_total is int;
-      allow update, delete: if true;
+       allow update, delete: if request.auth != null;
+    }
+
+    // Quiz Battle MVP. Aplikasi saat ini memakai login lokal, bukan Firebase Auth,
+    // sehingga rules mengikuti pola koleksi game lama dan memvalidasi bentuk payload.
+    match /battle_rooms/{roomId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && request.resource.data.keys().hasOnly([
+        'id', 'code', 'title', 'game_type', 'battle_game_type', 'subject_label', 'battle_settings', 'mode', 'status', 'current_question',
+        'time_per_question', 'questions', 'participants', 'guru_id', 'guru_nama',
+        'kelas_id', 'kelas_nama', 'pengajaran_id', 'tahun_ajaran_id', 'semester_id',
+        'created_at', 'updated_at', 'started_at', 'finished_at'
+      ])
+      && request.resource.data.id is string
+      && request.resource.data.id == roomId
+      && request.resource.data.code is string
+      && request.resource.data.code.size() == 6
+      && request.resource.data.title is string
+      && request.resource.data.game_type == 'battle'
+      && request.resource.data.battle_game_type in ['math', 'english_vocab']
+      && request.resource.data.subject_label is string
+      && request.resource.data.battle_settings is map
+      && request.resource.data.mode == 'individual'
+      && request.resource.data.status in ['waiting', 'live', 'finished']
+      && request.resource.data.current_question is int
+      && request.resource.data.current_question >= 0
+      && request.resource.data.time_per_question is int
+      && request.resource.data.time_per_question in [15, 20, 30]
+      && request.resource.data.questions is list
+      && request.resource.data.questions.size() >= 1
+      && request.resource.data.questions.size() <= 20
+      && request.resource.data.participants is map
+      && request.resource.data.guru_id is string
+      && request.resource.data.kelas_id is string
+      && request.resource.data.pengajaran_id is string
+      && request.resource.data.tahun_ajaran_id is string
+      && request.resource.data.semester_id is string
+      && request.resource.data.created_at is string
+      && request.resource.data.updated_at is string
+      && (!('guru_nama' in request.resource.data) || request.resource.data.guru_nama is string)
+      && (!('kelas_nama' in request.resource.data) || request.resource.data.kelas_nama is string)
+      && (!('started_at' in request.resource.data) || request.resource.data.started_at is string)
+      && (!('finished_at' in request.resource.data) || request.resource.data.finished_at is string);
+      allow delete: if request.auth != null;
+    }
+
+    match /battle_participants/{participantId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.resource.data.keys().hasOnly([
+        'id', 'participant_id', 'room_id', 'room_code', 'nama', 'score', 'correct', 'wrong', 'answers', 'score_events',
+        'avatar_key', 'avatar_seed', 'ready',
+        'joined_at', 'last_seen_at', 'updated_at'
+      ])
+      && request.resource.data.id is string
+      && request.resource.data.id == participantId
+      && request.resource.data.participant_id is string
+      && request.resource.data.room_id is string
+      && request.resource.data.room_code is string
+      && request.resource.data.room_code.size() == 6
+      && request.resource.data.nama is string
+      && request.resource.data.score is int
+      && request.resource.data.score >= 0
+      && request.resource.data.correct is int
+      && request.resource.data.correct >= 0
+      && request.resource.data.wrong is int
+      && request.resource.data.wrong >= 0
+      && request.resource.data.answers is map
+      && request.resource.data.score_events is map
+      && request.resource.data.avatar_key is string
+      && request.resource.data.avatar_seed is string
+      && request.resource.data.ready is bool
+      && request.resource.data.joined_at is string
+      && request.resource.data.updated_at is string
+      && (!('last_seen_at' in request.resource.data) || request.resource.data.last_seen_at is string);
+       allow delete: if request.auth != null;
     }
 
     match /{collectionName}/{documentId} {
-      allow read, write: if collectionName in [
+       allow read, write: if request.auth != null && collectionName in [
         'settings',
-        'users',
         'mata_pelajaran',
         'kelas',
         'tahun_ajaran',
@@ -204,9 +277,9 @@ service cloud.firestore {
     }
 
     match /chat_rooms/{roomId} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
       match /messages/{msgId} {
-        allow read, write: if true;
+        allow read, write: if request.auth != null;
       }
     }
 

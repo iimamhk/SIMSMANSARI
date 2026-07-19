@@ -24,6 +24,22 @@
       "destination": "/api/health.js"
     },
     {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/login.js"
+    },
+    {
+      "source": "/api/auth/users",
+      "destination": "/api/auth/users.js"
+    },
+    {
+      "source": "/api/auth/account",
+      "destination": "/api/auth/account.js"
+    },
+    {
+      "source": "/api/auth/contacts",
+      "destination": "/api/auth/contacts.js"
+    },
+    {
       "source": "/api/ai/test-connection",
       "destination": "/api/ai/test-connection.js"
     },

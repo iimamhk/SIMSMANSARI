@@ -1,12 +1,22 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getDocumentsWhere, saveDocument } from '../../firebase/data-service.js';
-import { getOperationCatalog, quizTypes, normalizeGameSettings } from '../../utils/math-game.js';
-import { getVocabularyThemeCatalog, getVocabularyThemeLabel, getVocabularyThemeOptions, vocabularyQuizTypes, normalizeVocabularySettings, getVocabularyWordList } from '../../utils/vocab-game.js';
+import { getOperationCatalog, quizTypes, normalizeGameSettings, generateMathQuestions } from '../../utils/math-game.js';
+import { getVocabularyThemeCatalog, getVocabularyThemeLabel, getVocabularyThemeOptions, vocabularyQuizTypes, normalizeVocabularySettings, getVocabularyWordList, generateVocabularyQuestions } from '../../utils/vocab-game.js';
 
 const LOCAL_CONFIG_KEY = 'simguru_game_configs_local';
 const LOCAL_SESSION_KEY = 'simguru_game_sessions_local';
 const VOCAB_TEMPLATE_FILE_NAME = 'template-english-vocabulary.xlsx';
+const BATTLE_ROOM_LOCAL_KEY = 'simguru_battle_rooms_local';
+
+function getBattleRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let index = 0; index < 6; index += 1) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
 
 function readLocalList(key) {
   try {
@@ -88,7 +98,7 @@ export async function renderGuruGamePage(container) {
     '<option value="all">Semua Kelas</option>',
     ...classOptions.map((item) => `<option value="${item.id}">${item.name}</option>`),
   ].join('');
-  const availableGameCount = 2;
+  const availableGameCount = 3;
   const gameCatalog = [
     {
       key: 'math',
@@ -142,19 +152,19 @@ export async function renderGuruGamePage(container) {
     {
       key: 'battle',
       title: 'Quiz Battle Kelas',
-      description: 'Room kompetisi kelas dengan leaderboard langsung.',
+      description: 'Battle kuis satu kelas dengan room, timer, dan leaderboard langsung.',
       cardHint: 'Kompetisi kelas real-time.',
-      status: 'Roadmap',
+      status: 'Aktif',
       badgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
       cardBadgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
       accentClass: 'from-violet-500 to-fuchsia-500',
       tileClass: 'from-violet-500 via-fuchsia-500 to-pink-500',
       iconGlyph: '⚡',
-      accessTag: 'Segera',
+      accessTag: 'Kode Room',
       workspaceTitle: 'Quiz Battle Kelas',
       workspaceCaption: 'Model kompetisi ringan yang kuat untuk memacu motivasi belajar siswa.',
-      available: false,
-      bullets: ['Room battle berbasis token guru', 'Leaderboard per ronde dan per kelas', 'Riwayat battle untuk evaluasi guru'],
+      available: true,
+      bullets: ['10 soal pilihan ganda', 'Timer per soal dan skor kecepatan', 'Leaderboard dan pembahasan akhir'],
     },
     {
       key: 'daily',
@@ -889,6 +899,51 @@ export async function renderGuruGamePage(container) {
             </div>
           </article>
 
+          <article id="game-workspace-battle" data-game-workspace="battle" class="game-workspace hidden space-y-4 rounded-[28px] border border-violet-200 bg-white p-5 shadow-sm">
+            <div class="overflow-hidden rounded-[28px] bg-gradient-to-br from-violet-950 via-indigo-900 to-fuchsia-800 p-5 text-white shadow-[0_20px_50px_rgba(76,29,149,0.24)]">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2"><span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 text-xl">⚡</span><p class="text-xs font-semibold uppercase tracking-[0.2em] text-violet-200">Quiz Battle Kelas</p></div>
+                  <h3 class="mt-3 text-2xl font-semibold tracking-tight">Buat arena battle satu kelas</h3>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-violet-100/85">Guru menjadi host. Siswa masuk dengan kode room yang sama, lalu menjawab 10 soal pilihan ganda dalam ronde cepat.</p>
+                </div>
+                <div class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em]">MVP Aktif</div>
+              </div>
+            </div>
+            <details class="group rounded-2xl border border-violet-100 bg-violet-50/70 p-4" open>
+              <summary class="cursor-pointer list-none text-sm font-semibold text-violet-900">Panduan host <span class="float-right text-violet-500 transition group-open:rotate-180">⌄</span></summary>
+              <div class="mt-3 grid gap-2 text-xs leading-5 text-violet-900/75 sm:grid-cols-3"><p>1. Pilih kelas dan atur durasi.</p><p>2. Bagikan kode room ke siswa.</p><p>3. Tekan mulai, pantau peserta, lalu lihat leaderboard.</p></div>
+            </details>
+            <form id="battle-room-form" class="space-y-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Kelas<select id="battle-assignment" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium normal-case tracking-normal text-slate-800">${options || '<option value="">Tidak ada relasi</option>'}</select></label>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Judul battle<input id="battle-title" value="Battle Review Kelas" maxlength="60" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium normal-case tracking-normal text-slate-800" /></label>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jenis battle<select id="battle-game-type" class="mt-2 w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-800"><option value="math">∑ Matematika</option><option value="english_vocab">Aa English Vocabulary</option></select></label>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jumlah soal<select id="battle-question-count" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm normal-case tracking-normal text-slate-800"><option value="10">10 soal</option><option value="15">15 soal</option><option value="20">20 soal</option></select></label>
+              </div>
+              <div id="battle-math-controls" class="grid gap-3 sm:grid-cols-2">
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Detik per soal<select id="battle-time-per-question" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm normal-case tracking-normal text-slate-800"><option value="15">15 detik</option><option value="20" selected>20 detik</option><option value="30">30 detik</option></select></label>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Operasi<select id="battle-operation" class="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm normal-case tracking-normal text-slate-800"><option value="mixed">Campuran</option><option value="add">Penjumlahan</option><option value="sub">Pengurangan</option><option value="mul">Perkalian</option></select></label>
+              </div>
+              <div id="battle-english-controls" class="hidden space-y-3">
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Tema vocabulary<select id="battle-vocab-theme" class="mt-2 w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-800"><option value="school">School Objects</option><option value="animals">Animals</option><option value="family">Family</option><option value="food">Food & Drink</option><option value="activities">Daily Activities</option></select></label>
+                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Mode soal<select id="battle-vocab-mode" class="mt-2 w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-sm font-semibold normal-case tracking-normal text-slate-800"><option value="meaning_choice">English ke Indonesia</option><option value="reverse_choice">Indonesia ke English</option><option value="sentence_fill">Lengkapi Kalimat</option><option value="mixed">Campuran</option></select></label>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-3"><button id="battle-create-btn" type="submit" class="rounded-2xl bg-violet-700 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-700/20 hover:bg-violet-800">Buat Room Battle</button><p id="battle-room-message" class="text-sm text-slate-500"></p></div>
+            </form>
+            <div id="battle-host-panel" class="hidden space-y-4 rounded-[24px] border border-violet-200 bg-white p-4">
+              <div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[0.16em] text-violet-600">Room aktif</p><p id="battle-room-code" class="mt-1 text-4xl font-black tracking-[0.22em] text-slate-900">------</p></div><div class="flex gap-2"><button id="battle-copy-code-btn" type="button" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Salin kode</button><button id="battle-start-btn" type="button" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Mulai battle</button></div></div>
+              <div class="grid gap-3 sm:grid-cols-3"><div class="rounded-2xl bg-violet-50 p-3"><p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600">Status</p><p id="battle-host-status" class="mt-1 font-semibold text-slate-900">Menunggu siswa</p></div><div class="rounded-2xl bg-sky-50 p-3"><p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-600">Peserta</p><p id="battle-host-participants" class="mt-1 font-semibold text-slate-900">0 siswa</p></div><div class="rounded-2xl bg-amber-50 p-3"><p class="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-600">Ronde</p><p id="battle-host-round" class="mt-1 font-semibold text-slate-900">Lobby</p></div></div>
+              <div class="flex items-center justify-between gap-3"><div><p class="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-600">Live scoreboard</p><p class="mt-1 text-xs text-slate-500">Skor berubah saat jawaban siswa masuk.</p></div><span class="live-score-pulse"><span></span>LIVE</span></div>
+              <div id="battle-host-leaderboard" class="battle-live-scoreboard space-y-2"></div>
+              <button id="battle-finish-btn" type="button" class="hidden rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-700">Akhiri battle</button>
+            </div>
+          </article>
+
           ${gameCatalog.filter((game) => !game.available).map((game) => `
             <article id="game-workspace-${game.key}" data-game-workspace="${game.key}" class="game-workspace hidden rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
               <div class="flex flex-wrap items-start justify-between gap-4">
@@ -985,6 +1040,30 @@ export async function renderGuruGamePage(container) {
   const englishResetWordBankBtn = container.querySelector('#english-reset-word-bank-btn');
   const englishCustomThemePanelEl = container.querySelector('#english-custom-theme-panel');
   const englishCustomThemeListEl = container.querySelector('#english-custom-theme-list');
+  const battleForm = container.querySelector('#battle-room-form');
+  const battleAssignmentEl = container.querySelector('#battle-assignment');
+  const battleGameTypeEl = container.querySelector('#battle-game-type');
+  const battleMathControlsEl = container.querySelector('#battle-math-controls');
+  const battleEnglishControlsEl = container.querySelector('#battle-english-controls');
+  const battleRoomMessageEl = container.querySelector('#battle-room-message');
+  const battleHostPanelEl = container.querySelector('#battle-host-panel');
+  const battleRoomCodeEl = container.querySelector('#battle-room-code');
+  const battleHostStatusEl = container.querySelector('#battle-host-status');
+  const battleHostParticipantsEl = container.querySelector('#battle-host-participants');
+  const battleHostRoundEl = container.querySelector('#battle-host-round');
+  const battleHostLeaderboardEl = container.querySelector('#battle-host-leaderboard');
+  const battleStartBtn = container.querySelector('#battle-start-btn');
+  const battleFinishBtn = container.querySelector('#battle-finish-btn');
+  const battleCopyCodeBtn = container.querySelector('#battle-copy-code-btn');
+
+  function updateBattleTypeControls() {
+    const isEnglish = battleGameTypeEl?.value === 'english_vocab';
+    battleMathControlsEl?.classList.toggle('hidden', isEnglish);
+    battleEnglishControlsEl?.classList.toggle('hidden', !isEnglish);
+  }
+
+  battleGameTypeEl?.addEventListener('change', updateBattleTypeControls);
+  updateBattleTypeControls();
 
   const totalSessionsEl = container.querySelector('#monitor-total-sessions');
   const averageScoreEl = container.querySelector('#monitor-average-score');
@@ -1062,6 +1141,69 @@ export async function renderGuruGamePage(container) {
   let currentEnglishWorkspaceTab = 'overview';
   let currentEnglishWordBank = [];
   let hasGameSelection = false;
+  let activeBattleRoom = null;
+  let battlePollId = null;
+
+  function readBattleRooms() {
+    return readLocalList(BATTLE_ROOM_LOCAL_KEY);
+  }
+
+  function saveBattleRoom(room) {
+    upsertLocalById(BATTLE_ROOM_LOCAL_KEY, room);
+    saveDocument('battle_rooms', room, room.id).catch(() => {});
+  }
+
+  function setBattleMessage(text, isError = false) {
+    if (!battleRoomMessageEl) return;
+    battleRoomMessageEl.textContent = text;
+    battleRoomMessageEl.className = isError ? 'text-sm text-rose-600' : 'text-sm text-slate-500';
+  }
+
+  function renderBattleLeaderboard(room) {
+    const participants = Object.values(room?.participants || {}).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+    if (battleHostParticipantsEl) battleHostParticipantsEl.textContent = `${participants.length} siswa`;
+    if (battleHostLeaderboardEl) {
+      battleHostLeaderboardEl.innerHTML = participants.length
+        ? participants.map((item, index) => `<div class="battle-live-score-row ${index === 0 ? 'is-leading' : ''}"><div class="battle-rank-badge">${index + 1}</div><div class="min-w-0 flex-1"><div class="flex items-center gap-2"><span class="truncate text-sm font-bold text-slate-800">${item.nama || 'Siswa'}</span>${item.ready ? '<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-700">Siap</span>' : ''}</div><p class="mt-0.5 text-[11px] text-slate-500">Benar ${Number(item.correct || 0)} • Salah ${Number(item.wrong || 0)} • Tidak jawab ${Object.values(item.score_events || {}).filter((event) => event.outcome === 'unanswered').length}</p></div><div class="text-right"><p class="text-lg font-black text-violet-700">${Number(item.score || 0)}</p><p class="text-[9px] font-bold uppercase tracking-wide text-slate-400">poin</p></div></div>`).join('')
+        : '<p class="rounded-2xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-500">Belum ada siswa bergabung.</p>';
+    }
+  }
+
+  function renderBattleRoom(room) {
+    if (!room) return;
+    activeBattleRoom = room;
+    if (battleHostPanelEl) battleHostPanelEl.classList.remove('hidden');
+    if (battleRoomCodeEl) battleRoomCodeEl.textContent = room.code;
+    if (battleHostStatusEl) battleHostStatusEl.textContent = room.status === 'live' ? 'Battle berlangsung' : room.status === 'finished' ? 'Selesai' : 'Menunggu siswa';
+    if (battleHostRoundEl) battleHostRoundEl.textContent = room.status === 'live' ? `Soal ${Math.min(room.current_question + 1, room.questions.length)}/${room.questions.length}` : 'Lobby';
+    battleStartBtn?.classList.toggle('hidden', room.status !== 'waiting');
+    battleFinishBtn?.classList.toggle('hidden', !['waiting', 'live'].includes(room.status));
+    renderBattleLeaderboard(room);
+  }
+
+  async function refreshBattleRoom() {
+    if (!activeBattleRoom) return;
+    const localRoom = readBattleRooms().find((item) => item.id === activeBattleRoom.id);
+    if (localRoom) renderBattleRoom(localRoom);
+    try {
+      const docs = await getDocumentsWhere('battle_rooms', [{ field: 'id', operator: '==', value: activeBattleRoom.id }]);
+      if (docs[0]) {
+        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, docs[0]);
+        renderBattleRoom(docs[0]);
+      }
+      const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: activeBattleRoom.id }]);
+      if (participantDocs.length) {
+        const mergedRoom = { ...(docs[0] || activeBattleRoom), participants: participantDocs.reduce((result, item) => ({ ...result, [item.id?.replace(`${activeBattleRoom.id}_`, '') || item.id]: item }), {}) };
+        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, mergedRoom);
+        renderBattleRoom(mergedRoom);
+      }
+    } catch {}
+  }
+
+  function stopBattlePolling() {
+    if (battlePollId) clearInterval(battlePollId);
+    battlePollId = null;
+  }
 
   function setGameSettingsVisibility(visible, animate = false) {
     if (gameSelectionHintEl) {
@@ -2103,6 +2245,81 @@ export async function renderGuruGamePage(container) {
     }
   });
 
+  battleForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const assignment = assignments.find((item) => item.id === battleAssignmentEl?.value) || selectedAssignment;
+    if (!assignment) {
+      setBattleMessage('Pilih relasi kelas terlebih dahulu.', true);
+      return;
+    }
+    const count = Number(container.querySelector('#battle-question-count')?.value || 10);
+    const timePerQuestion = Number(container.querySelector('#battle-time-per-question')?.value || 20);
+    const gameType = battleGameTypeEl?.value || 'math';
+    const operation = container.querySelector('#battle-operation')?.value || 'mixed';
+    const operations = operation === 'mixed' ? ['add', 'sub', 'mul'] : [operation];
+    const vocabTheme = container.querySelector('#battle-vocab-theme')?.value || 'school';
+    const vocabMode = container.querySelector('#battle-vocab-mode')?.value || 'meaning_choice';
+    const mathSettings = normalizeGameSettings({ operations, question_count: count, number_min: 1, number_max: 20, quiz_modes: ['multiple_choice'] });
+    const vocabSettings = normalizeVocabularySettings({ themes: [vocabTheme], question_count: count, quiz_modes: vocabMode === 'mixed' ? ['meaning_choice', 'reverse_choice', 'sentence_fill'] : [vocabMode] });
+    const questions = gameType === 'english_vocab'
+      ? (vocabMode === 'mixed'
+        ? vocabSettings.quiz_modes.flatMap((mode) => generateVocabularyQuestions({ ...vocabSettings, question_count: Math.ceil(count / vocabSettings.quiz_modes.length) }, mode)).slice(0, count).map((question, index) => ({ ...question, order: index + 1 }))
+        : generateVocabularyQuestions(vocabSettings, vocabMode))
+      : generateMathQuestions(mathSettings, 'multiple_choice');
+    const room = {
+      id: `battle_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      code: getBattleRoomCode(),
+      title: container.querySelector('#battle-title')?.value?.trim() || (gameType === 'english_vocab' ? 'English Vocabulary Battle' : 'Battle Review Kelas'),
+      game_type: 'battle',
+      battle_game_type: gameType,
+      subject_label: gameType === 'english_vocab' ? 'English Vocabulary' : 'Matematika',
+      battle_settings: gameType === 'english_vocab' ? vocabSettings : mathSettings,
+      mode: 'individual',
+      status: 'waiting',
+      current_question: 0,
+      time_per_question: timePerQuestion,
+      questions,
+      participants: {},
+      guru_id: userId,
+      guru_nama: session?.user?.nama || 'Guru',
+      kelas_id: assignment.kelas_id || '',
+      kelas_nama: assignment.kelas_nama || '',
+      pengajaran_id: assignment.id,
+      tahun_ajaran_id: context.tahun_ajaran_aktif,
+      semester_id: context.semester_aktif,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    saveBattleRoom(room);
+    renderBattleRoom(room);
+    setBattleMessage('Room siap. Bagikan kode kepada siswa di kelas.');
+    stopBattlePolling();
+    battlePollId = setInterval(refreshBattleRoom, 3000);
+  });
+
+  battleCopyCodeBtn?.addEventListener('click', async () => {
+    if (!activeBattleRoom?.code) return;
+    try { await navigator.clipboard.writeText(activeBattleRoom.code); } catch {}
+    setBattleMessage(`Kode room ${activeBattleRoom.code} berhasil disalin.`);
+  });
+
+  battleStartBtn?.addEventListener('click', () => {
+    if (!activeBattleRoom) return;
+    activeBattleRoom = { ...activeBattleRoom, status: 'live', started_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    saveBattleRoom(activeBattleRoom);
+    renderBattleRoom(activeBattleRoom);
+    setBattleMessage('Battle dimulai. Siswa sekarang dapat menjawab.');
+  });
+
+  battleFinishBtn?.addEventListener('click', () => {
+    if (!activeBattleRoom) return;
+    activeBattleRoom = { ...activeBattleRoom, status: 'finished', finished_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    saveBattleRoom(activeBattleRoom);
+    renderBattleRoom(activeBattleRoom);
+    setBattleMessage('Battle diakhiri. Leaderboard final tersimpan.');
+    stopBattlePolling();
+  });
+
   workspaceTabs.forEach((button) => {
     button.addEventListener('click', () => {
       setWorkspaceTab(button.getAttribute('data-workspace-tab') || 'overview');
@@ -2270,6 +2487,8 @@ export async function renderGuruGamePage(container) {
   await loadEnglishConfig(currentEnglishAssignmentId);
   renderEnglishWordList();
   await renderEnglishMonitoring(currentEnglishAssignmentId);
+
+  if (battleAssignmentEl && selectedAssignment) battleAssignmentEl.value = selectedAssignment.id;
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

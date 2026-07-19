@@ -7,6 +7,38 @@ import { vocabularyQuizTypes, generateVocabularyQuestions, evaluateVocabularySes
 const LOCAL_CONFIG_KEY = 'simguru_game_configs_local';
 const LOCAL_SESSION_KEY = 'simguru_game_sessions_local';
 const LOCAL_TOKEN_KEY = 'simguru_game_tokens_local';
+const BATTLE_ROOM_LOCAL_KEY = 'simguru_battle_rooms_local';
+const BATTLE_AVATARS = [
+  { key: 'comet', label: 'Kometa', seed: 'simguru-comet' },
+  { key: 'sprout', label: 'Tunas', seed: 'simguru-sprout' },
+  { key: 'pixel', label: 'Pixel', seed: 'simguru-pixel' },
+  { key: 'bubbles', label: 'Bubbles', seed: 'simguru-bubbles' },
+  { key: 'rocket', label: 'Roket', seed: 'simguru-rocket' },
+  { key: 'sunny', label: 'Sunny', seed: 'simguru-sunny' },
+  { key: 'orbit', label: 'Orbit', seed: 'simguru-orbit' },
+  { key: 'berry', label: 'Berry', seed: 'simguru-berry' },
+];
+const BATTLE_LOBBY_PHRASES = [
+  { label: 'P Info', icon: '📣', tone: 'do' },
+  { label: 'Ngopi Yuks', icon: '☕', tone: 're' },
+  { label: 'Bakal Savage nih bos!', icon: '🔥', tone: 'mi' },
+  { label: 'Semangat!', icon: '🎺', tone: 'fa' },
+  { label: 'Gas terus!', icon: '🚀', tone: 'sol' },
+  { label: 'Fokus dulu!', icon: '🎯', tone: 'la' },
+];
+const BATTLE_LOBBY_NOTES = [
+  { key: 'do', label: 'Do', frequency: 261.63 },
+  { key: 're', label: 'Re', frequency: 293.66 },
+  { key: 'mi', label: 'Mi', frequency: 329.63 },
+  { key: 'fa', label: 'Fa', frequency: 349.23 },
+  { key: 'sol', label: 'Sol', frequency: 392 },
+  { key: 'la', label: 'La', frequency: 440 },
+  { key: 'si', label: 'Si', frequency: 493.88 },
+];
+
+function getBattleAvatarUrl(seed) {
+  return `https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+}
 
 function readLocalList(key) {
   try {
@@ -81,6 +113,35 @@ function getGameOverlayMarkup() {
         </div>
         <div id="student-game-overlay-body" class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6" style="padding-bottom: calc(1rem + env(safe-area-inset-bottom));"></div>
       </div>
+      <section id="battle-lobby-overlay" class="battle-lobby-overlay hidden" aria-label="Lobi Quiz Battle">
+        <div class="battle-lobby-stars"></div>
+        <div class="battle-lobby-shell">
+          <header class="battle-lobby-header">
+            <div class="min-w-0">
+              <p class="battle-lobby-kicker">LOBI KELAS</p>
+              <h2 id="battle-arena-title" class="truncate text-xl font-black text-white">Battle Kelas</h2>
+              <p id="battle-arena-subtitle" class="mt-1 text-xs text-indigo-100/75">Avatar kamu sedang berkumpul di arena</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="battle-room-chip"><span>KODE</span><strong id="battle-arena-code">------</strong></div>
+              <button id="battle-arena-back-btn" type="button" class="sg-btn sg-btn-ghost px-3 py-2 text-xs">Keluar</button>
+            </div>
+          </header>
+          <div class="battle-arena-stage">
+            <div class="battle-arena-sign"><span class="text-2xl">⚡</span><div><p class="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-200">CLASSROOM ARENA</p><p class="text-sm font-black text-white">Siap untuk battle?</p></div></div>
+            <div class="battle-arena-platform"></div>
+            <div id="battle-arena-players" class="battle-arena-players"></div>
+            <div id="battle-arena-countdown" class="battle-arena-countdown hidden">3</div>
+          </div>
+          <footer class="battle-lobby-footer">
+            <div><p id="battle-arena-status" class="text-sm font-bold text-white">Menunggu guru memulai...</p><p id="battle-arena-player-count" class="mt-1 text-xs text-indigo-100/70">0 pemain di arena</p></div>
+            <div id="battle-soundboard" class="battle-soundboard">
+              <p class="battle-soundboard-label">Soundboard lobi <span id="battle-soundboard-cooldown"></span></p>
+              <div id="battle-soundboard-buttons" class="battle-soundboard-buttons"></div>
+            </div>
+          </footer>
+        </div>
+      </section>
     </section>
   `;
 }
@@ -107,6 +168,15 @@ export async function renderSiswaGamePage(container) {
       accentClass: 'from-sky-500 to-blue-500',
       tileClass: 'from-fuchsia-500 via-violet-500 to-indigo-500',
       iconGlyph: 'Aa',
+    },
+    {
+      key: 'battle',
+      title: 'Quiz Battle Kelas',
+      description: 'Masuk ke room kelas dan berlomba menjawab soal dengan cepat dan tepat.',
+      access: 'Kode Room',
+      accentClass: 'from-violet-600 to-fuchsia-500',
+      tileClass: 'from-violet-600 via-indigo-600 to-fuchsia-600',
+      iconGlyph: '⚡',
     },
   ];
 
@@ -185,7 +255,7 @@ export async function renderSiswaGamePage(container) {
               </div>
             </div>
 
-            <div class="grid gap-3 md:grid-cols-2">
+              <div id="battle-generic-config-controls" class="grid gap-3 md:grid-cols-2">
               <div>
                 <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Konfigurasi Kelas</label>
                 <select id="game-config-select" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"></select>
@@ -197,6 +267,24 @@ export async function renderSiswaGamePage(container) {
             </div>
 
             <div id="config-summary" class="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"></div>
+
+            <div id="battle-student-panel" class="hidden space-y-4 rounded-[24px] border border-violet-200 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4">
+              <details class="group rounded-2xl border border-violet-100 bg-white/80 p-4">
+                <summary class="cursor-pointer list-none text-sm font-semibold text-violet-900">Panduan bermain <span class="float-right text-violet-500 transition group-open:rotate-180">⌄</span></summary>
+                <div class="mt-3 space-y-2 text-xs leading-5 text-violet-900/75"><p>1. Masukkan kode room dari guru.</p><p>2. Tunggu guru memulai battle.</p><p>3. Pilih satu jawaban. Skor dipengaruhi benar dan cepat.</p><p>4. Setelah selesai, lihat posisi dan pembahasan.</p></div>
+              </details>
+              <div id="battle-avatar-picker" class="rounded-2xl border border-violet-100 bg-white/80 p-4">
+                <div class="flex flex-wrap items-end justify-between gap-2"><div><p class="text-xs font-semibold uppercase tracking-[0.14em] text-violet-700">Pilih avatar kamu</p><p class="mt-1 text-xs text-slate-500">Avatar akan tampil di lobi kelas.</p></div><span id="battle-avatar-label" class="text-xs font-semibold text-violet-600">Belum dipilih</span></div>
+                <div id="battle-avatar-options" class="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-8"></div>
+              </div>
+              <div id="battle-join-controls" class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end"><label class="text-xs font-semibold uppercase tracking-[0.12em] text-violet-700">Kode room<input id="battle-room-input" maxlength="6" autocomplete="off" class="mt-2 w-full rounded-2xl border border-violet-200 bg-white px-4 py-3 text-lg font-black uppercase tracking-[0.2em] text-slate-900" placeholder="ABC123" /></label><button id="battle-join-btn" type="button" class="rounded-2xl bg-violet-700 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-700/20 hover:bg-violet-800">Gabung room</button></div>
+              <div id="battle-lobby-view" class="hidden space-y-4 rounded-2xl border border-violet-200 bg-white p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3"><div><p class="text-xs font-semibold uppercase tracking-[0.14em] text-violet-600">Lobi kelas</p><p id="battle-lobby-room-title" class="mt-1 text-lg font-bold text-slate-900">Menunggu peserta</p></div><div class="rounded-full bg-violet-100 px-3 py-1.5 text-xs font-bold text-violet-700"><span id="battle-lobby-count">0</span> pemain</div></div>
+                <div id="battle-lobby-participants" class="grid grid-cols-2 gap-2 sm:grid-cols-3"></div>
+                <div class="border-t border-slate-100 pt-3"><p id="battle-ready-status" class="text-xs text-slate-500">Avatar kamu sudah masuk arena. Gunakan soundboard sambil menunggu guru.</p></div>
+              </div>
+              <div id="battle-student-status" class="rounded-2xl border border-violet-100 bg-white px-4 py-3 text-sm text-slate-600">Belum terhubung ke room.</div>
+            </div>
 
             <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
               <div id="game-token-panel" class="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
@@ -325,6 +413,29 @@ export async function renderSiswaGamePage(container) {
   const lobbyTitleEl = container.querySelector('#student-lobby-title');
   const lobbyBackBtn = container.querySelector('#student-lobby-back-btn');
   const resultAnalysisLabelEl = container.querySelector('#result-analysis-label');
+  const battleStudentPanelEl = container.querySelector('#battle-student-panel');
+  const battleRoomInputEl = container.querySelector('#battle-room-input');
+  const battleJoinBtn = container.querySelector('#battle-join-btn');
+  const battleStudentStatusEl = container.querySelector('#battle-student-status');
+  const battleAvatarOptionsEl = container.querySelector('#battle-avatar-options');
+  const battleAvatarLabelEl = container.querySelector('#battle-avatar-label');
+  const battleJoinControlsEl = container.querySelector('#battle-join-controls');
+  const battleLobbyViewEl = container.querySelector('#battle-lobby-view');
+  const battleLobbyRoomTitleEl = container.querySelector('#battle-lobby-room-title');
+  const battleLobbyCountEl = container.querySelector('#battle-lobby-count');
+  const battleLobbyParticipantsEl = container.querySelector('#battle-lobby-participants');
+  const battleReadyStatusEl = container.querySelector('#battle-ready-status');
+  const battleLobbyOverlayEl = document.getElementById('battle-lobby-overlay');
+  const battleArenaTitleEl = document.getElementById('battle-arena-title');
+  const battleArenaSubtitleEl = document.getElementById('battle-arena-subtitle');
+  const battleArenaCodeEl = document.getElementById('battle-arena-code');
+  const battleArenaPlayersEl = document.getElementById('battle-arena-players');
+  const battleArenaStatusEl = document.getElementById('battle-arena-status');
+  const battleArenaPlayerCountEl = document.getElementById('battle-arena-player-count');
+  const battleArenaBackBtn = document.getElementById('battle-arena-back-btn');
+  const battleArenaCountdownEl = document.getElementById('battle-arena-countdown');
+  const battleSoundboardButtonsEl = document.getElementById('battle-soundboard-buttons');
+  const battleSoundboardCooldownEl = document.getElementById('battle-soundboard-cooldown');
 
   const lobbyEl = container.querySelector('#game-lobby');
   const playEl = container.querySelector('#game-play');
@@ -360,6 +471,15 @@ export async function renderSiswaGamePage(container) {
   let timerId = null;
   let tokenState = null;
   let currentGameType = 'math';
+  let battleRoom = null;
+  let battlePollId = null;
+  let battleTimerId = null;
+  let battleQuestionStartedAt = 0;
+  let selectedBattleAvatar = BATTLE_AVATARS[0];
+  let battleArenaMotionId = null;
+  let battleArenaLastRoomStatus = '';
+  let battleSoundboardCooldownUntil = 0;
+  let battleSoundboardCooldownId = null;
   if (overlayBodyEl && playEl && resultEl) {
     overlayBodyEl.append(playEl, resultEl);
   }
@@ -395,10 +515,12 @@ export async function renderSiswaGamePage(container) {
       overlayTitleEl.textContent = meta.title;
     }
     if (workspaceTitleEl) {
-      workspaceTitleEl.textContent = currentGameType === 'english_vocab' ? 'Arena English Vocabulary' : 'Arena Matematika Cepat';
+      workspaceTitleEl.textContent = currentGameType === 'battle' ? 'Arena Quiz Battle Kelas' : currentGameType === 'english_vocab' ? 'Arena English Vocabulary' : 'Arena Matematika Cepat';
     }
     if (workspaceCaptionEl) {
-      workspaceCaptionEl.textContent = currentGameType === 'english_vocab'
+      workspaceCaptionEl.textContent = currentGameType === 'battle'
+        ? 'Masuk ke room, tunggu host, lalu jawab secepat dan setepat mungkin.'
+        : currentGameType === 'english_vocab'
         ? 'Pilih tema, mainkan kuis, lalu cek kata yang perlu diulang.'
         : 'Masukkan token, mulai sesi, lalu cek hasil.';
     }
@@ -414,12 +536,14 @@ export async function renderSiswaGamePage(container) {
         : 'Pilih mode lalu masukkan token.';
     }
     if (lobbyTitleEl) {
-      lobbyTitleEl.textContent = currentGameType === 'english_vocab' ? 'Lobby English Vocabulary' : 'Lobby Matematika Cepat';
+      lobbyTitleEl.textContent = currentGameType === 'battle' ? 'Lobby Quiz Battle Kelas' : currentGameType === 'english_vocab' ? 'Lobby English Vocabulary' : 'Lobby Matematika Cepat';
     }
     if (tokenPanelEl) {
       const tokenEnabled = activeConfig ? activeConfig.token_enabled !== false : (currentGameType === 'math');
       tokenPanelEl.classList.toggle('hidden', currentGameType === 'english_vocab' || !tokenEnabled);
     }
+    battleStudentPanelEl?.classList.toggle('hidden', currentGameType !== 'battle');
+    startGameBtn?.classList.toggle('hidden', currentGameType === 'battle');
     if (resultAnalysisLabelEl) {
       resultAnalysisLabelEl.textContent = currentGameType === 'english_vocab' ? 'Analisis Tema & Review Kata' : 'Analisis Operasi';
     }
@@ -449,6 +573,7 @@ export async function renderSiswaGamePage(container) {
       card.classList.toggle('ring-white/80', isActive);
     });
     refreshPublishedConfigsForGame();
+    updateWorkspaceMeta();
   }
 
   function formatTime(sec) {
@@ -456,6 +581,362 @@ export async function renderSiswaGamePage(container) {
     const m = String(Math.floor(total / 60)).padStart(2, '0');
     const s = String(total % 60).padStart(2, '0');
     return `${m}:${s}`;
+  }
+
+  function readBattleRooms() {
+    try { return JSON.parse(localStorage.getItem(BATTLE_ROOM_LOCAL_KEY) || '[]'); } catch { return []; }
+  }
+
+  function saveBattleRoomLocal(room) {
+    const rooms = readBattleRooms();
+    const index = rooms.findIndex((item) => item.id === room.id);
+    if (index >= 0) rooms[index] = room; else rooms.push(room);
+    localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(rooms));
+    saveDocument('battle_rooms', room, room.id).catch(() => {});
+  }
+
+  function saveBattleParticipant(room, participant) {
+    const payload = { ...participant, id: `${room.id}_${participant.id}`, participant_id: participant.id, room_id: room.id, room_code: room.code, updated_at: new Date().toISOString() };
+    saveDocument('battle_participants', payload, `${room.id}_${participant.id}`).catch(() => {});
+  }
+
+  function renderBattleAvatarPicker() {
+    if (!battleAvatarOptionsEl) return;
+    battleAvatarOptionsEl.innerHTML = BATTLE_AVATARS.map((avatar) => `<button type="button" data-battle-avatar="${avatar.key}" class="battle-avatar-option ${selectedBattleAvatar.key === avatar.key ? 'is-selected' : ''}" title="${avatar.label}"><img src="${getBattleAvatarUrl(avatar.seed)}" alt="Avatar ${avatar.label}" loading="lazy" /><span>${avatar.label}</span></button>`).join('');
+    battleAvatarOptionsEl.querySelectorAll('[data-battle-avatar]').forEach((button) => button.addEventListener('click', () => {
+      selectedBattleAvatar = BATTLE_AVATARS.find((avatar) => avatar.key === button.dataset.battleAvatar) || BATTLE_AVATARS[0];
+      renderBattleAvatarPicker();
+      if (battleAvatarLabelEl) battleAvatarLabelEl.textContent = selectedBattleAvatar.label;
+    }));
+  }
+
+  function renderBattleLobby(room) {
+    if (!room) return;
+    openGameOverlay();
+    const participants = Object.values(room.participants || {}).sort((left, right) => String(left.nama || '').localeCompare(String(right.nama || '')));
+    battleLobbyViewEl?.classList.remove('hidden');
+    battleJoinControlsEl?.classList.add('hidden');
+    if (battleLobbyRoomTitleEl) battleLobbyRoomTitleEl.textContent = room.title || 'Battle Kelas';
+    if (battleLobbyCountEl) battleLobbyCountEl.textContent = String(participants.length);
+    if (battleLobbyParticipantsEl) {
+      battleLobbyParticipantsEl.innerHTML = participants.length
+        ? participants.map((participant) => {
+          const avatar = BATTLE_AVATARS.find((item) => item.key === participant.avatar_key) || BATTLE_AVATARS[0];
+          return `<div class="battle-lobby-player ${participant.ready ? 'is-ready' : ''}"><img src="${getBattleAvatarUrl(participant.avatar_seed || avatar.seed)}" alt="Avatar ${participant.nama || 'Siswa'}" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800">${participant.nama || 'Siswa'}</p><p class="text-[10px] text-slate-500">${participant.ready ? 'Siap bermain' : 'Memilih avatar'}</p></div></div>`;
+        }).join('')
+        : '<p class="col-span-full rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-500">Menunggu teman-teman masuk...</p>';
+    }
+    const currentParticipant = getBattleParticipant(room);
+    if (battleReadyStatusEl) battleReadyStatusEl.textContent = currentParticipant?.ready ? 'Kamu sudah siap. Tunggu guru memulai.' : 'Pilih avatar lalu tekan siap.';
+    if (battleReadyStatusEl && currentParticipant?.ready) battleReadyStatusEl.textContent = 'Kamu sudah siap. Gunakan soundboard sambil menunggu guru.';
+    renderBattleArena(room);
+  }
+
+  function renderBattleArena(room) {
+    if (!battleArenaPlayersEl || !room) return;
+    const participants = Object.values(room.participants || {});
+    if (battleArenaTitleEl) battleArenaTitleEl.textContent = room.title || 'Battle Kelas';
+    if (battleArenaSubtitleEl) battleArenaSubtitleEl.textContent = `${room.subject_label || (room.battle_game_type === 'english_vocab' ? 'English Vocabulary' : 'Matematika')} • Avatar kamu sedang berkumpul di arena`;
+    if (battleArenaCodeEl) battleArenaCodeEl.textContent = room.code || '------';
+    if (battleArenaPlayerCountEl) battleArenaPlayerCountEl.textContent = `${participants.length} pemain di arena`;
+    if (battleArenaStatusEl) battleArenaStatusEl.textContent = room.status === 'live' ? 'Battle dimulai!' : 'Menunggu guru memulai...';
+    battleArenaPlayersEl.innerHTML = participants.map((participant, index) => {
+      const avatar = BATTLE_AVATARS.find((item) => item.key === participant.avatar_key) || BATTLE_AVATARS[0];
+      const left = 12 + ((index * 23) % 76);
+      const bottom = 14 + ((index * 17) % 35);
+      const delay = (index * 0.55).toFixed(2);
+      return `<div class="battle-arena-player ${participant.ready ? 'is-ready' : ''}" data-arena-player="${participant.id}" style="left:${left}%;bottom:${bottom}%;--walk-delay:${delay}s"><div class="battle-arena-nameplate"><span>${participant.nama || 'Siswa'}</span>${participant.ready ? '<b>SIAP</b>' : ''}</div><img src="${getBattleAvatarUrl(participant.avatar_seed || avatar.seed)}" alt="Avatar ${participant.nama || 'Siswa'}" /></div>`;
+    }).join('');
+    renderBattleSoundboard();
+    if (room.status === 'waiting') {
+      battleLobbyOverlayEl?.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+  }
+
+  function closeBattleArena() {
+    battleLobbyOverlayEl?.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+    if (battleArenaMotionId) cancelAnimationFrame(battleArenaMotionId);
+    battleArenaMotionId = null;
+    if (battleSoundboardCooldownId) window.clearTimeout(battleSoundboardCooldownId);
+    battleSoundboardCooldownId = null;
+  }
+
+  function startBattleArenaMotion() {
+    if (battleArenaMotionId) return;
+    const tick = (time) => {
+      document.querySelectorAll('#battle-arena-players .battle-arena-player').forEach((player, index) => {
+        const drift = Math.sin((time / 1800) + index) * 1.7;
+        player.style.transform = `translate(${drift}px, ${Math.cos((time / 1400) + index) * 2}px)`;
+      });
+      battleArenaMotionId = requestAnimationFrame(tick);
+    };
+    battleArenaMotionId = requestAnimationFrame(tick);
+  }
+
+  function playLocalBattleTone(noteKey) {
+    const note = BATTLE_LOBBY_NOTES.find((item) => item.key === noteKey) || BATTLE_LOBBY_NOTES[0];
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      const audio = new AudioContextClass();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.value = note.frequency;
+      gain.gain.setValueAtTime(0.08, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.32);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + 0.32);
+    } catch {}
+  }
+
+  function showBattleFloatingText(label, icon) {
+    if (!battleArenaPlayersEl) return;
+    const player = battleArenaPlayersEl.querySelector(`[data-arena-player="${CSS.escape(getBattleStudentId())}"]`) || battleArenaPlayersEl.querySelector('.battle-arena-player');
+    const bubble = document.createElement('div');
+    bubble.className = 'battle-floating-cheer';
+    bubble.textContent = `${icon} ${label}`;
+    if (player) player.append(bubble); else battleArenaPlayersEl.append(bubble);
+    window.setTimeout(() => bubble.remove(), 1800);
+  }
+
+  function updateBattleSoundboardCooldown() {
+    const remaining = Math.max(0, battleSoundboardCooldownUntil - Date.now());
+    if (battleSoundboardCooldownEl) battleSoundboardCooldownEl.textContent = remaining ? `• tunggu ${Math.ceil(remaining / 1000)} detik` : '• pilih kata atau nada';
+    battleSoundboardButtonsEl?.querySelectorAll('button').forEach((button) => { button.disabled = remaining > 0; });
+    if (remaining) battleSoundboardCooldownId = window.setTimeout(updateBattleSoundboardCooldown, 1000);
+  }
+
+  function renderBattleSoundboard() {
+    if (!battleSoundboardButtonsEl) return;
+    const phraseButtons = BATTLE_LOBBY_PHRASES.map((item) => `<button type="button" data-sound-label="${item.label}" data-sound-icon="${item.icon}" data-sound-tone="${item.tone}" class="battle-sound-button">${item.icon} ${item.label}</button>`).join('');
+    const noteButtons = BATTLE_LOBBY_NOTES.map((item) => `<button type="button" data-sound-note="${item.key}" class="battle-note-button">${item.label}</button>`).join('');
+    battleSoundboardButtonsEl.innerHTML = `${phraseButtons}${noteButtons}`;
+    battleSoundboardButtonsEl.querySelectorAll('[data-sound-label]').forEach((button) => button.addEventListener('click', () => {
+      if (battleSoundboardCooldownUntil > Date.now()) return;
+      playLocalBattleTone(button.dataset.soundTone);
+      showBattleFloatingText(button.dataset.soundLabel, button.dataset.soundIcon);
+      battleSoundboardCooldownUntil = Date.now() + 30000;
+      updateBattleSoundboardCooldown();
+    }));
+    battleSoundboardButtonsEl.querySelectorAll('[data-sound-note]').forEach((button) => button.addEventListener('click', () => {
+      if (battleSoundboardCooldownUntil > Date.now()) return;
+      playLocalBattleTone(button.dataset.soundNote);
+      const note = BATTLE_LOBBY_NOTES.find((item) => item.key === button.dataset.soundNote);
+      showBattleFloatingText(note?.label || 'Nada', '🎵');
+      battleSoundboardCooldownUntil = Date.now() + 30000;
+      updateBattleSoundboardCooldown();
+    }));
+    updateBattleSoundboardCooldown();
+  }
+
+  function setBattleStudentStatus(text, isError = false) {
+    if (!battleStudentStatusEl) return;
+    battleStudentStatusEl.textContent = text;
+    battleStudentStatusEl.className = isError
+      ? 'rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700'
+      : 'rounded-2xl border border-violet-100 bg-white px-4 py-3 text-sm text-slate-600';
+  }
+
+  function getBattleStudentId() {
+    return user.username || user.id || user.nis || 'siswa';
+  }
+
+  function getBattleParticipant(room) {
+    return room?.participants?.[getBattleStudentId()] || null;
+  }
+
+  async function fetchBattleRoom() {
+    if (!battleRoom) return null;
+    const localRoom = readBattleRooms().find((item) => item.id === battleRoom.id || item.code === battleRoom.code);
+    if (localRoom) battleRoom = localRoom;
+    try {
+      const docs = await getDocumentsWhere('battle_rooms', [{ field: 'code', operator: '==', value: battleRoom.code }]);
+      if (docs[0]) {
+        const remoteUpdatedAt = new Date(docs[0].updated_at || 0).getTime();
+        const localUpdatedAt = new Date(battleRoom.updated_at || 0).getTime();
+        if (remoteUpdatedAt >= localUpdatedAt) battleRoom = docs[0];
+        localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(readBattleRooms().filter((item) => item.id !== battleRoom.id).concat(battleRoom)));
+      }
+      const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: battleRoom.id }]);
+      if (participantDocs.length) {
+        battleRoom = { ...battleRoom, participants: participantDocs.reduce((result, item) => ({ ...result, [item.id?.replace(`${battleRoom.id}_`, '') || item.participant_id || item.id]: item }), { ...(battleRoom.participants || {}) }) };
+      }
+    } catch {}
+    return battleRoom;
+  }
+
+  function getBattleIndex(room) {
+    if (!room?.started_at) return -1;
+    return Math.floor(Math.max(0, Date.now() - new Date(room.started_at).getTime()) / (Number(room.time_per_question || 20) * 1000));
+  }
+
+  function getBattleRemainingMs(room, index) {
+    if (!room?.started_at) return 0;
+    const durationMs = Number(room.time_per_question || 20) * 1000;
+    const questionStartedAt = new Date(room.started_at).getTime() + (index * durationMs);
+    return Math.max(0, durationMs - (Date.now() - questionStartedAt));
+  }
+
+  function getBattlePoints(room, outcome, index) {
+    if (outcome === 'correct') {
+      const durationMs = Number(room.time_per_question || 20) * 1000;
+      const speedBonus = Math.round((getBattleRemainingMs(room, index) / durationMs) * 100);
+      return { points: 100 + Math.max(0, Math.min(100, speedBonus)), speed_bonus: speedBonus };
+    }
+    if (outcome === 'wrong') return { points: -20, speed_bonus: 0 };
+    return { points: -8, speed_bonus: 0 };
+  }
+
+  function applyBattleMissedQuestions() {
+    if (!battleRoom || battleRoom.status !== 'live') return;
+    const participant = getBattleParticipant(battleRoom);
+    if (!participant) return;
+    const currentIndex = getBattleIndex(battleRoom);
+    const scoreEvents = { ...(participant.score_events || {}) };
+    let changed = false;
+    let nextScore = Number(participant.score || 0);
+    for (let index = 0; index < currentIndex && index < battleRoom.questions.length; index += 1) {
+      const question = battleRoom.questions[index];
+      const eventKey = String(question.order);
+      if (scoreEvents[eventKey] || participant.answers?.[question.order] !== undefined) continue;
+      const scoring = getBattlePoints(battleRoom, 'unanswered', index);
+      nextScore = Math.max(0, nextScore + scoring.points);
+      scoreEvents[eventKey] = { outcome: 'unanswered', points: scoring.points, speed_bonus: 0, scored_at: new Date().toISOString() };
+      changed = true;
+    }
+    if (!changed) return;
+    const updatedParticipant = { ...participant, score: nextScore, score_events: scoreEvents, last_seen_at: new Date().toISOString() };
+    battleRoom = { ...battleRoom, participants: { ...(battleRoom.participants || {}), [getBattleStudentId()]: updatedParticipant }, updated_at: new Date().toISOString() };
+    saveBattleRoomLocal(battleRoom);
+    saveBattleParticipant(battleRoom, updatedParticipant);
+  }
+
+  function renderBattleQuestion(index) {
+    const question = battleRoom?.questions?.[index];
+    if (!question) return;
+    gameState = { ...(gameState || {}), battle: true, currentIndex: index, questions: battleRoom.questions, answers: getBattleParticipant(battleRoom)?.answers || {} };
+    counterEl.textContent = `${index + 1}/${battleRoom.questions.length}`;
+    promptEl.textContent = question.prompt;
+    promptEl.classList.toggle('text-3xl', battleRoom.battle_game_type === 'english_vocab');
+    operationEl.textContent = battleRoom.battle_game_type === 'english_vocab' ? `Vocabulary • ${question.theme_label || 'English'}` : `Ronde ${index + 1}`;
+    battleQuestionStartedAt = Date.now();
+    answerArea.innerHTML = (question.options || []).map((option, optionIndex) => `<button type="button" data-battle-answer="${option}" class="sg-battle-choice group flex w-full items-center gap-3 rounded-2xl border border-white/40 bg-white/90 px-4 py-4 text-left text-base font-semibold text-slate-800 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-50"><span class="sg-battle-choice-letter flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-xs font-bold text-violet-700">${String.fromCharCode(65 + optionIndex)}</span><span class="min-w-0 flex-1">${option}</span><span class="sg-battle-choice-mark hidden rounded-full bg-violet-600 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">Dipilih</span></button>`).join('');
+    const answered = getBattleParticipant(battleRoom)?.answers?.[question.order];
+    if (answered !== undefined) answerArea.querySelectorAll('[data-battle-answer]').forEach((button) => {
+      const isSelected = String(button.dataset.battleAnswer) === String(answered);
+      button.disabled = true;
+      button.classList.toggle('is-selected', isSelected);
+      button.querySelector('.sg-battle-choice-mark')?.classList.toggle('hidden', !isSelected);
+    });
+    answerArea.querySelectorAll('[data-battle-answer]').forEach((button) => button.addEventListener('click', () => {
+      answerArea.querySelectorAll('[data-battle-answer]').forEach((item) => {
+        item.classList.remove('is-selected');
+        item.querySelector('.sg-battle-choice-mark')?.classList.add('hidden');
+      });
+      button.classList.add('is-selected');
+      button.querySelector('.sg-battle-choice-mark')?.classList.remove('hidden');
+      submitBattleAnswer(question, button.dataset.battleAnswer);
+    }));
+  }
+
+  function renderBattleResult() {
+    const participant = getBattleParticipant(battleRoom) || {};
+    const participants = Object.values(battleRoom?.participants || {}).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+    const rank = Math.max(0, participants.findIndex((item) => item.id === getBattleStudentId())) + 1;
+    scoreEl.textContent = String(participant.score || 0);
+    accuracyEl.textContent = `${participant.correct || 0}/${battleRoom?.questions?.length || 0}`;
+    correctEl.textContent = rank ? `Peringkat ${rank}` : 'Selesai';
+    resultAnalysisLabelEl.textContent = 'Leaderboard Battle';
+    byOperationEl.innerHTML = participants.length ? participants.slice(0, 10).map((item, index) => `<div class="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><span class="text-sm font-semibold text-slate-800">${index + 1}. ${item.nama || 'Siswa'}</span><span class="text-sm font-bold text-violet-700">${Number(item.score || 0)} pt</span></div>`).join('') : '<p class="text-sm text-slate-500">Leaderboard belum tersedia.</p>';
+    openResult();
+  }
+
+  async function submitBattleAnswer(question, rawAnswer) {
+    if (!battleRoom || !question) return;
+    const participant = getBattleParticipant(battleRoom) || { id: getBattleStudentId(), nama: user.nama || 'Siswa', score: 0, correct: 0, wrong: 0, answers: {}, score_events: {}, joined_at: new Date().toISOString() };
+    if (participant.answers?.[question.order] !== undefined) return;
+    const isEnglishBattle = battleRoom.battle_game_type === 'english_vocab';
+    const answer = isEnglishBattle ? String(rawAnswer || '').trim().toLowerCase() : Number(rawAnswer);
+    const correct = isEnglishBattle
+      ? answer === String(question.answer || '').trim().toLowerCase()
+      : answer === Number(question.answer);
+    const questionIndex = Math.max(0, battleRoom.questions.findIndex((item) => item.order === question.order));
+    const scoreEvents = { ...(participant.score_events || {}) };
+    if (scoreEvents[String(question.order)]) return;
+    const scoring = getBattlePoints(battleRoom, correct ? 'correct' : 'wrong', questionIndex);
+    const updatedParticipant = {
+      ...participant,
+      answers: { ...(participant.answers || {}), [question.order]: rawAnswer },
+      score_events: { ...scoreEvents, [String(question.order)]: { outcome: correct ? 'correct' : 'wrong', points: scoring.points, speed_bonus: scoring.speed_bonus, scored_at: new Date().toISOString() } },
+      correct: Number(participant.correct || 0) + (correct ? 1 : 0),
+      wrong: Number(participant.wrong || 0) + (correct ? 0 : 1),
+      score: Math.max(0, Number(participant.score || 0) + scoring.points),
+      last_seen_at: new Date().toISOString(),
+    };
+    battleRoom = { ...battleRoom, participants: { ...(battleRoom.participants || {}), [getBattleStudentId()]: updatedParticipant }, updated_at: new Date().toISOString() };
+    saveBattleRoomLocal(battleRoom);
+    saveBattleParticipant(battleRoom, updatedParticipant);
+    answerArea.querySelectorAll('[data-battle-answer]').forEach((button) => {
+      const isSelected = String(button.dataset.battleAnswer) === String(rawAnswer);
+      button.disabled = true;
+      button.classList.toggle('is-selected', isSelected);
+      button.classList.toggle('is-correct', isSelected && correct);
+      button.classList.toggle('is-incorrect', isSelected && !correct);
+      button.querySelector('.sg-battle-choice-mark')?.classList.toggle('hidden', !isSelected);
+      if (isSelected) button.querySelector('.sg-battle-choice-mark').textContent = correct ? 'Benar' : 'Dipilih';
+    });
+    setBattleStudentStatus(correct ? `Benar! +${scoring.points} poin (${scoring.speed_bonus} bonus cepat)` : `Belum tepat. ${scoring.points} poin. Jawaban benar: ${question.correct_label || question.answer}`);
+    if (correct) playBattleTone(880); else playBattleTone(180);
+  }
+
+  function playBattleTone(frequency) {
+    try { const AudioContextClass = window.AudioContext || window.webkitAudioContext; const audio = new AudioContextClass(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); oscillator.frequency.value = frequency; gain.gain.setValueAtTime(0.06, audio.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.18); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + 0.18); } catch {}
+  }
+
+  async function syncBattle() {
+    if (!battleRoom) return;
+    await fetchBattleRoom();
+    const participant = getBattleParticipant(battleRoom);
+    if (battleRoom.status === 'waiting') {
+      renderBattleLobby(battleRoom);
+      setBattleStudentStatus(`Terhubung ke ${battleRoom.title || 'battle'}. Menunggu guru memulai...`);
+      return;
+    }
+    if (battleRoom.status === 'finished') { closeBattleArena(); renderBattleResult(); return; }
+    applyBattleMissedQuestions();
+    if (battleRoom.status === 'live' && battleArenaLastRoomStatus !== 'live') {
+      battleArenaLastRoomStatus = 'live';
+      if (battleArenaCountdownEl) {
+        battleArenaCountdownEl.classList.remove('hidden');
+        let count = 3;
+        battleArenaCountdownEl.textContent = String(count);
+        const countdownId = setInterval(() => {
+          count -= 1;
+          if (count <= 0) {
+            clearInterval(countdownId);
+            battleArenaCountdownEl.classList.add('hidden');
+            closeBattleArena();
+            openPlay();
+          } else {
+            battleArenaCountdownEl.textContent = String(count);
+            battleArenaCountdownEl.animate([{ transform: 'scale(0.65)', opacity: 0.2 }, { transform: 'scale(1)', opacity: 1 }], { duration: 320, easing: 'ease-out' });
+          }
+        }, 850);
+      } else {
+        closeBattleArena();
+      }
+      return;
+    }
+    openPlay();
+    const index = getBattleIndex(battleRoom);
+    if (index >= battleRoom.questions.length) { renderBattleResult(); return; }
+    if (gameState?.currentIndex !== index || !gameState?.battle) renderBattleQuestion(index);
+    const elapsed = Math.floor((Date.now() - new Date(battleRoom.started_at).getTime()) / 1000) % Number(battleRoom.time_per_question || 20);
+    timerEl.textContent = formatTime(Number(battleRoom.time_per_question || 20) - elapsed);
+    setBattleStudentStatus(`Soal ${index + 1} aktif. Jawab sebelum waktu habis.`);
   }
 
   function getTokenDocId(configId) {
@@ -499,6 +980,14 @@ export async function renderSiswaGamePage(container) {
     if (timerId) {
       clearInterval(timerId);
       timerId = null;
+    }
+    if (battlePollId) {
+      clearInterval(battlePollId);
+      battlePollId = null;
+    }
+    if (battleTimerId) {
+      clearInterval(battleTimerId);
+      battleTimerId = null;
     }
   }
 
@@ -1169,6 +1658,46 @@ export async function renderSiswaGamePage(container) {
     await finishGame(false);
   });
 
+  battleJoinBtn?.addEventListener('click', async () => {
+    const code = String(battleRoomInputEl?.value || '').trim().toUpperCase();
+    if (!code) {
+      setBattleStudentStatus('Masukkan kode room dari guru.', true);
+      return;
+    }
+    const localRoom = readBattleRooms().find((item) => item.code === code);
+    battleRoom = localRoom || { code };
+    await fetchBattleRoom();
+    if (!battleRoom?.id) {
+      setBattleStudentStatus('Room tidak ditemukan. Periksa kode dan pastikan guru sudah membuat room.', true);
+      return;
+    }
+    if (battleRoom.status === 'finished') {
+      setBattleStudentStatus('Battle ini sudah selesai.', true);
+      return;
+    }
+    const studentId = getBattleStudentId();
+    const participants = { ...(battleRoom.participants || {}) };
+    participants[studentId] = { ...(participants[studentId] || { id: studentId, nama: user.nama || user.username || 'Siswa', score: 0, correct: 0, wrong: 0, answers: {}, score_events: {}, joined_at: new Date().toISOString() }), wrong: Number(participants[studentId]?.wrong || 0), score_events: participants[studentId]?.score_events || {}, avatar_key: selectedBattleAvatar.key, avatar_seed: selectedBattleAvatar.seed, ready: true };
+    battleRoom = { ...battleRoom, participants, updated_at: new Date().toISOString() };
+    battleArenaLastRoomStatus = battleRoom.status === 'live' ? 'live' : 'waiting';
+    saveBattleRoomLocal(battleRoom);
+    saveBattleParticipant(battleRoom, participants[studentId]);
+    setBattleStudentStatus(battleRoom.status === 'live' ? 'Battle sedang berlangsung. Bersiap menjawab!' : `Berhasil bergabung ke ${battleRoom.title || 'room'}. Menunggu guru memulai...`);
+    openLobby();
+    if (battlePollId) clearInterval(battlePollId);
+    battlePollId = setInterval(syncBattle, 1000);
+    await syncBattle();
+    startBattleArenaMotion();
+  });
+
+  battleArenaBackBtn?.addEventListener('click', () => {
+    closeBattleArena();
+    if (battlePollId) clearInterval(battlePollId);
+    battlePollId = null;
+    battleRoom = null;
+    openLobby();
+  });
+
   playAgainBtn?.addEventListener('click', () => {
     openLobby();
   });
@@ -1178,6 +1707,14 @@ export async function renderSiswaGamePage(container) {
   });
 
   overlayBackBtn?.addEventListener('click', () => {
+    if (battleRoom) {
+      if (battlePollId) clearInterval(battlePollId);
+      battlePollId = null;
+      battleRoom = null;
+      gameState = null;
+      openLobby();
+      return;
+    }
     if (gameState) {
       const shouldExit = window.confirm('Permainan sedang berjalan. Keluar dari mode main penuh akan mengakhiri sesi ini. Lanjutkan?');
       if (!shouldExit) {
@@ -1198,6 +1735,9 @@ export async function renderSiswaGamePage(container) {
 
   await loadPublishedConfigs();
   openGameSelection();
+  renderBattleAvatarPicker();
+  renderBattleSoundboard();
+  if (battleAvatarLabelEl) battleAvatarLabelEl.textContent = selectedBattleAvatar.label;
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

@@ -1285,12 +1285,11 @@ export async function renderSiswaKuizPage(container) {
 
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
-  const localUsers = JSON.parse(localStorage.getItem('simguru_users') || '[]');
-  const cachedUser = localUsers.find((item) => String(item.username || '').toLowerCase() === String(session?.user?.username || '').toLowerCase()) || {};
-  state.siswaId = session?.user?.username || cachedUser.username || '';
-  state.siswaNama = session?.user?.nama || cachedUser.nama || '';
-  state.kelasId = session?.user?.kelas_id || cachedUser.kelas_id || session?.user?.kelas || cachedUser.kelas || '';
-  state.kelasNama = session?.user?.kelas_nama || cachedUser.kelas_nama || session?.user?.kelas || cachedUser.kelas || '';
+  const user = session?.user || {};
+  state.siswaId = user.username || '';
+  state.siswaNama = user.nama || '';
+  state.kelasId = user.kelas_id || user.kelas || '';
+  state.kelasNama = user.kelas_nama || user.kelas || '';
   state.context = context;
   state.view = 'list';
   state.activeSesi = null;

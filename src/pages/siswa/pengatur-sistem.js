@@ -1,6 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getCollectionDocs, saveDocument } from '../../firebase/data-service.js';
-import { normalizePassword, normalizeUsername, removeLocalUser, upsertLocalUser } from '../../firebase/auth-service.js';
+import { changePassword, normalizePassword } from '../../firebase/auth-service.js';
 
 export async function renderSiswaSystemSettingsPage(container) {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -88,56 +87,17 @@ export async function renderSiswaSystemSettingsPage(container) {
     }
 
     try {
-      const cachedUsers = JSON.parse(localStorage.getItem('simguru_users') || '[]');
-      const normalizedCurrent = normalizeUsername(currentUsername);
-      const nextUsername = newUsername || currentUsername;
-      const normalizedNext = normalizeUsername(nextUsername);
-
-      const usernameTaken = cachedUsers.some((item) => normalizeUsername(item.username) === normalizedNext && normalizeUsername(item.username) !== normalizedCurrent);
-      if (usernameTaken) {
-        setMessage('Username baru sudah dipakai oleh pengguna lain.', true);
+      if (newUsername && newUsername !== currentUsername) {
+        setMessage('Perubahan username dilakukan melalui administrator.', true);
         return;
       }
-
-      const cachedCurrentUser = cachedUsers.find((item) => normalizeUsername(item.username) === normalizedCurrent) || {};
-      const nextPassword = newPassword || normalizePassword(cachedCurrentUser.password || '');
-
-      if (!nextPassword) {
-        setMessage('Password lama tidak ditemukan. Isi password baru untuk melanjutkan.', true);
-        return;
-      }
-
-      const firestoreUsers = await getCollectionDocs('users');
-      const firestoreCurrentUser = firestoreUsers.find((item) => normalizeUsername(item.username) === normalizedCurrent);
-
-      const mergedUser = {
-        ...(firestoreCurrentUser || {}),
-        ...(cachedCurrentUser || {}),
-        id: currentUser.id || firestoreCurrentUser?.id || cachedCurrentUser.id,
-        nama: currentUser.nama || firestoreCurrentUser?.nama || cachedCurrentUser.nama || 'Siswa',
-        role: currentUser.role || firestoreCurrentUser?.role || cachedCurrentUser.role || 'siswa',
-        username: nextUsername,
-        username_lower: normalizedNext,
-        password: nextPassword,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (mergedUser.id) {
-        await saveDocument('users', mergedUser, mergedUser.id);
-      } else if (firestoreCurrentUser?.firestoreId || firestoreCurrentUser?.id) {
-        await saveDocument('users', mergedUser, firestoreCurrentUser.firestoreId || firestoreCurrentUser.id);
-      }
-
-      if (normalizedCurrent !== normalizedNext) {
-        removeLocalUser(currentUsername);
-      }
-      upsertLocalUser(mergedUser);
+      if (newPassword) await changePassword(newPassword);
 
       const updatedSession = {
         ...session,
         user: {
           ...currentUser,
-          username: nextUsername,
+           username: currentUsername,
         },
       };
       localStorage.setItem('simguru_session', JSON.stringify(updatedSession));

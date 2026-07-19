@@ -1,4 +1,13 @@
-import { db } from './firebase-config.js';
+import { auth } from './firebase-config.js';
+
+function getBackendBase() {
+  const base = typeof window !== 'undefined' ? window.__SIM_BACKEND_URL__ : '';
+  return String(base || '').replace(/\/+$/, '');
+}
+
+function backendUrl(path) {
+  return `${getBackendBase()}${path}`;
+}
 
 export function normalizeUsername(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
@@ -8,85 +17,92 @@ export function normalizePassword(value) {
   return String(value || '').trim();
 }
 
-function getLocalUsers() {
-  try {
-    return JSON.parse(localStorage.getItem('simguru_users') || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalUsers(users) {
-  localStorage.setItem('simguru_users', JSON.stringify(users));
-}
-
 export function upsertLocalUser(userData) {
-  const users = getLocalUsers();
+  // Keep only non-sensitive directory data for offline UI helpers.
   const username = String(userData.username || '').trim();
-  const normalizedUser = {
-    ...userData,
-    username,
-    username_lower: normalizeUsername(username),
-    password: normalizePassword(userData.password),
-  };
-  const existingIndex = users.findIndex((item) => normalizeUsername(item.username) === normalizeUsername(normalizedUser.username));
-  if (existingIndex >= 0) {
-    users[existingIndex] = normalizedUser;
-  } else {
-    users.push(normalizedUser);
-  }
-  saveLocalUsers(users);
+  const safeUser = { ...userData, username, username_lower: normalizeUsername(username) };
+  delete safeUser.password;
+  delete safeUser.password_hash;
+  localStorage.setItem(`simguru_user_${normalizeUsername(username)}`, JSON.stringify(safeUser));
+  return safeUser;
 }
 
 export function removeLocalUser(username) {
-  const normalizedUsername = normalizeUsername(username);
-  const users = getLocalUsers().filter((item) => normalizeUsername(item.username) !== normalizedUsername);
-  saveLocalUsers(users);
+  localStorage.removeItem(`simguru_user_${normalizeUsername(username)}`);
+}
+
+async function getAuthHeaders() {
+  const token = auth?.currentUser ? await auth.currentUser.getIdToken() : '';
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function getManagedUsers(role = '', kelasId = '') {
+  const params = new URLSearchParams();
+  if (role) params.set('role', role);
+  if (kelasId) params.set('kelas', kelasId);
+  const query = params.size ? `?${params.toString()}` : '';
+  const response = await fetch(backendUrl(`/api/auth/users${query}`), { headers: await getAuthHeaders() });
+  if (!response.ok) throw new Error('Data user tidak dapat dimuat.');
+  const result = await response.json();
+  return Array.isArray(result.users) ? result.users : [];
+}
+
+export async function getChatDirectory() {
+  const response = await fetch(backendUrl('/api/auth/contacts'), { headers: await getAuthHeaders() });
+  if (!response.ok) throw new Error('Daftar kontak tidak dapat dimuat.');
+  const result = await response.json();
+  return Array.isArray(result.users) ? result.users : [];
+}
+
+export async function saveManagedUser(userData, existingUsername = '') {
+  const response = await fetch(backendUrl('/api/auth/users'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+    body: JSON.stringify({ ...userData, existing_username: existingUsername || undefined }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Data user tidak dapat disimpan.');
+  return result.user;
+}
+
+export async function deleteManagedUser(username) {
+  const response = await fetch(backendUrl(`/api/auth/users?username=${encodeURIComponent(username)}`), {
+    method: 'DELETE',
+    headers: await getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Data user tidak dapat dihapus.');
+}
+
+export async function changePassword(password) {
+  const response = await fetch(backendUrl('/api/auth/account'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+    body: JSON.stringify({ password: normalizePassword(password) }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Password tidak dapat diperbarui.');
+  return true;
 }
 
 export async function loginUser(username, password) {
-  const normalizedUsername = normalizeUsername(username);
-  const normalizedPassword = normalizePassword(password);
-  const localUsers = getLocalUsers();
-  const cachedUser = localUsers.find((item) => normalizeUsername(item.username) === normalizedUsername && normalizePassword(item.password) === normalizedPassword);
-  if (cachedUser) {
-    return cachedUser;
-  }
-
-  if (!db) {
-    return null;
-  }
-
   try {
-    const snapshot = await db.collection('users').get();
-    const userDoc = snapshot.docs.find((doc) => {
-      const userData = doc.data();
-      return normalizeUsername(userData.username) === normalizedUsername && normalizePassword(userData.password) === normalizedPassword;
+    const response = await fetch(backendUrl('/api/auth/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: normalizeUsername(username), password: normalizePassword(password) }),
     });
-
-    if (!userDoc) {
-      return null;
-    }
-
-    const userData = userDoc.data();
-    const normalizedUser = {
-      id: userDoc.id,
-      ...userData,
-      username: String(userData.username || '').trim(),
-      username_lower: normalizeUsername(userData.username),
-      password: normalizePassword(userData.password),
-    };
-
-    upsertLocalUser(normalizedUser);
-    return normalizedUser;
+    if (!response.ok) return null;
+    const result = await response.json();
+    if (!result?.token || !result?.user || !auth) return null;
+    await auth.signInWithCustomToken(result.token);
+    return upsertLocalUser(result.user);
   } catch (error) {
-    console.warn('Login gagal saat membaca Firestore:', error);
+    console.warn('Login gagal:', error);
     return null;
   }
 }
 
 export async function saveSession(userData, context) {
-  const existingLocalUser = getLocalUsers().find((item) => normalizeUsername(item.username) === normalizeUsername(userData.username));
   const session = {
     user: {
       id: userData.id,
@@ -99,17 +115,11 @@ export async function saveSession(userData, context) {
       nis: userData.nis || '',
       nisn: userData.nisn || '',
     },
+    firebase_uid: auth?.currentUser?.uid || '',
     logged_in_at: new Date().toISOString(),
   };
 
-  upsertLocalUser({
-    ...(existingLocalUser || {}),
-    ...userData,
-    id: userData.id,
-    username: userData.username,
-    role: userData.role,
-    nama: userData.nama,
-  });
+  upsertLocalUser(userData);
 
   localStorage.setItem('simguru_session', JSON.stringify(session));
   localStorage.setItem('simguru_context', JSON.stringify(context));

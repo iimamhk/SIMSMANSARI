@@ -1,4 +1,5 @@
 import { db } from './firebase-config.js';
+import { getChatDirectory, getManagedUsers } from './auth-service.js';
 
 const MATERIAL_PUBLISHED_KEY = 'simguru_material_html_published';
 const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
@@ -40,11 +41,9 @@ function getActivePeriod(context) {
 }
 
 function getCachedUsers() {
-  try {
-    return JSON.parse(localStorage.getItem('simguru_users') || '[]');
-  } catch {
-    return [];
-  }
+  // User directory data is intentionally not cached as a collection in the browser.
+  // Demo assignments are available only when explicitly supplied by the application.
+  return [];
 }
 
 function getDemoTeachingAssignments(context) {
@@ -399,8 +398,7 @@ export async function getTeachingAssignmentsForUser(context, userId) {
 }
 
 export async function createPembelajaranFromPlotting(payload, context) {
-  const allUsers = await getCollectionDocs('users');
-  const siswaList = allUsers.filter((item) => item.role === 'siswa');
+  const siswaList = await getManagedUsers('siswa', payload.kelas_id || '');
   const siswaUntukKelas = siswaList
     .filter((item) => {
       const kelasNama = String(item.kelas_nama || item.kelas_id || '').toLowerCase();
@@ -952,17 +950,11 @@ function getChatRoomId(uidA, uidB) {
 
 export async function getChatContacts(excludeUid) {
   const filterFn = (u) => u && u.username && u.username !== excludeUid;
-  if (!db) {
-    return getCachedUsers().filter(filterFn);
-  }
   try {
-    const snapshot = await db.collection('users').get();
-    return snapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter(filterFn);
+    return (await getChatDirectory()).filter(filterFn);
   } catch (error) {
     console.warn('Gagal memuat kontak chat:', error);
-    return getCachedUsers().filter(filterFn);
+    return [];
   }
 }
 

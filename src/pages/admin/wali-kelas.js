@@ -1,10 +1,11 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import { saveDocument, deleteDocument, getCollectionDocs, getDocumentsWhere } from '../../firebase/data-service.js';
+import { getManagedUsers } from '../../firebase/auth-service.js';
 
 export async function renderAdminWaliKelasPage(container) {
   const context = getStoredContext();
-  const guruList = (await getCollectionDocs('users')).filter((item) => item.role === 'guru');
+  const guruList = await getManagedUsers('guru');
   const kelasList = await getCollectionDocs('kelas');
   const relations = await getDocumentsWhere('wali_kelas', [
     { field: 'tahun_ajaran_id', value: context.tahun_ajaran_aktif },

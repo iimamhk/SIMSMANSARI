@@ -1,11 +1,11 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
-import { saveDocument, getCollectionDocs, deleteDocument } from '../../firebase/data-service.js';
-import { upsertLocalUser, removeLocalUser } from '../../firebase/auth-service.js';
+import { saveDocument, getCollectionDocs } from '../../firebase/data-service.js';
+import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
 export async function renderMasterSiswaPage(container) {
   const context = getStoredContext();
-  const allUsers = await getCollectionDocs('users');
+  const allUsers = await getManagedUsers('siswa');
   const kelasList = await getCollectionDocs('kelas');
   let kelasCatalog = kelasList;
   const siswaList = allUsers
@@ -197,7 +197,7 @@ export async function renderMasterSiswaPage(container) {
         if (!item) return;
         container.querySelector('#siswa-nama').value = item.nama || '';
         container.querySelector('#siswa-username').value = item.username || '';
-        container.querySelector('#siswa-password').value = item.password || '12345';
+      container.querySelector('#siswa-password').value = '';
         container.querySelector('#siswa-kelas').value = item.kelas_nama || item.kelas_id || '';
         setEditMode(true, username);
       });
@@ -210,11 +210,11 @@ export async function renderMasterSiswaPage(container) {
         if (!item) return;
         const confirmed = confirm(`Hapus akun siswa ${item.nama}?`);
         if (!confirmed) return;
-        removeLocalUser(username);
         try {
-          await deleteDocument('users', username);
+          await deleteManagedUser(username);
         } catch (error) {
-          console.warn('Gagal menghapus siswa dari Firestore:', error);
+          alert(error.message || 'Gagal menghapus siswa.');
+          return;
         }
         alert('Siswa berhasil dihapus.');
         renderMasterSiswaPage(container);
@@ -334,8 +334,7 @@ export async function renderMasterSiswaPage(container) {
         const kelasInfo = await ensureKelas(row.kelas || row.kelas_nama || row.kelas_id || '');
         if (!nama) continue;
         const payload = { username, password, nama, role: 'siswa', status: 'active', created_at: new Date().toISOString(), tahun_ajaran_id: context.tahun_ajaran_aktif, semester_id: context.semester_aktif, kelas_id: kelasInfo?.id || '', kelas_nama: kelasInfo?.nama || '', username_lower: username.toLowerCase().replace(/\s+/g, '') };
-        upsertLocalUser(payload);
-        await saveDocument('users', payload, username);
+         await saveManagedUser(payload);
         saved += 1;
       }
       setProgressState(3, 'done');
@@ -387,11 +386,11 @@ export async function renderMasterSiswaPage(container) {
       username_lower: username.toLowerCase().replace(/\s+/g, ''),
     };
 
-    upsertLocalUser(payload);
     try {
-      await saveDocument('users', payload, username);
+      await saveManagedUser(payload, editingUsername || '');
     } catch (error) {
-      console.warn('Gagal menyimpan siswa ke Firestore, akun tetap disimpan lokal:', error);
+      alert(error.message || 'Gagal menyimpan siswa.');
+      return;
     }
     setEditMode(false);
     alert(editingUsername ? `Siswa berhasil diperbarui.` : `Siswa berhasil disimpan dengan username ${username}`);

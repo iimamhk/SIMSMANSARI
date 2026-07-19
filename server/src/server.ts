@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { env, validateServerConfig } from './config/env.js';
 import { createRateLimiter } from './middleware/rate-limit.js';
 import { aiRouter } from './routes/ai.routes.js';
+import { authRouter } from './routes/auth.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // ---- API AI (dilindungi rate limiter) ----
 const aiRateLimiter = createRateLimiter(env.rateLimitMax, env.rateLimitWindowMs);
 app.use('/api/ai', aiRateLimiter, aiRouter);
+app.use('/api/auth', authRouter);
 
 // ---- Frontend statis ----
 app.use(express.static(frontendDir, { extensions: ['html'] }));
