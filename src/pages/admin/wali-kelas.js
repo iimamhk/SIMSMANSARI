@@ -38,23 +38,25 @@ export async function renderAdminWaliKelasPage(container) {
 
   const html = renderLayout('Wali Kelas', `
     <div class="space-y-5">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Relasi Wali Kelas</h3>
-        <p class="mt-1 text-sm text-slate-500">Tetapkan guru sebagai wali kelas untuk periode aktif ${context.tahun_ajaran_aktif_nama || ''} / ${context.semester_aktif_nama || ''}. Satu kelas hanya memiliki satu wali kelas.</p>
+      <div class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
+        <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Admin Console</p>
+        <h3 class="mt-2 text-2xl font-bold tracking-tight">Relasi Wali Kelas</h3>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Tetapkan guru sebagai wali kelas untuk periode aktif ${context.tahun_ajaran_aktif_nama || ''} / ${context.semester_aktif_nama || ''}. Satu kelas hanya memiliki satu wali kelas.</p>
       </div>
 
-      <form id="wali-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <form id="wali-form" class="space-y-3 rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
         <h4 id="wali-form-title" class="text-base font-semibold text-slate-900">Tambah Wali Kelas</h4>
         <div>
           <label for="guru" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Guru</label>
-          <select id="guru" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${guruOptions}</select>
+          <select id="guru" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">${guruOptions}</select>
         </div>
         <div>
           <label for="kelas" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Kelas</label>
-          <select id="kelas" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${kelasOptions}</select>
+          <select id="kelas" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">${kelasOptions}</select>
         </div>
         <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Perhatian: menetapkan wali kelas baru pada kelas yang sama akan menggantikan wali kelas sebelumnya.</p>
-        <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Relasi Wali Kelas</button>
+        <button type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Relasi Wali Kelas</button>
       </form>
 
       <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">

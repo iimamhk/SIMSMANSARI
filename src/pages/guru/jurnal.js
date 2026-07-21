@@ -225,7 +225,7 @@ export async function renderGuruJurnalPage(container) {
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
               <label class="text-sm font-medium text-slate-700">Kelas</label>
-              <select id="assignment-select" class="mt-1.5 w-full appearance-none rounded-2xl border-2 border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-800 to-violet-700 px-3.5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.75)] outline-none transition hover:from-slate-800 hover:via-indigo-700 hover:to-violet-600 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-200/70">
+              <select id="assignment-select" class="mt-1.5 w-full appearance-none rounded-2xl border-2 border-blue-600 bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-3.5 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(59,130,246,0.95)] outline-none transition hover:from-indigo-700 hover:via-blue-600 hover:to-orange-600 focus:border-orange-300 focus:ring-4 focus:ring-orange-200/70">
                 ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
               </select>
             </div>

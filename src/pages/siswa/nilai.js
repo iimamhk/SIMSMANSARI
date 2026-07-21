@@ -87,10 +87,20 @@ export async function renderSiswaNilaiPage(container) {
     { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
     { field: 'semester_id', operator: '==', value: context.semester_aktif },
   ];
+  const studentGradeFilters = siswaKeys.length
+    ? [
+        ...filtersBase,
+        {
+          field: 'siswa_id',
+          operator: siswaKeys.length === 1 ? '==' : 'in',
+          value: siswaKeys.length === 1 ? siswaKeys[0] : siswaKeys,
+        },
+      ]
+    : null;
 
   const [nilaiTugasDocs, nilaiUjianDocs, assignmentDocs, babDocs, tugasDocs, uhColumnsDocs] = await Promise.all([
-    getDocumentsWhere('nilai_tugas', filtersBase),
-    getDocumentsWhere('nilai_ujian', filtersBase),
+    studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters) : Promise.resolve([]),
+    studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters) : Promise.resolve([]),
     getActiveTeachingAssignments(context),
     getDocumentsWhere('bab', [
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },

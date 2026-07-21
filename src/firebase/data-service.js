@@ -259,6 +259,13 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
     filters.forEach(({ field, operator = '==', value }) => {
       query = query.where(field, operator, value);
     });
+    if (options.orderBy) {
+      query = query.orderBy(options.orderBy, options.orderDirection || 'desc');
+    }
+    const resultLimit = Number(options.limit || 0);
+    if (resultLimit > 0) {
+      query = query.limit(resultLimit);
+    }
     const snapshot = await query.get();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   };
@@ -266,7 +273,12 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
   try {
     const cacheMs = Number(options.cacheMs || 0);
     if (cacheMs > 0) {
-      return withQueryCache(`query:${collectionName}:${JSON.stringify(filters)}`, load, cacheMs);
+      const queryOptions = {
+        orderBy: options.orderBy || '',
+        orderDirection: options.orderDirection || 'desc',
+        limit: Number(options.limit || 0),
+      };
+      return withQueryCache(`query:${collectionName}:${JSON.stringify(filters)}:${JSON.stringify(queryOptions)}`, load, cacheMs);
     }
     return await load();
   } catch (error) {
@@ -672,6 +684,7 @@ export async function getTeachingAssignmentsForUser(context, userId) {
       const filters = [
         { field: 'tahun_ajaran_id', value: year },
         { field: 'semester_id', value: semester },
+        { field: 'guru_id', value: userId },
       ];
       const [pengajaranData, pembelajaranData] = await Promise.all([
         getDocumentsWhere('pengajaran', filters),
@@ -1138,40 +1151,48 @@ export async function getPengumumanForGuru(context, guruId) {
 
 export async function getPengumumanForSiswa(context, kelasId) {
   const normalizedKelas = normalizeClassKey(kelasId);
-  if (!normalizedKelas) {
+  const { year, semester } = getActivePeriod(context);
+  if (!normalizedKelas || !year || !semester) {
     return [];
   }
 
+  const filterCurrentPeriod = (items) => items
+    .filter((item) => getPengumumanKelasIds(item).includes(normalizedKelas))
+    .filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester)
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    .slice(0, 20);
+
   if (!db) {
-    return readLocalPengumuman()
-      .filter((item) => getPengumumanKelasIds(item).includes(normalizedKelas))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    return filterCurrentPeriod(readLocalPengumuman());
   }
 
   try {
-    return withQueryCache(`pengumuman:siswa:${normalizedKelas}`, async () => {
+    return withQueryCache(`pengumuman:siswa:${normalizedKelas}:${year}:${semester}:20`, async () => {
+      const queryOptions = {
+        orderBy: 'created_at',
+        orderDirection: 'desc',
+        limit: 20,
+      };
       // Prefer array-contains for multi-class announcements.
       let items = await getDocumentsWhere(PENGUMUMAN_COLLECTION, [
         { field: 'kelas_ids', operator: 'array-contains', value: normalizedKelas },
-      ]);
+        { field: 'tahun_ajaran_id', value: year },
+        { field: 'semester_id', value: semester },
+      ], queryOptions);
       if (!items.length) {
-        // Fallback for older single-class field shape.
+        // Legacy documents use a single kelas_id, but remain bounded to the
+        // same class, active period, and 20 newest records.
         items = await getDocumentsWhere(PENGUMUMAN_COLLECTION, [
           { field: 'kelas_id', value: kelasId },
-        ]);
+          { field: 'tahun_ajaran_id', value: year },
+          { field: 'semester_id', value: semester },
+        ], queryOptions);
       }
-      if (!items.length) {
-        items = await getAllPengumuman();
-      }
-      return items
-        .filter((item) => getPengumumanKelasIds(item).includes(normalizedKelas))
-        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+      return filterCurrentPeriod(items);
     }, QUERY_CACHE_TTL_MS);
   } catch (error) {
     console.warn('Gagal mengambil pengumuman siswa:', error);
-    return readLocalPengumuman()
-      .filter((item) => getPengumumanKelasIds(item).includes(normalizedKelas))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    return filterCurrentPeriod(readLocalPengumuman());
   }
 }
 
@@ -1329,7 +1350,11 @@ export async function getChatContacts(excludeUid) {
 export async function getChatRoomsForUser(uid) {
   if (!db) return [];
   try {
-    const snapshot = await db.collection('chat_rooms').where('participants', 'array-contains', uid).get();
+    const snapshot = await db.collection('chat_rooms')
+      .where('participants', 'array-contains', uid)
+      .orderBy('last_at', 'desc')
+      .limit(30)
+      .get();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.warn('Gagal memuat daftar chat:', error);
@@ -1356,6 +1381,8 @@ export function subscribeChatRooms(uid, callback) {
     const unsubscribe = db
       .collection('chat_rooms')
       .where('participants', 'array-contains', uid)
+      .orderBy('last_at', 'desc')
+      .limit(30)
       .onSnapshot(
         (snapshot) => callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))),
         (error) => console.warn('Gagal memantau daftar chat:', error)

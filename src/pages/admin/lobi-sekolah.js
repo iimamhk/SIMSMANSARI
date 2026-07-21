@@ -35,20 +35,20 @@ export async function renderAdminLobbySchoolPage(container) {
 
   const html = renderLayout('Lobi Sekolah', `
     <div class="space-y-6">
-      <section class="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
-        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Lobi Sekolah</p>
-        <h3 class="mt-2 text-2xl font-semibold text-slate-900">Kelola halaman lobi publik sekolah</h3>
-        <p class="mt-2 text-sm leading-6 text-slate-600">Atur judul beranda, kategori lobi, daftar tautan, dan token akses untuk halaman tertentu dari satu panel admin.</p>
+      <section class="rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)]">
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Lobi Sekolah</p>
+        <h3 class="mt-2 text-2xl font-semibold text-white">Kelola halaman lobi publik sekolah</h3>
+        <p class="mt-2 text-sm leading-6 text-white/90">Atur judul beranda, kategori lobi, daftar tautan, dan token akses untuk halaman tertentu dari satu panel admin.</p>
       </section>
 
       <section class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <form id="lobby-settings-form" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Pengaturan Beranda</p>
+              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Pengaturan Beranda</p>
               <h4 class="mt-1 text-xl font-semibold text-slate-900">Konten utama lobi publik</h4>
             </div>
-            <button type="submit" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Simpan Beranda</button>
+            <button type="submit" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Simpan Beranda</button>
           </div>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
@@ -101,24 +101,24 @@ export async function renderAdminLobbySchoolPage(container) {
 
         <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Ringkasan</p>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Ringkasan</p>
             <h4 class="mt-1 text-xl font-semibold text-slate-900">Statistik modul lobi</h4>
           </div>
           <div class="grid gap-3 sm:grid-cols-3">
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4">
               <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kategori Aktif</p>
               <p class="mt-2 text-2xl font-semibold text-slate-900">${activeSections.length}</p>
             </div>
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4">
               <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Total Tautan</p>
               <p class="mt-2 text-2xl font-semibold text-slate-900">${links.filter((item) => item.is_active !== false).length}</p>
             </div>
-            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4">
               <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kategori Bertoken</p>
               <p class="mt-2 text-2xl font-semibold text-slate-900">${sections.filter((item) => item.requires_token).length}</p>
             </div>
           </div>
-          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+          <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4 text-sm leading-6 text-slate-600">
             Kategori bertipe <span class="font-semibold text-slate-900">Link Tree</span> akan ditampilkan sebagai halaman daftar tautan. Token bisa diubah manual dari panel kategori.
           </div>
         </div>
@@ -129,14 +129,14 @@ export async function renderAdminLobbySchoolPage(container) {
           <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Kategori Lobi</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Kategori Lobi</p>
                 <h4 class="mt-1 text-xl font-semibold text-slate-900">Daftar kategori</h4>
               </div>
-              <button id="new-section-btn" type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Kategori Baru</button>
+              <button id="new-section-btn" type="button" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Kategori Baru</button>
             </div>
             <div class="mt-4 space-y-3">
               ${sections.length ? sections.map((item) => `
-                <button type="button" data-section-pick="${item.id}" class="section-pick flex w-full items-start justify-between gap-3 rounded-2xl border ${selectedSectionId === item.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-900'} px-4 py-4 text-left transition">
+                <button type="button" data-section-pick="${item.id}" class="section-pick flex w-full items-start justify-between gap-3 rounded-2xl border ${selectedSectionId === item.id ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-cyan-500 text-white shadow-sm' : 'border-slate-200 bg-slate-50 text-slate-900'} px-4 py-4 text-left transition">
                   <div>
                     <p class="text-sm font-semibold">${item.title}</p>
                     <p class="mt-1 text-xs ${selectedSectionId === item.id ? 'text-slate-200' : 'text-slate-500'}">/${item.slug} • ${item.type === 'link_tree' ? 'Link Tree' : 'Daftar Kartu'} • ${displayThemeOptions.find((entry) => entry.value === item.display_theme)?.label || 'Glass Cards'}${item.requires_token ? ' • Bertoken' : ''}</p>
@@ -150,7 +150,7 @@ export async function renderAdminLobbySchoolPage(container) {
           <form id="section-form" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Editor Kategori</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Editor Kategori</p>
                 <h4 id="section-form-title" class="mt-1 text-xl font-semibold text-slate-900">${selectedSection ? 'Edit kategori' : 'Tambah kategori'}</h4>
               </div>
               ${selectedSection ? `<button id="delete-section-btn" type="button" class="rounded-2xl bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-600">Hapus</button>` : ''}
@@ -208,7 +208,7 @@ export async function renderAdminLobbySchoolPage(container) {
               <input id="section-access-token" value="${selectedSection?.access_token || ''}" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Contoh: RPP2026" />
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="submit" class="rounded-2xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Kategori</button>
+              <button type="submit" class="rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Kategori</button>
               <button id="reset-section-btn" type="button" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Reset</button>
             </div>
             <p id="section-message" class="text-sm text-slate-500"></p>
@@ -219,10 +219,10 @@ export async function renderAdminLobbySchoolPage(container) {
           <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Tautan Kategori</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Tautan Kategori</p>
                 <h4 class="mt-1 text-xl font-semibold text-slate-900">${selectedSection ? selectedSection.title : 'Pilih kategori'}</h4>
               </div>
-              <button id="new-link-btn" type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white" ${selectedSection ? '' : 'disabled'}>Tautan Baru</button>
+              <button id="new-link-btn" type="button" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white" ${selectedSection ? '' : 'disabled'}>Tautan Baru</button>
             </div>
             <div class="mt-4 space-y-3">
               ${selectedSection ? (selectedLinks.length ? selectedLinks.map((item) => `
@@ -245,7 +245,7 @@ export async function renderAdminLobbySchoolPage(container) {
 
           <form id="link-form" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4 ${selectedSection ? '' : 'opacity-60'}">
             <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Editor Tautan</p>
+              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Editor Tautan</p>
               <h4 id="link-form-title" class="mt-1 text-xl font-semibold text-slate-900">Tambah tautan</h4>
             </div>
             <input id="link-id" type="hidden" value="" />
@@ -272,7 +272,7 @@ export async function renderAdminLobbySchoolPage(container) {
               </label>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="submit" class="rounded-2xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white" ${selectedSection ? '' : 'disabled'}>Simpan Tautan</button>
+              <button type="submit" class="rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white" ${selectedSection ? '' : 'disabled'}>Simpan Tautan</button>
               <button id="reset-link-btn" type="button" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700" ${selectedSection ? '' : 'disabled'}>Reset</button>
             </div>
             <p id="link-message" class="text-sm text-slate-500"></p>

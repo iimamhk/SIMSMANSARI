@@ -18,24 +18,24 @@ export async function renderMasterSiswaPage(container) {
 
   const html = renderLayout('Master Siswa', `
     <div class="space-y-6">
-      <div class="rounded-[28px] border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-6 text-white shadow-sm">
+      <div class="rounded-[28px] border border-slate-200 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-6 text-white shadow-sm">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-2xl">
-            <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">Manajemen Data</p>
+            <p class="text-sm font-semibold uppercase tracking-[0.24em] text-white/75">Manajemen Data</p>
             <h3 class="mt-2 text-2xl font-semibold">Master Siswa</h3>
-            <p class="mt-2 text-sm text-slate-300">Kelola akun siswa, kelas, dan import data dengan tampilan yang lebih terstruktur dan profesional.</p>
+            <p class="mt-2 text-sm text-white/90">Kelola akun siswa, kelas, dan import data dengan tampilan yang lebih terstruktur dan profesional.</p>
           </div>
           <div class="grid gap-3 sm:grid-cols-3">
-            <div class="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-slate-300">Total Siswa</p>
+            <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Total Siswa</p>
               <p class="mt-1 text-xl font-semibold">${totalSiswa}</p>
             </div>
-            <div class="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-slate-300">Aktif</p>
+            <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Aktif</p>
               <p class="mt-1 text-xl font-semibold">${activeSiswa}</p>
             </div>
-            <div class="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-slate-300">Kelas</p>
+            <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Kelas</p>
               <p class="mt-1 text-xl font-semibold">${kelasTerpakai}</p>
             </div>
           </div>
@@ -43,39 +43,39 @@ export async function renderMasterSiswaPage(container) {
       </div>
 
       <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <div class="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <div class="flex items-start justify-between gap-3">
             <div>
               <h4 id="siswa-form-title" class="text-lg font-semibold text-slate-900">Tambah Siswa</h4>
               <p class="mt-1 text-sm text-slate-500">Buat akun siswa baru, tetapkan kelas, dan sesuaikan password secara langsung.</p>
             </div>
-            <span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">Form Master</span>
+            <span class="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">Form Master</span>
           </div>
           <form id="siswa-form" class="mt-5 grid gap-4 md:grid-cols-2">
             <div class="md:col-span-2">
               <label class="mb-2 block text-sm font-medium text-slate-700">Nama lengkap</label>
-              <input id="siswa-nama" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white" placeholder="Nama lengkap siswa" required />
+              <input id="siswa-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Nama lengkap siswa" required />
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Username</label>
-              <input id="siswa-username" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white" placeholder="Username" readonly />
+              <input id="siswa-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Username" readonly />
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Password</label>
-              <input id="siswa-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white" placeholder="Password" required />
+              <input id="siswa-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Password" required />
             </div>
             <div class="md:col-span-2">
               <label class="mb-2 block text-sm font-medium text-slate-700">Kelas</label>
-              <input id="siswa-kelas" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-blue-400 focus:bg-white" placeholder="Kode/Nama kelas (mis. X_1 atau X.1)" />
+              <input id="siswa-kelas" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Kode/Nama kelas (mis. X_1 atau X.1)" />
             </div>
             <div class="md:col-span-2 flex flex-wrap gap-2">
-              <button id="siswa-submit-btn" type="submit" class="rounded-2xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white shadow-sm">Simpan Siswa</button>
+              <button id="siswa-submit-btn" type="submit" class="rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-sm">Simpan Siswa</button>
               <button id="siswa-cancel-btn" type="button" class="hidden rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
             </div>
           </form>
         </div>
 
-        <div class="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <div class="flex items-start justify-between gap-3">
             <div>
               <h4 class="text-lg font-semibold text-slate-900">Import Siswa</h4>
@@ -84,7 +84,7 @@ export async function renderMasterSiswaPage(container) {
             <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Bulk Upload</span>
           </div>
           <div class="mt-5 flex flex-wrap gap-2">
-            <button id="download-siswa-template-btn" type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
+            <button id="download-siswa-template-btn" type="button" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
             <label class="cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
               <span>Pilih File CSV</span>
               <input id="import-siswa-input" type="file" accept=".csv" class="hidden" />
@@ -110,18 +110,18 @@ export async function renderMasterSiswaPage(container) {
           <div class="flex flex-col gap-2 md:flex-row">
             <label class="text-sm text-slate-600">
               <span class="mb-1 block">Cari</span>
-              <input id="siswa-search" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:bg-white" placeholder="Nama atau username" />
+              <input id="siswa-search" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:bg-white" placeholder="Nama atau username" />
             </label>
             <label class="text-sm text-slate-600">
               <span class="mb-1 block">Kelas</span>
-              <select id="siswa-kelas-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:bg-white">
+              <select id="siswa-kelas-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:bg-white">
                 <option value="all">Semua kelas</option>
                 ${kelasFilterOptions.map((kelas) => `<option value="${kelas}">${kelas}</option>`).join('')}
               </select>
             </label>
             <label class="text-sm text-slate-600">
               <span class="mb-1 block">Status</span>
-              <select id="siswa-status-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-blue-400 focus:bg-white">
+              <select id="siswa-status-filter" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-sky-300 focus:bg-white">
                 <option value="all">Semua status</option>
                 <option value="active">Aktif</option>
                 <option value="inactive">Tidak aktif</option>

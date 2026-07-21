@@ -10,15 +10,15 @@ export async function renderMasterPembelajaranPage(container) {
 
   const html = renderLayout('Master Pembelajaran', `
     <div class="space-y-5">
-      <div class="rounded-[28px] border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-6 text-white shadow-sm">
+      <div class="rounded-[28px] border border-slate-200 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-6 text-white shadow-sm">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div class="max-w-2xl">
-            <p class="text-sm font-semibold uppercase tracking-[0.24em] text-slate-300">Kelas Belajar</p>
+            <p class="text-sm font-semibold uppercase tracking-[0.24em] text-white/75">Kelas Belajar</p>
             <h3 class="mt-2 text-2xl font-semibold">Master Pembelajaran</h3>
-            <p class="mt-2 text-sm text-slate-300">Menyatukan hasil plotting jadwal menjadi kelas pembelajaran lengkap dengan guru, mapel, kelas, dan daftar siswa.</p>
+            <p class="mt-2 text-sm text-white/90">Menyatukan hasil plotting jadwal menjadi kelas pembelajaran lengkap dengan guru, mapel, kelas, dan daftar siswa.</p>
           </div>
-          <div class="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
-            <p class="text-xs uppercase tracking-[0.2em] text-slate-300">Total Kelas</p>
+          <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
+            <p class="text-xs uppercase tracking-[0.2em] text-white/75">Total Kelas</p>
             <p class="mt-1 text-xl font-semibold">${pembelajaranList.length}</p>
           </div>
         </div>
@@ -32,7 +32,7 @@ export async function renderMasterPembelajaranPage(container) {
               <div class="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <p class="text-sm font-semibold text-[#007AFF]">${item.kelas_nama || item.kelas_id || '-'}</p>
+                    <p class="text-sm font-semibold text-sky-600">${item.kelas_nama || item.kelas_id || '-'}</p>
                     <h4 class="mt-1 text-lg font-semibold text-slate-900">${item.mapel_nama || item.mapel_id || '-'}</h4>
                     <p class="mt-1 text-sm text-slate-500">Pengajar: ${item.guru_nama || item.guru_id || '-'}</p>
                   </div>

@@ -607,29 +607,49 @@ async function cleanupInvalidUlanganHarianEntries(context, assignment) {
   }
 }
 
-async function saveAllNilaiTugasToFirestore(context, assignment, cacheKey) {
+async function saveAllNilaiTugasToFirestore(context, assignment, members, cacheKey) {
   try {
     const cached = getFromCache(cacheKey);
     const nilai = cached.nilai || {};
-    
-    // Save all nilai_tugas to Firestore
-    for (const [key, value] of Object.entries(nilai)) {
-      const [babId, tugasId, siswaId] = key.split('_');
-      if (value && value !== '') {
-        const docId = `${assignment.id}_${babId}_${tugasId}_${siswaId}`;
-        await saveDocument('nilai_tugas', {
-          tahun_ajaran_id: context.tahun_ajaran_aktif,
-          semester_id: context.semester_aktif,
-          pengajaran_id: assignment.id,
-          guru_id: context.user_logged_in,
-          kelas_id: assignment.kelas_id,
-          mapel_id: assignment.mapel_id,
-          siswa_id: siswaId,
-          bab_id: babId,
-          tugas_id: tugasId,
-          nilai: parseFloat(value),
-          updated_at: new Date().toISOString(),
-        }, docId);
+    const babs = Array.isArray(cached.babs) ? cached.babs : [];
+    const tugasByBab = cached.tugas && typeof cached.tugas === 'object' ? cached.tugas : {};
+
+    // Rebuild keys from known entities. IDs may contain underscores, so cache
+    // keys must never be parsed with split('_').
+    for (const bab of babs) {
+      const babId = String(bab?.id || '').trim();
+      if (!babId) continue;
+      const tugasList = Array.isArray(tugasByBab[babId]) ? tugasByBab[babId] : [];
+
+      for (const tugas of tugasList) {
+        const tugasId = String(tugas?.id || '').trim();
+        if (!tugasId) continue;
+
+        for (const member of members) {
+          const siswaId = String(member?.siswa_id || member?.id || '').trim();
+          if (!siswaId) continue;
+          const key = `${babId}_${tugasId}_${siswaId}`;
+          if (!Object.prototype.hasOwnProperty.call(nilai, key)) continue;
+          const value = nilai[key];
+          if (value === '' || value === null || value === undefined) continue;
+          const parsedValue = Number(value);
+          if (!Number.isFinite(parsedValue)) continue;
+
+          const docId = `${assignment.id}_${babId}_${tugasId}_${siswaId}`;
+          await saveDocument('nilai_tugas', {
+            tahun_ajaran_id: context.tahun_ajaran_aktif,
+            semester_id: context.semester_aktif,
+            pengajaran_id: assignment.id,
+            guru_id: context.user_logged_in,
+            kelas_id: assignment.kelas_id,
+            mapel_id: assignment.mapel_id,
+            siswa_id: siswaId,
+            bab_id: babId,
+            tugas_id: tugasId,
+            nilai: parsedValue,
+            updated_at: new Date().toISOString(),
+          }, docId);
+        }
       }
     }
     
@@ -683,15 +703,30 @@ async function saveAllNilaiUHToFirestore(context, assignment, cacheKey) {
   }
 }
 
-async function saveAllNilaiExamToFirestore(context, assignment, cacheKey, jenisNilai) {
+async function saveAllNilaiExamToFirestore(context, assignment, members, cacheKey, jenisNilai) {
   try {
     const cached = getFromCache(cacheKey);
     const nilaiKey = jenisNilai === 'pts' ? 'nilaiPTS' : 'nilaiPAS';
     const nilaiData = cached[nilaiKey] || {};
-    
-    // Save all nilai_ujian (PTS/PAS) to Firestore
-    for (const [siswaId, value] of Object.entries(nilaiData)) {
-      if (value && value !== '') {
+
+    // Match cache entries against the roster instead of splitting student IDs.
+    // Legacy single-value entries are treated as the original/murni score.
+    for (const member of members) {
+      const siswaId = String(member?.siswa_id || member?.id || '').trim();
+      if (!siswaId) continue;
+
+      for (const tipe of ['murni', 'remidi']) {
+        const key = `${siswaId}_${tipe}`;
+        const hasTypedValue = Object.prototype.hasOwnProperty.call(nilaiData, key);
+        const hasLegacyValue = tipe === 'murni' && Object.prototype.hasOwnProperty.call(nilaiData, siswaId);
+        if (!hasTypedValue && !hasLegacyValue) continue;
+
+        const value = hasTypedValue ? nilaiData[key] : nilaiData[siswaId];
+        if (value === '' || value === null || value === undefined) continue;
+        const parsedValue = Number(value);
+        if (!Number.isFinite(parsedValue)) continue;
+
+        const docId = `${assignment.id}_${siswaId}_${jenisNilai}_${tipe}`;
         await saveDocument('nilai_ujian', {
           tahun_ajaran_id: context.tahun_ajaran_aktif,
           semester_id: context.semester_aktif,
@@ -701,9 +736,10 @@ async function saveAllNilaiExamToFirestore(context, assignment, cacheKey, jenisN
           mapel_id: assignment.mapel_id,
           siswa_id: siswaId,
           jenis_nilai: jenisNilai,
-          nilai: parseFloat(value),
+          tipe,
+          nilai: parsedValue,
           updated_at: new Date().toISOString(),
-        });
+        }, docId);
       }
     }
     
@@ -1327,7 +1363,7 @@ function setupNilaiTugasEventsRebuild(container, context, assignment, members, c
     });
     syncLocalScoreCache(assignment, cacheKey, latest);
 
-    const success = await saveAllNilaiTugasToFirestore(context, assignment, cacheKey);
+    const success = await saveAllNilaiTugasToFirestore(context, assignment, members, cacheKey);
     if (success) {
       // Keep UI cache; no full reload needed.
       syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
@@ -1422,14 +1458,14 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
                     
                     let maxMurniRem = null;
                     if (murni !== null || remidi !== null) {
-                       maxMurniRem = Math.max(murni || 0, remidi || 0);
+                       maxMurniRem = Math.max(murni === null ? -Infinity : murni, remidi === null ? -Infinity : remidi);
                     }
-                    return maxMurniRem;
+                    return maxMurniRem ?? 0;
                   });
 
                   const validScores = scores.filter(s => s !== null);
-                  const avg = validScores.length > 0
-                    ? (validScores.reduce((a, b) => a + b, 0) / validScores.length).toFixed(1)
+                  const avg = uhColumns.length > 0
+                    ? (validScores.reduce((a, b) => a + b, 0) / uhColumns.length).toFixed(1)
                     : '-';
 
                   return `
@@ -1442,8 +1478,8 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
                           const remidiRaw = nilaiUH[`${siswa}_${col.id}_remidi`];
                           const legacyRaw = nilaiUH[`${siswa}_${col.id}`];
                           
-                          let murniVal = murniRaw !== undefined ? murniRaw : (legacyRaw !== undefined ? legacyRaw : '');
-                          let remidiVal = remidiRaw !== undefined ? remidiRaw : '';
+                          let murniVal = (murniRaw !== undefined && murniRaw !== '') ? murniRaw : '';
+                          let remidiVal = (remidiRaw !== undefined && remidiRaw !== '') ? remidiRaw : '';
                           
                           let murni = murniVal !== '' ? Number(murniVal) : null;
                           let remidi = remidiVal !== '' ? Number(remidiVal) : null;
@@ -1486,7 +1522,12 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
     try {
       const docId = `${assignment.id}_${siswaId}_ulangan_harian_${uhKey}`;
 
-      if (rawValue === '' || rawValue === null || rawValue === undefined) {
+      if (rawValue === null || rawValue === undefined) {
+        await deleteDocument('nilai_ujian', docId);
+        return;
+      }
+
+      if (rawValue !== 0 && (Number.isNaN(Number(rawValue)) || rawValue === '')) {
         await deleteDocument('nilai_ujian', docId);
         return;
       }
@@ -1512,10 +1553,14 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
   const syncNilaiUHInput = (inputEl) => {
     const siswaId = inputEl.getAttribute('data-siswa');
     const uhKey = inputEl.getAttribute('data-uh');
-    const rawValue = inputEl.value === '' ? '' : Number(inputEl.value);
+    const rawValue = inputEl.value === '' ? undefined : Number(inputEl.value);
 
     cached_.nilaiUH = cached_.nilaiUH || {};
-    cached_.nilaiUH[`${siswaId}_${uhKey}`] = rawValue;
+    if (rawValue !== undefined) {
+      cached_.nilaiUH[`${siswaId}_${uhKey}`] = rawValue;
+    } else {
+      delete cached_.nilaiUH[`${siswaId}_${uhKey}`];
+    }
     saveToCache(cacheKey, cached_);
 
     updateUlanganHarianRow(inputEl);
@@ -1542,7 +1587,7 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
         if (murni === null && remidi === null) {
           maxEl.textContent = '-';
         } else {
-          maxEl.textContent = String(Math.max(murni || 0, remidi || 0));
+          maxEl.textContent = String(Math.max(murni === null ? -Infinity : murni, remidi === null ? -Infinity : remidi));
         }
       }
     });
@@ -1551,12 +1596,10 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
     if (avgEl) {
       const maxValues = uhColumns
         .map((col) => row.querySelector(`[data-max-uh="${col.id}"]`)?.textContent || '-')
-        .map((txt) => (txt !== '-' ? Number(txt) : null))
-        .filter((num) => num !== null);
+        .map((txt) => (txt !== '-' ? Number(txt) : 0))
+        .filter(num => num !== null);
 
-      avgEl.textContent = maxValues.length
-        ? (maxValues.reduce((a, b) => a + b, 0) / maxValues.length).toFixed(1)
-        : '-';
+      avgEl.textContent = (maxValues.reduce((a, b) => a + b, 0) / uhColumns.length).toFixed(1);
     }
   };
 
@@ -2287,8 +2330,8 @@ async function renderTabPTSPAS(context, assignment, members, container) {
     syncLocalScoreCache(assignment, cacheKey, latest);
 
     const [okPts, okPas] = await Promise.all([
-      saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pts'),
-      saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pas'),
+      saveAllNilaiExamToFirestore(context, assignment, members, cacheKey, 'pts'),
+      saveAllNilaiExamToFirestore(context, assignment, members, cacheKey, 'pas'),
     ]);
     if (okPts || okPas) {
       syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
@@ -3581,10 +3624,10 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
     // Persist current cached scores without forcing full page reload.
     syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
     const results = await Promise.all([
-      saveAllNilaiTugasToFirestore(context, assignment, cacheKey),
+      saveAllNilaiTugasToFirestore(context, assignment, members, cacheKey),
       saveAllNilaiUHToFirestore(context, assignment, cacheKey),
-      saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pts'),
-      saveAllNilaiExamToFirestore(context, assignment, cacheKey, 'pas'),
+      saveAllNilaiExamToFirestore(context, assignment, members, cacheKey, 'pts'),
+      saveAllNilaiExamToFirestore(context, assignment, members, cacheKey, 'pas'),
     ]);
     if (results.some(Boolean)) {
       syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
@@ -4079,7 +4122,7 @@ export async function renderGuruPenilaianPage(container) {
             </div>
             <div class="w-full lg:max-w-xl">
               <div class="rounded-2xl border border-emerald-200/80 bg-white p-2 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.35)]">
-                <select id="assignment-select" class="w-full appearance-none rounded-xl border-2 border-slate-800 bg-gradient-to-r from-slate-900 via-emerald-800 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(15,23,42,0.75)] outline-none transition hover:from-slate-800 hover:via-emerald-700 hover:to-teal-600 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-200/70">
+                <select id="assignment-select" class="w-full appearance-none rounded-xl border-2 border-blue-600 bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(59,130,246,0.95)] outline-none transition hover:from-indigo-700 hover:via-blue-600 hover:to-orange-600 focus:border-orange-300 focus:ring-4 focus:ring-orange-200/70">
                   ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
                 </select>
               </div>
@@ -4099,7 +4142,7 @@ export async function renderGuruPenilaianPage(container) {
             <div class="hidden rounded-full border border-emerald-100 bg-white/90 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm sm:block">Sinkron ke kelas aktif</div>
           </div>
           <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-1">
-          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(15,23,42,0.8)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
+          <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
           <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
           <button id="tab-keaktifan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="keaktifan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"></path><circle cx="5" cy="19" r="1.2" fill="currentColor"></circle><circle cx="12" cy="6" r="1.2" fill="currentColor"></circle><circle cx="19" cy="13" r="1.2" fill="currentColor"></circle></svg><span>Keaktifan</span></button>
           <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
@@ -4147,7 +4190,7 @@ export async function renderGuruPenilaianPage(container) {
     tabButtons.forEach((button) => {
       const isActive = button === activeBtn;
       button.className = isActive
-        ? 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(15,23,42,0.8)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap'
+        ? 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap'
         : 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap';
       if (isActive) button.dataset.active = 'true';
       else delete button.dataset.active;

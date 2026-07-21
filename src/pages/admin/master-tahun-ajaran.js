@@ -45,13 +45,15 @@ export async function renderMasterTahunAjaranPage(container) {
 
   const html = renderLayout('Master Tahun Ajaran', `
     <div class="space-y-6">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Kelola Tahun Ajaran & Semester</h3>
-        <p class="mt-1 text-sm text-slate-500">Tambahkan, sunting, hapus, dan aktifkan periode belajar yang akan berlaku untuk seluruh pengguna.</p>
+      <div class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
+        <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Admin Console</p>
+        <h3 class="mt-2 text-2xl font-bold tracking-tight">Kelola Tahun Ajaran & Semester</h3>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Tambahkan, sunting, hapus, dan aktifkan periode belajar yang akan berlaku untuk seluruh pengguna.</p>
       </div>
 
       <div class="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <h4 class="text-base font-semibold text-slate-900">Daftar Periode</h4>
           <div class="mt-4 overflow-x-auto rounded-3xl border border-slate-100 bg-slate-50 p-3">
             <table class="min-w-full text-left text-sm text-slate-700">
@@ -75,27 +77,27 @@ export async function renderMasterTahunAjaranPage(container) {
           </div>
         </div>
 
-        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <h4 id="period-form-title" class="text-base font-semibold text-slate-900">Tambah Tahun Ajaran</h4>
           <form id="period-form" class="mt-4 space-y-4">
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Kode Tahun Ajaran</label>
-              <input id="period-year-id" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" placeholder="Contoh: 2026_2027" required />
+              <input id="period-year-id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: 2026_2027" required />
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Nama Tahun Ajaran</label>
-              <input id="period-year-name" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" placeholder="Contoh: 2026/2027" required />
+              <input id="period-year-name" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: 2026/2027" required />
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Kode Semester</label>
-              <input id="period-semester-id" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" placeholder="Contoh: 2026_2027_1" required />
+              <input id="period-semester-id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: 2026_2027_1" required />
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Nama Semester</label>
-              <input id="period-semester-name" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" placeholder="Contoh: Semester 1 (Ganjil)" required />
+              <input id="period-semester-name" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Semester 1 (Ganjil)" required />
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="submit" class="rounded-2xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Periode</button>
+              <button type="submit" class="rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Periode</button>
               <button id="period-cancel-btn" type="button" class="hidden rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
             </div>
           </form>

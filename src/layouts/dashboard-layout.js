@@ -342,12 +342,12 @@ export function renderLayout(title, content, opts = {}) {
     .map((item) => {
       const active = isRouteActive(item.routes);
       return `
-        <a href="${item.href}" class="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition duration-200 ${active ? 'bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_14px_28px_-16px_rgba(15,23,42,0.75)] ring-1 ring-white/15' : 'text-slate-600 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-[0_10px_24px_-18px_rgba(15,23,42,0.45)] hover:ring-1 hover:ring-emerald-100'}">
-          <span class="relative z-10 inline-flex h-7 w-7 items-center justify-center rounded-xl ${active ? 'bg-white/15 ring-1 ring-white/20' : 'bg-slate-100/90 ring-1 ring-slate-200/70 group-hover:bg-emerald-50 group-hover:ring-emerald-100'}">
+        <a href="${item.href}" class="group relative inline-flex items-center gap-2 overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition duration-200 ${active ? 'bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-400 text-white shadow-[0_14px_28px_-16px_rgba(14,165,233,0.55)] ring-1 ring-white/20' : 'text-slate-600 hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-[0_10px_24px_-18px_rgba(14,165,233,0.28)] hover:ring-1 hover:ring-sky-100'}">
+          <span class="relative z-10 inline-flex h-7 w-7 items-center justify-center rounded-xl ${active ? 'bg-white/20 ring-1 ring-white/25' : 'bg-slate-100/90 ring-1 ring-slate-200/70 group-hover:bg-sky-50 group-hover:ring-sky-100'}">
             ${item.icon(active)}
           </span>
           <span class="relative z-10 whitespace-nowrap">${item.label}</span>
-          ${active ? '<span class="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/10 to-transparent"></span>' : ''}
+          ${active ? '<span class="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-white/15 to-transparent"></span>' : ''}
         </a>
       `;
     })
@@ -358,8 +358,8 @@ export function renderLayout(title, content, opts = {}) {
         .map((item) => {
           const active = isRouteActive(item.routes);
           return `
-            <a href="${item.href}" class="inline-flex items-center gap-2 whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold transition ${active ? 'bg-gradient-to-r from-slate-900 via-emerald-700 to-teal-600 text-white shadow-[0_12px_24px_-16px_rgba(15,23,42,0.7)]' : 'bg-white/90 text-slate-600 ring-1 ring-slate-200/80 hover:bg-white hover:text-slate-900'}">
-              <span class="inline-flex h-6 w-6 items-center justify-center rounded-lg ${active ? 'bg-white/15' : 'bg-slate-100'}">
+            <a href="${item.href}" class="inline-flex items-center gap-2 whitespace-nowrap rounded-2xl px-3 py-2 text-xs font-semibold transition ${active ? 'bg-gradient-to-r from-sky-500 via-cyan-500 to-teal-400 text-white shadow-[0_12px_24px_-16px_rgba(14,165,233,0.55)]' : 'bg-white/90 text-slate-600 ring-1 ring-slate-200/80 hover:bg-white hover:text-slate-900'}">
+              <span class="inline-flex h-6 w-6 items-center justify-center rounded-lg ${active ? 'bg-white/20' : 'bg-slate-100'}">
                 ${item.icon(active)}
               </span>
               <span>${item.label}</span>
@@ -454,8 +454,8 @@ export function renderLayout(title, content, opts = {}) {
           </div>
         </header>
 
-        <nav class="hidden md:block overflow-hidden rounded-[28px] border border-white/70 bg-white/90 p-2 shadow-[0_18px_50px_-28px_rgba(15,23,42,0.35)] ring-1 ring-white/60 backdrop-blur-xl">
-          <div class="rounded-[24px] bg-gradient-to-r from-slate-50 via-white to-emerald-50/70 p-1.5">
+        <nav class="hidden md:block overflow-hidden rounded-[28px] border border-white/70 bg-white/90 p-2 shadow-[0_18px_50px_-28px_rgba(14,165,233,0.22)] ring-1 ring-white/60 backdrop-blur-xl">
+          <div class="rounded-[24px] bg-gradient-to-r from-sky-50/80 via-white to-cyan-50/70 p-1.5">
             <div class="flex flex-wrap gap-1.5">
               ${navItems}
             </div>

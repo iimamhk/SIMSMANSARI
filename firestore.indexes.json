@@ -1,0 +1,51 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "chat_rooms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participants", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "last_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nilai_tugas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tahun_ajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "semester_id", "order": "ASCENDING" },
+        { "fieldPath": "siswa_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nilai_ujian",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tahun_ajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "semester_id", "order": "ASCENDING" },
+        { "fieldPath": "siswa_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pengumuman",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kelas_ids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "tahun_ajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "semester_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "pengumuman",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kelas_id", "order": "ASCENDING" },
+        { "fieldPath": "tahun_ajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "semester_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

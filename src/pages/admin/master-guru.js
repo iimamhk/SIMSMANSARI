@@ -24,17 +24,19 @@ export async function renderMasterGuruPage(container) {
 
   const html = renderLayout('Master Guru', `
     <div class="space-y-5">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 id="guru-form-title" class="text-lg font-semibold text-slate-900">Tambah Guru</h3>
-         <p class="mt-1 text-sm text-slate-500">Password hanya diproses server dan tidak pernah ditampilkan kembali.</p>
+      <div class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
+        <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Admin Console</p>
+        <h3 id="guru-form-title" class="mt-2 text-2xl font-bold tracking-tight">Master Guru</h3>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Password hanya diproses server dan tidak pernah ditampilkan kembali.</p>
       </div>
 
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
         <h4 class="text-base font-semibold text-slate-900">Import Guru</h4>
         <p class="mt-1 text-sm text-slate-500">Unggah file CSV untuk menambah data guru sekaligus.</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button id="download-guru-template-btn" type="button" class="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
-          <label class="cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+          <button id="download-guru-template-btn" type="button" class="rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
+          <label class="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 font-semibold text-slate-700">
             <span>Pilih File CSV</span>
             <input id="import-guru-input" type="file" accept=".csv" class="hidden" />
           </label>
@@ -49,12 +51,12 @@ export async function renderMasterGuruPage(container) {
         <div id="guru-import-message" class="mt-3 text-sm text-slate-600"></div>
       </div>
 
-      <form id="guru-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <input id="guru-nama" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Nama lengkap guru" required />
-        <input id="guru-username" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Username" readonly />
-        <input id="guru-password" type="password" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Password" required />
+      <form id="guru-form" class="space-y-3 rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
+        <input id="guru-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Nama lengkap guru" required />
+        <input id="guru-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Username" readonly />
+        <input id="guru-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Password" required />
         <div class="flex flex-wrap gap-2">
-          <button id="guru-submit-btn" type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Guru</button>
+          <button id="guru-submit-btn" type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Guru</button>
           <button id="guru-cancel-btn" type="button" class="hidden rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
         </div>
       </form>

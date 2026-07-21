@@ -37,17 +37,19 @@ export async function renderMasterAkademikPage(container) {
 
   const html = renderLayout('Master Akademik', `
     <div class="space-y-6">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Data Akademik</h3>
-        <p class="mt-1 text-sm text-slate-500">Kelola mata pelajaran dan kelas yang digunakan dalam sistem.</p>
+      <div class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
+        <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Admin Console</p>
+        <h3 class="mt-2 text-2xl font-bold tracking-tight">Data Akademik</h3>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Kelola mata pelajaran dan kelas yang digunakan dalam sistem dengan alur master yang rapi.</p>
       </div>
 
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
         <h4 class="text-base font-semibold text-slate-900">Import Data Akademik</h4>
         <p class="mt-1 text-sm text-slate-500">Unduh template CSV, isi data, lalu unggah untuk menambahkan mata pelajaran dan kelas secara cepat.</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button id="download-template-btn" type="button" class="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
-          <label class="cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+          <button id="download-template-btn" type="button" class="rounded-xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
+          <label class="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 font-semibold text-slate-700">
             <span>Pilih File CSV</span>
             <input id="import-file-input" type="file" accept=".csv" class="hidden" />
           </label>
@@ -63,13 +65,13 @@ export async function renderMasterAkademikPage(container) {
       </div>
 
       <div class="grid gap-4 lg:grid-cols-2">
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <h4 id="mapel-form-title" class="text-base font-semibold text-slate-900">Tambah Mata Pelajaran</h4>
           <form id="mapel-form" class="mt-3 space-y-3">
-            <input id="mapel-id" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Kode mapel" required />
-            <input id="mapel-nama" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Nama mapel" required />
+            <input id="mapel-id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Kode mapel" required />
+            <input id="mapel-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Nama mapel" required />
             <div class="flex flex-wrap gap-2">
-              <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Mapel</button>
+              <button type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Mapel</button>
               <button id="mapel-cancel-btn" type="button" class="hidden rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
             </div>
           </form>
@@ -81,13 +83,13 @@ export async function renderMasterAkademikPage(container) {
           </table>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <h4 id="kelas-form-title" class="text-base font-semibold text-slate-900">Tambah Kelas</h4>
           <form id="kelas-form" class="mt-3 space-y-3">
-            <input id="kelas-id" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Kode kelas" required />
-            <input id="kelas-nama" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Nama kelas" required />
+            <input id="kelas-id" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Kode kelas" required />
+            <input id="kelas-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Nama kelas" required />
             <div class="flex flex-wrap gap-2">
-              <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Kelas</button>
+              <button type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Kelas</button>
               <button id="kelas-cancel-btn" type="button" class="hidden rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
             </div>
           </form>

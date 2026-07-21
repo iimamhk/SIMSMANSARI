@@ -43,45 +43,47 @@ export async function renderPlottingJadwalPage(container) {
 
   const html = renderLayout('Plotting Jadwal', `
     <div class="space-y-5">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Pengunci Relasi Mengajar</h3>
-        <p class="mt-1 text-sm text-slate-500">Tetapkan guru, mata pelajaran, dan kelas untuk periode aktif ${context.tahun_ajaran_aktif_nama || ''} / ${context.semester_aktif_nama || ''}.</p>
+      <div class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
+        <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Admin Console</p>
+        <h3 class="mt-2 text-2xl font-bold tracking-tight">Mapping Relasi Mengajar</h3>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Tetapkan guru, mata pelajaran, dan kelas untuk periode aktif ${context.tahun_ajaran_aktif_nama || ''} / ${context.semester_aktif_nama || ''}.</p>
       </div>
 
-      <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="flex items-center justify-between rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
         <div>
           <h4 class="text-sm font-semibold text-slate-900">Izinkan Guru Mengisi Relasi Sendiri</h4>
           <p class="mt-0.5 text-xs text-slate-500">Jika aktif, guru dapat menambahkan dan mengelola relasi mengajar sendiri di halaman Mapping.</p>
         </div>
-        <button type="button" id="toggle-guru-relasi" class="relative inline-flex h-7 w-12 items-center rounded-full transition ${guruBolehIsi ? 'bg-[#007AFF]' : 'bg-slate-300'}" aria-pressed="${guruBolehIsi}">
+        <button type="button" id="toggle-guru-relasi" class="relative inline-flex h-7 w-12 items-center rounded-full transition ${guruBolehIsi ? 'bg-gradient-to-r from-sky-500 to-cyan-500' : 'bg-slate-300'}" aria-pressed="${guruBolehIsi}">
           <span class="inline-block h-5 w-5 rounded-full bg-white shadow transition ${guruBolehIsi ? 'translate-x-6' : 'translate-x-1'}"></span>
         </button>
       </div>
 
-      <form id="plotting-form" class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <form id="plotting-form" class="space-y-3 rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
         <h4 id="plotting-form-title" class="text-base font-semibold text-slate-900">Tambah Plotting Jadwal</h4>
         <div>
           <label for="guru" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Guru</label>
-          <select id="guru" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${guruOptions}</select>
+          <select id="guru" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">${guruOptions}</select>
         </div>
         <div>
           <label for="mapel" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Mata Pelajaran</label>
-          <select id="mapel" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${mapelOptions}</select>
+          <select id="mapel" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">${mapelOptions}</select>
         </div>
         <div>
           <label for="kelas" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Kelas</label>
-          <select id="kelas" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${kelasOptions}</select>
+          <select id="kelas" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">${kelasOptions}</select>
         </div>
         <div>
           <label for="hari" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Hari Mengajar</label>
-          <input id="hari" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Contoh: Senin" />
+          <input id="hari" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: Senin" />
         </div>
         <div>
           <label for="jam" class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Jam Ke</label>
-          <input id="jam" type="text" inputmode="text" autocomplete="off" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Contoh: 1-2" />
+          <input id="jam" type="text" inputmode="text" autocomplete="off" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Contoh: 1-2" />
         </div>
         <p class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">Perhatian: perubahan relasi akan memengaruhi data pembelajaran pada relasi yang sama.</p>
-        <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white">Simpan Plotting</button>
+        <button type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Plotting</button>
       </form>
 
       <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -200,7 +202,7 @@ export async function renderPlottingJadwalPage(container) {
   const toggleButton = container.querySelector('#toggle-guru-relasi');
   if (toggleButton) {
     const updateToggleVisual = (isOn) => {
-      toggleButton.className = `relative inline-flex h-7 w-12 items-center rounded-full transition ${isOn ? 'bg-[#007AFF]' : 'bg-slate-300'}`;
+      toggleButton.className = `relative inline-flex h-7 w-12 items-center rounded-full transition ${isOn ? 'bg-gradient-to-r from-sky-500 to-cyan-500' : 'bg-slate-300'}`;
       toggleButton.setAttribute('aria-pressed', String(isOn));
       const thumb = toggleButton.querySelector('span');
       if (thumb) {

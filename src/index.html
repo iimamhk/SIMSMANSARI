@@ -51,6 +51,85 @@
         --quiz-math-inline-font: 1em;
       }
 
+      /* =========================================================================
+         Premium "Dark Sapphire" Ambient Background
+         Subtle floating orbs, glowing gradients, gentle animations.
+         ========================================================================= */
+
+      body {
+        position: relative;
+        min-height: 100vh;
+        background-color: #070b14;
+        background-image:
+          radial-gradient(ellipse 75% 65% at 12% 18%, rgba(18, 78, 180, 0.30), transparent 60%),
+          radial-gradient(ellipse 55% 50% at 88% 82%, rgba(130, 95, 28, 0.09), transparent 55%),
+          radial-gradient(ellipse 60% 55% at 50% 50%, rgba(8, 40, 100, 0.06), transparent 65%);
+        background-attachment: fixed;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(to bottom right, #070b14, #0c1a30 50%, #070b14);
+        opacity: 0.85;
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .ambient-orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(140px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .ao-top-left {
+        top: -18%; left: -14%;
+        width: 50vh; height: 50vh;
+        background: linear-gradient(135deg, #2d5aa0, #1a3a80);
+        animation: driftHorizontal 32s ease-in-out infinite alternate;
+      }
+
+      .ao-bottom-right {
+        bottom: -22%; right: -10%;
+        width: 58vh; height: 58vh;
+        background: linear-gradient(135deg, #b08830, #8a6622);
+        animation: driftHorizontal 38s ease-in-out infinite alternate-reverse;
+      }
+
+      .ao-center-glow {
+        top: 45%; left: 50%;
+        width: 42vh; height: 42vh;
+        background: linear-gradient(135deg, #1c6ea0, #0a3560);
+        animation: pulseGlow 14s ease-in-out infinite;
+      }
+
+      #app {
+        position: relative;
+        z-index: 10;
+      }
+
+      @media(max-width:767px){.ao-top-left,.ao-bottom-right{width:42vh;height:42vh}.ao-center-glow{width:34vh;height:34vw}}
+
+      @keyframes driftHorizontal {
+        0%   {transform:translateY(0) scale(1)}
+        35%  {transform:translateY(3vh) scale(1.05)}
+        65%  {transform:translateY(-2vh) scale(1.03)}
+        100% {transform:translateY(1vh) scale(1.08)}
+      }
+      @keyframes pulseGlow {
+        0%,100%{opacity:.55;transform:translate(-50%,-50%)scale(.96)}
+        50%   {opacity:.95;transform:translate(-50%,-50%)scale(1.1)}
+      }
+
+      @media(prefers-reduced-motion:reduce){
+        *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      }
+
       .math-display .katex-display {
         margin: 0;
         min-width: max-content;
@@ -656,6 +735,16 @@
       .sg-fade-up {
         animation: sgFadeUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
+
+      /* Ensure all dropdown selects are always visible */
+      select {
+        background-color: #f8fafc !important;
+        color: #1e293b !important;
+      }
+      select option {
+        background-color: #ffffff !important;
+        color: #1e293b !important;
+      }
     </style>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -667,7 +756,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   </head>
-  <body class="min-h-screen bg-[linear-gradient(145deg,_#10b981_0%,_#5eead4_28%,_#67e8f9_56%,_#93c5fd_76%,_#c4b5fd_100%)] text-slate-900 antialiased">
+  <body class="min-h-screen text-slate-900 antialiased"
+        style="background:#070b14;background-image:linear-gradient(to bottom right,#070b14,#0c1a30 50%,#070b14);">
     <div id="app" class="min-h-screen"></div>
     <script>
       (function installBootstrapErrorHandler() {

@@ -9,9 +9,11 @@ export async function renderSystemSettingsPage(container) {
 
   const html = renderLayout('Pengaturan Akun', `
     <div class="space-y-4">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-lg font-semibold text-slate-900">Manajemen Akun Admin</h3>
-        <p class="mt-1 text-sm text-slate-500">Ubah username dan password akun admin yang sedang aktif.</p>
+      <div class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
+        <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Security</p>
+        <h3 class="mt-2 text-2xl font-bold tracking-tight">Manajemen Akun Admin</h3>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Ubah password akun admin yang sedang aktif. Password disimpan terenkripsi di server.</p>
       </div>
 
       <form id="settings-form" class="space-y-4">
@@ -22,23 +24,23 @@ export async function renderSystemSettingsPage(container) {
 
         <div>
           <label class="mb-2 block text-sm font-medium text-slate-700">Username Baru</label>
-          <input id="new-username" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-transparent focus:ring-2 focus:ring-[#007AFF]" placeholder="Kosongkan jika tidak diubah" />
+          <input id="new-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 outline-none transition focus:border-transparent focus:ring-4 focus:ring-sky-100" placeholder="Kosongkan jika tidak diubah" />
           <p class="mt-1 text-xs text-slate-500">Gunakan 3-30 karakter tanpa spasi (huruf, angka, titik, garis bawah, atau minus).</p>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="mb-2 block text-sm font-medium text-slate-700">Password Baru</label>
-            <input id="new-password" type="password" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-transparent focus:ring-2 focus:ring-[#007AFF]" placeholder="Minimal 6 karakter" />
+            <input id="new-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 outline-none transition focus:border-transparent focus:ring-4 focus:ring-sky-100" placeholder="Minimal 6 karakter" />
           </div>
           <div>
             <label class="mb-2 block text-sm font-medium text-slate-700">Konfirmasi Password Baru</label>
-            <input id="confirm-password" type="password" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-transparent focus:ring-2 focus:ring-[#007AFF]" placeholder="Ulangi password baru" />
+            <input id="confirm-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 outline-none transition focus:border-transparent focus:ring-4 focus:ring-sky-100" placeholder="Ulangi password baru" />
           </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
-          <button type="submit" class="rounded-xl bg-[#007AFF] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0063CC]">Simpan Akun</button>
+          <button type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-sky-600 hover:to-cyan-600">Simpan Akun</button>
           <p id="account-message" class="text-sm text-slate-500"></p>
         </div>
       </form>

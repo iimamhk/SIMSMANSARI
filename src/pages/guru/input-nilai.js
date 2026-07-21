@@ -43,7 +43,7 @@ export async function renderGuruInputNilaiPage(container) {
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <p class="text-sm font-medium text-slate-700">Pilih Kelas & Mapel Anda</p>
         <p class="mt-1 text-sm text-slate-500">Lembar nilai akan memuat siswa dari relasi mengajar aktif pada semester berjalan.</p>
-        <select id="assignment-select" class="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+        <select id="assignment-select" class="mt-3 w-full rounded-xl border border-slate-200 bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-4 py-3 text-sm font-bold text-white outline-none transition hover:from-indigo-700 hover:via-blue-600 hover:to-orange-600">
           ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
         </select>
       </div>
