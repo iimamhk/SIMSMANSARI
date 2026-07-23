@@ -6,7 +6,70 @@ const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
 const MATERIAL_READS_KEY = 'simguru_material_reads';
 const MATERIAL_READS_COLLECTION = 'materi_reads';
 const QUERY_CACHE_TTL_MS = 60000;
+const COLLECTION_CACHE_TTL_MS = 300000;
+const STATIC_COLLECTION_CACHE_TTL_MS = 1800000;
+const FIRESTORE_READ_STATUS_KEY = 'simguru_firestore_read_status';
 const queryCache = new Map();
+
+const STATIC_COLLECTIONS = new Set([
+  'settings',
+  'mata_pelajaran',
+  'kelas',
+  'tahun_ajaran',
+  'pengajaran',
+  'pembelajaran',
+  'wali_kelas',
+]);
+
+function isFirestoreReadQuotaError(error) {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code === 'resource-exhausted'
+    || message.includes('quota')
+    || message.includes('resource exhausted');
+}
+
+function setFirestoreReadStatus(status) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (!status) {
+      localStorage.removeItem(FIRESTORE_READ_STATUS_KEY);
+      return;
+    }
+    localStorage.setItem(FIRESTORE_READ_STATUS_KEY, JSON.stringify(status));
+  } catch {
+    // Ignore localStorage issues.
+  }
+}
+
+function markFirestoreReadQuotaExceeded(source = '', error = null) {
+  setFirestoreReadStatus({
+    state: 'exhausted',
+    source: String(source || ''),
+    message: String(error?.message || 'Firestore read quota exceeded'),
+    detected_at: new Date().toISOString(),
+  });
+}
+
+function clearFirestoreReadQuotaStatus() {
+  const current = (() => {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      return JSON.parse(localStorage.getItem(FIRESTORE_READ_STATUS_KEY) || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  if (current?.state === 'exhausted') {
+    setFirestoreReadStatus({
+      state: 'ok',
+      source: '',
+      message: '',
+      detected_at: '',
+      recovered_at: new Date().toISOString(),
+    });
+  }
+}
 
 async function withQueryCache(key, loader, ttlMs = QUERY_CACHE_TTL_MS) {
   const now = Date.now();
@@ -239,15 +302,22 @@ async function getDocsFromCollection(collectionName) {
 
   try {
     const snapshot = await db.collection(collectionName).get();
+    clearFirestoreReadQuotaStatus();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
+    if (isFirestoreReadQuotaError(error)) {
+      markFirestoreReadQuotaExceeded(`collection:${collectionName}`, error);
+    }
     console.warn(`Gagal membaca koleksi ${collectionName}:`, error);
     return [];
   }
 }
 
 export async function getCollectionDocs(collectionName, options = {}) {
-  const cacheMs = Number(options.cacheMs || QUERY_CACHE_TTL_MS);
+  const defaultCacheMs = STATIC_COLLECTIONS.has(collectionName)
+    ? STATIC_COLLECTION_CACHE_TTL_MS
+    : COLLECTION_CACHE_TTL_MS;
+  const cacheMs = Number(options.cacheMs || defaultCacheMs);
   // Master collections are relatively static; cache aggressively to avoid repeated full reads.
   return withQueryCache(`collection:${collectionName}`, () => getDocsFromCollection(collectionName), cacheMs);
 }
@@ -298,10 +368,19 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
         orderDirection: options.orderDirection || 'desc',
         limit: Number(options.limit || 0),
       };
-      return withQueryCache(`query:${collectionName}:${JSON.stringify(filters)}:${JSON.stringify(queryOptions)}`, load, cacheMs);
+      return withQueryCache(`query:${collectionName}:${JSON.stringify(filters)}:${JSON.stringify(queryOptions)}`, async () => {
+        const data = await load();
+        clearFirestoreReadQuotaStatus();
+        return data;
+      }, cacheMs);
     }
-    return await load();
+    const data = await load();
+    clearFirestoreReadQuotaStatus();
+    return data;
   } catch (error) {
+    if (isFirestoreReadQuotaError(error)) {
+      markFirestoreReadQuotaExceeded(`query:${collectionName}`, error);
+    }
     console.warn(`Gagal query dokumen dari koleksi ${collectionName}:`, error);
     return [];
   }
@@ -367,6 +446,50 @@ export async function getAttendanceRecords(context, pengajaranId = '') {
     return getDocumentsWhere('absensi', filters);
   } catch (error) {
     console.warn('Gagal mengambil data absensi dari Firestore, memakai data cadangan:', error);
+    return [];
+  }
+}
+
+export async function getAttendanceRecordsByDate(context, pengajaranId = '', date = '') {
+  const { year, semester } = getActivePeriod(context);
+  const targetDate = String(date || '').trim();
+  if (!year || !semester || !targetDate) {
+    return [];
+  }
+
+  try {
+    const filters = [
+      { field: 'tahun_ajaran_id', value: year },
+      { field: 'semester_id', value: semester },
+      { field: 'tanggal', value: targetDate },
+    ];
+    if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
+    return getDocumentsWhere('absensi', filters, { cacheMs: 20000 });
+  } catch (error) {
+    console.warn('Gagal mengambil data absensi harian dari Firestore, memakai data cadangan:', error);
+    return [];
+  }
+}
+
+export async function getAttendanceRecordsByDateRange(context, pengajaranId = '', startDate = '', endDate = '') {
+  const { year, semester } = getActivePeriod(context);
+  const start = String(startDate || '').trim();
+  const end = String(endDate || '').trim();
+  if (!year || !semester || !start || !end) {
+    return [];
+  }
+
+  try {
+    const filters = [
+      { field: 'tahun_ajaran_id', value: year },
+      { field: 'semester_id', value: semester },
+      { field: 'tanggal', operator: '>=', value: start },
+      { field: 'tanggal', operator: '<=', value: end },
+    ];
+    if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
+    return getDocumentsWhere('absensi', filters, { cacheMs: 30000 });
+  } catch (error) {
+    console.warn('Gagal mengambil data absensi rentang tanggal dari Firestore, memakai data cadangan:', error);
     return [];
   }
 }
@@ -976,11 +1099,16 @@ export async function getPublishedMaterials(options = {}) {
         docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
           { field: 'tahun_ajaran_id', value: year },
           { field: 'semester_id', value: semester },
-        ]);
+        ], { cacheMs: QUERY_CACHE_TTL_MS, orderBy: 'updated_at', orderDirection: 'desc', limit: 300 });
       }
       if (!docs.length) {
-        const snapshot = await db.collection(MATERIAL_PUBLISHED_COLLECTION).get();
-        docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        // Avoid full scans to protect read quota when filters are empty.
+        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [], {
+          cacheMs: QUERY_CACHE_TTL_MS,
+          orderBy: 'updated_at',
+          orderDirection: 'desc',
+          limit: 300,
+        });
       }
       // Firestore adalah sumber kebenaran utama saat online.
       // Ini mencegah materi yang sudah dihapus di Firestore hidup lagi dari cache lokal.
@@ -1280,8 +1408,13 @@ export async function getAllPengumuman() {
 
   try {
     return withQueryCache('pengumuman:all', async () => {
-      const snapshot = await db.collection(PENGUMUMAN_COLLECTION).get();
-      const firestoreItems = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      // Avoid full scans; fetch recent announcements only.
+      const firestoreItems = await getDocumentsWhere(PENGUMUMAN_COLLECTION, [], {
+        cacheMs: QUERY_CACHE_TTL_MS,
+        orderBy: 'created_at',
+        orderDirection: 'desc',
+        limit: 300,
+      });
       // Firestore is authoritative. Do not resurrect deleted announcements from local cache.
       writeLocalPengumuman(firestoreItems);
       return firestoreItems;

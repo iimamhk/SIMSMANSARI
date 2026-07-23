@@ -1,6 +1,70 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
-import { getActiveTeachingAssignments, getDocumentsWhere } from '../../firebase/data-service.js';
+import { getDocumentsWhere } from '../../firebase/data-service.js';
+
+function chunkArray(items = [], size = 10) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function getDocsByPengajaranIds(collectionName, filtersBase, pengajaranIds = []) {
+  const normalizedIds = Array.from(new Set((pengajaranIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!normalizedIds.length) return [];
+
+  const chunks = chunkArray(normalizedIds, 10);
+  const result = await Promise.all(chunks.map((ids) => getDocumentsWhere(collectionName, [
+    ...filtersBase,
+    {
+      field: 'pengajaran_id',
+      operator: ids.length === 1 ? '==' : 'in',
+      value: ids.length === 1 ? ids[0] : ids,
+    },
+  ], { cacheMs: 120000 })));
+
+  const merged = result.flat();
+  const deduped = new Map();
+  merged.forEach((item) => {
+    const key = String(item.id || `${item.pengajaran_id}_${item.bab_id || item.tugas_id || item.uh_id || ''}`);
+    deduped.set(key, item);
+  });
+  return Array.from(deduped.values());
+}
+
+async function getAssignmentDocsByIds(filtersBase, pengajaranIds = []) {
+  const normalizedIds = Array.from(new Set((pengajaranIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!normalizedIds.length) return [];
+  const chunks = chunkArray(normalizedIds, 10);
+
+  const [pengajaranChunks, pembelajaranChunks] = await Promise.all([
+    Promise.all(chunks.map((ids) => getDocumentsWhere('pengajaran', [
+      ...filtersBase,
+      {
+        field: 'id',
+        operator: ids.length === 1 ? '==' : 'in',
+        value: ids.length === 1 ? ids[0] : ids,
+      },
+    ], { cacheMs: 120000 }))),
+    Promise.all(chunks.map((ids) => getDocumentsWhere('pembelajaran', [
+      ...filtersBase,
+      {
+        field: 'id',
+        operator: ids.length === 1 ? '==' : 'in',
+        value: ids.length === 1 ? ids[0] : ids,
+      },
+    ], { cacheMs: 120000 }))),
+  ]);
+
+  const merged = [...pengajaranChunks.flat(), ...pembelajaranChunks.flat()];
+  const deduped = new Map();
+  merged.forEach((item) => {
+    const key = String(item.id || item.pengajaran_id || '');
+    if (key) deduped.set(key, item);
+  });
+  return Array.from(deduped.values());
+}
 
 function average(values = []) {
   const valid = values.map((item) => Number(item)).filter((item) => Number.isFinite(item));
@@ -98,22 +162,21 @@ export async function renderSiswaNilaiPage(container) {
       ]
     : null;
 
-  const [nilaiTugasDocs, nilaiUjianDocs, assignmentDocs, babDocs, tugasDocs, uhColumnsDocs] = await Promise.all([
+  const [nilaiTugasDocs, nilaiUjianDocs] = await Promise.all([
     studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters) : Promise.resolve([]),
     studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters) : Promise.resolve([]),
-    getActiveTeachingAssignments(context),
-    getDocumentsWhere('bab', [
-      { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-      { field: 'semester_id', operator: '==', value: context.semester_aktif },
-    ]),
-    getDocumentsWhere('tugas_bab', [
-      { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-      { field: 'semester_id', operator: '==', value: context.semester_aktif },
-    ]),
-    getDocumentsWhere('ulangan_harian_kolom', [
-      { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-      { field: 'semester_id', operator: '==', value: context.semester_aktif },
-    ]),
+  ]);
+
+  const relevantPengajaranIds = Array.from(new Set([
+    ...nilaiTugasDocs.map((doc) => String(doc.pengajaran_id || '').trim()),
+    ...nilaiUjianDocs.map((doc) => String(doc.pengajaran_id || '').trim()),
+  ].filter(Boolean)));
+
+  const [assignmentDocs, babDocs, tugasDocs, uhColumnsDocs] = await Promise.all([
+    getAssignmentDocsByIds(filtersBase, relevantPengajaranIds),
+    getDocsByPengajaranIds('bab', filtersBase, relevantPengajaranIds),
+    getDocsByPengajaranIds('tugas_bab', filtersBase, relevantPengajaranIds),
+    getDocsByPengajaranIds('ulangan_harian_kolom', filtersBase, relevantPengajaranIds),
   ]);
 
   const activeBabKeys = new Set(
@@ -131,9 +194,17 @@ export async function renderSiswaNilaiPage(container) {
   });
   const filteredNilaiUjianDocs = nilaiUjianDocs.filter((doc) => siswaKeys.includes(normalizeUserKey(doc.siswa_id)));
 
-  const mapelNameMap = new Map(
-    assignmentDocs.map((item) => [String(item.mapel_id || ''), item.mapel_nama || item.mapel_id || '-'])
-  );
+  const mapelNameMap = new Map();
+  assignmentDocs.forEach((item) => {
+    const key = String(item.mapel_id || '').trim();
+    if (!key) return;
+    mapelNameMap.set(key, item.mapel_nama || item.mapel_id || key);
+  });
+  [...nilaiTugasDocs, ...nilaiUjianDocs].forEach((item) => {
+    const key = String(item.mapel_id || '').trim();
+    if (!key || mapelNameMap.has(key)) return;
+    if (item.mapel_nama) mapelNameMap.set(key, item.mapel_nama);
+  });
 
   const babNameMap = new Map(
     babDocs.map((item) => {

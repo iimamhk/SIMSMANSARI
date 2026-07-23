@@ -9,6 +9,19 @@ function backendUrl(path) {
   return `${getBackendBase()}${path}`;
 }
 
+function markFirestoreReadQuotaStatus(source = '') {
+  try {
+    localStorage.setItem('simguru_firestore_read_status', JSON.stringify({
+      state: 'exhausted',
+      source: String(source || 'login'),
+      message: 'Kuota database Firebase sedang habis.',
+      detected_at: new Date().toISOString(),
+    }));
+  } catch {
+    // Ignore localStorage errors.
+  }
+}
+
 let authReadyPromise = null;
 
 export function waitForAuthReady() {
@@ -207,7 +220,10 @@ export async function loginUser(username, password) {
     return upsertLocalUser(result.user);
   } catch (error) {
     console.warn('Login gagal:', error);
-    if (error?.message?.includes('Kuota database') || error?.message?.includes('database sedang')) throw error;
+    if (error?.message?.includes('Kuota database') || error?.message?.includes('database sedang')) {
+      markFirestoreReadQuotaStatus('login');
+      throw error;
+    }
     if (error instanceof Error && error.message) throw error;
     throw new Error('Layanan login sedang tidak tersedia.');
   }

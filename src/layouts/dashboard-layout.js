@@ -17,6 +17,16 @@ export function renderLayout(title, content, opts = {}) {
   const activePeriod = context?.tahun_ajaran_aktif_nama && context?.semester_aktif_nama
     ? `${context.tahun_ajaran_aktif_nama} / ${context.semester_aktif_nama}`
     : '';
+  let firestoreReadStatus = null;
+  try {
+    firestoreReadStatus = JSON.parse(localStorage.getItem('simguru_firestore_read_status') || 'null');
+  } catch {
+    firestoreReadStatus = null;
+  }
+  const showReadQuotaBanner = firestoreReadStatus?.state === 'exhausted';
+  const readQuotaTime = showReadQuotaBanner && firestoreReadStatus?.detected_at
+    ? new Date(firestoreReadStatus.detected_at).toLocaleString('id-ID')
+    : '';
   const headerClockRoutes = [
     '#guru/dashboard',
     '#guru/input-absen',
@@ -37,6 +47,9 @@ export function renderLayout(title, content, opts = {}) {
     '#siswa/kuiz',
   ];
   const showHeaderClock = (isGuru || isSiswa) && headerClockRoutes.some((route) => currentHash === route || currentHash.startsWith(`${route}/`));
+  const headerRightPadding = showHeaderClock && showReadQuotaBanner
+    ? 'pr-56 sm:pr-72'
+    : 'pr-24 sm:pr-32';
 
   const accentPanel = opts?.accentPanel || 'from-emerald-500 via-cyan-500 to-sky-500';
 
@@ -417,11 +430,25 @@ export function renderLayout(title, content, opts = {}) {
         <header class="relative overflow-hidden rounded-[24px] border border-white/60 bg-white/85 p-3 shadow-[0_10px_34px_-12px_rgba(15,23,42,0.22)] ring-1 ring-white/70 backdrop-blur-xl sm:rounded-[28px] sm:p-4">
           <div class="pointer-events-none absolute inset-0 bg-gradient-to-br ${accentPanel} opacity-[0.14]"></div>
           <div class="pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full bg-gradient-to-br ${accentPanel} opacity-20 blur-2xl"></div>
-          <div class="relative flex flex-col gap-2.5 pr-24 sm:pr-32">
+          <div class="relative flex flex-col gap-2.5 ${headerRightPadding}">
             ${showHeaderClock ? `
-              <div class="absolute right-0 top-0 flex flex-col items-end text-right">
-                <p id="dashboard-clock" class="text-lg font-extrabold leading-none text-slate-900 sm:text-xl">--:--:--</p>
-                <p id="dashboard-date" class="mt-1 text-[10px] text-slate-500 sm:text-[11px]">Memuat tanggal...</p>
+              <div class="absolute right-0 top-0 flex items-start gap-2">
+                ${showReadQuotaBanner ? `
+                  <div class="max-w-[170px] rounded-xl border border-rose-200 bg-rose-50/95 px-2 py-1 text-left shadow-sm">
+                    <p class="text-[10px] font-semibold leading-tight text-rose-800">Read quota habis</p>
+                    ${readQuotaTime ? `<p class="mt-0.5 text-[9px] leading-tight text-rose-700">${readQuotaTime}</p>` : ''}
+                  </div>
+                ` : ''}
+                <div class="flex flex-col items-end text-right">
+                  <p id="dashboard-clock" class="text-lg font-extrabold leading-none text-slate-900 sm:text-xl">--:--:--</p>
+                  <p id="dashboard-date" class="mt-1 text-[10px] text-slate-500 sm:text-[11px]">Memuat tanggal...</p>
+                </div>
+              </div>
+            ` : ''}
+            ${!showHeaderClock && showReadQuotaBanner ? `
+              <div class="absolute right-0 top-0 max-w-[190px] rounded-xl border border-rose-200 bg-rose-50/95 px-2 py-1 text-left shadow-sm">
+                <p class="text-[10px] font-semibold leading-tight text-rose-800">Read quota habis</p>
+                ${readQuotaTime ? `<p class="mt-0.5 text-[9px] leading-tight text-rose-700">${readQuotaTime}</p>` : ''}
               </div>
             ` : ''}
           ${(showHeaderClock || isAdmin) ? `

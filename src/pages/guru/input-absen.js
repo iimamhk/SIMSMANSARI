@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecords, saveAttendanceRecord, saveAttendanceRecordsBatch, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getClassMembers, getAttendanceRecordsByDate, getAttendanceRecordsByDateRange, saveAttendanceRecord, saveAttendanceRecordsBatch, saveDocument, getDocumentsWhere } from '../../firebase/data-service.js';
 
 const statusLabels = ['H', 'S', 'I', 'A', 'K'];
 const statusClasses = {
@@ -158,7 +158,7 @@ export async function renderGuruInputAbsenPage(container) {
     : await getActiveTeachingAssignments(context);
   const selectedAssignment = assignments[0] || null;
   const attendanceDate = getDefaultAttendanceDate();
-  const attendanceRecords = selectedAssignment ? await getAttendanceRecords(context, selectedAssignment.id) : [];
+  const attendanceRecords = selectedAssignment ? await getAttendanceRecordsByDate(context, selectedAssignment.id, attendanceDate) : [];
   const members = selectedAssignment ? await getClassMembers(context, selectedAssignment.kelas_id) : [];
 
   const assignmentOptions = assignments
@@ -595,12 +595,47 @@ export async function renderGuruInputAbsenPage(container) {
   let currentAssignments = assignments;
   let currentMembers = members;
   let currentAttendance = attendanceRecords;
+  let currentRecapAttendance = [];
+  const recapAttendanceCache = new Map();
   let currentSpecialNotes = [];
   let activeAbsensiSubtab = 'absensi';
   let activeRekapSubtab = 'rekap-absensi';
 
   function getCurrentAssignment() {
     return currentAssignments.find((item) => item.id === selectedAssignmentId) || currentAssignments[0] || null;
+  }
+
+  function resetRecapAttendanceCache() {
+    recapAttendanceCache.clear();
+    currentRecapAttendance = [];
+  }
+
+  async function refreshDailyAttendance() {
+    const assignment = getCurrentAssignment();
+    currentAttendance = assignment
+      ? await getAttendanceRecordsByDate(context, assignment.id, selectedDate)
+      : [];
+    return currentAttendance;
+  }
+
+  async function loadRecapAttendanceForPeriod() {
+    const assignment = getCurrentAssignment();
+    if (!assignment) {
+      currentRecapAttendance = [];
+      return currentRecapAttendance;
+    }
+
+    const period = getRecapPeriod();
+    const cacheKey = `${assignment.id}|${period.start}|${period.end}`;
+    if (recapAttendanceCache.has(cacheKey)) {
+      currentRecapAttendance = recapAttendanceCache.get(cacheKey) || [];
+      return currentRecapAttendance;
+    }
+
+    const records = await getAttendanceRecordsByDateRange(context, assignment.id, period.start, period.end);
+    recapAttendanceCache.set(cacheKey, records);
+    currentRecapAttendance = records;
+    return records;
   }
 
   function getAttendanceForDate(date) {
@@ -850,7 +885,7 @@ export async function renderGuruInputAbsenPage(container) {
     rekapSubtabCatatanKeluarKelas?.classList.toggle('hidden', activeRekapSubtab !== 'rekap-catatan-keluar-kelas');
   }
 
-  function setMainTab(targetTab) {
+  async function setMainTab(targetTab) {
     const tabKey = ['input', 'rekap', 'pencapaian'].includes(targetTab) ? targetTab : 'input';
 
     tabInput.classList.toggle('hidden', tabKey !== 'input');
@@ -869,11 +904,13 @@ export async function renderGuruInputAbsenPage(container) {
       // Rekap should always open on the default recap table view.
       activeRekapSubtab = 'rekap-absensi';
       setRekapSubtab('rekap-absensi');
+      await loadRecapAttendanceForPeriod();
       renderRecap();
       renderRecapSpecialNotes();
       return;
     }
 
+    await loadRecapAttendanceForPeriod();
     renderPencapaian();
   }
 
@@ -1032,7 +1069,7 @@ export async function renderGuruInputAbsenPage(container) {
 
     const period = getRecapPeriod();
     const dates = getDatesInRange(period.start, period.end);
-    const records = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
+    const records = currentRecapAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
 
     const present = records.filter((item) => item.status === 'H').length;
     const sick = records.filter((item) => item.status === 'S').length;
@@ -1135,7 +1172,7 @@ export async function renderGuruInputAbsenPage(container) {
 
     const period = getRecapPeriod();
     const dates = getDatesInRange(period.start, period.end);
-    const filteredRecords = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
+    const filteredRecords = currentRecapAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
     const kRecords = filteredRecords.filter((item) => item.status === 'K');
 
     const tableDateHeaderCells = dates
@@ -1219,9 +1256,11 @@ export async function renderGuruInputAbsenPage(container) {
     const assignment = getCurrentAssignment();
     selectedAssignmentId = assignment?.id || '';
     const nextMembers = assignment ? await getClassMembers(context, assignment.kelas_id) : [];
-    const nextAttendance = assignment ? await getAttendanceRecords(context, assignment.id) : [];
+    const nextAttendance = assignment ? await getAttendanceRecordsByDate(context, assignment.id, selectedDate) : [];
     currentMembers = nextMembers;
     currentAttendance = nextAttendance;
+    resetRecapAttendanceCache();
+    await loadRecapAttendanceForPeriod();
     await refreshSpecialNotes();
     renderSpecialNoteStudentOptions();
     renderSpecialNoteHistoryStudentOptions();
@@ -1471,7 +1510,7 @@ export async function renderGuruInputAbsenPage(container) {
     }
 
     const period = getRecapPeriod();
-    const records = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
+    const records = currentRecapAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
     if (!records.length) {
       alert('Tidak ada data untuk diekspor.');
       return;
@@ -1506,7 +1545,7 @@ export async function renderGuruInputAbsenPage(container) {
     }
 
     const period = getRecapPeriod();
-    const records = currentAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
+    const records = currentRecapAttendance.filter((item) => item.tanggal >= period.start && item.tanggal <= period.end);
     const siswaStats = currentMembers.map((member) => {
       const id = member.siswa_id || member.id;
       const name = member.siswa_nama || member.nama || '-';
@@ -1552,7 +1591,7 @@ export async function renderGuruInputAbsenPage(container) {
       : 'Belum ada data absensi untuk menampilkan motivasi. Yuk, mulai catat absensi hari ini agar kita bisa melihat perkembangan kehadiran siswa dengan jelas!';
   }
 
-  container.addEventListener('click', (event) => {
+  container.addEventListener('click', async (event) => {
     const tabButton = event.target.closest('.tab-btn');
     if (tabButton) {
       tabButtons.forEach((btn) => {
@@ -1560,7 +1599,7 @@ export async function renderGuruInputAbsenPage(container) {
         btn.className = `tab-btn inline-flex w-full items-center justify-center gap-2 rounded-full px-3 py-2.5 text-sm font-semibold transition sm:w-auto ${isActive ? attendanceTabActiveClass : attendanceTabIdleClass}`;
       });
       const target = tabButton.getAttribute('data-tab');
-      setMainTab(target || 'input');
+      await setMainTab(target || 'input');
     }
 
     const button = event.target.closest('.status-btn');
@@ -1592,13 +1631,15 @@ export async function renderGuruInputAbsenPage(container) {
   });
 
   rekapSubtabButtons.forEach((button) => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const nextTab = button.getAttribute('data-rekap-subtab') || 'rekap-absensi';
       setRekapSubtab(nextTab);
       if (nextTab === 'rekap-absensi') {
+        await loadRecapAttendanceForPeriod();
         renderRecap();
       }
       if (nextTab === 'rekap-catatan-keluar-kelas') {
+        await loadRecapAttendanceForPeriod();
         renderRecapSpecialNotes();
       }
     });
@@ -1626,42 +1667,48 @@ export async function renderGuruInputAbsenPage(container) {
     await refreshCurrentData();
   });
 
-  attendanceDateInput?.addEventListener('change', (event) => {
+  attendanceDateInput?.addEventListener('change', async (event) => {
     selectedDate = event.target.value;
     if (!isWeekday(selectedDate)) {
       validateDate(selectedDate);
     }
+    await refreshDailyAttendance();
     renderMemberRows();
     renderKeluarKelasKList();
   });
 
-  rekapFilterType?.addEventListener('change', (event) => {
+  rekapFilterType?.addEventListener('change', async (event) => {
     const filterType = event.target.value;
     rekapCustomRange.classList.toggle('hidden', filterType !== 'custom');
+    await loadRecapAttendanceForPeriod();
     renderRecap();
     renderRecapSpecialNotes();
     renderPencapaian();
   });
 
-  rekapMonth?.addEventListener('change', () => {
+  rekapMonth?.addEventListener('change', async () => {
+    await loadRecapAttendanceForPeriod();
     renderRecap();
     renderRecapSpecialNotes();
     renderPencapaian();
   });
 
-  rekapYear?.addEventListener('change', () => {
+  rekapYear?.addEventListener('change', async () => {
+    await loadRecapAttendanceForPeriod();
     renderRecap();
     renderRecapSpecialNotes();
     renderPencapaian();
   });
 
-  rekapStartDate?.addEventListener('change', () => {
+  rekapStartDate?.addEventListener('change', async () => {
+    await loadRecapAttendanceForPeriod();
     renderRecap();
     renderRecapSpecialNotes();
     renderPencapaian();
   });
 
-  rekapEndDate?.addEventListener('change', () => {
+  rekapEndDate?.addEventListener('change', async () => {
+    await loadRecapAttendanceForPeriod();
     renderRecap();
     renderRecapSpecialNotes();
     renderPencapaian();
@@ -1682,6 +1729,7 @@ export async function renderGuruInputAbsenPage(container) {
     rekapYear.value = String(now.getFullYear());
   }
 
+  await loadRecapAttendanceForPeriod();
   await refreshSpecialNotes();
   renderSpecialNoteStudentOptions();
   renderSpecialNoteHistoryStudentOptions();
@@ -1692,5 +1740,5 @@ export async function renderGuruInputAbsenPage(container) {
   renderPencapaian();
   setAbsensiSubtab('absensi');
   setRekapSubtab('rekap-absensi');
-  setMainTab('input');
+  await setMainTab('input');
 }
