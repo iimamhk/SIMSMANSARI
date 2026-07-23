@@ -55,6 +55,24 @@
         { "fieldPath": "semester_id", "order": "ASCENDING" },
         { "fieldPath": "tanggal", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "materi_ai",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "guru_id", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "materi_publish",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kelas_id", "order": "ASCENDING" },
+        { "fieldPath": "tahun_ajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "semester_id", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

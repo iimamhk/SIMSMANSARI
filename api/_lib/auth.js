@@ -78,14 +78,21 @@ async function login(usernameInput, passwordInput) {
   return { token, user };
 }
 
-async function listUsers(role, kelasId = '') {
+async function listUsers(role, kelasId = '', options = {}) {
   let query = getFirestore().collection('users');
   if (role) query = query.where('role', '==', role);
   if (kelasId) query = query.where('kelas_id', '==', kelasId);
+  const maxResults = Math.min(Math.max(Number(options.limit) || 100, 1), 200);
+  query = query.orderBy(admin.firestore.FieldPath.documentId()).limit(maxResults);
+  if (options.after) query = query.startAfter(String(options.after));
   const snapshot = await query.get();
-  return snapshot.docs
+  const users = snapshot.docs
     .map((doc) => safeUser(doc.data() || {}, doc.id))
     .filter((user) => !role || user.role === role);
+  return {
+    users,
+    nextCursor: snapshot.size === maxResults ? snapshot.docs[snapshot.docs.length - 1]?.id || null : null,
+  };
 }
 
 async function saveUser(input, existingUsername) {

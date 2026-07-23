@@ -473,6 +473,7 @@ export async function renderSiswaGamePage(container) {
   let currentGameType = 'math';
   let battleRoom = null;
   let battlePollId = null;
+  let battleUnsubscribe = null;
   let battleTimerId = null;
   let battleQuestionStartedAt = 0;
   let selectedBattleAvatar = BATTLE_AVATARS[0];
@@ -592,7 +593,16 @@ export async function renderSiswaGamePage(container) {
     const index = rooms.findIndex((item) => item.id === room.id);
     if (index >= 0) rooms[index] = room; else rooms.push(room);
     localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(rooms));
-    saveDocument('battle_rooms', room, room.id).catch(() => {});
+    const participant = room?.participants?.[getBattleStudentId()];
+    if (window.firebaseDb && room?.id && participant) {
+      const participantPath = new window.firebase.firestore.FieldPath('participants', getBattleStudentId());
+      window.firebaseDb.collection('battle_rooms').doc(room.id).update(
+        participantPath,
+        participant,
+        'updated_at',
+        new Date().toISOString(),
+      ).catch(() => {});
+    }
   }
 
   function saveBattleParticipant(room, participant) {
@@ -922,9 +932,9 @@ export async function renderSiswaGamePage(container) {
     try { const AudioContextClass = window.AudioContext || window.webkitAudioContext; const audio = new AudioContextClass(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); oscillator.frequency.value = frequency; gain.gain.setValueAtTime(0.06, audio.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.18); oscillator.connect(gain).connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + 0.18); } catch {}
   }
 
-  async function syncBattle() {
+  async function syncBattle(skipFetch = false) {
     if (!battleRoom) return;
-    await fetchBattleRoom();
+    if (!skipFetch) await fetchBattleRoom();
     const participant = getBattleParticipant(battleRoom);
     if (battleRoom.status === 'waiting') {
       renderBattleLobby(battleRoom);
@@ -945,7 +955,7 @@ export async function renderSiswaGamePage(container) {
             clearInterval(countdownId);
             battleArenaCountdownEl.classList.add('hidden');
             closeBattleArena();
-            openPlay();
+            syncBattle(true);
           } else {
             battleArenaCountdownEl.textContent = String(count);
             battleArenaCountdownEl.animate([{ transform: 'scale(0.65)', opacity: 0.2 }, { transform: 'scale(1)', opacity: 1 }], { duration: 320, easing: 'ease-out' });
@@ -953,6 +963,7 @@ export async function renderSiswaGamePage(container) {
         }, 850);
       } else {
         closeBattleArena();
+        syncBattle(true);
       }
       return;
     }
@@ -963,6 +974,13 @@ export async function renderSiswaGamePage(container) {
     const elapsed = Math.floor((Date.now() - new Date(battleRoom.started_at).getTime()) / 1000) % Number(battleRoom.time_per_question || 20);
     timerEl.textContent = formatTime(Number(battleRoom.time_per_question || 20) - elapsed);
     setBattleStudentStatus(`Soal ${index + 1} aktif. Jawab sebelum waktu habis.`);
+  }
+
+  function startBattleQuestionTimer() {
+    if (battleTimerId) clearInterval(battleTimerId);
+    battleTimerId = setInterval(() => {
+      if (!document.hidden && battleRoom?.status === 'live') syncBattle(true);
+    }, 1000);
   }
 
   function getTokenDocId(configId) {
@@ -1010,6 +1028,10 @@ export async function renderSiswaGamePage(container) {
     if (battlePollId) {
       clearInterval(battlePollId);
       battlePollId = null;
+    }
+    if (battleUnsubscribe) {
+      battleUnsubscribe();
+      battleUnsubscribe = null;
     }
     if (battleTimerId) {
       clearInterval(battleTimerId);
@@ -1711,17 +1733,32 @@ export async function renderSiswaGamePage(container) {
     setBattleStudentStatus(battleRoom.status === 'live' ? 'Battle sedang berlangsung. Bersiap menjawab!' : `Berhasil bergabung ke ${battleRoom.title || 'room'}. Menunggu guru memulai...`);
     openLobby();
     if (battlePollId) clearInterval(battlePollId);
-    battlePollId = setInterval(() => {
-      if (!document.hidden) syncBattle();
-    }, 8000);
-    await syncBattle();
+    if (battleUnsubscribe) battleUnsubscribe();
+    battlePollId = null;
+    battleUnsubscribe = window.firebaseDb?.collection('battle_rooms').doc(battleRoom.id)
+      .onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        battleRoom = { id: snapshot.id, ...snapshot.data() };
+        syncBattle(true);
+      }, () => {
+        battleUnsubscribe = null;
+        if (!battlePollId) {
+          battlePollId = setInterval(() => {
+            if (!document.hidden) syncBattle();
+          }, 15000);
+        }
+      });
+    startBattleQuestionTimer();
+    await syncBattle(true);
     startBattleArenaMotion();
   });
 
   battleArenaBackBtn?.addEventListener('click', () => {
     closeBattleArena();
     if (battlePollId) clearInterval(battlePollId);
+    if (battleUnsubscribe) battleUnsubscribe();
     battlePollId = null;
+    battleUnsubscribe = null;
     battleRoom = null;
     openLobby();
   });
@@ -1737,7 +1774,9 @@ export async function renderSiswaGamePage(container) {
   overlayBackBtn?.addEventListener('click', () => {
     if (battleRoom) {
       if (battlePollId) clearInterval(battlePollId);
+      if (battleUnsubscribe) battleUnsubscribe();
       battlePollId = null;
+      battleUnsubscribe = null;
       battleRoom = null;
       gameState = null;
       openLobby();
@@ -1770,10 +1809,12 @@ export async function renderSiswaGamePage(container) {
   container.routeCleanup = () => {
     if (timerId) clearInterval(timerId);
     if (battlePollId) clearInterval(battlePollId);
+    if (battleUnsubscribe) battleUnsubscribe();
     if (battleTimerId) clearInterval(battleTimerId);
     stopBattleArenaMotion();
     timerId = null;
     battlePollId = null;
+    battleUnsubscribe = null;
     battleTimerId = null;
   };
 

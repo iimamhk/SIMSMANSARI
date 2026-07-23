@@ -1,5 +1,5 @@
 import { db } from './firebase-config.js';
-import { saveDocument, deleteDocument, getCollectionDocs } from './data-service.js';
+import { saveDocument, deleteDocument, getDocumentsWhere } from './data-service.js';
 
 const MATERI_AI_COLLECTION = 'materi_ai';
 const MATERI_AI_LOCAL_KEY = 'simguru_materi_ai';
@@ -47,7 +47,9 @@ export async function listMateriAiForUser(guruId) {
   let remote = [];
   if (db) {
     try {
-      remote = await getCollectionDocs(MATERI_AI_COLLECTION);
+      remote = await getDocumentsWhere(MATERI_AI_COLLECTION, [
+        { field: 'guru_id', value: guruId },
+      ], { orderBy: 'updated_at', orderDirection: 'desc', limit: 30, cacheMs: 60000 });
     } catch (error) {
       console.warn('Gagal memuat riwayat Materi AI dari Firestore:', error);
     }
@@ -69,9 +71,8 @@ export async function getMateriAi(id) {
   const local = readLocal().find((item) => item.id === id);
   if (db) {
     try {
-      const remote = await getCollectionDocs(MATERI_AI_COLLECTION);
-      const remoteItem = remote.find((item) => item.id === id);
-      if (remoteItem) return { ...remoteItem, ...local };
+      const snapshot = await db.collection(MATERI_AI_COLLECTION).doc(id).get();
+      if (snapshot.exists) return { id: snapshot.id, ...snapshot.data(), ...local };
     } catch (error) {
       console.warn('Gagal memuat Materi AI dari Firestore:', error);
     }

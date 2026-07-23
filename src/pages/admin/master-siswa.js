@@ -42,37 +42,16 @@ export async function renderMasterSiswaPage(container) {
         </div>
       </div>
 
-      <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <div class="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
         <div class="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <h4 id="siswa-form-title" class="text-lg font-semibold text-slate-900">Tambah Siswa</h4>
-              <p class="mt-1 text-sm text-slate-500">Buat akun siswa baru, tetapkan kelas, dan sesuaikan password secara langsung.</p>
+              <h4 class="text-lg font-semibold text-slate-900">Tambah Siswa</h4>
+              <p class="mt-1 text-sm text-slate-500">Buat akun siswa melalui formulir ringkas tanpa meninggalkan daftar.</p>
             </div>
             <span class="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">Form Master</span>
           </div>
-          <form id="siswa-form" class="mt-5 grid gap-4 md:grid-cols-2">
-            <div class="md:col-span-2">
-              <label class="mb-2 block text-sm font-medium text-slate-700">Nama lengkap</label>
-              <input id="siswa-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Nama lengkap siswa" required />
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium text-slate-700">Username</label>
-              <input id="siswa-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Kosongkan untuk membuat dari nama" pattern="[A-Za-z0-9._-]{3,30}" />
-            </div>
-            <div>
-              <label class="mb-2 block text-sm font-medium text-slate-700">Password</label>
-              <input id="siswa-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Password" required />
-            </div>
-            <div class="md:col-span-2">
-              <label class="mb-2 block text-sm font-medium text-slate-700">Kelas</label>
-              <input id="siswa-kelas" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Kode/Nama kelas (mis. X_1 atau X.1)" />
-            </div>
-            <div class="md:col-span-2 flex flex-wrap gap-2">
-              <button id="siswa-submit-btn" type="submit" class="rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-sm">Simpan Siswa</button>
-              <button id="siswa-cancel-btn" type="button" class="hidden rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
-            </div>
-          </form>
+          <button id="open-siswa-form-btn" type="button" class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-sky-600 hover:to-cyan-600">Tambah Siswa Baru</button>
         </div>
 
         <div class="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
@@ -132,7 +111,7 @@ export async function renderMasterSiswaPage(container) {
 
         <div class="p-5">
           <div class="mb-3 flex items-center justify-between">
-            <p class="text-sm text-slate-500">Menampilkan <span id="siswa-results-count" class="font-semibold text-slate-700">0</span> siswa</p>
+            <p class="text-sm text-slate-500" aria-live="polite">Menampilkan <span id="siswa-results-count" class="font-semibold text-slate-700">0</span> siswa</p>
           </div>
           <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-100">
@@ -149,8 +128,50 @@ export async function renderMasterSiswaPage(container) {
               <tbody id="siswa-table-body" class="divide-y divide-slate-100 bg-white"></tbody>
             </table>
           </div>
+          <div id="siswa-pagination" class="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p id="siswa-page-summary" class="text-xs text-slate-500" aria-live="polite"></p>
+            <div class="flex items-center gap-2">
+              <button id="siswa-prev-page" type="button" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Sebelumnya</button>
+              <span id="siswa-page-number" class="min-w-20 text-center text-xs font-semibold text-slate-700"></span>
+              <button id="siswa-next-page" type="button" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Berikutnya</button>
+            </div>
+          </div>
         </div>
       </div>
+
+      <dialog id="siswa-dialog" aria-labelledby="siswa-form-title" class="m-auto max-h-[92vh] w-[calc(100%_-_2rem)] max-w-2xl overflow-hidden rounded-[28px] border-0 bg-white p-0 shadow-2xl backdrop:bg-slate-950/45 backdrop:backdrop-blur-sm">
+        <div class="max-h-[92vh] overflow-y-auto">
+          <div class="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">Data Siswa</p>
+              <h4 id="siswa-form-title" class="mt-1 text-xl font-semibold text-slate-900">Tambah Siswa</h4>
+            </div>
+            <button id="siswa-dialog-close" type="button" aria-label="Tutup formulir" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-50">Tutup</button>
+          </div>
+          <form id="siswa-form" class="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+            <div class="sm:col-span-2">
+              <label for="siswa-nama" class="mb-2 block text-sm font-medium text-slate-700">Nama lengkap</label>
+              <input id="siswa-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Nama lengkap siswa" required />
+            </div>
+            <div>
+              <label for="siswa-username" class="mb-2 block text-sm font-medium text-slate-700">Username</label>
+              <input id="siswa-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Otomatis dari nama" pattern="[A-Za-z0-9._-]{3,30}" />
+            </div>
+            <div>
+              <label for="siswa-password" class="mb-2 block text-sm font-medium text-slate-700">Password</label>
+              <input id="siswa-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Password" required />
+            </div>
+            <div class="sm:col-span-2">
+              <label for="siswa-kelas" class="mb-2 block text-sm font-medium text-slate-700">Kelas</label>
+              <input id="siswa-kelas" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Kode/Nama kelas (mis. X_1 atau X.1)" />
+            </div>
+            <div class="sticky bottom-0 -mx-5 -mb-5 flex gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:col-span-2 sm:-mx-6 sm:-mb-6 sm:px-6">
+              <button id="siswa-submit-btn" type="submit" class="flex-1 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-60">Simpan Siswa</button>
+              <button id="siswa-cancel-btn" type="button" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Batal</button>
+            </div>
+          </form>
+        </div>
+      </dialog>
     </div>
   `);
 
@@ -163,11 +184,31 @@ export async function renderMasterSiswaPage(container) {
   const statusFilter = container.querySelector('#siswa-status-filter');
   const progressContainer = container.querySelector('#siswa-import-progress');
   const messageBox = container.querySelector('#siswa-import-message');
+  const dialog = container.querySelector('#siswa-dialog');
+  const pageSummary = container.querySelector('#siswa-page-summary');
+  const pageNumber = container.querySelector('#siswa-page-number');
+  const prevPageBtn = container.querySelector('#siswa-prev-page');
+  const nextPageBtn = container.querySelector('#siswa-next-page');
+  const PAGE_SIZE = 10;
+  let currentPage = 1;
+  let lastEditTrigger = null;
 
   const filterState = {
     search: '',
     kelas: 'all',
     status: 'all',
+  };
+
+  const closeDialog = () => {
+    if (dialog?.open) dialog.close();
+    lastEditTrigger?.focus?.();
+    lastEditTrigger = null;
+  };
+
+  const openDialog = (trigger = null) => {
+    lastEditTrigger = trigger;
+    dialog?.showModal();
+    requestAnimationFrame(() => container.querySelector('#siswa-nama')?.focus());
   };
 
   const sortSiswaByNama = (items) => {
@@ -200,6 +241,7 @@ export async function renderMasterSiswaPage(container) {
       container.querySelector('#siswa-password').value = '';
         container.querySelector('#siswa-kelas').value = item.kelas_nama || item.kelas_id || '';
         setEditMode(true, item.id, item.username);
+        openDialog(button);
       });
     });
 
@@ -226,8 +268,18 @@ export async function renderMasterSiswaPage(container) {
   const renderRows = () => {
     const visibleItems = getVisibleSiswa();
     resultsCount.textContent = visibleItems.length;
+    const totalPages = Math.max(1, Math.ceil(visibleItems.length / PAGE_SIZE));
+    currentPage = Math.min(currentPage, totalPages);
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    const pageItems = visibleItems.slice(startIndex, startIndex + PAGE_SIZE);
+    const rangeStart = visibleItems.length ? startIndex + 1 : 0;
+    const rangeEnd = Math.min(startIndex + PAGE_SIZE, visibleItems.length);
+    pageSummary.textContent = `${rangeStart}-${rangeEnd} dari ${visibleItems.length} siswa`;
+    pageNumber.textContent = `Halaman ${currentPage}/${totalPages}`;
+    prevPageBtn.disabled = currentPage <= 1;
+    nextPageBtn.disabled = currentPage >= totalPages;
 
-    if (!visibleItems.length) {
+    if (!pageItems.length) {
       tableBody.innerHTML = `
         <tr>
           <td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500">Tidak ada data siswa yang sesuai filter saat ini.</td>
@@ -236,9 +288,9 @@ export async function renderMasterSiswaPage(container) {
       return;
     }
 
-    tableBody.innerHTML = visibleItems.map((item, index) => `
+    tableBody.innerHTML = pageItems.map((item, index) => `
       <tr class="text-sm text-slate-600 hover:bg-slate-50">
-        <td class="px-4 py-3 text-slate-500">${index + 1}</td>
+        <td class="px-4 py-3 text-slate-500">${startIndex + index + 1}</td>
         <td class="px-4 py-3">
           <div class="font-semibold text-slate-800">${item.nama}</div>
         </td>
@@ -256,7 +308,7 @@ export async function renderMasterSiswaPage(container) {
       </tr>
     `).join('');
 
-    bindRowActions(visibleItems);
+    bindRowActions(pageItems);
   };
 
   const setProgressState = (step, state) => {
@@ -360,7 +412,6 @@ export async function renderMasterSiswaPage(container) {
     editingAccountId = isEditing ? accountId : null;
     editingUsername = isEditing ? username : null;
     submitBtn.textContent = isEditing ? 'Perbarui Siswa' : 'Simpan Siswa';
-    cancelBtn.classList.toggle('hidden', !isEditing);
     title.textContent = isEditing ? 'Edit Siswa' : 'Tambah Siswa';
     container.querySelector('#siswa-password').required = !isEditing;
     container.querySelector('#siswa-password').placeholder = isEditing ? 'Kosongkan jika password tidak diubah' : 'Password';
@@ -373,26 +424,28 @@ export async function renderMasterSiswaPage(container) {
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    submitBtn.disabled = true;
+    const previousSubmitLabel = submitBtn.textContent;
+    submitBtn.textContent = editingAccountId ? 'Memperbarui...' : 'Menyimpan...';
     const nama = container.querySelector('#siswa-nama').value.trim();
     const password = container.querySelector('#siswa-password').value.trim();
     const kelasInput = container.querySelector('#siswa-kelas').value.trim();
     const username = container.querySelector('#siswa-username').value.trim() || generateUsername(nama);
-    const kelasInfo = await ensureKelas(kelasInput);
-    const payload = {
-      username,
-      ...(password ? { password } : {}),
-      nama,
-      role: 'siswa',
-      status: 'active',
-      created_at: new Date().toISOString(),
-      tahun_ajaran_id: context.tahun_ajaran_aktif,
-      semester_id: context.semester_aktif,
-      kelas_id: kelasInfo?.id || '',
-      kelas_nama: kelasInfo?.nama || '',
-      username_lower: username.toLowerCase().replace(/\s+/g, ''),
-    };
-
     try {
+      const kelasInfo = await ensureKelas(kelasInput);
+      const payload = {
+        username,
+        ...(password ? { password } : {}),
+        nama,
+        role: 'siswa',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        tahun_ajaran_id: context.tahun_ajaran_aktif,
+        semester_id: context.semester_aktif,
+        kelas_id: kelasInfo?.id || '',
+        kelas_nama: kelasInfo?.nama || '',
+        username_lower: username.toLowerCase().replace(/\s+/g, ''),
+      };
       const savedUser = await saveManagedUser(payload, editingAccountId || '');
       await synchronizeCurrentClassMemberships(context, [savedUser]);
       const oldUsernames = new Set([
@@ -404,27 +457,60 @@ export async function renderMasterSiswaPage(container) {
       }
     } catch (error) {
       alert(error.message || 'Gagal menyimpan siswa.');
+      submitBtn.disabled = false;
+      submitBtn.textContent = previousSubmitLabel;
       return;
     }
     const wasEditing = Boolean(editingUsername);
     setEditMode(false);
+    closeDialog();
     alert(wasEditing ? `Siswa berhasil diperbarui.` : `Siswa berhasil disimpan dengan username ${username}`);
     renderMasterSiswaPage(container);
   });
 
-  cancelBtn.addEventListener('click', () => setEditMode(false));
+  cancelBtn.addEventListener('click', () => {
+    setEditMode(false);
+    closeDialog();
+  });
+  container.querySelector('#siswa-dialog-close')?.addEventListener('click', () => {
+    setEditMode(false);
+    closeDialog();
+  });
+  container.querySelector('#open-siswa-form-btn')?.addEventListener('click', (event) => {
+    setEditMode(false);
+    openDialog(event.currentTarget);
+  });
+  dialog?.addEventListener('click', (event) => {
+    if (event.target === dialog) {
+      setEditMode(false);
+      closeDialog();
+    }
+  });
+  dialog?.addEventListener('cancel', () => setEditMode(false));
+
+  prevPageBtn?.addEventListener('click', () => {
+    currentPage = Math.max(1, currentPage - 1);
+    renderRows();
+  });
+  nextPageBtn?.addEventListener('click', () => {
+    currentPage += 1;
+    renderRows();
+  });
 
   ['input', 'change'].forEach((eventName) => {
     searchInput?.addEventListener(eventName, () => {
       filterState.search = searchInput.value.trim();
+      currentPage = 1;
       renderRows();
     });
     kelasFilter?.addEventListener(eventName, () => {
       filterState.kelas = kelasFilter.value;
+      currentPage = 1;
       renderRows();
     });
     statusFilter?.addEventListener(eventName, () => {
       filterState.status = statusFilter.value;
+      currentPage = 1;
       renderRows();
     });
   });

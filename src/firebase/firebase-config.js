@@ -23,6 +23,15 @@ if (window.firebase) {
     auth = window.firebase.auth(app);
     db = window.firebase.firestore(app);
 
+// Persist query/doc snapshots across reloads. Failure is non-fatal in
+    // private browsing or browsers that do not support IndexedDB.
+    db.enablePersistence().catch((error) => {
+      const code = String(error?.code || '');
+      if (code !== 'failed-precondition' && code !== 'unimplemented') {
+        console.warn('Firestore offline persistence failed:', error);
+      }
+    });
+
     window.firebaseApp = app;
     window.firebaseAuth = auth;
     window.firebaseDb = db;

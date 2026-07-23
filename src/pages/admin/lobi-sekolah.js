@@ -45,7 +45,7 @@ export async function renderAdminLobbySchoolPage(container) {
         <form id="lobby-settings-form" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Pengaturan Beranda</p>
+              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Pengaturan Beranda</p>
               <h4 class="mt-1 text-xl font-semibold text-slate-900">Konten utama lobi publik</h4>
             </div>
             <button type="submit" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Simpan Beranda</button>
@@ -101,7 +101,7 @@ export async function renderAdminLobbySchoolPage(container) {
 
         <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Ringkasan</p>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Ringkasan</p>
             <h4 class="mt-1 text-xl font-semibold text-slate-900">Statistik modul lobi</h4>
           </div>
           <div class="grid gap-3 sm:grid-cols-3">
@@ -129,7 +129,7 @@ export async function renderAdminLobbySchoolPage(container) {
           <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Kategori Lobi</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Kategori Lobi</p>
                 <h4 class="mt-1 text-xl font-semibold text-slate-900">Daftar kategori</h4>
               </div>
               <button id="new-section-btn" type="button" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Kategori Baru</button>
@@ -150,7 +150,7 @@ export async function renderAdminLobbySchoolPage(container) {
           <form id="section-form" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Editor Kategori</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Editor Kategori</p>
                 <h4 id="section-form-title" class="mt-1 text-xl font-semibold text-slate-900">${selectedSection ? 'Edit kategori' : 'Tambah kategori'}</h4>
               </div>
               ${selectedSection ? `<button id="delete-section-btn" type="button" class="rounded-2xl bg-rose-100 px-4 py-3 text-sm font-semibold text-rose-600">Hapus</button>` : ''}
@@ -219,7 +219,7 @@ export async function renderAdminLobbySchoolPage(container) {
           <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
             <div class="flex items-center justify-between gap-3">
               <div>
-                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Tautan Kategori</p>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Tautan Kategori</p>
                 <h4 class="mt-1 text-xl font-semibold text-slate-900">${selectedSection ? selectedSection.title : 'Pilih kategori'}</h4>
               </div>
               <button id="new-link-btn" type="button" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white" ${selectedSection ? '' : 'disabled'}>Tautan Baru</button>
@@ -245,7 +245,7 @@ export async function renderAdminLobbySchoolPage(container) {
 
           <form id="link-form" class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4 ${selectedSection ? '' : 'opacity-60'}">
             <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Editor Tautan</p>
+              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Editor Tautan</p>
               <h4 id="link-form-title" class="mt-1 text-xl font-semibold text-slate-900">Tambah tautan</h4>
             </div>
             <input id="link-id" type="hidden" value="" />

@@ -66,11 +66,13 @@ function renderQuizReviewMathBlock(text, tone = 'slate', fallback = '(kosong)') 
 
 const db = () => window.firebaseDb || null;
 
-async function fsQuery(collection, filters = []) {
+async function fsQuery(collection, filters = [], options = {}) {
   if (!db()) return [];
   try {
     let q = db().collection(collection);
     filters.forEach(({ field, op, value }) => { q = q.where(field, op || '==', value); });
+    if (options.orderBy) q = q.orderBy(options.orderBy, options.orderDirection || 'desc');
+    if (Number(options.limit) > 0) q = q.limit(Number(options.limit));
     const snap = await q.get();
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch { return []; }
@@ -160,16 +162,16 @@ async function loadSesiUntukSiswa() {
     // Prefer class-scoped query when available to avoid full-collection reads.
     let remote = [];
     if (state.kelasId) {
-      remote = await fsQuery(COLLECTION_SESI, [{ field: 'kelas_id', value: state.kelasId }]);
+      const filters = [{ field: 'kelas_id', value: state.kelasId }];
+      if (state.context?.tahun_ajaran_aktif) filters.push({ field: 'tahun_ajaran_id', value: state.context.tahun_ajaran_aktif });
+      if (state.context?.semester_aktif) filters.push({ field: 'semester_id', value: state.context.semester_aktif });
+      remote = await fsQuery(COLLECTION_SESI, filters);
     }
     if (!remote.length && state.context?.tahun_ajaran_aktif && state.context?.semester_aktif) {
       remote = await fsQuery(COLLECTION_SESI, [
         { field: 'tahun_ajaran_id', value: state.context.tahun_ajaran_aktif },
         { field: 'semester_id', value: state.context.semester_aktif },
       ]);
-    }
-    if (!remote.length) {
-      remote = await fsQuery(COLLECTION_SESI, []);
     }
     state.sesiList = remote
       .filter((s) => isVisibleToStudent(s) && filterByContext(s))

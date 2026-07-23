@@ -5,10 +5,16 @@ import { getManagedUsers } from '../../firebase/auth-service.js';
 
 export async function renderAdminWaliKelasPage(container) {
   const context = getStoredContext();
+  const activeYear = context?.tahun_ajaran_aktif || '';
+  const activeSemester = context?.semester_aktif || '';
   const guruList = await getManagedUsers('guru');
   const kelasList = await getCollectionDocs('kelas');
-  const allWaliKelas = await getCollectionDocs('wali_kelas');
-  const relations = allWaliKelas.filter((item) => item.tahun_ajaran_id === context.tahun_ajaran_aktif && item.semester_id === context.semester_aktif);
+  const relations = activeYear && activeSemester
+    ? await getDocumentsWhere('wali_kelas', [
+      { field: 'tahun_ajaran_id', value: activeYear },
+      { field: 'semester_id', value: activeSemester },
+    ], { cacheMs: 300000 })
+    : [];
 
   const guruOptions = guruList
     .map((item) => `<option value="${item.username}">${item.nama}</option>`)

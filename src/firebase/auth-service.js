@@ -122,20 +122,25 @@ export async function getManagedUsers(role = '', kelasId = '') {
   if (cached && Date.now() - cached.at < MANAGED_USERS_TTL_MS) return cached.data;
   if (cached?.promise) return cached.promise;
 
-  const params = new URLSearchParams();
-  if (role) params.set('role', role);
-  if (kelasId) params.set('kelas', kelasId);
-  const query = params.size ? `?${params.toString()}` : '';
   const promise = (async () => {
-    const response = await authenticatedFetch(`/api/auth/users${query}`);
-    if (!response.ok) {
-      const result = await response.json().catch(() => ({}));
-      throw new Error(response.status === 401
-        ? 'Sesi admin berakhir. Silakan login kembali.'
-        : (result.error || 'Data user tidak dapat dimuat.'));
-    }
-    const result = await response.json();
-    const users = Array.isArray(result.users) ? result.users : [];
+    const users = [];
+    let after = '';
+    do {
+      const params = new URLSearchParams({ limit: '100' });
+      if (role) params.set('role', role);
+      if (kelasId) params.set('kelas', kelasId);
+      if (after) params.set('after', after);
+      const response = await authenticatedFetch(`/api/auth/users?${params.toString()}`);
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(response.status === 401
+          ? 'Sesi admin berakhir. Silakan login kembali.'
+          : (result.error || 'Data user tidak dapat dimuat.'));
+      }
+      const result = await response.json();
+      users.push(...(Array.isArray(result.users) ? result.users : []));
+      after = String(result.nextCursor || '');
+    } while (after);
     managedUsersCache.set(cacheKey, { at: Date.now(), data: users });
     return users;
   })().finally(() => {
@@ -153,10 +158,15 @@ export async function getChatDirectory() {
   if (chatDirectoryCache.promise) return chatDirectoryCache.promise;
 
   chatDirectoryCache.promise = (async () => {
-    const response = await authenticatedFetch('/api/auth/contacts');
-    if (!response.ok) throw new Error('Daftar kontak tidak dapat dimuat.');
-    const result = await response.json();
-    const users = Array.isArray(result.users) ? result.users : [];
+    const users = [];
+    let after = '';
+    do {
+      const response = await authenticatedFetch(`/api/auth/contacts${after ? `?after=${encodeURIComponent(after)}` : ''}`);
+      if (!response.ok) throw new Error('Daftar kontak tidak dapat dimuat.');
+      const result = await response.json();
+      users.push(...(Array.isArray(result.users) ? result.users : []));
+      after = String(result.nextCursor || '');
+    } while (after);
     chatDirectoryCache.at = Date.now();
     chatDirectoryCache.data = users;
     return users;

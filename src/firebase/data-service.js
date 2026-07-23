@@ -12,6 +12,7 @@ const FIRESTORE_READ_STATUS_KEY = 'simguru_firestore_read_status';
 const queryCache = new Map();
 const PERSISTENT_CACHE_PREFIX = 'simguru_pcache_';
 const PERSISTENT_CACHE_TTL_MS = 7200000;
+const FIRESTORE_QUOTA_COOLDOWN_MS = 120000;
 
 const STATIC_COLLECTIONS = new Set([
   'settings',
@@ -79,7 +80,12 @@ function isReadQuotaExhausted() {
     const raw = localStorage.getItem(FIRESTORE_READ_STATUS_KEY);
     if (!raw) return false;
     const status = JSON.parse(raw);
-    return status?.state === 'exhausted';
+    if (status?.state !== 'exhausted') return false;
+    const detectedAt = new Date(status.detected_at || 0).getTime();
+    if (!Number.isFinite(detectedAt) || Date.now() - detectedAt >= FIRESTORE_QUOTA_COOLDOWN_MS) {
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -101,7 +107,9 @@ async function withQueryCache(key, loader, ttlMs = QUERY_CACHE_TTL_MS) {
   }
 
   if (isReadQuotaExhausted()) {
-    return Promise.resolve([]);
+    const error = new Error('Kuota baca Firestore sedang dalam masa pemulihan.');
+    error.code = 'resource-exhausted';
+    return Promise.reject(error);
   }
 
   const promise = Promise.resolve()
@@ -388,7 +396,7 @@ async function getDocsFromCollection(collectionName) {
       markFirestoreReadQuotaExceeded(`collection:${collectionName}`, error);
     }
     console.warn(`Gagal membaca koleksi ${collectionName}:`, error);
-    return [];
+    throw error;
   }
 }
 
@@ -404,14 +412,20 @@ export async function getCollectionDocs(collectionName, options = {}) {
     }
     return data;
   };
-  if (STATIC_COLLECTIONS.has(collectionName)) {
-    return withQueryCache(`persistent:${collectionName}`, async () => {
-      const persistent = getPersistentCache(collectionName);
-      if (persistent) return persistent;
-      return loadFromFirestore();
-    }, cacheMs);
+  try {
+    if (STATIC_COLLECTIONS.has(collectionName)) {
+      return await withQueryCache(`persistent:${collectionName}`, async () => {
+        const persistent = getPersistentCache(collectionName);
+        if (persistent) return persistent;
+        return loadFromFirestore();
+      }, cacheMs);
+    }
+    return await withQueryCache(`collection:${collectionName}`, loadFromFirestore, cacheMs);
+  } catch (error) {
+    if (options.throwOnError) throw error;
+    const persistent = STATIC_COLLECTIONS.has(collectionName) ? getPersistentCache(collectionName) : null;
+    return Array.isArray(persistent) ? persistent : [];
   }
-  return withQueryCache(`collection:${collectionName}`, loadFromFirestore, cacheMs);
 }
 
 export async function deleteDocumentsBatch(collectionName, ids = []) {
@@ -462,7 +476,9 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
   try {
     const cacheMs = Number(options.cacheMs || 0);
     if (isReadQuotaExhausted() && cacheMs <= 0) {
-      return [];
+      const error = new Error('Kuota baca Firestore sedang dalam masa pemulihan.');
+      error.code = 'resource-exhausted';
+      throw error;
     }
     if (cacheMs > 0) {
       const queryOptions = {
@@ -484,6 +500,7 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
       markFirestoreReadQuotaExceeded(`query:${collectionName}`, error);
     }
     console.warn(`Gagal query dokumen dari koleksi ${collectionName}:`, error);
+    if (options.throwOnError) throw error;
     return [];
   }
 }
@@ -507,28 +524,37 @@ export async function recalculateDashboardCounts(context) {
   const { year, semester } = getActivePeriod(context);
   if (!year || !semester || !db) return null;
   try {
-    const [mapelList, kelasList, pengajaranList] = await Promise.all([
-      getCollectionDocs('mata_pelajaran').catch(() => []),
-      getCollectionDocs('kelas').catch(() => []),
-      getDocumentsWhere('pengajaran', [
-        { field: 'tahun_ajaran_id', value: year },
-        { field: 'semester_id', value: semester },
-      ]).catch(() => []),
-    ]);
-    const [guruList, siswaList] = await Promise.all([
-      db.collection('users').where('role', '==', 'guru').get().then((s) => s.docs).catch(() => []),
-      db.collection('users').where('role', '==', 'siswa').get().then((s) => s.docs).catch(() => []),
+    const countQuery = async (query) => {
+      if (typeof query.count === 'function') {
+        const snapshot = await query.count().get();
+        return Number(snapshot.data()?.count || 0);
+      }
+      const snapshot = await query.get();
+      return snapshot.size;
+    };
+    const [jumlahMapel, jumlahKelas, jumlahPengajaran, jumlahGuru, jumlahSiswa] = await Promise.all([
+      countQuery(db.collection('mata_pelajaran')),
+      countQuery(db.collection('kelas')),
+      countQuery(db.collection('pengajaran')
+        .where('tahun_ajaran_id', '==', year)
+        .where('semester_id', '==', semester)),
+      countQuery(db.collection('users').where('role', '==', 'guru')),
+      countQuery(db.collection('users').where('role', '==', 'siswa')),
     ]);
     const counts = {
-      jumlah_guru: guruList.length,
-      jumlah_siswa: siswaList.length,
-      jumlah_mapel: mapelList.length,
-      jumlah_kelas: kelasList.length,
-      jumlah_pengajaran: pengajaranList.length,
+      jumlah_guru: jumlahGuru,
+      jumlah_siswa: jumlahSiswa,
+      jumlah_mapel: jumlahMapel,
+      jumlah_kelas: jumlahKelas,
+      jumlah_pengajaran: jumlahPengajaran,
       updated_at: new Date().toISOString(),
     };
     const docId = `${year}_${semester}`;
-    await db.collection('dashboard_counts').doc(docId).set(counts, { merge: true });
+    try {
+      await db.collection('dashboard_counts').doc(docId).set(counts, { merge: true });
+    } catch (error) {
+      console.warn('Statistik berhasil dihitung tetapi cache dashboard gagal disimpan:', error);
+    }
     return counts;
   } catch (error) {
     console.warn('Gagal menghitung statistik dashboard:', error);
@@ -634,7 +660,7 @@ export async function getAttendanceRecordsByDate(context, pengajaranId = '', dat
       { field: 'tanggal', value: targetDate },
     ];
     if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
-    return await getDocumentsWhere('absensi', filters, { cacheMs: 20000 });
+    return await getDocumentsWhere('absensi', filters, { cacheMs: 20000, throwOnError: true });
   } catch (error) {
     if (isFirestoreIndexError(error) && pengajaranId) {
       try {
@@ -668,7 +694,7 @@ export async function getAttendanceRecordsByDateRange(context, pengajaranId = ''
       { field: 'tanggal', operator: '<=', value: end },
     ];
     if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
-    return await getDocumentsWhere('absensi', filters, { cacheMs: 30000 });
+    return await getDocumentsWhere('absensi', filters, { cacheMs: 30000, throwOnError: true });
   } catch (error) {
     if (isFirestoreIndexError(error) && pengajaranId) {
       try {
@@ -1307,11 +1333,8 @@ export async function getPublishedMaterials(options = {}) {
     return withQueryCache(cacheKey, async () => {
       let docs = [];
       const materialFilters = [];
-      const queryOptions = {
+const queryOptions = {
         cacheMs: QUERY_CACHE_TTL_MS,
-        orderBy: 'updated_at',
-        orderDirection: 'desc',
-        limit: 300,
       };
       if (kelasId) materialFilters.push({ field: 'kelas_id', value: kelasId });
       if (year) materialFilters.push({ field: 'tahun_ajaran_id', value: year });
@@ -1319,12 +1342,10 @@ export async function getPublishedMaterials(options = {}) {
       if (materialFilters.length) {
         docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, materialFilters, queryOptions);
       }
-      if (!docs.length) {
-        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [], queryOptions);
-      }
-      // Firestore adalah sumber kebenaran utama saat online.
-      // Ini mencegah materi yang sudah dihapus di Firestore hidup lagi dari cache lokal.
-      const materials = mergeMaterialsById(docs, []);
+      // Sort client-side to avoid composite index requirement.
+      const materials = mergeMaterialsById(docs, [])
+        .sort((a, b) => String(b.updated_at || b.published_at || '').localeCompare(String(a.updated_at || a.published_at || '')))
+        .slice(0, 300);
       writeLocalPublishedMaterials(materials);
       return materials;
     }, QUERY_CACHE_TTL_MS);
@@ -1467,39 +1488,44 @@ export async function recordMaterialRead(payload) {
 
   if (db) {
     const ref = db.collection(MATERIAL_READS_COLLECTION).doc(readId);
-    let existingRemoteRead = null;
-    let readError = null;
-    try {
-      const snapshot = await ref.get();
-      existingRemoteRead = snapshot.exists ? snapshot.data() : null;
-    } catch (error) {
-      readError = error;
-    }
-
-    const remoteReadCount = Number(existingRemoteRead?.read_count || existingLocalRead.read_count || 0) + (shouldIncrementRead ? 1 : 0);
-    const remoteTotalDuration = Number(existingRemoteRead?.total_duration_seconds || existingLocalRead.total_duration_seconds || 0) + durationSeconds;
-    const remoteCompleted = payload?.completed === true || eventType === 'complete' || Boolean(existingRemoteRead?.completed_at) || Boolean(existingLocalRead.completed_at);
-    const remotePayload = {
-      ...(existingRemoteRead || {}),
-      ...nextPayload,
-      read_count: remoteReadCount,
-      first_read_at: existingRemoteRead?.first_read_at || existingLocalRead.first_read_at || nowIso,
+    const increment = window.firebase?.firestore?.FieldValue?.increment;
+    const explicitlyCompleted = payload?.completed === true || eventType === 'complete';
+    const remoteUpdate = {
+      ...payload,
+      id: readId,
+      material_id: materialId,
+      siswa_id: studentId,
+      event_type: eventType,
+      read_count: increment ? increment(shouldIncrementRead ? 1 : 0) : nextPayload.read_count,
       last_read_at: nowIso,
       last_duration_seconds: durationSeconds,
-      total_duration_seconds: remoteTotalDuration,
-      completed_at: remoteCompleted ? (existingRemoteRead?.completed_at || existingLocalRead.completed_at || nowIso) : '',
-      completion_status: remoteCompleted ? 'completed' : (remoteReadCount > 0 ? 'opened' : 'unopened'),
+      total_duration_seconds: increment ? increment(durationSeconds) : nextPayload.total_duration_seconds,
     };
+    delete remoteUpdate.first_read_at;
+    delete remoteUpdate.completed_at;
+    delete remoteUpdate.completion_status;
+    if (explicitlyCompleted) {
+      remoteUpdate.completed_at = nowIso;
+      remoteUpdate.completion_status = 'completed';
+    }
 
     try {
-      await ref.set(remotePayload, { merge: true });
+      await ref.update(remoteUpdate);
       const nextLocalReads = localReads.filter((item) => item.id !== readId);
-      nextLocalReads.push(remotePayload);
+      nextLocalReads.push(nextPayload);
       writeLocalMaterialReads(nextLocalReads);
-      return remotePayload;
+      return nextPayload;
     } catch (writeError) {
-      if (readError) {
-        console.warn(`Gagal mencatat bacaan materi ke Firestore (read+write): ${readError?.message || readError}`);
+      if (String(writeError?.code || '').includes('not-found')) {
+        try {
+          await ref.set(nextPayload);
+          const nextLocalReads = localReads.filter((item) => item.id !== readId);
+          nextLocalReads.push(nextPayload);
+          writeLocalMaterialReads(nextLocalReads);
+          return nextPayload;
+        } catch (createError) {
+          console.warn('Gagal membuat catatan bacaan materi di Firestore:', createError);
+        }
       } else {
         console.warn('Gagal mencatat bacaan materi ke Firestore:', writeError);
       }
@@ -1785,10 +1811,13 @@ export async function deletePengumuman(id) {
     const readsSnapshot = await db.collection(PENGUMUMAN_READS_COLLECTION)
       .where('pengumuman_id', '==', pengumumanId)
       .get();
-    const batch = db.batch();
-    batch.delete(db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId));
-    readsSnapshot.docs.forEach((doc) => batch.delete(doc.ref));
-    await batch.commit();
+    const refs = readsSnapshot.docs.map((doc) => doc.ref);
+    for (let i = 0; i < refs.length; i += 400) {
+      const batch = db.batch();
+      refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+    await db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId).delete();
   }
 
   writeLocalPengumuman(readLocalPengumuman().filter((item) => item.id !== pengumumanId));

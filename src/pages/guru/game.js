@@ -1143,6 +1143,7 @@ export async function renderGuruGamePage(container) {
   let hasGameSelection = false;
   let activeBattleRoom = null;
   let battlePollId = null;
+  let battleUnsubscribe = null;
 
   function readBattleRooms() {
     return readLocalList(BATTLE_ROOM_LOCAL_KEY);
@@ -1220,6 +1221,8 @@ export async function renderGuruGamePage(container) {
   function stopBattlePolling() {
     if (battlePollId) clearInterval(battlePollId);
     battlePollId = null;
+    if (battleUnsubscribe) battleUnsubscribe();
+    battleUnsubscribe = null;
   }
 
   function setGameSettingsVisibility(visible, animate = false) {
@@ -2311,9 +2314,20 @@ export async function renderGuruGamePage(container) {
     renderBattleRoom(room);
     setBattleMessage('Room siap. Bagikan kode kepada siswa di kelas.');
     stopBattlePolling();
-    battlePollId = setInterval(() => {
-      if (!document.hidden) refreshBattleRoom();
-    }, 8000);
+    battleUnsubscribe = window.firebaseDb?.collection('battle_rooms').doc(room.id)
+      .onSnapshot((snapshot) => {
+        if (!snapshot.exists) return;
+        const nextRoom = { id: snapshot.id, ...snapshot.data() };
+        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, nextRoom);
+        renderBattleRoom(nextRoom);
+      }, () => {
+        battleUnsubscribe = null;
+        if (!battlePollId) {
+          battlePollId = setInterval(() => {
+            if (!document.hidden) refreshBattleRoom();
+          }, 15000);
+        }
+      });
   });
 
   battleCopyCodeBtn?.addEventListener('click', async () => {

@@ -17,7 +17,11 @@ module.exports = async (req, res) => {
   try {
     if (req.method === 'GET') {
       if (!adminUser) return res.status(401).json({ error: 'Akses admin diperlukan.' });
-      return res.status(200).json({ users: await listUsers(req.query?.role, req.query?.kelas) });
+      const result = await listUsers(req.query?.role, req.query?.kelas, {
+        limit: req.query?.limit,
+        after: req.query?.after,
+      });
+      return res.status(200).json(result);
     }
     if (!adminUser) return res.status(401).json({ error: 'Akses admin diperlukan.' });
     if (req.method === 'POST') {

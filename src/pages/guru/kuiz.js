@@ -403,11 +403,13 @@ async function fsGet(collection, id) {
   } catch { return null; }
 }
 
-async function fsQuery(collection, filters = []) {
+async function fsQuery(collection, filters = [], options = {}) {
   if (!db()) return [];
   try {
     let q = db().collection(collection);
     filters.forEach(({ field, op, value }) => { q = q.where(field, op || '==', value); });
+    if (options.orderBy) q = q.orderBy(options.orderBy, options.orderDirection || 'desc');
+    if (Number(options.limit) > 0) q = q.limit(Number(options.limit));
     const snap = await q.get();
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch { return []; }
@@ -2054,7 +2056,7 @@ function openModalEditorSoal(paketId) {
   document.getElementById('btn-tambah-soal')?.addEventListener('click', () => openModalSoalItem(paketId, null));
 
   document.querySelectorAll('[data-soal-action]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const action = btn.dataset.soalAction;
       const soalId = btn.dataset.soalId;
       if (action === 'edit') openModalSoalItem(paketId, soalId);
@@ -2910,6 +2912,10 @@ function openModalGroupSesi(eventGroupId) {
     btn.addEventListener('click', async () => {
       await changeSesiStatus(btn.dataset.sesiId, 'aktif');
       closeModal();
+      if (state.tab === 'monitor') {
+        const activeSessions = state.sesiList.filter((sesi) => sesi.status === 'aktif');
+        await Promise.all(activeSessions.map((sesi) => loadJawabanForSesi(sesi.id)));
+      }
       rerender();
       showNotif('Sesi diaktifkan.');
     });
@@ -3899,10 +3905,7 @@ export async function renderGuruKuizPage(container) {
 
   await Promise.all([loadPaket(), loadSesi()]);
 
-  // Ringkasan awal hanya membutuhkan sesi aktif. Jawaban sesi historis dimuat
-  // ketika guru membuka monitor, hasil, koreksi, atau sinkronisasi nilai.
-  const activeSessions = state.sesiList.filter((sesi) => sesi.status === 'aktif');
-  await Promise.all(activeSessions.map((sesi) => loadJawabanForSesi(sesi.id)));
+  // Jawaban dimuat saat monitor/hasil dibuka, bukan saat halaman pertama tampil.
 
   const html = renderLayout('Ujian Pro', `
     <div class="space-y-5">

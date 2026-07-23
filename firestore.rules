@@ -1,9 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /dashboard_counts/{periodId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
     match /materi_publish/{materialId} {
       allow read: if true;
-      allow create, update: if request.auth != null && request.resource.data.keys().hasOnly([
+      allow create: if request.auth != null && request.auth.token.role == 'guru' && request.resource.data.guru_id == request.auth.token.username && request.resource.data.keys().hasOnly([
         'id',
         'source_id',
         'pengajaran_id',
@@ -201,12 +206,17 @@ service cloud.firestore {
       && (!('kelas_nama' in request.resource.data) || request.resource.data.kelas_nama is string)
       && (!('started_at' in request.resource.data) || request.resource.data.started_at is string)
       && (!('finished_at' in request.resource.data) || request.resource.data.finished_at is string);
-      allow delete: if request.auth != null;
+      allow update: if request.auth != null
+        && ((resource.data.guru_id == request.auth.token.username
+          && request.resource.data.guru_id == resource.data.guru_id)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'updated_at'])
+          && request.resource.data.participants.diff(resource.data.participants).affectedKeys().hasOnly([request.auth.token.username])));
+      allow delete: if request.auth != null && resource.data.guru_id == request.auth.token.username;
     }
 
     match /battle_participants/{participantId} {
       allow read: if request.auth != null;
-      allow create, update: if request.resource.data.keys().hasOnly([
+      allow create, update: if request.auth != null && request.resource.data.participant_id == request.auth.token.username && request.resource.data.keys().hasOnly([
         'id', 'participant_id', 'room_id', 'room_code', 'nama', 'score', 'correct', 'wrong', 'answers', 'score_events',
         'avatar_key', 'avatar_seed', 'ready',
         'joined_at', 'last_seen_at', 'updated_at'
@@ -232,7 +242,7 @@ service cloud.firestore {
       && request.resource.data.joined_at is string
       && request.resource.data.updated_at is string
       && (!('last_seen_at' in request.resource.data) || request.resource.data.last_seen_at is string);
-       allow delete: if request.auth != null;
+       allow delete: if request.auth != null && resource.data.participant_id == request.auth.token.username;
     }
 
     // Public lobby content is rendered before authentication on the home page.

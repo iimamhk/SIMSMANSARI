@@ -7,7 +7,8 @@ module.exports = async (req, res) => {
   if (!header.startsWith('Bearer ')) return res.status(401).json({ error: 'Sesi tidak valid.' });
   try {
     await getAuth().verifyIdToken(header.slice(7));
-    return res.status(200).json({ users: await listUsers() });
+    const result = await listUsers('', '', { limit: 100, after: req.query?.after });
+    return res.status(200).json(result);
   } catch (error) {
     console.error('Contacts API error:', error);
     return res.status(401).json({ error: 'Sesi tidak valid.' });

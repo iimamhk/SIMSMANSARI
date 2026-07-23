@@ -207,7 +207,7 @@ export async function renderAdminDashboard(container) {
   async function loadDashboardStats() {
     try {
       // Coba baca dari dokumen dashboard_counts (1 read saja)
-      const cached = await getDashboardCounts(context);
+      const cached = await getDashboardCounts(context) || await recalculateDashboardCounts(context);
       if (cached) {
         const guruCount = Number(cached.jumlah_guru || 0);
         const siswaCount = Number(cached.jumlah_siswa || 0);
