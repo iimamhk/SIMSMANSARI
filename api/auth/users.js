@@ -35,6 +35,9 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Method tidak diizinkan.' });
   } catch (error) {
     console.error('Admin user API error:', error);
+    if (Number(error?.code) === 8) {
+      return res.status(503).json({ error: 'Kuota database Firebase sedang habis. Coba kembali setelah kuota tersedia.' });
+    }
     return res.status(400).json({ error: error.message || 'Operasi user gagal.' });
   }
 };

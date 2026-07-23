@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
-import { saveDocument, getCollectionDocs } from '../../firebase/data-service.js';
+import { saveDocument, getCollectionDocs, synchronizeCurrentClassMemberships, synchronizeRenamedUserReferences } from '../../firebase/data-service.js';
 import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
 export async function renderMasterSiswaPage(container) {
@@ -58,7 +58,7 @@ export async function renderMasterSiswaPage(container) {
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Username</label>
-              <input id="siswa-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Username" readonly />
+              <input id="siswa-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100 transition focus:border-sky-300 focus:bg-white" placeholder="Kosongkan untuk membuat dari nama" pattern="[A-Za-z0-9._-]{3,30}" />
             </div>
             <div>
               <label class="mb-2 block text-sm font-medium text-slate-700">Password</label>
@@ -192,26 +192,27 @@ export async function renderMasterSiswaPage(container) {
   const bindRowActions = (visibleItems) => {
     container.querySelectorAll('[data-action="edit-siswa"]').forEach((button) => {
       button.addEventListener('click', () => {
-        const username = button.dataset.username;
-        const item = siswaList.find((entry) => entry.username === username);
+        const accountId = button.dataset.accountId;
+        const item = siswaList.find((entry) => entry.id === accountId);
         if (!item) return;
         container.querySelector('#siswa-nama').value = item.nama || '';
         container.querySelector('#siswa-username').value = item.username || '';
       container.querySelector('#siswa-password').value = '';
         container.querySelector('#siswa-kelas').value = item.kelas_nama || item.kelas_id || '';
-        setEditMode(true, username);
+        setEditMode(true, item.id, item.username);
       });
     });
 
     container.querySelectorAll('[data-action="delete-siswa"]').forEach((button) => {
       button.addEventListener('click', async () => {
-        const username = button.dataset.username;
-        const item = siswaList.find((entry) => entry.username === username);
+        const accountId = button.dataset.accountId;
+        const item = siswaList.find((entry) => entry.id === accountId);
         if (!item) return;
         const confirmed = confirm(`Hapus akun siswa ${item.nama}?`);
         if (!confirmed) return;
         try {
-          await deleteManagedUser(username);
+          await deleteManagedUser(accountId);
+          await synchronizeCurrentClassMemberships(context, [{ ...item, status: 'inactive' }]);
         } catch (error) {
           alert(error.message || 'Gagal menghapus siswa.');
           return;
@@ -248,8 +249,8 @@ export async function renderMasterSiswaPage(container) {
         </td>
         <td class="px-4 py-3">
           <div class="flex flex-wrap gap-2">
-            <button type="button" data-action="edit-siswa" data-username="${item.username}" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">Edit</button>
-            <button type="button" data-action="delete-siswa" data-username="${item.username}" class="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-600">Hapus</button>
+            <button type="button" data-action="edit-siswa" data-account-id="${item.id}" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">Edit</button>
+            <button type="button" data-action="delete-siswa" data-account-id="${item.id}" class="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-600">Hapus</button>
           </div>
         </td>
       </tr>
@@ -305,7 +306,7 @@ export async function renderMasterSiswaPage(container) {
   };
 
   container.querySelector('#download-siswa-template-btn')?.addEventListener('click', () => {
-    const template = ['nama,username,password,kelas', 'Aditya Bayu Permana,adityabayupremana,12345,X.1', 'Budi Santoso,budisantoso,12345,X_2'].join('\n');
+    const template = ['nama,username,password,kelas', 'Aditya Bayu Permana,adityabayupremana,123456,X.1', 'Budi Santoso,budisantoso,123456,X_2'].join('\n');
     const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -330,11 +331,12 @@ export async function renderMasterSiswaPage(container) {
       for (const row of rows) {
         const nama = String(row.nama || '').trim();
         const username = String(row.username || generateUsername(nama)).trim();
-        const password = String(row.password || '12345').trim();
+        const password = String(row.password || '123456').trim();
         const kelasInfo = await ensureKelas(row.kelas || row.kelas_nama || row.kelas_id || '');
         if (!nama) continue;
         const payload = { username, password, nama, role: 'siswa', status: 'active', created_at: new Date().toISOString(), tahun_ajaran_id: context.tahun_ajaran_aktif, semester_id: context.semester_aktif, kelas_id: kelasInfo?.id || '', kelas_nama: kelasInfo?.nama || '', username_lower: username.toLowerCase().replace(/\s+/g, '') };
-         await saveManagedUser(payload);
+         const savedUser = await saveManagedUser(payload);
+         await synchronizeCurrentClassMemberships(context, [savedUser]);
         saved += 1;
       }
       setProgressState(3, 'done');
@@ -347,34 +349,38 @@ export async function renderMasterSiswaPage(container) {
     }
   });
 
+  let editingAccountId = null;
   let editingUsername = null;
   const form = container.querySelector('#siswa-form');
   const submitBtn = container.querySelector('#siswa-submit-btn');
   const cancelBtn = container.querySelector('#siswa-cancel-btn');
   const title = container.querySelector('#siswa-form-title');
 
-  const setEditMode = (isEditing, username = '') => {
+  const setEditMode = (isEditing, accountId = '', username = '') => {
+    editingAccountId = isEditing ? accountId : null;
     editingUsername = isEditing ? username : null;
     submitBtn.textContent = isEditing ? 'Perbarui Siswa' : 'Simpan Siswa';
     cancelBtn.classList.toggle('hidden', !isEditing);
     title.textContent = isEditing ? 'Edit Siswa' : 'Tambah Siswa';
+    container.querySelector('#siswa-password').required = !isEditing;
+    container.querySelector('#siswa-password').placeholder = isEditing ? 'Kosongkan jika password tidak diubah' : 'Password';
     if (!isEditing) {
       form.reset();
       container.querySelector('#siswa-username').value = '';
-      container.querySelector('#siswa-password').value = '12345';
+      container.querySelector('#siswa-password').value = '123456';
     }
   };
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const nama = container.querySelector('#siswa-nama').value.trim();
-    const password = container.querySelector('#siswa-password').value.trim() || '12345';
+    const password = container.querySelector('#siswa-password').value.trim();
     const kelasInput = container.querySelector('#siswa-kelas').value.trim();
-    const username = editingUsername || generateUsername(nama);
+    const username = container.querySelector('#siswa-username').value.trim() || generateUsername(nama);
     const kelasInfo = await ensureKelas(kelasInput);
     const payload = {
       username,
-      password,
+      ...(password ? { password } : {}),
       nama,
       role: 'siswa',
       status: 'active',
@@ -387,13 +393,22 @@ export async function renderMasterSiswaPage(container) {
     };
 
     try {
-      await saveManagedUser(payload, editingUsername || '');
+      const savedUser = await saveManagedUser(payload, editingAccountId || '');
+      await synchronizeCurrentClassMemberships(context, [savedUser]);
+      const oldUsernames = new Set([
+        editingUsername,
+        ...(Array.isArray(savedUser.previous_usernames) ? savedUser.previous_usernames : []),
+      ].filter((item) => item && item.toLowerCase() !== savedUser.username.toLowerCase()));
+      for (const oldUsername of oldUsernames) {
+        await synchronizeRenamedUserReferences(context, 'siswa', oldUsername, savedUser);
+      }
     } catch (error) {
       alert(error.message || 'Gagal menyimpan siswa.');
       return;
     }
+    const wasEditing = Boolean(editingUsername);
     setEditMode(false);
-    alert(editingUsername ? `Siswa berhasil diperbarui.` : `Siswa berhasil disimpan dengan username ${username}`);
+    alert(wasEditing ? `Siswa berhasil diperbarui.` : `Siswa berhasil disimpan dengan username ${username}`);
     renderMasterSiswaPage(container);
   });
 

@@ -26,6 +26,7 @@ function safeUser(data, id) {
     nis: data.nis || '',
     nisn: data.nisn || '',
     mapel: data.mapel || '',
+    previous_usernames: Array.isArray(data.previous_usernames) ? data.previous_usernames : [],
   };
 }
 
@@ -55,7 +56,10 @@ async function login(usernameInput, passwordInput) {
   const db = getFirestore();
   let ref = db.collection('users').doc(username);
   let snapshot = await ref.get();
-  if (!snapshot.exists) {
+  if (snapshot.exists && normalizeUsername(snapshot.data()?.username || snapshot.id) !== username) {
+    snapshot = null;
+  }
+  if (!snapshot?.exists) {
     const byLower = await db.collection('users').where('username_lower', '==', username).limit(1).get();
     const byUsername = byLower.empty
       ? await db.collection('users').where('username', '==', username).limit(1).get()
@@ -90,28 +94,64 @@ async function saveUser(input, existingUsername) {
   const password = input.password ? normalizePassword(input.password) : '';
   if (password && (password.length < 6 || password.length > 200)) throw new Error('Password harus 6-200 karakter.');
   const db = getFirestore();
-  const id = normalizeUsername(existingUsername || username);
-  const ref = db.collection('users').doc(id);
-  const oldSnapshot = await ref.get();
-  const oldData = oldSnapshot.exists ? oldSnapshot.data() || {} : {};
+  const accountId = normalizeUsername(existingUsername || username);
+  const ref = db.collection('users').doc(accountId);
+  const initialSnapshot = await ref.get();
+  if (!existingUsername && initialSnapshot.exists) throw new Error('Username sudah digunakan oleh akun lain.');
+  const initialData = initialSnapshot.exists ? initialSnapshot.data() || {} : {};
+  const oldUsername = normalizeUsername(initialData.username || accountId);
+  const usernameMatches = await db.collection('users').where('username_lower', '==', username).get();
+  if (usernameMatches.docs.some((doc) => doc.id !== accountId)) {
+    throw new Error('Username sudah digunakan oleh akun lain.');
+  }
   const { password: ignoredPassword, password_hash: ignoredPasswordHash, existing_username: ignoredExistingUsername, ...profile } = input;
-  const payload = {
-    ...oldData,
-    ...profile,
-    ...safeUser({ ...profile, username }, id),
-    username,
-    username_lower: username,
-    updated_at: new Date().toISOString(),
-  };
-  delete payload.id;
-  delete payload.password;
-  delete payload.password_hash;
-  if (password) payload.password_hash = await bcrypt.hash(password, 12);
-  else if (oldData.password_hash) payload.password_hash = oldData.password_hash;
-  else if (oldData.password) payload.password_hash = await bcrypt.hash(oldData.password, 12);
-  else if (!oldSnapshot.exists) throw new Error('Password wajib diisi untuk akun baru.');
-  await ref.set(payload, { merge: true });
-  return safeUser(payload, id);
+  const passwordHash = password ? await bcrypt.hash(password, 12) : '';
+  let payload = null;
+  await db.runTransaction(async (transaction) => {
+    const usernameRef = db.collection('usernames').doc(username);
+    const [latestSnapshot, usernameSnapshot] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(usernameRef),
+    ]);
+    if (!existingUsername && latestSnapshot.exists) throw new Error('Username sudah digunakan oleh akun lain.');
+    const latestData = latestSnapshot.exists ? latestSnapshot.data() || {} : {};
+    if (usernameSnapshot.exists && usernameSnapshot.data()?.account_id !== accountId) {
+      throw new Error('Username sudah digunakan oleh akun lain.');
+    }
+    payload = {
+      ...latestData,
+      ...profile,
+      ...safeUser({ ...profile, username }, accountId),
+      username,
+      username_lower: username,
+      updated_at: new Date().toISOString(),
+    };
+    if (oldUsername !== username || accountId !== username) {
+      payload.previous_usernames = Array.from(new Set([
+        ...(Array.isArray(latestData.previous_usernames) ? latestData.previous_usernames : []),
+        oldUsername,
+        accountId,
+      ].map(normalizeUsername).filter((item) => item && item !== username)));
+    }
+    delete payload.id;
+    delete payload.password;
+    delete payload.password_hash;
+    if (passwordHash) payload.password_hash = passwordHash;
+    else if (latestData.password_hash) payload.password_hash = latestData.password_hash;
+    else if (latestData.password) payload.password_hash = await bcrypt.hash(latestData.password, 12);
+    else throw new Error('Password wajib diisi untuk akun baru.');
+    transaction.set(ref, payload, { merge: true });
+    transaction.set(usernameRef, { account_id: accountId, username, updated_at: new Date().toISOString() });
+    if (oldUsername && oldUsername !== username) {
+      transaction.set(db.collection('usernames').doc(oldUsername), {
+        account_id: accountId,
+        username: oldUsername,
+        reserved: true,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  });
+  return safeUser(payload, accountId);
 }
 
 module.exports = { login, listUsers, saveUser, safeUser, normalizeUsername };

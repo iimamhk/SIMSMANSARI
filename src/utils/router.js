@@ -38,11 +38,12 @@ import { renderMasterTahunAjaranPage } from '../pages/admin/master-tahun-ajaran.
 import { renderPlottingJadwalPage } from '../pages/admin/plotting-jadwal.js';
 import { renderMasterPembelajaranPage } from '../pages/admin/master-pembelajaran.js';
 import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
+import { waitForAuthReady } from '../firebase/auth-service.js';
 
 function getSession() {
   const raw = localStorage.getItem('simguru_session');
   const session = raw ? JSON.parse(raw) : null;
-  return session?.firebase_uid ? session : null;
+  return session?.firebase_uid || session?.emergency_local ? session : null;
 }
 
 function getDefaultRouteByRole(role) {
@@ -83,6 +84,21 @@ function resolveRoute(hash) {
 }
 
 async function renderRoute() {
+  const requestedHash = window.location.hash || '#home';
+  const isProtectedRoute = requestedHash.startsWith('#admin')
+    || requestedHash.startsWith('#guru')
+    || requestedHash.startsWith('#siswa');
+  const activeSession = getSession();
+  const bypassAuthReady = Boolean(activeSession?.emergency_local);
+  if (isProtectedRoute && !bypassAuthReady && !(await waitForAuthReady())) {
+    localStorage.removeItem('simguru_session');
+    localStorage.removeItem('simguru_wali');
+    if (window.location.hash !== '#login') {
+      window.location.hash = '#login';
+      return;
+    }
+  }
+
   const route = resolveRoute(window.location.hash);
   const container = document.getElementById('app');
 

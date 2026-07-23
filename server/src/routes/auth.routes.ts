@@ -46,6 +46,7 @@ function safeUser(data: Record<string, unknown>, id: string) {
     kelas: String(data.kelas || data.kelas_nama || data.kelas_id || ''),
     nis: String(data.nis || ''),
     nisn: String(data.nisn || ''),
+    previous_usernames: Array.isArray(data.previous_usernames) ? data.previous_usernames.map((item) => String(item)) : [],
   };
 }
 
@@ -61,6 +62,10 @@ async function requireIdToken(req: Request): Promise<admin.auth.DecodedIdToken |
 
 function isAdmin(token: admin.auth.DecodedIdToken | null): boolean {
   return token?.role === 'admin';
+}
+
+function isQuotaExceeded(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && Number(error.code) === 8;
 }
 
 router.get('/users', async (req: Request, res: Response) => {
@@ -81,6 +86,10 @@ router.get('/users', async (req: Request, res: Response) => {
     res.status(200).json({ users });
   } catch (error) {
     console.error('Load users error:', error);
+    if (isQuotaExceeded(error)) {
+      res.status(503).json({ error: 'Kuota database Firebase sedang habis. Coba kembali setelah kuota tersedia.' });
+      return;
+    }
     res.status(500).json({ error: 'Data user tidak dapat dimuat.' });
   }
 });
@@ -147,34 +156,71 @@ router.post('/users', async (req: Request, res: Response) => {
   try {
     const firestore = getAdminApp().firestore();
     const existingUsername = normalizeUsername(req.body?.existing_username);
-    const documentId = existingUsername || username;
-    const ref = firestore.collection('users').doc(documentId);
-    const previous = await ref.get();
-    const previousData = previous.exists ? (previous.data() || {}) as Record<string, unknown> : {};
-    const payload: Record<string, unknown> = {
-      ...previousData,
-      username,
-      username_lower: username,
-      nama: String(req.body?.nama || previousData.nama || ''),
-      role: String(req.body?.role || previousData.role || 'siswa'),
-      status: String(req.body?.status || previousData.status || 'active'),
-      kelas_id: String(req.body?.kelas_id || previousData.kelas_id || ''),
-      kelas_nama: String(req.body?.kelas_nama || previousData.kelas_nama || ''),
-      tahun_ajaran_id: String(req.body?.tahun_ajaran_id || previousData.tahun_ajaran_id || ''),
-      semester_id: String(req.body?.semester_id || previousData.semester_id || ''),
-      updated_at: new Date().toISOString(),
-    };
-    delete payload.password;
-    delete payload.password_hash;
-    if (password) payload.password_hash = await bcrypt.hash(password, 12);
-    else if (typeof previousData.password_hash === 'string') payload.password_hash = previousData.password_hash;
-    else if (typeof previousData.password === 'string') payload.password_hash = await bcrypt.hash(previousData.password, 12);
-    else if (!previous.exists) {
-      res.status(400).json({ error: 'Password wajib diisi untuk akun baru.' });
+    const accountId = existingUsername || username;
+    const ref = firestore.collection('users').doc(accountId);
+    const initialSnapshot = await ref.get();
+    if (!existingUsername && initialSnapshot.exists) {
+      res.status(409).json({ error: 'Username sudah digunakan oleh akun lain.' });
       return;
     }
-    await ref.set(payload, { merge: true });
-    res.status(200).json({ user: safeUser(payload, documentId) });
+    const initialData = initialSnapshot.exists ? (initialSnapshot.data() || {}) as Record<string, unknown> : {};
+    const oldUsername = normalizeUsername(initialData.username || accountId);
+    const usernameMatches = await firestore.collection('users').where('username_lower', '==', username).get();
+    if (usernameMatches.docs.some((doc) => doc.id !== accountId)) {
+      res.status(409).json({ error: 'Username sudah digunakan oleh akun lain.' });
+      return;
+    }
+    const passwordHash = password ? await bcrypt.hash(password, 12) : '';
+    let payload: Record<string, unknown> = {};
+    await firestore.runTransaction(async (transaction) => {
+      const usernameRef = firestore.collection('usernames').doc(username);
+      const [latestSnapshot, usernameSnapshot] = await Promise.all([
+        transaction.get(ref),
+        transaction.get(usernameRef),
+      ]);
+      if (!existingUsername && latestSnapshot.exists) throw new Error('Username sudah digunakan oleh akun lain.');
+      const latestData = latestSnapshot.exists ? (latestSnapshot.data() || {}) as Record<string, unknown> : {};
+      if (usernameSnapshot.exists && usernameSnapshot.data()?.account_id !== accountId) {
+        throw new Error('Username sudah digunakan oleh akun lain.');
+      }
+      payload = {
+        ...latestData,
+        username,
+        username_lower: username,
+        nama: String(req.body?.nama || latestData.nama || ''),
+        role: String(req.body?.role || latestData.role || 'siswa'),
+        status: String(req.body?.status || latestData.status || 'active'),
+        kelas_id: String(req.body?.kelas_id ?? latestData.kelas_id ?? ''),
+        kelas_nama: String(req.body?.kelas_nama ?? latestData.kelas_nama ?? ''),
+        tahun_ajaran_id: String(req.body?.tahun_ajaran_id || latestData.tahun_ajaran_id || ''),
+        semester_id: String(req.body?.semester_id || latestData.semester_id || ''),
+        updated_at: new Date().toISOString(),
+      };
+      if (oldUsername !== username || accountId !== username) {
+        payload.previous_usernames = Array.from(new Set([
+          ...(Array.isArray(latestData.previous_usernames) ? latestData.previous_usernames : []),
+          oldUsername,
+          accountId,
+        ].map((item) => normalizeUsername(item)).filter((item) => item && item !== username)));
+      }
+      delete payload.password;
+      delete payload.password_hash;
+      if (passwordHash) payload.password_hash = passwordHash;
+      else if (typeof latestData.password_hash === 'string') payload.password_hash = latestData.password_hash;
+      else if (typeof latestData.password === 'string') payload.password_hash = await bcrypt.hash(latestData.password, 12);
+      else throw new Error('Password wajib diisi untuk akun baru.');
+      transaction.set(ref, payload, { merge: true });
+      transaction.set(usernameRef, { account_id: accountId, username, updated_at: new Date().toISOString() });
+      if (oldUsername && oldUsername !== username) {
+        transaction.set(firestore.collection('usernames').doc(oldUsername), {
+          account_id: accountId,
+          username: oldUsername,
+          reserved: true,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    });
+    res.status(200).json({ user: safeUser(payload, accountId) });
   } catch (error) {
     console.error('Save user error:', error);
     res.status(500).json({ error: 'Data user tidak dapat disimpan.' });
@@ -211,10 +257,13 @@ router.post('/login', async (req: Request, res: Response) => {
 
   try {
     const firestore = getAdminApp().firestore();
-    let userSnapshot = await firestore.collection('users').doc(username).get();
+    let userSnapshot: admin.firestore.DocumentSnapshot | undefined = await firestore.collection('users').doc(username).get();
+    if (userSnapshot.exists && normalizeUsername(userSnapshot.data()?.username || userSnapshot.id) !== username) {
+      userSnapshot = undefined;
+    }
 
     // Supports old records whose document ID differs from the username.
-    if (!userSnapshot.exists) {
+    if (!userSnapshot?.exists) {
       const query = await firestore.collection('users').where('username_lower', '==', username).limit(1).get();
       userSnapshot = query.docs[0] || (await firestore.collection('users').where('username', '==', username).limit(1).get()).docs[0];
     }
@@ -256,6 +305,10 @@ router.post('/login', async (req: Request, res: Response) => {
     res.status(200).json({ token, user });
   } catch (error) {
     console.error('Login error:', error);
+    if (isQuotaExceeded(error)) {
+      res.status(503).json({ error: 'Kuota database Firebase sedang habis. Coba kembali setelah kuota tersedia.' });
+      return;
+    }
     res.status(500).json({ error: 'Server autentikasi belum dikonfigurasi.' });
   }
 });

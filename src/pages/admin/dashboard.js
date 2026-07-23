@@ -214,11 +214,11 @@ export async function renderAdminDashboard(container) {
         getCollectionDocs('pengajaran').catch(() => []),
       ]);
 
-      const guruCount = guruList.length;
-      const siswaCount = siswaList.length;
-      const mapelCount = mapelList.length;
-      const kelasCount = kelasList.length;
-      const mappingCount = pengajaranList.length;
+      const guruCount = Array.isArray(guruList) ? guruList.length : 0;
+      const siswaCount = Array.isArray(siswaList) ? siswaList.length : 0;
+      const mapelCount = Array.isArray(mapelList) ? mapelList.length : 0;
+      const kelasCount = Array.isArray(kelasList) ? kelasList.length : 0;
+      const mappingCount = Array.isArray(pengajaranList) ? pengajaranList.length : 0;
       const hasUsers = guruCount > 0 && siswaCount > 0;
       const hasMapping = mappingCount > 0;
       const completed = [hasPeriod, hasUsers, hasMapping].filter(Boolean).length;

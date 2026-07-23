@@ -212,6 +212,26 @@ function mapStudentToMember(student) {
   };
 }
 
+function deduplicateClassMembers(members = []) {
+  const membersById = new Map();
+  members.forEach((member) => {
+    const studentId = normalizeUserKey(member?.siswa_id || member?.id);
+    if (!studentId) return;
+    const existing = membersById.get(studentId);
+    const existingUpdatedAt = String(existing?.updated_at || existing?.created_at || '');
+    const nextUpdatedAt = String(member?.updated_at || member?.created_at || '');
+    if (!existing || nextUpdatedAt >= existingUpdatedAt) {
+      membersById.set(studentId, {
+        ...member,
+        id: member.siswa_id || member.id,
+        siswa_id: member.siswa_id || member.id,
+      });
+    }
+  });
+  return Array.from(membersById.values())
+    .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+}
+
 async function getDocsFromCollection(collectionName) {
   if (!db) {
     return [];
@@ -437,7 +457,11 @@ export async function saveAttendanceRecord(payload) {
 
 export async function saveAttendanceRecordsBatch(payloads = []) {
   if (!db || !Array.isArray(payloads) || !payloads.length) return [];
-  const items = payloads.filter((item) => item?.id && item?.siswa_id);
+  const items = Array.from(new Map(
+    payloads
+      .filter((item) => item?.id && item?.siswa_id)
+      .map((item) => [item.id, item])
+  ).values());
   if (!items.length) return [];
 
   try {
@@ -760,6 +784,176 @@ export async function createPembelajaranFromPlotting(payload, context) {
   return learningPayload;
 }
 
+export async function synchronizeCurrentClassMemberships(context, students = []) {
+  if (!db) return { deleted: 0, saved: 0 };
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester || !Array.isArray(students)) {
+    return { deleted: 0, saved: 0 };
+  }
+
+  const studentsById = new Map();
+  students
+    .filter((student) => student?.role === 'siswa' && student.username)
+    .forEach((student) => studentsById.set(normalizeUserKey(student.username), student));
+  const managedStudents = Array.from(studentsById.values());
+  if (!managedStudents.length) return { deleted: 0, saved: 0 };
+
+  const studentKeys = Array.from(new Set(managedStudents.flatMap((student) => [
+    student.username,
+    ...(Array.isArray(student.previous_usernames) ? student.previous_usernames : []),
+  ]).map(normalizeUserKey).filter(Boolean)));
+  const membershipDocs = [];
+  for (let index = 0; index < studentKeys.length; index += 10) {
+    const keys = studentKeys.slice(index, index + 10);
+    const snapshot = await db.collection('anggota_kelas')
+      .where('siswa_id', 'in', keys)
+      .get();
+    snapshot.docs.forEach((doc) => membershipDocs.push({ id: doc.id, ...doc.data() }));
+  }
+  const currentMemberships = membershipDocs.filter((item) => item.semester_id === semester);
+  const membershipsByStudent = new Map();
+  const deleteIds = [];
+
+  currentMemberships.forEach((membership) => {
+    const studentId = normalizeUserKey(membership.siswa_id || membership.id);
+    if (!membershipsByStudent.has(studentId)) membershipsByStudent.set(studentId, []);
+    membershipsByStudent.get(studentId).push(membership);
+  });
+
+  const membershipWrites = [];
+  const classSequence = new Map();
+  managedStudents.forEach((student) => {
+    const studentId = normalizeUserKey(student.username);
+    const studentMemberships = (membershipsByStudent.get(studentId) || [])
+      .slice()
+      .sort((a, b) => String(b.updated_at || b.created_at || '').localeCompare(String(a.updated_at || a.created_at || '')));
+    const isActive = String(student.status || 'active').toLowerCase() === 'active';
+    if (!isActive || !student.kelas_id) {
+      studentMemberships.forEach((membership) => deleteIds.push(membership.id));
+      return;
+    }
+
+    const classKey = normalizeClassKey(student.kelas_id);
+    const classNumber = (classSequence.get(classKey) || 0) + 1;
+    classSequence.set(classKey, classNumber);
+    const expectedId = `${year}_${semester}_${student.kelas_id}_${student.username}`;
+    const matchingMemberships = studentMemberships
+      .filter((membership) => normalizeClassKey(membership.kelas_id) === normalizeClassKey(student.kelas_id));
+    const canonicalMembership = matchingMemberships.find((membership) => membership.id === expectedId)
+      || matchingMemberships[0];
+    studentMemberships
+      .filter((membership) => membership.id !== canonicalMembership?.id)
+      .forEach((membership) => deleteIds.push(membership.id));
+
+    const nextMembership = {
+      id: expectedId,
+      tahun_ajaran_id: year,
+      semester_id: semester,
+      kelas_id: student.kelas_id,
+      kelas_nama: student.kelas_nama || student.kelas_id,
+      siswa_id: student.username,
+      siswa_nama: student.nama || '-',
+      nomor_absen: student.nomor_absen || canonicalMembership?.nomor_absen || classNumber,
+      status: 'active',
+      created_at: canonicalMembership?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const membershipChanged = !canonicalMembership
+      || canonicalMembership.id !== expectedId
+      || canonicalMembership.kelas_id !== nextMembership.kelas_id
+      || canonicalMembership.kelas_nama !== nextMembership.kelas_nama
+      || canonicalMembership.siswa_nama !== nextMembership.siswa_nama
+      || Number(canonicalMembership.nomor_absen || 0) !== Number(nextMembership.nomor_absen || 0)
+      || String(canonicalMembership.status || 'active').toLowerCase() !== 'active';
+    if (canonicalMembership?.id && canonicalMembership.id !== expectedId) {
+      deleteIds.push(canonicalMembership.id);
+    }
+    if (membershipChanged) membershipWrites.push(nextMembership);
+  });
+
+  const writtenMembershipIds = new Set(membershipWrites.map((payload) => payload.id));
+  const uniqueDeleteIds = Array.from(new Set(deleteIds.filter(Boolean)))
+    .filter((id) => !writtenMembershipIds.has(id));
+  const operations = [
+    ...membershipWrites.map((payload) => ({ type: 'set', collection: 'anggota_kelas', id: payload.id, payload })),
+    ...uniqueDeleteIds.map((id) => ({ type: 'delete', collection: 'anggota_kelas', id })),
+  ];
+
+  for (let index = 0; index < operations.length; index += 400) {
+    const batch = db.batch();
+    operations.slice(index, index + 400).forEach((operation) => {
+      const ref = db.collection(operation.collection).doc(operation.id);
+      if (operation.type === 'delete') batch.delete(ref);
+      else batch.set(ref, sanitizeForFirestore(operation.payload), { merge: true });
+    });
+    await batch.commit();
+  }
+  if (operations.length) invalidateQueryCache();
+  return {
+    deleted: uniqueDeleteIds.length,
+    saved: membershipWrites.length,
+  };
+}
+
+export async function synchronizeRenamedUserReferences(context, role, oldUsername, user) {
+  if (!db) return { updated: 0, deleted: 0 };
+  const previousId = normalizeUserKey(oldUsername);
+  const nextId = normalizeUserKey(user?.username);
+  const { year, semester } = getActivePeriod(context);
+  if (!previousId || !nextId || previousId === nextId || !year || !semester) {
+    return { updated: 0, deleted: 0 };
+  }
+
+  if (role === 'siswa') {
+    const snapshot = await db.collection('anggota_kelas')
+      .where('tahun_ajaran_id', '==', year)
+      .get();
+    const oldMembershipIds = snapshot.docs
+      .filter((doc) => {
+        const data = doc.data() || {};
+        return data.semester_id === semester
+          && normalizeUserKey(data.siswa_id) === previousId;
+      })
+      .map((doc) => doc.id);
+    await synchronizeCurrentClassMemberships(context, [user]);
+    await deleteDocumentsBatch('anggota_kelas', oldMembershipIds);
+    return { updated: 1, deleted: oldMembershipIds.length };
+  }
+
+  if (role === 'guru') {
+    const collections = ['pengajaran', 'pembelajaran', 'wali_kelas'];
+    const docs = [];
+    for (const collectionName of collections) {
+      const snapshot = await db.collection(collectionName)
+        .where('guru_id', '==', oldUsername)
+        .get();
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data() || {};
+        const samePeriod = collectionName === 'wali_kelas'
+          ? (!data.tahun_ajaran_id || data.tahun_ajaran_id === year)
+          : data.tahun_ajaran_id === year && data.semester_id === semester;
+        if (samePeriod) docs.push({ ref: doc.ref, data });
+      });
+    }
+
+    for (let index = 0; index < docs.length; index += 400) {
+      const batch = db.batch();
+      docs.slice(index, index + 400).forEach(({ ref, data }) => {
+        batch.set(ref, {
+          guru_id: user.username,
+          guru_nama: user.nama || data.guru_nama || '',
+          updated_at: new Date().toISOString(),
+        }, { merge: true });
+      });
+      await batch.commit();
+    }
+    if (docs.length) invalidateQueryCache();
+    return { updated: docs.length, deleted: 0 };
+  }
+
+  return { updated: 0, deleted: 0 };
+}
+
 export async function getPublishedMaterials(options = {}) {
   if (!db) {
     return readLocalPublishedMaterials();
@@ -1002,54 +1196,32 @@ export async function getMaterialReadStatsForTeacher(guruId) {
 }
 
 export async function getClassMembers(context, kelasId) {
-  const { year } = getActivePeriod(context);
-  if (!year || !kelasId) {
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester || !kelasId) {
     return [];
   }
 
+  if (!db) return getFallbackClassMembersFor(kelasId);
+
   try {
     const normalizedKelasId = normalizeClassKey(kelasId);
-    return withQueryCache(`class-members:${year}:${normalizedKelasId}`, async () => {
+    return withQueryCache(`class-members:${year}:${semester}:${normalizedKelasId}`, async () => {
       const anggotaKelasData = await getDocumentsWhere('anggota_kelas', [
         { field: 'tahun_ajaran_id', value: year },
         { field: 'kelas_id', value: kelasId },
       ]);
-      const classMemberDocs = anggotaKelasData
+      const classMemberDocs = deduplicateClassMembers(anggotaKelasData
+        .filter((item) => item.semester_id === semester)
+        .filter((item) => String(item.status || 'active').toLowerCase() === 'active')
         .filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId)
-        .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
+      );
       if (classMemberDocs.length) return classMemberDocs;
 
-      const pembelajaranData = await getDocumentsWhere('pembelajaran', [
-        { field: 'tahun_ajaran_id', value: year },
-        { field: 'kelas_id', value: kelasId },
-      ]);
-      const pembelajaranDoc = pembelajaranData.find((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId);
-      if (pembelajaranDoc?.siswa?.length) {
-        return pembelajaranDoc.siswa
-          .map((student) => ({
-            id: student.siswa_id || student.id,
-            siswa_id: student.siswa_id || student.id,
-            siswa_nama: student.siswa_nama || student.nama || '-',
-            nomor_absen: student.nomor_absen || 0,
-            kelas_id: pembelajaranDoc.kelas_id,
-            kelas_nama: pembelajaranDoc.kelas_nama,
-          }))
-          .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
-      }
-
-      const cachedUsers = getCachedUsers()
-        .filter((item) => item.role === 'siswa')
-        .filter((item) => normalizeClassKey(item.kelas_id) === normalizedKelasId || normalizeClassKey(item.kelas_nama) === normalizedKelasId)
-        .map(mapStudentToMember)
-        .sort((a, b) => Number(a.nomor_absen || 9999) - Number(b.nomor_absen || 9999));
-      if (cachedUsers.length) return cachedUsers;
-
-      const fallbackStudents = getFallbackClassMembersFor(kelasId);
-      return fallbackStudents.length ? fallbackStudents : getDemoClassMembers(context, kelasId);
+      return [];
     });
   } catch (error) {
-    console.warn('Gagal mengambil anggota kelas dari Firestore, memakai data cadangan:', error);
-    return getDemoClassMembers(context, kelasId);
+    console.warn('Gagal mengambil anggota kelas dari Firestore:', error);
+    return [];
   }
 }
 

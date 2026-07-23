@@ -1,5 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
+import { synchronizeRenamedUserReferences } from '../../firebase/data-service.js';
 import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
 export async function renderMasterGuruPage(container) {
@@ -14,8 +15,8 @@ export async function renderMasterGuruPage(container) {
         <td class="px-3 py-2">${item.status || 'active'}</td>
         <td class="px-3 py-2">
           <div class="flex flex-wrap gap-2">
-            <button type="button" data-action="edit-guru" data-username="${item.username}" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">Edit</button>
-            <button type="button" data-action="delete-guru" data-username="${item.username}" class="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-600">Hapus</button>
+            <button type="button" data-action="edit-guru" data-account-id="${item.id}" class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">Edit</button>
+            <button type="button" data-action="delete-guru" data-account-id="${item.id}" class="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-600">Hapus</button>
           </div>
         </td>
       </tr>
@@ -53,7 +54,7 @@ export async function renderMasterGuruPage(container) {
 
       <form id="guru-form" class="space-y-3 rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">
         <input id="guru-nama" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Nama lengkap guru" required />
-        <input id="guru-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Username" readonly />
+        <input id="guru-username" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Kosongkan untuk membuat dari nama" pattern="[A-Za-z0-9._-]{3,30}" />
         <input id="guru-password" type="password" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Password" required />
         <div class="flex flex-wrap gap-2">
           <button id="guru-submit-btn" type="submit" class="rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white">Simpan Guru</button>
@@ -116,7 +117,7 @@ export async function renderMasterGuruPage(container) {
   };
 
   container.querySelector('#download-guru-template-btn')?.addEventListener('click', () => {
-    const template = ['nama,username,password', 'Imam Budiharto,imambudiharto,12345', 'Tatimmatul Ianah,tatimmatulianah,12345'].join('\n');
+    const template = ['nama,username,password', 'Imam Budiharto,imambudiharto,123456', 'Tatimmatul Ianah,tatimmatulianah,123456'].join('\n');
     const blob = new Blob([template], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -141,7 +142,7 @@ export async function renderMasterGuruPage(container) {
       for (const row of rows) {
         const nama = String(row.nama || '').trim();
         const username = String(row.username || generateUsername(nama)).trim();
-        const password = String(row.password || '12345').trim();
+        const password = String(row.password || '123456').trim();
         if (!nama) continue;
          const payload = { username, password, nama, role: 'guru', status: 'active', created_at: new Date().toISOString(), tahun_ajaran_id: context.tahun_ajaran_aktif, semester_id: context.semester_aktif };
          await saveManagedUser(payload);
@@ -157,33 +158,37 @@ export async function renderMasterGuruPage(container) {
     }
   });
 
+  let editingAccountId = null;
   let editingUsername = null;
   const form = container.querySelector('#guru-form');
   const submitBtn = container.querySelector('#guru-submit-btn');
   const cancelBtn = container.querySelector('#guru-cancel-btn');
   const title = container.querySelector('#guru-form-title');
 
-  const setEditMode = (isEditing, username = '') => {
+  const setEditMode = (isEditing, accountId = '', username = '') => {
+    editingAccountId = isEditing ? accountId : null;
     editingUsername = isEditing ? username : null;
     submitBtn.textContent = isEditing ? 'Perbarui Guru' : 'Simpan Guru';
     cancelBtn.classList.toggle('hidden', !isEditing);
     title.textContent = isEditing ? 'Edit Guru' : 'Tambah Guru';
+    container.querySelector('#guru-password').required = !isEditing;
+    container.querySelector('#guru-password').placeholder = isEditing ? 'Kosongkan jika password tidak diubah' : 'Password';
     if (!isEditing) {
       form.reset();
       container.querySelector('#guru-username').value = '';
-      container.querySelector('#guru-password').value = '12345';
+      container.querySelector('#guru-password').value = '123456';
     }
   };
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const nama = container.querySelector('#guru-nama').value.trim();
-    const password = container.querySelector('#guru-password').value.trim() || '12345';
-    const username = editingUsername || generateUsername(nama);
+    const password = container.querySelector('#guru-password').value.trim();
+    const username = container.querySelector('#guru-username').value.trim() || generateUsername(nama);
 
     const payload = {
       username,
-      password,
+      ...(password ? { password } : {}),
       nama,
       role: 'guru',
       status: 'active',
@@ -194,13 +199,21 @@ export async function renderMasterGuruPage(container) {
     };
 
     try {
-      await saveManagedUser(payload, editingUsername || '');
+      const savedUser = await saveManagedUser(payload, editingAccountId || '');
+      const oldUsernames = new Set([
+        editingUsername,
+        ...(Array.isArray(savedUser.previous_usernames) ? savedUser.previous_usernames : []),
+      ].filter((item) => item && item.toLowerCase() !== savedUser.username.toLowerCase()));
+      for (const oldUsername of oldUsernames) {
+        await synchronizeRenamedUserReferences(context, 'guru', oldUsername, savedUser);
+      }
     } catch (error) {
       alert(error.message || 'Gagal menyimpan guru.');
       return;
     }
+    const wasEditing = Boolean(editingUsername);
     setEditMode(false);
-    alert(editingUsername ? `Guru berhasil diperbarui.` : `Guru berhasil disimpan dengan username ${username}`);
+    alert(wasEditing ? `Guru berhasil diperbarui.` : `Guru berhasil disimpan dengan username ${username}`);
     renderMasterGuruPage(container);
   });
 
@@ -208,25 +221,25 @@ export async function renderMasterGuruPage(container) {
 
   container.querySelectorAll('[data-action="edit-guru"]').forEach((button) => {
     button.addEventListener('click', () => {
-      const username = button.dataset.username;
-      const item = guruList.find((entry) => entry.username === username);
+      const accountId = button.dataset.accountId;
+      const item = guruList.find((entry) => entry.id === accountId);
       if (!item) return;
       container.querySelector('#guru-nama').value = item.nama || '';
       container.querySelector('#guru-username').value = item.username || '';
        container.querySelector('#guru-password').value = '';
-      setEditMode(true, username);
+      setEditMode(true, item.id, item.username);
     });
   });
 
   container.querySelectorAll('[data-action="delete-guru"]').forEach((button) => {
     button.addEventListener('click', async () => {
-      const username = button.dataset.username;
-      const item = guruList.find((entry) => entry.username === username);
+      const accountId = button.dataset.accountId;
+      const item = guruList.find((entry) => entry.id === accountId);
       if (!item) return;
       const confirmed = confirm(`Hapus akun guru ${item.nama}?`);
       if (!confirmed) return;
        try {
-         await deleteManagedUser(username);
+         await deleteManagedUser(accountId);
        } catch (error) {
          alert(error.message || 'Gagal menghapus guru.');
          return;

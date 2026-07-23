@@ -55,6 +55,7 @@ export function getSessionUserKeys(session = {}, context = {}) {
     session?.user?.nis,
     session?.user?.nisn,
     context?.user_logged_in,
+    ...(Array.isArray(session?.user?.previous_usernames) ? session.user.previous_usernames : []),
   ]
     .map((value) => normalizeUserKey(value))
     .filter(Boolean);

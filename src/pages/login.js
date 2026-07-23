@@ -1,4 +1,4 @@
-import { loginUser, saveSession, normalizeUsername, normalizePassword } from '../firebase/auth-service.js';
+import { loginUser, saveSession, normalizeUsername, normalizePassword, getEmergencyLocalUser } from '../firebase/auth-service.js';
 import { getAppConfig, getDocumentsWhere } from '../firebase/data-service.js';
 import { getStoredContext } from '../utils/helpers.js';
 
@@ -121,7 +121,28 @@ export function renderLoginPage(container) {
     const password = container.querySelector('#password').value.trim();
     const normalizedUsername = normalizeUsername(username);
     const normalizedPassword = normalizePassword(password);
-    const user = await loginUser(normalizedUsername, normalizedPassword);
+    let user = null;
+    try {
+      user = await loginUser(normalizedUsername, normalizedPassword);
+    } catch (error) {
+      const errorMessage = error?.message || 'Layanan login sedang tidak tersedia.';
+      if (errorMessage.includes('Kuota database Firebase sedang habis')) {
+        const emergencyUser = getEmergencyLocalUser(normalizedUsername);
+        if (emergencyUser) {
+          const continueEmergency = confirm('Kuota Firebase sedang habis. Lanjutkan dengan mode darurat lokal menggunakan data terakhir yang tersimpan di browser ini?');
+          if (continueEmergency) {
+            user = emergencyUser;
+          }
+        }
+      }
+      if (!user) {
+        alert(errorMessage);
+        loginBtn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoader.classList.add('hidden');
+        return;
+      }
+    }
 
     if (!user) {
       alert('Username atau password salah.');
