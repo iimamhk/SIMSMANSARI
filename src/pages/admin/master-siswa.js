@@ -367,7 +367,7 @@ export async function renderMasterSiswaPage(container) {
     if (!isEditing) {
       form.reset();
       container.querySelector('#siswa-username').value = '';
-      container.querySelector('#siswa-password').value = '123456';
+      container.querySelector('#siswa-password').value = '';
     }
   };
 

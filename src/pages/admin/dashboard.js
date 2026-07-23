@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { getCollectionDocs } from '../../firebase/data-service.js';
+import { getDashboardCounts, recalculateDashboardCounts } from '../../firebase/data-service.js';
 import { getManagedUsers } from '../../firebase/auth-service.js';
 import { seedInitialData } from './seed-data.js';
 import {
@@ -206,6 +206,62 @@ export async function renderAdminDashboard(container) {
 
   async function loadDashboardStats() {
     try {
+      // Coba baca dari dokumen dashboard_counts (1 read saja)
+      const cached = await getDashboardCounts(context);
+      if (cached) {
+        const guruCount = Number(cached.jumlah_guru || 0);
+        const siswaCount = Number(cached.jumlah_siswa || 0);
+        const mapelCount = Number(cached.jumlah_mapel || 0);
+        const kelasCount = Number(cached.jumlah_kelas || 0);
+        const mappingCount = Number(cached.jumlah_pengajaran || 0);
+        const hasUsers = guruCount > 0 && siswaCount > 0;
+        const hasMapping = mappingCount > 0;
+        const completed = [hasPeriod, hasUsers, hasMapping].filter(Boolean).length;
+
+        if (metricsEl) {
+          metricsEl.innerHTML = [
+            adminMetricCard({ label: 'Guru', value: formatNumber(guruCount), hint: guruCount ? 'Akun guru aktif di sistem' : 'Belum ada data guru', icon: adminIcons.users, tone: 'sky' }),
+            adminMetricCard({ label: 'Siswa', value: formatNumber(siswaCount), hint: siswaCount ? 'Akun siswa terdaftar' : 'Belum ada data siswa', icon: adminIcons.users, tone: 'teal' }),
+            adminMetricCard({ label: 'Mata Pelajaran', value: formatNumber(mapelCount), hint: mapelCount ? 'Mapel master tersedia' : 'Belum ada mapel', icon: adminIcons.book, tone: 'violet' }),
+            adminMetricCard({ label: 'Kelas', value: formatNumber(kelasCount), hint: kelasCount ? 'Kelas master tersedia' : 'Belum ada kelas', icon: adminIcons.building, tone: 'amber' }),
+          ].join('');
+        }
+
+        if (checklistEl) {
+          checklistEl.innerHTML = [
+            checklistItem({
+              done: hasPeriod,
+              title: 'Periode akademik aktif',
+              description: hasPeriod ? periodLabel : 'Belum ada tahun ajaran/semester aktif.',
+              href: '#admin/master-tahun-ajaran',
+              cta: hasPeriod ? 'Kelola' : 'Atur sekarang',
+            }),
+            checklistItem({
+              done: hasUsers,
+              title: 'Data guru & siswa',
+              description: hasUsers ? `${formatNumber(guruCount)} guru · ${formatNumber(siswaCount)} siswa` : 'Pastikan akun guru dan siswa sudah tersedia.',
+              href: guruCount ? '#admin/master-siswa' : '#admin/master-guru',
+              cta: hasUsers ? 'Tinjau' : 'Lengkapi data',
+            }),
+            checklistItem({
+              done: hasMapping,
+              title: 'Mapping mengajar',
+              description: hasMapping ? `${formatNumber(mappingCount)} relasi mengajar tercatat` : 'Relasi guru–mapel–kelas dibutuhkan untuk absensi dan penilaian.',
+              href: '#admin/plotting-jadwal',
+              cta: hasMapping ? 'Kelola mapping' : 'Buat mapping',
+            }),
+          ].join('');
+        }
+
+        if (setupScoreEl) {
+          setupScoreEl.textContent = `${completed}/3 siap`;
+          setupScoreEl.className = `rounded-full px-3 py-1 text-xs font-semibold ring-1 ${completed === 3 ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : completed === 0 ? 'bg-rose-50 text-rose-700 ring-rose-100' : 'bg-amber-50 text-amber-700 ring-amber-100'}`;
+        }
+        root?.setAttribute('aria-busy', 'false');
+        return;
+      }
+
+      // Fallback: baca langsung dari Firestore (terjadi sekali setiap 5 menit)
       const [guruList, siswaList, mapelList, kelasList, pengajaranList] = await Promise.all([
         getManagedUsers('guru').catch(() => []),
         getManagedUsers('siswa').catch(() => []),
@@ -262,6 +318,9 @@ export async function renderAdminDashboard(container) {
         setupScoreEl.textContent = `${completed}/3 siap`;
         setupScoreEl.className = `rounded-full px-3 py-1 text-xs font-semibold ring-1 ${completed === 3 ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : completed === 0 ? 'bg-rose-50 text-rose-700 ring-rose-100' : 'bg-amber-50 text-amber-700 ring-amber-100'}`;
       }
+
+      // Simpan hasil perhitungan untuk dashboard berikutnya
+      recalculateDashboardCounts(context).catch(() => {});
       root?.setAttribute('aria-busy', 'false');
     } catch (error) {
       console.error(error);

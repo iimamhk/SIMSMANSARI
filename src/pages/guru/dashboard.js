@@ -337,7 +337,7 @@ export function renderGuruDashboard(container) {
       { field: 'guru_id', value: userId },
       { field: 'tahun_ajaran_id', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', value: context.semester_aktif },
-    ]);
+    ], { cacheMs: 180000 });
     const wali = waliRels[0] || null;
     let cached = null;
     try {

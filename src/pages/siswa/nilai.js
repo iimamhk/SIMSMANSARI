@@ -163,8 +163,8 @@ export async function renderSiswaNilaiPage(container) {
     : null;
 
   const [nilaiTugasDocs, nilaiUjianDocs] = await Promise.all([
-    studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters) : Promise.resolve([]),
-    studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters) : Promise.resolve([]),
+    studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters, { cacheMs: 180000 }) : Promise.resolve([]),
+    studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters, { cacheMs: 180000 }) : Promise.resolve([]),
   ]);
 
   const relevantPengajaranIds = Array.from(new Set([

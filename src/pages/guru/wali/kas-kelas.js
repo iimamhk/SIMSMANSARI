@@ -57,7 +57,7 @@ export async function renderGuruKasKelasPage(container) {
     { field: 'guru_id', value: guruId },
     { field: 'tahun_ajaran_id', value: context.tahun_ajaran_aktif },
     { field: 'semester_id', value: context.semester_aktif },
-  ]);
+  ], { cacheMs: 180000 });
   const wali = waliRels[0];
 
   if (!wali) {

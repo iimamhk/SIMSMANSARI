@@ -176,7 +176,7 @@ export async function renderMasterGuruPage(container) {
     if (!isEditing) {
       form.reset();
       container.querySelector('#guru-username').value = '';
-      container.querySelector('#guru-password').value = '123456';
+      container.querySelector('#guru-password').value = '';
     }
   };
 

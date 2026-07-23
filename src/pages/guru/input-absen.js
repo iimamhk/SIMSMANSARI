@@ -688,7 +688,7 @@ export async function renderGuruInputAbsenPage(container) {
         { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
         { field: 'semester_id', operator: '==', value: context.semester_aktif },
         { field: 'pengajaran_id', operator: '==', value: assignment.id },
-      ]);
+      ], { cacheMs: 120000 });
       currentSpecialNotes = [...docs].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
     } catch (error) {
       console.error('Gagal memuat catatan khusus:', error);

@@ -551,7 +551,7 @@ export async function renderGuruJurnalPage(container) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'guru_id', operator: '==', value: userId },
-    ]);
+    ], { cacheMs: 120000 });
 
     if (filterKelas !== 'all') {
       journals = journals.filter((item) => item.pengajaran_id === filterKelas);

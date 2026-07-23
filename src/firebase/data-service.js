@@ -10,6 +10,8 @@ const COLLECTION_CACHE_TTL_MS = 300000;
 const STATIC_COLLECTION_CACHE_TTL_MS = 1800000;
 const FIRESTORE_READ_STATUS_KEY = 'simguru_firestore_read_status';
 const queryCache = new Map();
+const PERSISTENT_CACHE_PREFIX = 'simguru_pcache_';
+const PERSISTENT_CACHE_TTL_MS = 7200000;
 
 const STATIC_COLLECTIONS = new Set([
   'settings',
@@ -71,23 +73,100 @@ function clearFirestoreReadQuotaStatus() {
   }
 }
 
+function isReadQuotaExhausted() {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  try {
+    const raw = localStorage.getItem(FIRESTORE_READ_STATUS_KEY);
+    if (!raw) return false;
+    const status = JSON.parse(raw);
+    return status?.state === 'exhausted';
+  } catch {
+    return false;
+  }
+}
+
 async function withQueryCache(key, loader, ttlMs = QUERY_CACHE_TTL_MS) {
   const now = Date.now();
   const cached = queryCache.get(key);
-  if (cached && now - cached.createdAt < ttlMs) {
-    return cached.promise;
+
+  if (cached) {
+    const isExpired = now - cached.createdAt >= ttlMs;
+    if (!isExpired) {
+      return cached.promise;
+    }
+    if (isReadQuotaExhausted()) {
+      return cached.promise;
+    }
+    queryCache.delete(key);
   }
 
-  const promise = Promise.resolve().then(loader).catch((error) => {
-    queryCache.delete(key);
-    throw error;
-  });
+  if (isReadQuotaExhausted()) {
+    return Promise.resolve([]);
+  }
+
+  const promise = Promise.resolve()
+    .then(loader)
+    .catch((error) => {
+      queryCache.delete(key);
+      throw error;
+    });
   queryCache.set(key, { createdAt: now, promise });
   return promise;
 }
 
-function invalidateQueryCache() {
-  queryCache.clear();
+function invalidateQueryCache(collectionName = '') {
+  if (!collectionName) {
+    queryCache.clear();
+    return;
+  }
+  const target = String(collectionName || '');
+  for (const key of queryCache.keys()) {
+    const segments = key.split(':');
+    if (segments.length >= 2 && ['persistent', 'collection', 'query'].includes(segments[0]) && segments[1] === target) {
+      queryCache.delete(key);
+    }
+  }
+}
+
+function updatePersistentCache(collectionName, updatedDoc) {
+  const cached = getPersistentCache(collectionName);
+  if (!cached || !Array.isArray(cached)) return;
+  const index = cached.findIndex((doc) => doc.id === updatedDoc.id);
+  if (index >= 0) {
+    cached[index] = { ...cached[index], ...updatedDoc };
+  } else {
+    cached.push(updatedDoc);
+  }
+  setPersistentCache(collectionName, cached);
+}
+
+function getPersistentCache(key) {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  try {
+    const raw = localStorage.getItem(PERSISTENT_CACHE_PREFIX + key);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (Date.now() - cached.at < cached.ttl) return cached.data;
+    localStorage.removeItem(PERSISTENT_CACHE_PREFIX + key);
+    return null;
+  } catch { return null; }
+}
+
+function setPersistentCache(key, data, ttlMs = PERSISTENT_CACHE_TTL_MS) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    localStorage.setItem(PERSISTENT_CACHE_PREFIX + key, JSON.stringify({ at: Date.now(), ttl: ttlMs, data }));
+  } catch { /* localStorage full or disabled */ }
+}
+
+function clearPersistentCache(key) {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    if (key) { localStorage.removeItem(PERSISTENT_CACHE_PREFIX + key); return; }
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(PERSISTENT_CACHE_PREFIX))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch { /* ignore */ }
 }
 
 function normalizeClassKey(value) {
@@ -318,8 +397,21 @@ export async function getCollectionDocs(collectionName, options = {}) {
     ? STATIC_COLLECTION_CACHE_TTL_MS
     : COLLECTION_CACHE_TTL_MS;
   const cacheMs = Number(options.cacheMs || defaultCacheMs);
-  // Master collections are relatively static; cache aggressively to avoid repeated full reads.
-  return withQueryCache(`collection:${collectionName}`, () => getDocsFromCollection(collectionName), cacheMs);
+  const loadFromFirestore = async () => {
+    const data = await getDocsFromCollection(collectionName);
+    if (STATIC_COLLECTIONS.has(collectionName)) {
+      setPersistentCache(collectionName, data, STATIC_COLLECTION_CACHE_TTL_MS);
+    }
+    return data;
+  };
+  if (STATIC_COLLECTIONS.has(collectionName)) {
+    return withQueryCache(`persistent:${collectionName}`, async () => {
+      const persistent = getPersistentCache(collectionName);
+      if (persistent) return persistent;
+      return loadFromFirestore();
+    }, cacheMs);
+  }
+  return withQueryCache(`collection:${collectionName}`, loadFromFirestore, cacheMs);
 }
 
 export async function deleteDocumentsBatch(collectionName, ids = []) {
@@ -335,7 +427,14 @@ export async function deleteDocumentsBatch(collectionName, ids = []) {
     await batch.commit();
     deleted += chunk.length;
   }
-  invalidateQueryCache();
+  invalidateQueryCache(collectionName);
+  if (STATIC_COLLECTIONS.has(collectionName)) {
+    const cached = getPersistentCache(collectionName);
+    if (Array.isArray(cached)) {
+      const remaining = cached.filter((doc) => !uniqueIds.includes(doc.id));
+      setPersistentCache(collectionName, remaining);
+    }
+  }
   return deleted;
 }
 
@@ -362,6 +461,9 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
 
   try {
     const cacheMs = Number(options.cacheMs || 0);
+    if (isReadQuotaExhausted() && cacheMs <= 0) {
+      return [];
+    }
     if (cacheMs > 0) {
       const queryOptions = {
         orderBy: options.orderBy || '',
@@ -386,6 +488,54 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
   }
 }
 
+export async function getDashboardCounts(context) {
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester || !db) return null;
+  try {
+    const doc = await db.collection('dashboard_counts').doc(`${year}_${semester}`).get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (Date.now() - new Date(data.updated_at || 0).getTime() < 300000) {
+        return { id: doc.id, ...data };
+      }
+    }
+  } catch { /* fallback ke perhitungan manual */ }
+  return null;
+}
+
+export async function recalculateDashboardCounts(context) {
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester || !db) return null;
+  try {
+    const [mapelList, kelasList, pengajaranList] = await Promise.all([
+      getCollectionDocs('mata_pelajaran').catch(() => []),
+      getCollectionDocs('kelas').catch(() => []),
+      getDocumentsWhere('pengajaran', [
+        { field: 'tahun_ajaran_id', value: year },
+        { field: 'semester_id', value: semester },
+      ]).catch(() => []),
+    ]);
+    const [guruList, siswaList] = await Promise.all([
+      db.collection('users').where('role', '==', 'guru').get().then((s) => s.docs).catch(() => []),
+      db.collection('users').where('role', '==', 'siswa').get().then((s) => s.docs).catch(() => []),
+    ]);
+    const counts = {
+      jumlah_guru: guruList.length,
+      jumlah_siswa: siswaList.length,
+      jumlah_mapel: mapelList.length,
+      jumlah_kelas: kelasList.length,
+      jumlah_pengajaran: pengajaranList.length,
+      updated_at: new Date().toISOString(),
+    };
+    const docId = `${year}_${semester}`;
+    await db.collection('dashboard_counts').doc(docId).set(counts, { merge: true });
+    return counts;
+  } catch (error) {
+    console.warn('Gagal menghitung statistik dashboard:', error);
+    return null;
+  }
+}
+
 export async function saveDocument(collectionName, payload, id = null) {
   if (!db) {
     return null;
@@ -394,7 +544,21 @@ export async function saveDocument(collectionName, payload, id = null) {
   const safePayload = sanitizeForFirestore(payload);
   const ref = id ? db.collection(collectionName).doc(id) : db.collection(collectionName).doc();
   await ref.set(safePayload, { merge: true });
-  invalidateQueryCache();
+  invalidateQueryCache(collectionName);
+  if (STATIC_COLLECTIONS.has(collectionName)) {
+    updatePersistentCache(collectionName, { id: ref.id, ...safePayload });
+  } else {
+    const cached = getPersistentCache(collectionName);
+    if (Array.isArray(cached)) {
+      const index = cached.findIndex((doc) => doc.id === (id || ref.id));
+      if (index >= 0) {
+        cached[index] = { ...cached[index], ...safePayload, id: id || ref.id };
+      } else {
+        cached.push({ id: id || ref.id, ...safePayload });
+      }
+      setPersistentCache(collectionName, cached);
+    }
+  }
   return { id: ref.id, ...safePayload };
 }
 
@@ -532,7 +696,14 @@ export async function deleteDocument(collectionName, id) {
   }
 
   await db.collection(collectionName).doc(id).delete();
-  invalidateQueryCache();
+  invalidateQueryCache(collectionName);
+  if (STATIC_COLLECTIONS.has(collectionName)) {
+    const cached = getPersistentCache(collectionName);
+    if (Array.isArray(cached)) {
+      const remaining = cached.filter((doc) => doc.id !== id);
+      setPersistentCache(collectionName, remaining);
+    }
+  }
   return true;
 }
 
@@ -594,7 +765,7 @@ export async function saveAttendanceRecord(payload) {
         kelas_id: payload.kelas_id || summary.kelas_id || '',
         kelas_nama: payload.kelas_nama || summary.kelas_nama || '',
         ...counts,
-        complete: summary.complete === true,
+        complete: true,
         last_attendance_date: payload.tanggal || summary.last_attendance_date || '',
         updated_at: new Date().toISOString(),
       }, { merge: true });
@@ -606,7 +777,7 @@ export async function saveAttendanceRecord(payload) {
     console.warn('Ringkasan absensi belum diizinkan Rules; menyimpan absensi detail saja.');
     await saveDocument('absensi', safePayload, payload.id);
   }
-  invalidateQueryCache();
+  invalidateQueryCache('absensi');
   return { id: payload.id, ...safePayload };
 }
 
@@ -701,20 +872,25 @@ export async function saveAttendanceRecordsBatch(payloads = []) {
           total_alpa: counts.total_alpa,
           total_keluar_kelas: counts.total_keluar_kelas,
           total_catatan: counts.total_catatan,
-          complete: counts.complete === true,
+          complete: true,
           last_attendance_date: counts.last_attendance_date,
           updated_at: new Date().toISOString(),
         }, { merge: true });
       });
       await batch.commit();
     }
-    invalidateQueryCache();
+    invalidateQueryCache('absensi');
+    invalidateQueryCache('absensi_ringkasan_siswa');
     return safeItems;
   } catch (error) {
     // Fallback to sequential path so attendance still works under older Rules.
     if (error?.code === 'permission-denied') {
       console.warn('Batch absensi fallback ke simpan per-siswa.');
       return Promise.all(items.map((item) => saveAttendanceRecord(item)));
+    }
+    if (isFirestoreReadQuotaError(error)) {
+      console.warn('Batch absensi fallback ke simpan per-siswa (quota exhausted).');
+      return Promise.all(items.map((item) => saveDocument('absensi', sanitizeForFirestore(item), item.id)));
     }
     throw error;
   }
@@ -735,12 +911,16 @@ export async function getAttendanceSummary(context, siswaId, aliases = []) {
   }
 
   const siswaKeys = Array.from(new Set([siswaId, ...aliases].map(normalizeUserKey).filter(Boolean))).slice(0, 10);
+  const filters = [
+    { field: 'siswa_id', operator: 'in', value: siswaKeys },
+    { field: 'tahun_ajaran_id', value: year },
+    { field: 'semester_id', value: semester },
+  ];
   const records = siswaKeys.length
-    ? await getDocumentsWhere('absensi', [{ field: 'siswa_id', operator: 'in', value: siswaKeys }])
+    ? await getDocumentsWhere('absensi', filters, { cacheMs: 120000 })
     : [];
-  const periodRecords = records.filter((item) => item.tahun_ajaran_id === year && item.semester_id === semester);
-  const counts = buildAttendanceCounts(periodRecords);
-  const latest = periodRecords.slice().sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')))[0] || {};
+  const counts = buildAttendanceCounts(records);
+  const latest = records.slice().sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')))[0] || {};
   const summary = {
     id: summaryRef.id,
     tahun_ajaran_id: year,
@@ -1043,7 +1223,7 @@ export async function synchronizeCurrentClassMemberships(context, students = [])
     });
     await batch.commit();
   }
-  if (operations.length) invalidateQueryCache();
+  if (operations.length) invalidateQueryCache('anggota_kelas');
   return {
     deleted: uniqueDeleteIds.length,
     saved: membershipWrites.length,
@@ -1060,16 +1240,16 @@ export async function synchronizeRenamedUserReferences(context, role, oldUsernam
   }
 
   if (role === 'siswa') {
+    const allIds = Array.from(new Set([
+      previousId,
+      ...(Array.isArray(user.previous_usernames) ? user.previous_usernames.map(normalizeUserKey) : []),
+    ].filter(Boolean))).slice(0, 10);
     const snapshot = await db.collection('anggota_kelas')
       .where('tahun_ajaran_id', '==', year)
+      .where('semester_id', '==', semester)
+      .where('siswa_id', 'in', allIds)
       .get();
-    const oldMembershipIds = snapshot.docs
-      .filter((doc) => {
-        const data = doc.data() || {};
-        return data.semester_id === semester
-          && normalizeUserKey(data.siswa_id) === previousId;
-      })
-      .map((doc) => doc.id);
+    const oldMembershipIds = snapshot.docs.map((doc) => doc.id);
     await synchronizeCurrentClassMemberships(context, [user]);
     await deleteDocumentsBatch('anggota_kelas', oldMembershipIds);
     return { updated: 1, deleted: oldMembershipIds.length };
@@ -1086,7 +1266,7 @@ export async function synchronizeRenamedUserReferences(context, role, oldUsernam
         const data = doc.data() || {};
         const samePeriod = collectionName === 'wali_kelas'
           ? (!data.tahun_ajaran_id || data.tahun_ajaran_id === year)
-          : data.tahun_ajaran_id === year && data.semester_id === semester;
+          : data.tahun_ajaran_id === year;
         if (samePeriod) docs.push({ ref: doc.ref, data });
       });
     }
@@ -1102,7 +1282,11 @@ export async function synchronizeRenamedUserReferences(context, role, oldUsernam
       });
       await batch.commit();
     }
-    if (docs.length) invalidateQueryCache();
+    if (docs.length) {
+      invalidateQueryCache('pengajaran');
+      invalidateQueryCache('pembelajaran');
+      invalidateQueryCache('wali_kelas');
+    }
     return { updated: docs.length, deleted: 0 };
   }
 
@@ -1122,25 +1306,21 @@ export async function getPublishedMaterials(options = {}) {
   try {
     return withQueryCache(cacheKey, async () => {
       let docs = [];
-      if (kelasId) {
-        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
-          { field: 'kelas_id', value: kelasId },
-        ]);
-      }
-      if (!docs.length && year && semester) {
-        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
-          { field: 'tahun_ajaran_id', value: year },
-          { field: 'semester_id', value: semester },
-        ], { cacheMs: QUERY_CACHE_TTL_MS, orderBy: 'updated_at', orderDirection: 'desc', limit: 300 });
+      const materialFilters = [];
+      const queryOptions = {
+        cacheMs: QUERY_CACHE_TTL_MS,
+        orderBy: 'updated_at',
+        orderDirection: 'desc',
+        limit: 300,
+      };
+      if (kelasId) materialFilters.push({ field: 'kelas_id', value: kelasId });
+      if (year) materialFilters.push({ field: 'tahun_ajaran_id', value: year });
+      if (semester) materialFilters.push({ field: 'semester_id', value: semester });
+      if (materialFilters.length) {
+        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, materialFilters, queryOptions);
       }
       if (!docs.length) {
-        // Avoid full scans to protect read quota when filters are empty.
-        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [], {
-          cacheMs: QUERY_CACHE_TTL_MS,
-          orderBy: 'updated_at',
-          orderDirection: 'desc',
-          limit: 300,
-        });
+        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [], queryOptions);
       }
       // Firestore adalah sumber kebenaran utama saat online.
       // Ini mencegah materi yang sudah dihapus di Firestore hidup lagi dari cache lokal.
@@ -1286,31 +1466,43 @@ export async function recordMaterialRead(payload) {
   };
 
   if (db) {
+    const ref = db.collection(MATERIAL_READS_COLLECTION).doc(readId);
+    let existingRemoteRead = null;
+    let readError = null;
     try {
-      const ref = db.collection(MATERIAL_READS_COLLECTION).doc(readId);
       const snapshot = await ref.get();
-      const existingRemoteRead = snapshot.exists ? snapshot.data() : null;
-      const remoteReadCount = Number(existingRemoteRead?.read_count || existingLocalRead.read_count || 0) + (shouldIncrementRead ? 1 : 0);
-      const remoteTotalDuration = Number(existingRemoteRead?.total_duration_seconds || existingLocalRead.total_duration_seconds || 0) + durationSeconds;
-      const remoteCompleted = payload?.completed === true || eventType === 'complete' || Boolean(existingRemoteRead?.completed_at) || Boolean(existingLocalRead.completed_at);
-      const remotePayload = {
-        ...(existingRemoteRead || {}),
-        ...nextPayload,
-        read_count: remoteReadCount,
-        first_read_at: existingRemoteRead?.first_read_at || existingLocalRead.first_read_at || nowIso,
-        last_read_at: nowIso,
-        last_duration_seconds: durationSeconds,
-        total_duration_seconds: remoteTotalDuration,
-        completed_at: remoteCompleted ? (existingRemoteRead?.completed_at || existingLocalRead.completed_at || nowIso) : '',
-        completion_status: remoteCompleted ? 'completed' : (remoteReadCount > 0 ? 'opened' : 'unopened'),
-      };
+      existingRemoteRead = snapshot.exists ? snapshot.data() : null;
+    } catch (error) {
+      readError = error;
+    }
+
+    const remoteReadCount = Number(existingRemoteRead?.read_count || existingLocalRead.read_count || 0) + (shouldIncrementRead ? 1 : 0);
+    const remoteTotalDuration = Number(existingRemoteRead?.total_duration_seconds || existingLocalRead.total_duration_seconds || 0) + durationSeconds;
+    const remoteCompleted = payload?.completed === true || eventType === 'complete' || Boolean(existingRemoteRead?.completed_at) || Boolean(existingLocalRead.completed_at);
+    const remotePayload = {
+      ...(existingRemoteRead || {}),
+      ...nextPayload,
+      read_count: remoteReadCount,
+      first_read_at: existingRemoteRead?.first_read_at || existingLocalRead.first_read_at || nowIso,
+      last_read_at: nowIso,
+      last_duration_seconds: durationSeconds,
+      total_duration_seconds: remoteTotalDuration,
+      completed_at: remoteCompleted ? (existingRemoteRead?.completed_at || existingLocalRead.completed_at || nowIso) : '',
+      completion_status: remoteCompleted ? 'completed' : (remoteReadCount > 0 ? 'opened' : 'unopened'),
+    };
+
+    try {
       await ref.set(remotePayload, { merge: true });
       const nextLocalReads = localReads.filter((item) => item.id !== readId);
       nextLocalReads.push(remotePayload);
       writeLocalMaterialReads(nextLocalReads);
       return remotePayload;
-    } catch (error) {
-      console.warn('Gagal mencatat baca materi ke Firestore:', error);
+    } catch (writeError) {
+      if (readError) {
+        console.warn(`Gagal mencatat bacaan materi ke Firestore (read+write): ${readError?.message || readError}`);
+      } else {
+        console.warn('Gagal mencatat bacaan materi ke Firestore:', writeError);
+      }
     }
   }
 
@@ -1368,6 +1560,7 @@ export async function getClassMembers(context, kelasId) {
     return withQueryCache(`class-members:${year}:${semester}:${normalizedKelasId}`, async () => {
       const anggotaKelasData = await getDocumentsWhere('anggota_kelas', [
         { field: 'tahun_ajaran_id', value: year },
+        { field: 'semester_id', value: semester },
         { field: 'kelas_id', value: kelasId },
       ]);
       const classMemberDocs = deduplicateClassMembers(anggotaKelasData

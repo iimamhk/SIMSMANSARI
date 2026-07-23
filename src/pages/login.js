@@ -177,7 +177,7 @@ export function renderLoginPage(container) {
           { field: 'guru_id', value: user.username },
           { field: 'tahun_ajaran_id', value: activeContext.tahun_ajaran_aktif },
           { field: 'semester_id', value: activeContext.semester_aktif },
-        ]);
+        ], { cacheMs: 300000 });
         localStorage.setItem('simguru_wali', JSON.stringify(waliRelations[0] || null));
       } catch {
         try {

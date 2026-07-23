@@ -137,7 +137,7 @@ export function subscribeKas(kasId, callback) {
 }
 
 export async function getKasConfig(kasId) {
-  const result = await getDocumentsWhere('kas_kelas', [{ field: 'id', value: kasId }]);
+  const result = await getDocumentsWhere('kas_kelas', [{ field: 'id', value: kasId }], { cacheMs: 300000 });
   return result[0] || null;
 }
 
