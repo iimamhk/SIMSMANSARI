@@ -45,6 +45,16 @@
         { "fieldPath": "semester_id", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "absensi",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pengajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "tahun_ajaran_id", "order": "ASCENDING" },
+        { "fieldPath": "semester_id", "order": "ASCENDING" },
+        { "fieldPath": "tanggal", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

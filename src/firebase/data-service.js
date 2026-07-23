@@ -443,11 +443,17 @@ export async function getAttendanceRecords(context, pengajaranId = '') {
       { field: 'semester_id', value: semester },
     ];
     if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
-    return getDocumentsWhere('absensi', filters);
+    return await getDocumentsWhere('absensi', filters);
   } catch (error) {
     console.warn('Gagal mengambil data absensi dari Firestore, memakai data cadangan:', error);
     return [];
   }
+}
+
+function isFirestoreIndexError(error) {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code.includes('failed-precondition') && message.includes('requires an index');
 }
 
 export async function getAttendanceRecordsByDate(context, pengajaranId = '', date = '') {
@@ -464,8 +470,19 @@ export async function getAttendanceRecordsByDate(context, pengajaranId = '', dat
       { field: 'tanggal', value: targetDate },
     ];
     if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
-    return getDocumentsWhere('absensi', filters, { cacheMs: 20000 });
+    return await getDocumentsWhere('absensi', filters, { cacheMs: 20000 });
   } catch (error) {
+    if (isFirestoreIndexError(error) && pengajaranId) {
+      try {
+        // Fallback tanpa composite index: query 1 field lalu filter di client.
+        const docs = await getDocumentsWhere('absensi', [{ field: 'pengajaran_id', value: pengajaranId }], { cacheMs: 15000 });
+        return docs.filter((item) => String(item.tahun_ajaran_id || '') === String(year)
+          && String(item.semester_id || '') === String(semester)
+          && String(item.tanggal || '') === targetDate);
+      } catch (fallbackError) {
+        console.warn('Fallback absensi harian juga gagal:', fallbackError);
+      }
+    }
     console.warn('Gagal mengambil data absensi harian dari Firestore, memakai data cadangan:', error);
     return [];
   }
@@ -487,8 +504,23 @@ export async function getAttendanceRecordsByDateRange(context, pengajaranId = ''
       { field: 'tanggal', operator: '<=', value: end },
     ];
     if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
-    return getDocumentsWhere('absensi', filters, { cacheMs: 30000 });
+    return await getDocumentsWhere('absensi', filters, { cacheMs: 30000 });
   } catch (error) {
+    if (isFirestoreIndexError(error) && pengajaranId) {
+      try {
+        // Fallback tanpa composite index: query 1 field lalu filter di client.
+        const docs = await getDocumentsWhere('absensi', [{ field: 'pengajaran_id', value: pengajaranId }], { cacheMs: 20000 });
+        return docs.filter((item) => {
+          const tanggal = String(item.tanggal || '');
+          return String(item.tahun_ajaran_id || '') === String(year)
+            && String(item.semester_id || '') === String(semester)
+            && tanggal >= start
+            && tanggal <= end;
+        });
+      } catch (fallbackError) {
+        console.warn('Fallback absensi rentang tanggal juga gagal:', fallbackError);
+      }
+    }
     console.warn('Gagal mengambil data absensi rentang tanggal dari Firestore, memakai data cadangan:', error);
     return [];
   }
