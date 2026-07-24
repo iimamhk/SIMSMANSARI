@@ -1,11 +1,17 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
 import { synchronizeRenamedUserReferences } from '../../firebase/data-service.js';
-import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
+import { getManagedUsersPage, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
-export async function renderMasterGuruPage(container) {
+export async function renderMasterGuruPage(container, pageState = {}) {
   const context = getStoredContext();
-  const guruList = await getManagedUsers('guru');
+  const serverPage = await getManagedUsersPage('guru', '', {
+    limit: 10,
+    after: pageState.after || '',
+    includeTotal: !pageState.after,
+  });
+  const totalUsers = Number(serverPage.total ?? pageState.total ?? 0);
+  const guruList = Array.isArray(serverPage.users) ? serverPage.users : [];
   const guruRows = guruList
     .map((item) => `
       <tr class="border-t border-slate-100 text-sm text-slate-600">
@@ -76,11 +82,56 @@ export async function renderMasterGuruPage(container) {
           </thead>
           <tbody>${guruRows}</tbody>
         </table>
+        <div class="flex flex-col gap-3 border-t border-slate-100 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p id="guru-page-summary" class="text-xs text-slate-500"></p>
+          <div class="flex items-center gap-2">
+            <button id="guru-prev-page" type="button" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Sebelumnya</button>
+            <span id="guru-page-number" class="min-w-20 text-center text-xs font-semibold text-slate-700"></span>
+            <button id="guru-next-page" type="button" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Berikutnya</button>
+          </div>
+        </div>
       </div>
     </div>
   `);
 
   container.innerHTML = html;
+
+  const PAGE_SIZE = 10;
+  const currentPage = Number(pageState.page || 1);
+  const totalPages = Math.max(1, Math.ceil((totalUsers || guruList.length) / PAGE_SIZE));
+  const rangeStart = guruList.length ? ((currentPage - 1) * PAGE_SIZE) + 1 : 0;
+  const rangeEnd = ((currentPage - 1) * PAGE_SIZE) + guruList.length;
+  const pageSummary = container.querySelector('#guru-page-summary');
+  const pageNumber = container.querySelector('#guru-page-number');
+  const prevPageBtn = container.querySelector('#guru-prev-page');
+  const nextPageBtn = container.querySelector('#guru-next-page');
+  if (pageSummary) pageSummary.textContent = `${rangeStart}-${rangeEnd} dari ${totalUsers || guruList.length} guru`;
+  if (pageNumber) pageNumber.textContent = `Halaman ${currentPage}/${totalPages}`;
+  if (prevPageBtn) {
+    prevPageBtn.disabled = currentPage <= 1;
+    prevPageBtn.addEventListener('click', () => {
+      if (currentPage <= 1) return;
+      const previousAfter = pageState.previousCursors?.[currentPage - 2] || '';
+      renderMasterGuruPage(container, {
+        page: currentPage - 1,
+        after: previousAfter,
+        total: totalUsers,
+        previousCursors: (pageState.previousCursors || []).slice(0, Math.max(0, currentPage - 2)),
+      });
+    });
+  }
+  if (nextPageBtn) {
+    nextPageBtn.disabled = !serverPage.nextCursor || currentPage >= totalPages;
+    nextPageBtn.addEventListener('click', () => {
+      if (!serverPage.nextCursor) return;
+      renderMasterGuruPage(container, {
+        page: currentPage + 1,
+        after: serverPage.nextCursor,
+        total: totalUsers,
+        previousCursors: [...(pageState.previousCursors || []), pageState.after || ''],
+      });
+    });
+  }
 
   const progressContainer = container.querySelector('#guru-import-progress');
   const messageBox = container.querySelector('#guru-import-message');

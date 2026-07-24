@@ -1144,6 +1144,7 @@ export async function renderGuruGamePage(container) {
   let activeBattleRoom = null;
   let battlePollId = null;
   let battleUnsubscribe = null;
+  let battleParticipantsUnsubscribe = null;
 
   function readBattleRooms() {
     return readLocalList(BATTLE_ROOM_LOCAL_KEY);
@@ -1200,17 +1201,17 @@ export async function renderGuruGamePage(container) {
         upsertLocalById(BATTLE_ROOM_LOCAL_KEY, roomDoc);
         renderBattleRoom(roomDoc);
       }
-      // Prefer participants embedded in room document. Query only when missing.
-      if (!Object.keys((roomDoc || activeBattleRoom).participants || {}).length) {
-        const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: activeBattleRoom.id }]);
-        if (participantDocs.length) {
-          const mergedRoom = {
-            ...(roomDoc || activeBattleRoom),
-            participants: participantDocs.reduce((result, item) => ({
-              ...result,
-              [item.id?.replace(`${activeBattleRoom.id}_`, '') || item.id]: item,
-            }), {}),
-          };
+      if (activeBattleRoom.id) {
+        const participantDocs = await getDocumentsWhere('battle_participants', [
+          { field: 'room_id', operator: '==', value: activeBattleRoom.id },
+        ]);
+        const participants = {};
+        participantDocs.forEach((item) => {
+          const id = item.participant_id || item.id;
+          participants[id] = { ...item, id };
+        });
+        if (Object.keys(participants).length) {
+          const mergedRoom = { ...(roomDoc || activeBattleRoom), participants };
           upsertLocalById(BATTLE_ROOM_LOCAL_KEY, mergedRoom);
           renderBattleRoom(mergedRoom);
         }
@@ -1223,6 +1224,8 @@ export async function renderGuruGamePage(container) {
     battlePollId = null;
     if (battleUnsubscribe) battleUnsubscribe();
     battleUnsubscribe = null;
+    if (battleParticipantsUnsubscribe) battleParticipantsUnsubscribe();
+    battleParticipantsUnsubscribe = null;
   }
 
   function setGameSettingsVisibility(visible, animate = false) {
@@ -2317,11 +2320,37 @@ export async function renderGuruGamePage(container) {
     battleUnsubscribe = window.firebaseDb?.collection('battle_rooms').doc(room.id)
       .onSnapshot((snapshot) => {
         if (!snapshot.exists) return;
-        const nextRoom = { id: snapshot.id, ...snapshot.data() };
+        const roomData = snapshot.data() || {};
+        const nextRoom = {
+          id: snapshot.id,
+          ...roomData,
+          participants: activeBattleRoom?.participants || roomData.participants || {},
+        };
         upsertLocalById(BATTLE_ROOM_LOCAL_KEY, nextRoom);
         renderBattleRoom(nextRoom);
       }, () => {
         battleUnsubscribe = null;
+        if (!battlePollId) {
+          battlePollId = setInterval(() => {
+            if (!document.hidden) refreshBattleRoom();
+          }, 15000);
+        }
+      });
+    battleParticipantsUnsubscribe = window.firebaseDb?.collection('battle_participants')
+      .where('room_id', '==', room.id)
+      .onSnapshot((snapshot) => {
+        if (!activeBattleRoom) return;
+        const participants = {};
+        snapshot.docs.forEach((doc) => {
+          const data = doc.data() || {};
+          const id = data.participant_id || doc.id;
+          participants[id] = { id, ...data };
+        });
+        activeBattleRoom = { ...activeBattleRoom, participants };
+        upsertLocalById(BATTLE_ROOM_LOCAL_KEY, activeBattleRoom);
+        renderBattleRoom(activeBattleRoom);
+      }, () => {
+        battleParticipantsUnsubscribe = null;
         if (!battlePollId) {
           battlePollId = setInterval(() => {
             if (!document.hidden) refreshBattleRoom();

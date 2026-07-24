@@ -151,6 +151,24 @@ export async function getManagedUsers(role = '', kelasId = '') {
   return promise;
 }
 
+export async function getManagedUsersPage(role = '', kelasId = '', options = {}) {
+  const params = new URLSearchParams({
+    limit: String(Math.min(Math.max(Number(options.limit) || 10, 1), 100)),
+    includeTotal: options.includeTotal ? 'true' : 'false',
+  });
+  if (role) params.set('role', role);
+  if (kelasId) params.set('kelas', kelasId);
+  if (options.after) params.set('after', options.after);
+  const response = await authenticatedFetch(`/api/auth/users?${params.toString()}`);
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({}));
+    throw new Error(response.status === 401
+      ? 'Sesi admin berakhir. Silakan login kembali.'
+      : (result.error || 'Data user tidak dapat dimuat.'));
+  }
+  return response.json();
+}
+
 export async function getChatDirectory() {
   if (chatDirectoryCache.data && Date.now() - chatDirectoryCache.at < CHAT_DIRECTORY_TTL_MS) {
     return chatDirectoryCache.data;

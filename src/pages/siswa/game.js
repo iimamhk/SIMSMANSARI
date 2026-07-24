@@ -474,6 +474,7 @@ export async function renderSiswaGamePage(container) {
   let battleRoom = null;
   let battlePollId = null;
   let battleUnsubscribe = null;
+  let battleParticipantUnsubscribe = null;
   let battleTimerId = null;
   let battleQuestionStartedAt = 0;
   let selectedBattleAvatar = BATTLE_AVATARS[0];
@@ -593,16 +594,6 @@ export async function renderSiswaGamePage(container) {
     const index = rooms.findIndex((item) => item.id === room.id);
     if (index >= 0) rooms[index] = room; else rooms.push(room);
     localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(rooms));
-    const participant = room?.participants?.[getBattleStudentId()];
-    if (window.firebaseDb && room?.id && participant) {
-      const participantPath = new window.firebase.firestore.FieldPath('participants', getBattleStudentId());
-      window.firebaseDb.collection('battle_rooms').doc(room.id).update(
-        participantPath,
-        participant,
-        'updated_at',
-        new Date().toISOString(),
-      ).catch(() => {});
-    }
   }
 
   function saveBattleParticipant(room, participant) {
@@ -786,18 +777,12 @@ export async function renderSiswaGamePage(container) {
           localStorage.setItem(BATTLE_ROOM_LOCAL_KEY, JSON.stringify(readBattleRooms().filter((item) => item.id !== battleRoom.id).concat(battleRoom)));
         }
       }
-      // Participants are already stored in room document for most flows.
-      // Query participants only when room has no embedded participants.
-      if (!Object.keys(battleRoom.participants || {}).length) {
-        const participantDocs = await getDocumentsWhere('battle_participants', [{ field: 'room_id', operator: '==', value: battleRoom.id }]);
-        if (participantDocs.length) {
-          battleRoom = {
-            ...battleRoom,
-            participants: participantDocs.reduce((result, item) => ({
-              ...result,
-              [item.id?.replace(`${battleRoom.id}_`, '') || item.participant_id || item.id]: item,
-            }), { ...(battleRoom.participants || {}) }),
-          };
+      const studentId = getBattleStudentId();
+      if (battleRoom.id && window.firebaseDb) {
+        const participantSnap = await window.firebaseDb.collection('battle_participants').doc(`${battleRoom.id}_${studentId}`).get();
+        if (participantSnap.exists) {
+          const participant = { id: studentId, ...participantSnap.data() };
+          battleRoom = { ...battleRoom, participants: { ...(battleRoom.participants || {}), [studentId]: participant } };
         }
       }
     } catch {}
@@ -1032,6 +1017,10 @@ export async function renderSiswaGamePage(container) {
     if (battleUnsubscribe) {
       battleUnsubscribe();
       battleUnsubscribe = null;
+    }
+    if (battleParticipantUnsubscribe) {
+      battleParticipantUnsubscribe();
+      battleParticipantUnsubscribe = null;
     }
     if (battleTimerId) {
       clearInterval(battleTimerId);
@@ -1734,11 +1723,20 @@ export async function renderSiswaGamePage(container) {
     openLobby();
     if (battlePollId) clearInterval(battlePollId);
     if (battleUnsubscribe) battleUnsubscribe();
+    if (battleParticipantUnsubscribe) battleParticipantUnsubscribe();
     battlePollId = null;
     battleUnsubscribe = window.firebaseDb?.collection('battle_rooms').doc(battleRoom.id)
       .onSnapshot((snapshot) => {
         if (!snapshot.exists) return;
-        battleRoom = { id: snapshot.id, ...snapshot.data() };
+        const roomData = snapshot.data() || {};
+        const currentParticipant = battleRoom?.participants?.[getBattleStudentId()];
+        battleRoom = {
+          id: snapshot.id,
+          ...roomData,
+          participants: currentParticipant
+            ? { ...(roomData.participants || {}), [getBattleStudentId()]: currentParticipant }
+            : roomData.participants || {},
+        };
         syncBattle(true);
       }, () => {
         battleUnsubscribe = null;
@@ -1748,6 +1746,21 @@ export async function renderSiswaGamePage(container) {
           }, 15000);
         }
       });
+    battleParticipantUnsubscribe = window.firebaseDb?.collection('battle_participants').doc(`${battleRoom.id}_${studentId}`)
+      .onSnapshot((snapshot) => {
+        if (!battleRoom) return;
+        if (!snapshot.exists) {
+          const participants = { ...(battleRoom.participants || {}) };
+          delete participants[studentId];
+          battleRoom = { ...battleRoom, participants };
+          saveBattleRoomLocal(battleRoom);
+          setBattleStudentStatus('Koneksi peserta terputus. Silakan masuk kembali ke room.', true);
+          return;
+        }
+        const participant = { id: studentId, ...snapshot.data() };
+        battleRoom = { ...battleRoom, participants: { ...(battleRoom.participants || {}), [studentId]: participant } };
+        syncBattle(true);
+      }, () => {});
     startBattleQuestionTimer();
     await syncBattle(true);
     startBattleArenaMotion();
@@ -1757,8 +1770,10 @@ export async function renderSiswaGamePage(container) {
     closeBattleArena();
     if (battlePollId) clearInterval(battlePollId);
     if (battleUnsubscribe) battleUnsubscribe();
+    if (battleParticipantUnsubscribe) battleParticipantUnsubscribe();
     battlePollId = null;
     battleUnsubscribe = null;
+    battleParticipantUnsubscribe = null;
     battleRoom = null;
     openLobby();
   });
@@ -1775,8 +1790,10 @@ export async function renderSiswaGamePage(container) {
     if (battleRoom) {
       if (battlePollId) clearInterval(battlePollId);
       if (battleUnsubscribe) battleUnsubscribe();
+      if (battleParticipantUnsubscribe) battleParticipantUnsubscribe();
       battlePollId = null;
       battleUnsubscribe = null;
+      battleParticipantUnsubscribe = null;
       battleRoom = null;
       gameState = null;
       openLobby();
@@ -1810,11 +1827,13 @@ export async function renderSiswaGamePage(container) {
     if (timerId) clearInterval(timerId);
     if (battlePollId) clearInterval(battlePollId);
     if (battleUnsubscribe) battleUnsubscribe();
+    if (battleParticipantUnsubscribe) battleParticipantUnsubscribe();
     if (battleTimerId) clearInterval(battleTimerId);
     stopBattleArenaMotion();
     timerId = null;
     battlePollId = null;
     battleUnsubscribe = null;
+    battleParticipantUnsubscribe = null;
     battleTimerId = null;
   };
 

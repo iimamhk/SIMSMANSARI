@@ -1,18 +1,24 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
 import { saveDocument, getCollectionDocs, synchronizeCurrentClassMemberships, synchronizeRenamedUserReferences } from '../../firebase/data-service.js';
-import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
+import { getManagedUsersPage, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
-export async function renderMasterSiswaPage(container) {
+export async function renderMasterSiswaPage(container, pageState = {}) {
   const context = getStoredContext();
-  const allUsers = await getManagedUsers('siswa');
+  const serverPage = await getManagedUsersPage('siswa', '', {
+    limit: 10,
+    after: pageState.after || '',
+    includeTotal: !pageState.after,
+  });
+  const totalUsers = Number(serverPage.total ?? pageState.total ?? 0);
+  const allUsers = Array.isArray(serverPage.users) ? serverPage.users : [];
   const kelasList = await getCollectionDocs('kelas');
   let kelasCatalog = kelasList;
   const siswaList = allUsers
     .filter((item) => item.role === 'siswa')
     .sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
   const kelasFilterOptions = [...new Set([...(kelasCatalog || []).map((item) => item.nama || item.id).filter(Boolean), ...(siswaList || []).map((item) => item.kelas_nama || item.kelas_id).filter(Boolean)])];
-  const totalSiswa = siswaList.length;
+  const totalSiswa = totalUsers || siswaList.length;
   const activeSiswa = siswaList.filter((item) => (item.status || 'active') === 'active').length;
   const kelasTerpakai = new Set(siswaList.map((item) => item.kelas_nama || item.kelas_id).filter(Boolean)).size;
 
@@ -31,11 +37,11 @@ export async function renderMasterSiswaPage(container) {
               <p class="mt-1 text-xl font-semibold">${totalSiswa}</p>
             </div>
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Aktif</p>
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Aktif Halaman</p>
               <p class="mt-1 text-xl font-semibold">${activeSiswa}</p>
             </div>
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Kelas</p>
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Kelas Halaman</p>
               <p class="mt-1 text-xl font-semibold">${kelasTerpakai}</p>
             </div>
           </div>
@@ -190,7 +196,7 @@ export async function renderMasterSiswaPage(container) {
   const prevPageBtn = container.querySelector('#siswa-prev-page');
   const nextPageBtn = container.querySelector('#siswa-next-page');
   const PAGE_SIZE = 10;
-  let currentPage = 1;
+  let currentPage = Number(pageState.page || 1);
   let lastEditTrigger = null;
 
   const filterState = {
@@ -268,13 +274,12 @@ export async function renderMasterSiswaPage(container) {
   const renderRows = () => {
     const visibleItems = getVisibleSiswa();
     resultsCount.textContent = visibleItems.length;
-    const totalPages = Math.max(1, Math.ceil(visibleItems.length / PAGE_SIZE));
-    currentPage = Math.min(currentPage, totalPages);
+    const totalPages = Math.max(1, Math.ceil((totalUsers || visibleItems.length) / PAGE_SIZE));
     const startIndex = (currentPage - 1) * PAGE_SIZE;
-    const pageItems = visibleItems.slice(startIndex, startIndex + PAGE_SIZE);
+    const pageItems = visibleItems;
     const rangeStart = visibleItems.length ? startIndex + 1 : 0;
-    const rangeEnd = Math.min(startIndex + PAGE_SIZE, visibleItems.length);
-    pageSummary.textContent = `${rangeStart}-${rangeEnd} dari ${visibleItems.length} siswa`;
+    const rangeEnd = startIndex + visibleItems.length;
+    pageSummary.textContent = `${rangeStart}-${rangeEnd} dari ${totalUsers || visibleItems.length} siswa`;
     pageNumber.textContent = `Halaman ${currentPage}/${totalPages}`;
     prevPageBtn.disabled = currentPage <= 1;
     nextPageBtn.disabled = currentPage >= totalPages;
@@ -489,12 +494,24 @@ export async function renderMasterSiswaPage(container) {
   dialog?.addEventListener('cancel', () => setEditMode(false));
 
   prevPageBtn?.addEventListener('click', () => {
-    currentPage = Math.max(1, currentPage - 1);
-    renderRows();
+    if (currentPage <= 1) return;
+    const previousAfter = pageState.previousCursors?.[currentPage - 2] || '';
+    renderMasterSiswaPage(container, {
+      page: currentPage - 1,
+      after: previousAfter,
+      total: totalUsers,
+      previousCursors: (pageState.previousCursors || []).slice(0, Math.max(0, currentPage - 2)),
+    });
   });
   nextPageBtn?.addEventListener('click', () => {
-    currentPage += 1;
-    renderRows();
+    if (!serverPage.nextCursor) return;
+    const cursors = [...(pageState.previousCursors || []), pageState.after || ''];
+    renderMasterSiswaPage(container, {
+      page: currentPage + 1,
+      after: serverPage.nextCursor,
+      total: totalUsers,
+      previousCursors: cursors,
+    });
   });
 
   ['input', 'change'].forEach((eventName) => {
