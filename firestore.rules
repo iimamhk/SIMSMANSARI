@@ -8,7 +8,7 @@ service cloud.firestore {
 
     match /materi_publish/{materialId} {
       allow read: if true;
-      allow create: if request.auth != null && request.auth.token.role == 'guru' && request.resource.data.guru_id == request.auth.token.username && request.resource.data.keys().hasOnly([
+      allow create, update: if request.auth != null && request.auth.token.role == 'guru' && request.resource.data.guru_id == request.auth.token.username && request.resource.data.keys().hasOnly([
         'id',
         'source_id',
         'pengajaran_id',
@@ -66,7 +66,7 @@ service cloud.firestore {
       && (!('published_at' in request.resource.data) || request.resource.data.published_at is string)
       && request.resource.data.visible_to_students is bool;
 
-      allow delete: if request.auth != null;
+      allow delete: if request.auth != null && resource.data.guru_id == request.auth.token.username;
     }
 
     match /materi_reads/{readId} {

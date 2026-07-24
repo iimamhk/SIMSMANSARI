@@ -783,9 +783,9 @@
           storedBase = '';
         }
 
-        // Live Server frontend berjalan di 5500, sedangkan API lokal berjalan di 3000.
-        // Pada deployment same-origin, backend tetap dikosongkan agar memakai URL saat ini.
-        const defaultBase = window.location.port === '5500' ? 'http://127.0.0.1:3000' : '';
+        // Live Server tidak menjalankan Vercel Functions. Gunakan API production
+        // sebagai fallback agar login tetap bekerja tanpa server lokal :3000.
+        const defaultBase = window.location.port === '5500' ? 'https://simsmansari.vercel.app' : '';
         window.__SIM_BACKEND_URL__ = (storedBase || defaultBase).replace(/\/+$/, '');
       })();
     </script>
