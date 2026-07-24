@@ -13,6 +13,10 @@ async function requireAdmin(req) {
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).end();
   const adminUser = await requireAdmin(req);
   try {
     if (req.method === 'GET') {
@@ -20,6 +24,7 @@ module.exports = async (req, res) => {
       const result = await listUsers(req.query?.role, req.query?.kelas, {
         limit: req.query?.limit,
         after: req.query?.after,
+        includeTotal: req.query?.includeTotal === 'true',
       });
       return res.status(200).json(result);
     }

@@ -12,6 +12,10 @@ async function currentUser(req) {
 }
 
 module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.status(204).end();
   const decoded = await currentUser(req);
   if (!decoded) return res.status(401).json({ error: 'Sesi tidak valid.' });
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method tidak diizinkan.' });
