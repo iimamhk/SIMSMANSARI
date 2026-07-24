@@ -130,7 +130,11 @@ function invalidateQueryCache(collectionName = '') {
   const target = String(collectionName || '');
   for (const key of queryCache.keys()) {
     const segments = key.split(':');
-    if (segments.length >= 2 && ['persistent', 'collection', 'query'].includes(segments[0]) && segments[1] === target) {
+    const isStandardKey = segments.length >= 2
+      && ['persistent', 'collection', 'query'].includes(segments[0])
+      && segments[1] === target;
+    const isScopedCollectionKey = key.startsWith(`${target}:`);
+    if (isStandardKey || isScopedCollectionKey) {
       queryCache.delete(key);
     }
   }
