@@ -1,0 +1,44 @@
+name: Backup Mingguan Google Drive
+
+on:
+  schedule:
+    # Runs every Sunday at 02:00 UTC (09:00 WIB)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    # Allows manual triggering from GitHub Actions UI
+
+env:
+  NODE_VERSION: '20'
+  # Default active period, override with GitHub Secrets if needed
+  TAHUN_AJARAN_AKTIF: '2025'
+  SEMESTER_AKTIF: 'gasal'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run backup script
+      run: node scripts/backup-to-drive.js
+      env:
+        # Firebase Service Account JSON (required for firebase-admin)
+        FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        # Google Service Account JSON (required for googleapis)
+        # Can be the same as FIREBASE_SERVICE_ACCOUNT_JSON if Firebase SA has Drive/Sheets API access
+        GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
+        # Google Drive Folder ID where backups will be stored
+        # You need to create this folder manually in Google Drive and share it with the Service Account email
+        BACKUP_FOLDER_ID: ${{ secrets.BACKUP_FOLDER_ID }}
+        # Override active period if needed
+        TAHUN_AJARAN_AKTIF: ${{ env.TAHUN_AJARAN_AKTIF }}
+        SEMESTER_AKTIF: ${{ env.SEMESTER_AKTIF }}

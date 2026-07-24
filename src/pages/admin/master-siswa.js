@@ -1,17 +1,27 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
 import { saveDocument, getCollectionDocs, synchronizeCurrentClassMemberships, synchronizeRenamedUserReferences } from '../../firebase/data-service.js';
-import { getManagedUsersPage, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
+import { getManagedUsers, getManagedUsersPage, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
 export async function renderMasterSiswaPage(container, pageState = {}) {
   const context = getStoredContext();
-  const serverPage = await getManagedUsersPage('siswa', '', {
-    limit: 10,
-    after: pageState.after || '',
-    includeTotal: !pageState.after,
-  });
-  const totalUsers = Number(serverPage.total ?? pageState.total ?? 0);
-  const allUsers = Array.isArray(serverPage.users) ? serverPage.users : [];
+  const hasFilters = Boolean(pageState.search || pageState.kelas || pageState.status);
+  let serverPage, allUsers, totalUsers;
+
+  if (hasFilters) {
+    const allStudents = await getManagedUsers('siswa');
+    allUsers = allStudents.filter((item) => item.role === 'siswa');
+    totalUsers = allUsers.length;
+    serverPage = { users: allUsers, nextCursor: null, total: totalUsers };
+  } else {
+    serverPage = await getManagedUsersPage('siswa', '', {
+      limit: 10,
+      after: pageState.after || '',
+      includeTotal: !pageState.after,
+    });
+    allUsers = Array.isArray(serverPage.users) ? serverPage.users : [];
+    totalUsers = Number(serverPage.total ?? pageState.total ?? 0);
+  }
   const kelasList = await getCollectionDocs('kelas');
   let kelasCatalog = kelasList;
   const siswaList = allUsers
@@ -500,6 +510,9 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
       page: currentPage - 1,
       after: previousAfter,
       total: totalUsers,
+      search: pageState.search,
+      kelas: pageState.kelas,
+      status: pageState.status,
       previousCursors: (pageState.previousCursors || []).slice(0, Math.max(0, currentPage - 2)),
     });
   });
@@ -510,27 +523,46 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
       page: currentPage + 1,
       after: serverPage.nextCursor,
       total: totalUsers,
+      search: pageState.search,
+      kelas: pageState.kelas,
+      status: pageState.status,
       previousCursors: cursors,
     });
   });
 
-  ['input', 'change'].forEach((eventName) => {
-    searchInput?.addEventListener(eventName, () => {
-      filterState.search = searchInput.value.trim();
-      currentPage = 1;
-      renderRows();
+  const currentSearchVal = pageState.search || '';
+  const currentKelasVal = pageState.kelas || 'all';
+  const currentStatusVal = pageState.status || 'all';
+  if (searchInput) {
+    searchInput.value = currentSearchVal;
+    searchInput.addEventListener('input', () => {
+      renderMasterSiswaPage(container, {
+        search: searchInput.value.trim(),
+        kelas: (kelasFilter?.value || 'all'),
+        status: (statusFilter?.value || 'all'),
+      });
     });
-    kelasFilter?.addEventListener(eventName, () => {
-      filterState.kelas = kelasFilter.value;
-      currentPage = 1;
-      renderRows();
+  }
+  if (kelasFilter) {
+    kelasFilter.value = currentKelasVal;
+    kelasFilter.addEventListener('change', () => {
+      renderMasterSiswaPage(container, {
+        search: (searchInput?.value.trim() || ''),
+        kelas: kelasFilter.value,
+        status: (statusFilter?.value || 'all'),
+      });
     });
-    statusFilter?.addEventListener(eventName, () => {
-      filterState.status = statusFilter.value;
-      currentPage = 1;
-      renderRows();
+  }
+  if (statusFilter) {
+    statusFilter.value = currentStatusVal;
+    statusFilter.addEventListener('change', () => {
+      renderMasterSiswaPage(container, {
+        search: (searchInput?.value.trim() || ''),
+        kelas: (kelasFilter?.value || 'all'),
+        status: statusFilter.value,
+      });
     });
-  });
+  }
 
   renderRows();
 

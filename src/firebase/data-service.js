@@ -8,7 +8,14 @@ const MATERIAL_READS_COLLECTION = 'materi_reads';
 const QUERY_CACHE_TTL_MS = 60000;
 const COLLECTION_CACHE_TTL_MS = 300000;
 const STATIC_COLLECTION_CACHE_TTL_MS = 1800000;
-const FIRESTORE_READ_STATUS_KEY = 'simguru_firestore_read_status';
+function getFirestoreReadStatusKey() {
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage?.getItem('simguru_session') : null;
+    const session = raw ? JSON.parse(raw) : null;
+    const uid = session?.user?.id || session?.user?.username || '';
+    return `simguru_firestore_read_status_${uid}`;
+  } catch { return 'simguru_firestore_read_status'; }
+}
 const queryCache = new Map();
 const PERSISTENT_CACHE_PREFIX = 'simguru_pcache_';
 const PERSISTENT_CACHE_TTL_MS = 7200000;
@@ -36,10 +43,10 @@ function setFirestoreReadStatus(status) {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     if (!status) {
-      localStorage.removeItem(FIRESTORE_READ_STATUS_KEY);
+      localStorage.removeItem(getFirestoreReadStatusKey());
       return;
     }
-    localStorage.setItem(FIRESTORE_READ_STATUS_KEY, JSON.stringify(status));
+    localStorage.setItem(getFirestoreReadStatusKey(), JSON.stringify(status));
   } catch {
     // Ignore localStorage issues.
   }
@@ -58,7 +65,7 @@ function clearFirestoreReadQuotaStatus() {
   const current = (() => {
     if (typeof window === 'undefined' || !window.localStorage) return null;
     try {
-      return JSON.parse(localStorage.getItem(FIRESTORE_READ_STATUS_KEY) || 'null');
+      return JSON.parse(localStorage.getItem(getFirestoreReadStatusKey()) || 'null');
     } catch {
       return null;
     }
@@ -77,7 +84,7 @@ function clearFirestoreReadQuotaStatus() {
 function isReadQuotaExhausted() {
   if (typeof window === 'undefined' || !window.localStorage) return false;
   try {
-    const raw = localStorage.getItem(FIRESTORE_READ_STATUS_KEY);
+    const raw = localStorage.getItem(getFirestoreReadStatusKey());
     if (!raw) return false;
     const status = JSON.parse(raw);
     if (status?.state !== 'exhausted') return false;
@@ -1039,16 +1046,17 @@ export async function getActiveTeachingAssignments(context) {
         { field: 'tahun_ajaran_id', value: year },
         { field: 'semester_id', value: semester },
       ];
-      const [pengajaranData, pembelajaranData] = await Promise.all([
-        getDocumentsWhere('pengajaran', filters),
-        getDocumentsWhere('pembelajaran', filters),
-      ]);
+      const pengajaranData = await getDocumentsWhere('pengajaran', filters);
 
-      const combined = [...pengajaranData, ...pembelajaranData]
-        .map((item) => ({ id: item.id, ...item }))
-        .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+      if (!pengajaranData.length) {
+        const pembelajaranData = await getDocumentsWhere('pembelajaran', filters);
+        const combined = [...pengajaranData, ...pembelajaranData]
+          .map((item) => ({ id: item.id, ...item }))
+          .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+        return combined.length ? combined : getDemoTeachingAssignments(context);
+      }
 
-      return combined.length ? combined : getDemoTeachingAssignments(context);
+      return pengajaranData.length ? pengajaranData : getDemoTeachingAssignments(context);
     });
   } catch (error) {
     console.warn('Gagal mengambil pengajaran dari Firestore, memakai data cadangan:', error);
@@ -1075,12 +1083,17 @@ export async function getTeachingAssignmentsForUser(context, userId) {
         { field: 'semester_id', value: semester },
         { field: 'guru_id', value: userId },
       ];
-      const [pengajaranData, pembelajaranData] = await Promise.all([
-        getDocumentsWhere('pengajaran', filters),
-        getDocumentsWhere('pembelajaran', filters),
-      ]);
+      const pengajaranData = await getDocumentsWhere('pengajaran', filters);
 
-      return [...pengajaranData, ...pembelajaranData]
+      if (!pengajaranData.length) {
+        const pembelajaranData = await getDocumentsWhere('pembelajaran', filters);
+        return [...pengajaranData, ...pembelajaranData]
+          .filter((item) => normalizeUserKey(item.guru_id) === normalizedUserId)
+          .map((item) => ({ id: item.id, ...item }))
+          .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
+      }
+
+      return pengajaranData
         .filter((item) => normalizeUserKey(item.guru_id) === normalizedUserId)
         .map((item) => ({ id: item.id, ...item }))
         .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
