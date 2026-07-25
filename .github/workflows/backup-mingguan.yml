@@ -45,7 +45,11 @@ jobs:
           echo "::warning::GOOGLE_SA_KEY is not set, will use FIREBASE_SERVICE_ACCOUNT_JSON"
         fi
         if [ -z "${{ secrets.BACKUP_FOLDER_ID }}" ]; then
-          echo "::warning::BACKUP_FOLDER_ID is not set, backup folder will be created in root Drive"
+          echo "::error::BACKUP_FOLDER_ID is not set. Set it to a folder shared with the service account."
+          exit 1
+        fi
+        if [ -z "${{ secrets.BACKUP_SHARE_EMAIL }}" ]; then
+          echo "::warning::BACKUP_SHARE_EMAIL is not set; folder links will only be available to the service account."
         fi
         echo "All required checks passed."
 

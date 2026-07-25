@@ -2,6 +2,10 @@ const { google } = require('googleapis');
 const admin = require('firebase-admin');
 const path = require('path');
 
+const DRIVE_API_OPTIONS = {
+  supportsAllDrives: true,
+};
+
 // --- Helper Functions ---
 
 // Sanitize sheet names for Google Sheets (max 100 chars, no invalid chars)
@@ -84,7 +88,12 @@ async function ensureBackupFolder(drive, folderName, parentId = null) {
   if (parentId) {
     q += ` and '${parentId}' in parents`;
   }
-  const res = await drive.files.list({ q, fields: 'files(id,name)' });
+  const res = await drive.files.list({
+    ...DRIVE_API_OPTIONS,
+    includeItemsFromAllDrives: true,
+    q,
+    fields: 'files(id,name,parents,mimeType)',
+  });
   if (res.data.files.length) {
     console.log(`  Folder found: ${folderName} (${res.data.files[0].id})`);
     return res.data.files[0];
@@ -95,7 +104,11 @@ async function ensureBackupFolder(drive, folderName, parentId = null) {
     parents: parentId ? [parentId] : [],
   };
   console.log(`  Creating folder: ${folderName}`);
-  const folder = await drive.files.create({ resource: fileMetadata, fields: 'id' });
+  const folder = await drive.files.create({
+    ...DRIVE_API_OPTIONS,
+    resource: fileMetadata,
+    fields: 'id,name,parents,mimeType',
+  });
   return folder.data;
 }
 
@@ -120,6 +133,7 @@ async function cleanupOldBackups(drive, rootFolderId, keepDays = 14) {
 
   // List old folders in the root backup folder
   const res = await drive.files.list({
+    ...DRIVE_API_OPTIONS,
     q: `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and createdTime < '${cutoffStr}T00:00:00'`,
     fields: 'files(id,name,createdTime)',
   });
@@ -128,7 +142,7 @@ async function cleanupOldBackups(drive, rootFolderId, keepDays = 14) {
     let deleted = 0;
     for (const folder of res.data.files) {
       try {
-        await drive.files.delete({ fileId: folder.id });
+        await drive.files.delete({ ...DRIVE_API_OPTIONS, fileId: folder.id });
         console.log(`  Deleted: ${folder.name} from ${folder.createdTime}`);
         deleted++;
       } catch (e) {
@@ -155,14 +169,29 @@ async function createSpreadsheet(sheets, drive, parentFolderId, guruId, guruName
   const fileMetadata = {
     name: spreadsheetTitle,
     mimeType: 'application/vnd.google-apps.spreadsheet',
+    parents: parentFolderId ? [parentFolderId] : undefined,
   };
-  const file = await drive.files.create({ resource: fileMetadata, fields: 'id' });
+  const file = await drive.files.create({
+    ...DRIVE_API_OPTIONS,
+    resource: fileMetadata,
+    fields: 'id,name,parents,mimeType,webViewLink',
+  });
   const fileId = file.data.id;
-  console.log(`Created spreadsheet for ${guruName}: ${fileId}`);
+  console.log(`Created spreadsheet for ${guruName}: https://docs.google.com/spreadsheets/d/${fileId}/edit`);
 
-  // Move to the shared parent folder (so user can see it)
-  if (parentFolderId) {
+  const verifiedFile = await drive.files.get({
+    ...DRIVE_API_OPTIONS,
+    fileId,
+    fields: 'id,name,parents,mimeType,webViewLink',
+  });
+  if (verifiedFile.data.mimeType !== 'application/vnd.google-apps.spreadsheet') {
+    throw new Error(`File backup ${fileId} bukan Google Spreadsheet.`);
+  }
+
+  // Older Drive implementations may ignore parents during creation, so verify it.
+  if (parentFolderId && !verifiedFile.data.parents?.includes(parentFolderId)) {
     await drive.files.update({
+      ...DRIVE_API_OPTIONS,
       fileId,
       addParents: parentFolderId,
       fields: 'id,parents',
@@ -173,6 +202,7 @@ async function createSpreadsheet(sheets, drive, parentFolderId, guruId, guruName
   if (process.env.BACKUP_SHARE_EMAIL) {
     try {
       await drive.permissions.create({
+        ...DRIVE_API_OPTIONS,
         fileId,
         requestBody: {
           type: 'user',
@@ -204,14 +234,44 @@ async function createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex) {
       }],
     },
   };
-  await sheets.spreadsheets.batchUpdate(request);
+  const response = await sheets.spreadsheets.batchUpdate(request);
+  return response.data.replies?.[0]?.addSheet?.properties?.sheetId;
+}
+
+async function formatSheet(sheets, spreadsheetId, sheetId, columnCount, rowCount, frozenRows = 1) {
+  if (sheetId == null || columnCount < 1 || rowCount < 1) return;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    resource: {
+      requests: [
+        {
+          updateSheetProperties: {
+            properties: { sheetId, gridProperties: { frozenRowCount: frozenRows } },
+            fields: 'gridProperties.frozenRowCount',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: 0, endRowIndex: Math.min(frozenRows, rowCount), startColumnIndex: 0, endColumnIndex: columnCount },
+            cell: { userEnteredFormat: { backgroundColor: { red: 0.12, green: 0.28, blue: 0.45 }, textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, horizontalAlignment: 'CENTER', wrapStrategy: 'WRAP' } },
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)',
+          },
+        },
+        {
+          autoResizeDimensions: {
+            dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: columnCount },
+          },
+        },
+      ],
+    },
+  });
 }
 
 // --- Data Processing & Sheet Generation ---
 
 async function generateRekapAbsensi(sheets, spreadsheetId, assignment, siswaList, absensiData, sheetIndex) {
   const sheetTitle = sanitizeSheetName(`Rekap Absensi - ${assignment.kelas_nama || assignment.kelas_id}`);
-  await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
+  const sheetId = await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
   const rekapAbsen = {};
   absensiData.forEach(absen => {
     if (!rekapAbsen[absen.siswa_id]) {
@@ -266,12 +326,13 @@ async function generateRekapAbsensi(sheets, spreadsheetId, assignment, siswaList
     valueInputOption: 'USER_ENTERED',
     resource: { values },
   });
+  await formatSheet(sheets, spreadsheetId, sheetId, values[0].length, values.length);
   return sheetTitle;
 }
 
 async function generateAbsensiHarian(sheets, spreadsheetId, assignment, siswaList, absensiData, sheetIndex) {
   const sheetTitle = sanitizeSheetName(`Absensi Harian - ${assignment.kelas_nama || assignment.kelas_id}`);
-  await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
+  const sheetId = await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
 
   const dates = [...new Set(absensiData.map(a => a.tanggal))].sort();
   const dateHeaders = dates.map(d => formatDate(d));
@@ -337,12 +398,13 @@ async function generateAbsensiHarian(sheets, spreadsheetId, assignment, siswaLis
     valueInputOption: 'USER_ENTERED',
     resource: { values },
   });
+  await formatSheet(sheets, spreadsheetId, sheetId, values[0].length, values.length);
   return sheetTitle;
 }
 
 async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilaiData, babData, tugasData, uhKolomData, sheetIndex) {
   const sheetTitle = sanitizeSheetName(`Nilai - ${assignment.kelas_nama || assignment.kelas_id}`);
-  await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
+  const sheetId = await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
 
   // --- Configuration Section ---
   const configValues = [
@@ -380,6 +442,7 @@ async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilai
   const secondLevelHeaders = [['', '']]; // Task-specific headers
 
   let currentColumn = 2; // Start after No (A) and Nama Siswa (B)
+  let taskColumnCount = 0;
 
   // BAB and Tugas Headers
   Object.values(babMap).forEach(bab => {
@@ -393,6 +456,7 @@ async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilai
       bab.tugas.forEach(tugas => {
         secondLevelHeaders[0].push(tugas.nama);
         currentColumn++;
+        taskColumnCount++;
       });
     }
   });
@@ -491,10 +555,7 @@ async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilai
     });
 
     // Rerata Tugas Formula
-    const rerataTugasFormulaCell = columnToLetter(row.length + 1); // +1 because we are pushing values
-    const rerataTugasFormula = tugasScores.length > 0 ? `=AVERAGE(${columnToLetter(currentColumn - tugasScores.length + 2)}${dataStartRow + studentRowNum -1}:${columnToLetter(currentColumn + 1)}${dataStartRow + studentRowNum-1})` : '-';
-    // this formula is wrong, need to calculate dynamically
-    row.push(tugasScores.length > 0 ? (totalTugasScore / totalTugasCount).toFixed(1) : '-');
+    row.push(tugasScores.length > 0 ? Number((totalTugasScore / totalTugasCount).toFixed(1)) : '-');
 
 
     let totalUHScore = 0;
@@ -503,32 +564,33 @@ async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilai
     // UH Scores
     uhHeaders.forEach(uhName => {
       const uhId = Object.keys(uhKolomMap).find(key => uhKolomMap[key] === uhName);
-      const score = studentNilai[uhId] || '-';
+      const score = studentNilai[uhId] ?? '-';
       row.push(score);
-      if (typeof score === 'number') {
-        totalUHScore += score;
+      const numericScore = Number(score);
+      if (score !== '-' && Number.isFinite(numericScore)) {
+        totalUHScore += numericScore;
         totalUHCount++;
       }
     });
 
     // Rerata UH Formula
-    row.push(totalUHCount > 0 ? (totalUHScore / totalUHCount).toFixed(1) : '-');
+    row.push(totalUHCount > 0 ? Number((totalUHScore / totalUHCount).toFixed(1)) : '-');
 
     // PTS, PAS
-    row.push(studentNilai.pts || '-');
-    row.push(studentNilai.pas || '-');
+    row.push(studentNilai.pts ?? '-');
+    row.push(studentNilai.pas ?? '-');
 
     // Nilai Akhir Formula (references config cells A2,C2,E2,G2 etc, and other cells in this row)
-    const rerataTugasColLetter = columnToLetter(currentColumn + 2); // Assuming Rerata Tugas is the next one
-    const rerataUHColLetter = columnToLetter(currentColumn + 4 + uhHeaders.length); // Assuming Rerata UH position
-    const ptsColLetter = columnToLetter(currentColumn + 5 + uhHeaders.length);
-    const pasColLetter = columnToLetter(currentColumn + 6 + uhHeaders.length);
+    const rerataTugasColLetter = columnToLetter(taskColumnCount + 3);
+    const rerataUHColLetter = columnToLetter(taskColumnCount + uhHeaders.length + 4);
+    const ptsColLetter = columnToLetter(taskColumnCount + uhHeaders.length + 5);
+    const pasColLetter = columnToLetter(taskColumnCount + uhHeaders.length + 6);
 
     const nilaiAkhirFormula = `=IFERROR((${rerataTugasColLetter}${dataStartRow + studentRowNum -1}*B$2)+(${rerataUHColLetter}${dataStartRow + studentRowNum -1}*D$2)+(${ptsColLetter}${dataStartRow + studentRowNum -1}*F$2)+(${pasColLetter}${dataStartRow + studentRowNum -1}*H$2),"-")`;
     row.push(nilaiAkhirFormula);
 
     // Grade Formula
-    const nilaiAkhirColLetter = columnToLetter(currentColumn + 7 + uhHeaders.length);
+    const nilaiAkhirColLetter = columnToLetter(taskColumnCount + uhHeaders.length + 7);
     const gradeFormula = `=IF(${nilaiAkhirColLetter}${dataStartRow + studentRowNum -1}>=90,"A",IF(${nilaiAkhirColLetter}${dataStartRow + studentRowNum -1}>=85,"A-",IF(${nilaiAkhirColLetter}${dataStartRow + studentRowNum -1}>=80,"B+",IF(${nilaiAkhirColLetter}${dataStartRow + studentRowNum -1}>=75,"B",IF(${nilaiAkhirColLetter}${dataStartRow + studentRowNum -1}>=60,"C","D")))))`;
     row.push(gradeFormula);
 
@@ -548,7 +610,26 @@ async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilai
 
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
-    resource: { requests },
+    resource: { requests: requests.concat([
+      {
+        updateSheetProperties: {
+          properties: { sheetId, gridProperties: { frozenRowCount: dataStartRow - 1 } },
+          fields: 'gridProperties.frozenRowCount',
+        },
+      },
+      {
+        repeatCell: {
+          range: { sheetId, startRowIndex: headerStartRow - 1, endRowIndex: dataStartRow - 1, startColumnIndex: 0, endColumnIndex: currentColumn + 6 + uhHeaders.length },
+          cell: { userEnteredFormat: { backgroundColor: { red: 0.12, green: 0.28, blue: 0.45 }, textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, horizontalAlignment: 'CENTER', wrapStrategy: 'WRAP' } },
+          fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,wrapStrategy)',
+        },
+      },
+      {
+        autoResizeDimensions: {
+          dimensions: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: currentColumn + 7 + uhHeaders.length },
+        },
+      },
+    ]) },
   });
 
   return sheetTitle;
@@ -594,16 +675,20 @@ async function main() {
       console.log(`Using specified BACKUP_FOLDER_ID: ${process.env.BACKUP_FOLDER_ID}`);
       try {
         const folderRes = await drive.files.get({
+          ...DRIVE_API_OPTIONS,
           fileId: process.env.BACKUP_FOLDER_ID,
-          fields: 'id,name',
+          fields: 'id,name,mimeType,parents',
         });
+        if (folderRes.data.mimeType !== 'application/vnd.google-apps.folder') {
+          throw new Error('BACKUP_FOLDER_ID bukan folder Google Drive.');
+        }
         console.log(`  Parent folder: "${folderRes.data.name}" (${folderRes.data.id})`);
         rootFolder = folderRes.data;
       } catch (e) {
-        console.error(`Warning: BACKUP_FOLDER_ID "${process.env.BACKUP_FOLDER_ID}" not found or inaccessible.`);
-        console.error(`  Error: ${e.message}`);
-        console.error('  Creating root folder in default location instead.');
-        rootFolder = await ensureBackupFolder(drive, rootFolderName);
+        throw new Error(
+          `BACKUP_FOLDER_ID "${process.env.BACKUP_FOLDER_ID}" tidak dapat diakses oleh service account. ` +
+          `Bagikan folder tersebut ke email client_email pada service-account JSON. Detail: ${e.message}`
+        );
       }
     } else {
       // Find or create root folder in the service account's Drive
@@ -624,7 +709,7 @@ async function main() {
     const dateFolder = await ensureBackupFolder(drive, dateFolderName, rootFolder.id);
     console.log(`Backup folder: ${dateFolderName} (${dateFolder.id})`);
 
-    const period = {
+    let period = {
       year: process.env.TAHUN_AJARAN_AKTIF || '2026_2027',
       semester: process.env.SEMESTER_AKTIF || '2026_2027_1',
     };
@@ -640,13 +725,31 @@ async function main() {
       throw e;
     }
 
+    // A wrong period setting previously produced an empty folder and a successful run.
+    // Fall back to the available teaching period so the backup contains real data.
+    if (pengajaranData.length === 0) {
+      console.warn(`No assignments for ${period.year}/${period.semester}; checking all teaching assignments...`);
+      pengajaranData = await getFirestoreData(db, 'pengajaran');
+      if (!pengajaranData.length) {
+        pengajaranData = await getFirestoreData(db, 'pembelajaran');
+      }
+      if (pengajaranData.length) {
+        period = {
+          year: pengajaranData[0].tahun_ajaran_id,
+          semester: pengajaranData[0].semester_id,
+        };
+        console.log(`Using detected period ${period.year}/${period.semester}.`);
+      }
+    }
+
     console.log(`Found ${pengajaranData.length} teaching assignments.`);
     if (pengajaranData.length === 0) {
-      console.warn('No teaching assignments found for the current period (checked pengajaran + pembelajaran). Backup may be empty.');
+      throw new Error('Tidak ada data pengajaran/pembelajaran. Backup dihentikan agar tidak menghasilkan folder kosong.');
     }
 
     const assignmentsByGuru = groupBy(pengajaranData, 'guru_id');
     let guruCount = 0;
+    let createdSpreadsheetCount = 0;
     const totalGurus = Object.keys(assignmentsByGuru).length;
     console.log(`Processing ${totalGurus} teachers...`);
 
@@ -662,6 +765,7 @@ async function main() {
       let spreadsheetId;
       try {
         spreadsheetId = await createSpreadsheet(sheets, drive, dateFolder.id, guruId, guruName, spreadsheetTitle);
+        createdSpreadsheetCount++;
       } catch (e) {
         console.error(`  Failed to create spreadsheet for ${guruName}: ${e.message}`);
         continue; // Skip this guru, continue with next
@@ -686,33 +790,33 @@ async function main() {
       const [allAbsensi, allNilaiTugas, allNilaiUjian, allBab, allTugasBab, allUhKolom] = await Promise.all([
         getFirestoreData(db, 'absensi', [
           { field: 'guru_id', operator: '==', value: guruId },
-          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+          { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+          { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on absensi collection.`); } throw e; }),
         getFirestoreData(db, 'nilai_tugas', [
           { field: 'guru_id', operator: '==', value: guruId },
-          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+          { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+          { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_tugas collection.`); } throw e; }),
         getFirestoreData(db, 'nilai_ujian', [
           { field: 'guru_id', operator: '==', value: guruId },
-          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+          { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+          { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_ujian collection.`); } throw e; }),
         getFirestoreData(db, 'bab', [
           { field: 'guru_id', operator: '==', value: guruId },
-          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+          { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+          { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on bab collection.`); } throw e; }),
         getFirestoreData(db, 'tugas_bab', [
           { field: 'guru_id', operator: '==', value: guruId },
-          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+          { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+          { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on tugas_bab collection.`); } throw e; }),
         getFirestoreData(db, 'ulangan_harian_kolom', [
           { field: 'guru_id', operator: '==', value: guruId },
-          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+          { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+          { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on ulangan_harian_kolom collection.`); } throw e; }),
       ]);
 
@@ -749,12 +853,17 @@ async function main() {
       // Delete initial Sheet1 if multiple sheets were created
       if (sheetIndex > 0) {
         try {
+          const spreadsheet = await sheets.spreadsheets.get({
+            spreadsheetId,
+            fields: 'sheets(properties(sheetId,title))',
+          });
+          const initialSheet = spreadsheet.data.sheets?.find(sheet => sheet.properties?.title === 'Sheet1');
           await sheets.spreadsheets.batchUpdate({
             spreadsheetId,
             resource: {
-              requests: [{
-                deleteSheet: { sheetId: 0 }
-              }]
+              requests: initialSheet ? [{
+                deleteSheet: { sheetId: initialSheet.properties.sheetId }
+              }] : []
             }
           });
         } catch (e) {
@@ -763,6 +872,26 @@ async function main() {
       }
       console.log(`  ✓ ${guruName} backup complete.`);
     }
+
+    if (createdSpreadsheetCount === 0) {
+      throw new Error('Tidak ada spreadsheet laporan yang berhasil dibuat. Periksa akses Google Drive/Sheets dan konfigurasi periode.');
+    }
+
+    const backupFiles = await drive.files.list({
+      ...DRIVE_API_OPTIONS,
+      includeItemsFromAllDrives: true,
+      q: `'${dateFolder.id}' in parents and trashed=false`,
+      fields: 'files(id,name,mimeType,webViewLink)',
+      orderBy: 'name',
+    });
+    console.log(`\nFiles in backup folder (${backupFiles.data.files.length}):`);
+    backupFiles.data.files.forEach(file => {
+      const url = file.mimeType === 'application/vnd.google-apps.spreadsheet'
+        ? `https://docs.google.com/spreadsheets/d/${file.id}/edit`
+        : `https://drive.google.com/open?id=${file.id}`;
+      console.log(`  - ${file.name}: ${url}`);
+    });
+
     // Share backup folder with user if email is provided
     if (process.env.BACKUP_SHARE_EMAIL) {
       try {
