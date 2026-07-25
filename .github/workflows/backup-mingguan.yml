@@ -9,9 +9,8 @@ on:
 
 env:
   NODE_VERSION: '20'
-  # Default active period, override with GitHub Secrets if needed
-  TAHUN_AJARAN_AKTIF: '2025'
-  SEMESTER_AKTIF: 'gasal'
+  TAHUN_AJARAN_AKTIF: '2026_2027'
+  SEMESTER_AKTIF: '2026_2027_1'
 
 jobs:
   backup:
@@ -25,20 +24,44 @@ jobs:
       with:
         node-version: ${{ env.NODE_VERSION }}
 
+    - name: Cache npm dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
     - name: Install dependencies
       run: npm install
 
+    - name: Validate required secrets
+      run: |
+        if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" ]; then
+          echo "::error::FIREBASE_SERVICE_ACCOUNT_JSON is not set"
+          exit 1
+        fi
+        if [ -z "${{ secrets.GOOGLE_SA_KEY }}" ]; then
+          echo "::warning::GOOGLE_SA_KEY is not set, will use FIREBASE_SERVICE_ACCOUNT_JSON"
+        fi
+        if [ -z "${{ secrets.BACKUP_FOLDER_ID }}" ]; then
+          echo "::warning::BACKUP_FOLDER_ID is not set, backup folder will be created in root Drive"
+        fi
+        echo "All required checks passed."
+
     - name: Run backup script
+      id: backup
       run: node scripts/backup-to-drive.js
       env:
-        # Firebase Service Account JSON (required for firebase-admin)
         FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-        # Google Service Account JSON (required for googleapis)
-        # Can be the same as FIREBASE_SERVICE_ACCOUNT_JSON if Firebase SA has Drive/Sheets API access
         GOOGLE_SA_KEY: ${{ secrets.GOOGLE_SA_KEY }}
-        # Google Drive Folder ID where backups will be stored
-        # You need to create this folder manually in Google Drive and share it with the Service Account email
         BACKUP_FOLDER_ID: ${{ secrets.BACKUP_FOLDER_ID }}
-        # Override active period if needed
-        TAHUN_AJARAN_AKTIF: ${{ env.TAHUN_AJARAN_AKTIF }}
-        SEMESTER_AKTIF: ${{ env.SEMESTER_AKTIF }}
+        BACKUP_SHARE_EMAIL: ${{ secrets.BACKUP_SHARE_EMAIL }}
+        TAHUN_AJARAN_AKTIF: ${{ secrets.TAHUN_AJARAN_AKTIF || env.TAHUN_AJARAN_AKTIF }}
+        SEMESTER_AKTIF: ${{ secrets.SEMESTER_AKTIF || env.SEMESTER_AKTIF }}
+
+    - name: Send notification on failure
+      if: failure()
+      run: |
+        echo "::error::Backup mingguan GAGAL! Periksa logs GitHub Actions untuk detail."
+        echo "Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

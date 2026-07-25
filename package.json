@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "backup": "node scripts/backup-to-drive.js",
+    "backup:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; require('./scripts/backup-to-drive.js')\""
+  },
   "dependencies": {
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.2",

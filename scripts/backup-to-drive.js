@@ -73,16 +73,20 @@ async function getServiceAccountAuth(sa) {
     credentials: sa,
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.file', // Allows creating files in user's Drive
+      'https://www.googleapis.com/auth/drive', // Full Drive access so shared folders are visible
     ],
   });
   return auth.getClient();
 }
 
 async function ensureBackupFolder(drive, folderName, parentId = null) {
-  const q = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const res = await drive.files.list({ q: parentId ? `${q} and '${parentId}' in parents` : q });
+  let q = `name='${folderName.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  if (parentId) {
+    q += ` and '${parentId}' in parents`;
+  }
+  const res = await drive.files.list({ q, fields: 'files(id,name)' });
   if (res.data.files.length) {
+    console.log(`  Folder found: ${folderName} (${res.data.files[0].id})`);
     return res.data.files[0];
   }
   const fileMetadata = {
@@ -90,6 +94,7 @@ async function ensureBackupFolder(drive, folderName, parentId = null) {
     mimeType: 'application/vnd.google-apps.folder',
     parents: parentId ? [parentId] : [],
   };
+  console.log(`  Creating folder: ${folderName}`);
   const folder = await drive.files.create({ resource: fileMetadata, fields: 'id' });
   return folder.data;
 }
@@ -473,123 +478,234 @@ async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilai
 // --- Main Backup Function ---
 
 async function main() {
-  if (!process.env.GOOGLE_SA_KEY && !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.error('Error: GOOGLE_SA_KEY or FIREBASE_SERVICE_ACCOUNT_JSON environment variable not set.');
-    process.exit(1);
-  }
+  try {
+    console.log('=== Backup SIMSMANSARI - Starting ===');
+    console.log(`Time: ${new Date().toISOString()}`);
 
-  const saJson = process.env.GOOGLE_SA_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  const sa = JSON.parse(saJson);
+    if (!process.env.GOOGLE_SA_KEY && !process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      console.error('Error: GOOGLE_SA_KEY or FIREBASE_SERVICE_ACCOUNT_JSON environment variable not set.');
+      process.exit(1);
+    }
 
-  admin.initializeApp({ credential: admin.credential.cert(sa) });
-  const db = admin.firestore();
+    const saJson = process.env.GOOGLE_SA_KEY || process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    let sa;
+    try {
+      sa = JSON.parse(saJson);
+    } catch (e) {
+      console.error('Error: Failed to parse Service Account JSON. Check that the secret is valid JSON.');
+      console.error(e.message);
+      process.exit(1);
+    }
 
-  const auth = await getServiceAccountAuth(sa);
-  const sheets = google.sheets({ version: 'v4', auth });
-  const drive = google.drive({ version: 'v3', auth });
+    admin.initializeApp({ credential: admin.credential.cert(sa) });
+    const db = admin.firestore();
 
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const rootFolderName = 'Backup SIMSMANSARI';
-  const rootFolder = await ensureBackupFolder(drive, rootFolderName);
-  const dateFolder = await ensureBackupFolder(drive, `Laporan SIMSMANSARI - ${dateStr}`, rootFolder.id);
+    console.log('Authenticating to Google APIs...');
+    const auth = await getServiceAccountAuth(sa);
+    const sheets = google.sheets({ version: 'v4', auth });
+    const drive = google.drive({ version: 'v3', auth });
+    console.log('Authentication successful.');
 
-  const pengajaranData = await getFirestoreData(db, 'pengajaran', [
-    { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' }, // Default year
-    { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' }, // Default semester
-  ]);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const rootFolderName = 'Backup SIMSMANSARI';
 
-  const assignmentsByGuru = groupBy(pengajaranData, 'guru_id');
-  let guruCount = 0;
+    // Use BACKUP_FOLDER_ID if provided to place backup in a specific folder
+    let rootFolder;
+    if (process.env.BACKUP_FOLDER_ID) {
+      console.log(`Using specified BACKUP_FOLDER_ID: ${process.env.BACKUP_FOLDER_ID}`);
+      try {
+        const folderRes = await drive.files.get({
+          fileId: process.env.BACKUP_FOLDER_ID,
+          fields: 'id,name',
+        });
+        console.log(`  Parent folder: "${folderRes.data.name}" (${folderRes.data.id})`);
+        rootFolder = folderRes.data;
+      } catch (e) {
+        console.error(`Warning: BACKUP_FOLDER_ID "${process.env.BACKUP_FOLDER_ID}" not found or inaccessible.`);
+        console.error(`  Error: ${e.message}`);
+        console.error('  Creating root folder in default location instead.');
+        rootFolder = await ensureBackupFolder(drive, rootFolderName);
+      }
+    } else {
+      // Find or create root folder in the service account's Drive
+      rootFolder = await ensureBackupFolder(drive, rootFolderName);
+    }
 
-  for (const guruId of Object.keys(assignmentsByGuru)) {
-    guruCount++;
-    const assignments = assignmentsByGuru[guruId];
-    const guruName = assignments[0].guru_nama || `Guru-${guruId}`;
-    const mapelName = assignments[0].mapel_nama || 'Mapel';
+    // Find or create the daily folder inside the root folder
+    const dateFolderName = `Laporan SIMSMANSARI - ${dateStr}`;
+    const dateFolder = await ensureBackupFolder(drive, dateFolderName, rootFolder.id);
+    console.log(`Backup folder: ${dateFolderName} (${dateFolder.id})`);
 
-    const spreadsheetTitle = `${String(guruCount).padStart(2, '0')} - ${guruName} (${mapelName})`;
-    const spreadsheetId = await createSpreadsheet(sheets, drive, dateFolder.id, guruId, guruName, spreadsheetTitle);
+    console.log(`Fetching teaching assignments for ${process.env.TAHUN_AJARAN_AKTIF || '2026_2027'} / ${process.env.SEMESTER_AKTIF || '2026_2027_1'}...`);
+    const pengajaranData = await getFirestoreData(db, 'pengajaran', [
+      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+    ]).catch(e => {
+      if (isFirestoreIndexError(e)) {
+        console.error('Firestore index error on pengajaran collection.');
+        console.error('Create the required composite index at:');
+        console.error(`  https://console.firebase.google.com/project/${sa.project_id}/firestore/indexes`);
+        throw e;
+      }
+      throw e;
+    });
 
-    // Get all students for this guru's classes
-    const classIds = [...new Set(assignments.map(a => a.kelas_id))];
-    let siswaList = [];
-    for (const classId of classIds) {
-      const studentsInClass = await getFirestoreData(db, 'users', [
-        { field: 'role', operator: '==', value: 'siswa' },
-        { field: 'kelas_id', operator: '==', value: classId },
+    console.log(`Found ${pengajaranData.length} teaching assignments.`);
+    if (pengajaranData.length === 0) {
+      console.warn('No teaching assignments found for the current period. Backup may be empty.');
+    }
+
+    const assignmentsByGuru = groupBy(pengajaranData, 'guru_id');
+    let guruCount = 0;
+    const totalGurus = Object.keys(assignmentsByGuru).length;
+    console.log(`Processing ${totalGurus} teachers...`);
+
+    for (const guruId of Object.keys(assignmentsByGuru)) {
+      guruCount++;
+      const assignments = assignmentsByGuru[guruId];
+      const guruName = assignments[0].guru_nama || `Guru-${guruId}`;
+      const mapelName = assignments[0].mapel_nama || 'Mapel';
+
+      console.log(`\n[${guruCount}/${totalGurus}] Processing: ${guruName} (${mapelName})`);
+
+      const spreadsheetTitle = `${String(guruCount).padStart(2, '0')} - ${guruName} (${mapelName})`;
+      let spreadsheetId;
+      try {
+        spreadsheetId = await createSpreadsheet(sheets, drive, dateFolder.id, guruId, guruName, spreadsheetTitle);
+      } catch (e) {
+        console.error(`  Failed to create spreadsheet for ${guruName}: ${e.message}`);
+        continue; // Skip this guru, continue with next
+      }
+
+      // Get all students for this guru's classes
+      console.log(`  Fetching students...`);
+      const classIds = [...new Set(assignments.map(a => a.kelas_id))];
+      let siswaList = [];
+      for (const classId of classIds) {
+        const studentsInClass = await getFirestoreData(db, 'users', [
+          { field: 'role', operator: '==', value: 'siswa' },
+          { field: 'kelas_id', operator: '==', value: classId },
+        ]);
+        siswaList.push(...studentsInClass);
+      }
+      siswaList = [...new Map(siswaList.map(item => [item.id, item])).values()]; // Deduplicate
+      console.log(`  Found ${siswaList.length} students across ${classIds.length} classes.`);
+
+      // Fetch all data for this guru in parallel
+      console.log(`  Fetching attendance and grade data...`);
+      const [allAbsensi, allNilaiTugas, allNilaiUjian, allBab, allTugasBab, allUhKolom] = await Promise.all([
+        getFirestoreData(db, 'absensi', [
+          { field: 'guru_id', operator: '==', value: guruId },
+          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+        ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on absensi collection.`); } throw e; }),
+        getFirestoreData(db, 'nilai_tugas', [
+          { field: 'guru_id', operator: '==', value: guruId },
+          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+        ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_tugas collection.`); } throw e; }),
+        getFirestoreData(db, 'nilai_ujian', [
+          { field: 'guru_id', operator: '==', value: guruId },
+          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+        ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_ujian collection.`); } throw e; }),
+        getFirestoreData(db, 'bab', [
+          { field: 'guru_id', operator: '==', value: guruId },
+          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+        ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on bab collection.`); } throw e; }),
+        getFirestoreData(db, 'tugas_bab', [
+          { field: 'guru_id', operator: '==', value: guruId },
+          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+        ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on tugas_bab collection.`); } throw e; }),
+        getFirestoreData(db, 'ulangan_harian_kolom', [
+          { field: 'guru_id', operator: '==', value: guruId },
+          { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
+          { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
+        ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on ulangan_harian_kolom collection.`); } throw e; }),
       ]);
-      siswaList.push(...studentsInClass);
-    }
-    siswaList = [...new Map(siswaList.map(item => [item.id, item])).values()]; // Deduplicate
 
-    // Data for all assignments for this guru
-    const allAbsensi = await getFirestoreData(db, 'absensi', [
-      { field: 'guru_id', operator: '==', value: guruId },
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' },
-    ]);
-    const allNilaiTugas = await getFirestoreData(db, 'nilai_tugas', [
-      { field: 'guru_id', operator: '==', value: guruId },
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' },
-    ]);
-    const allNilaiUjian = await getFirestoreData(db, 'nilai_ujian', [
-      { field: 'guru_id', operator: '==', value: guruId },
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' },
-    ]);
-    const allBab = await getFirestoreData(db, 'bab', [
-      { field: 'guru_id', operator: '==', value: guruId }, // Assuming bab has guru_id
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' },
-    ]);
-    const allTugasBab = await getFirestoreData(db, 'tugas_bab', [
-      { field: 'guru_id', operator: '==', value: guruId }, // Assuming tugas_bab has guru_id
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' },
-    ]);
-    const allUhKolom = await getFirestoreData(db, 'ulangan_harian_kolom', [
-      { field: 'guru_id', operator: '==', value: guruId }, // Assuming ulangan_harian_kolom has guru_id
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2025' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || 'gasal' },
-    ]);
+      let sheetIndex = 0;
+      for (const assignment of assignments.sort((a,b) => String(a.kelas_nama || '').localeCompare(String(b.kelas_nama || '')))) {
+        const kelasNama = assignment.kelas_nama || assignment.kelas_id || 'Unknown';
+        const pengajaranId = assignment.id;
 
-    let sheetIndex = 0;
-    for (const assignment of assignments.sort((a,b) => String(a.kelas_nama || '').localeCompare(String(b.kelas_nama || '')))) {
-      const kelasNama = assignment.kelas_nama || assignment.kelas_id || 'Unknown';
-      const pengajaranId = assignment.id;
+        console.log(`    Creating sheets for class: ${kelasNama}`);
 
-      const currentKelasSiswa = siswaList.filter(s => s.kelas_id === assignment.kelas_id);
-      const currentAbsensi = allAbsensi.filter(a => a.pengajaran_id === pengajaranId);
-      const currentNilaiTugas = allNilaiTugas.filter(n => n.pengajaran_id === pengajaranId);
-      const currentNilaiUjian = allNilaiUjian.filter(n => n.pengajaran_id === pengajaranId);
-      const currentBab = allBab.filter(b => b.pengajaran_id === pengajaranId);
-      const currentTugasBab = allTugasBab.filter(t => t.pengajaran_id === pengajaranId);
-      const currentUhKolom = allUhKolom.filter(uh => uh.pengajaran_id === pengajaranId);
+        const currentKelasSiswa = siswaList.filter(s => s.kelas_id === assignment.kelas_id);
+        const currentAbsensi = allAbsensi.filter(a => a.pengajaran_id === pengajaranId);
+        const currentNilaiTugas = allNilaiTugas.filter(n => n.pengajaran_id === pengajaranId);
+        const currentNilaiUjian = allNilaiUjian.filter(n => n.pengajaran_id === pengajaranId);
+        const currentBab = allBab.filter(b => b.pengajaran_id === pengajaranId);
+        const currentTugasBab = allTugasBab.filter(t => t.pengajaran_id === pengajaranId);
+        const currentUhKolom = allUhKolom.filter(uh => uh.pengajaran_id === pengajaranId);
 
-      // Create Rekap Absensi sheet
-      await generateRekapAbsensi(sheets, spreadsheetId, assignment, currentKelasSiswa, currentAbsensi, sheetIndex++);
-      // Create Absensi Harian sheet
-      await generateAbsensiHarian(sheets, spreadsheetId, assignment, currentKelasSiswa, currentAbsensi, sheetIndex++);
-      // Create Nilai sheet
-      await generateNilai(sheets, spreadsheetId, assignment, currentKelasSiswa, {
-        nilaiTugas: currentNilaiTugas,
-        nilaiUjian: currentNilaiUjian,
-      }, currentBab, currentTugasBab, currentUhKolom, sheetIndex++);
-    }
-    // Delete initial Sheet1 if multiple sheets were created
-    if (sheetIndex > 0) {
-        await sheets.spreadsheets.batchUpdate({
+        try {
+          // Create Rekap Absensi sheet
+          await generateRekapAbsensi(sheets, spreadsheetId, assignment, currentKelasSiswa, currentAbsensi, sheetIndex++);
+          // Create Absensi Harian sheet
+          await generateAbsensiHarian(sheets, spreadsheetId, assignment, currentKelasSiswa, currentAbsensi, sheetIndex++);
+          // Create Nilai sheet
+          await generateNilai(sheets, spreadsheetId, assignment, currentKelasSiswa, {
+            nilaiTugas: currentNilaiTugas,
+            nilaiUjian: currentNilaiUjian,
+          }, currentBab, currentTugasBab, currentUhKolom, sheetIndex++);
+          console.log(`    ✓ Sheets created for ${kelasNama}`);
+        } catch (e) {
+          console.error(`    ✗ Failed to create sheets for ${kelasNama}: ${e.message}`);
+        }
+      }
+      // Delete initial Sheet1 if multiple sheets were created
+      if (sheetIndex > 0) {
+        try {
+          await sheets.spreadsheets.batchUpdate({
             spreadsheetId,
             resource: {
-                requests: [{
-                    deleteSheet: { sheetId: 0 } // Sheet1 usually has ID 0
-                }]
+              requests: [{
+                deleteSheet: { sheetId: 0 }
+              }]
             }
-        });
+          });
+        } catch (e) {
+          // Ignore error deleting Sheet1
+        }
+      }
+      console.log(`  ✓ ${guruName} backup complete.`);
     }
+    // Share backup folder with user if email is provided
+    if (process.env.BACKUP_SHARE_EMAIL) {
+      try {
+        console.log(`\nSharing backup folder with ${process.env.BACKUP_SHARE_EMAIL}...`);
+        await drive.permissions.create({
+          fileId: dateFolder.id,
+          requestBody: {
+            type: 'user',
+            role: 'reader',
+            emailAddress: process.env.BACKUP_SHARE_EMAIL,
+          },
+          sendNotificationEmail: true,
+        });
+        console.log(`  ✓ Shared successfully. Check your email for notification.`);
+      } catch (e) {
+        console.warn(`  Warning: Could not share folder: ${e.message}`);
+        console.warn(`  Manually share folder URL with your email:`);
+        console.warn(`  https://drive.google.com/drive/folders/${dateFolder.id}`);
+      }
+    }
+
+    console.log('\n=== Backup process completed successfully ===');
+    console.log(`\n📁 Backup folder URL:`);
+    console.log(`https://drive.google.com/drive/folders/${rootFolder.id}`);
+    console.log(`https://drive.google.com/drive/folders/${dateFolder.id}`);
+  } catch (error) {
+    console.error('\n=== Backup FAILED ===');
+    console.error(`Error: ${error.message}`);
+    if (error.stack) {
+      console.error(`Stack: ${error.stack.split('\n').slice(0, 3).join('\n')}`);
+    }
+    process.exit(1);
   }
-  console.log('Backup process completed.');
 }
 
 // Helper to check if a Firestore error is an index error
@@ -599,5 +715,4 @@ function isFirestoreIndexError(error) {
     return (code === 'failed-precondition' && message.includes('index')) || message.includes('the query requires an index');
 }
 
-
-main().catch(console.error);
+main();
