@@ -462,7 +462,10 @@ async function main() {
       process.exit(1);
     }
 
-    admin.initializeApp({ credential: admin.credential.cert(sa) });
+    admin.initializeApp({ 
+      credential: admin.credential.cert(sa),
+      storageBucket: `${sa.project_id}.appspot.com`
+    });
     const db = admin.firestore();
     const bucket = admin.storage().bucket();
 
