@@ -67,34 +67,6 @@ async function getActiveTeachingAssignments(db, period) {
   return pembelajaranData;
 }
 
-async function cleanOldBackups(bucket, keepDays = 14) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - keepDays);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-
-  console.log(`Cleaning up old Excel backups older than ${keepDays} days (before ${cutoffStr})...`);
-
-  const [files] = await bucket.getFiles({ prefix: 'backups/' });
-  let deleted = 0;
-  for (const file of files) {
-    const parts = file.name.split('/');
-    const datePart = parts[1];
-    if (datePart && datePart < cutoffStr) {
-      try {
-        await file.delete();
-        deleted++;
-      } catch (e) {
-        console.warn(`  Could not delete ${file.name}: ${e.message}`);
-      }
-    }
-  }
-  if (deleted > 0) {
-    console.log(`  Deleted ${deleted} old backup file(s).`);
-  } else {
-    console.log('  No old backups to clean up.');
-  }
-}
-
 async function generateWorkbook(assignmentsByGuru, siswaDataMap, dataMap, period) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'SIMSMANSARI Backup';
@@ -104,7 +76,6 @@ async function generateWorkbook(assignmentsByGuru, siswaDataMap, dataMap, period
     const guruName = assignments[0].guru_nama || `Guru-${guruId}`;
     const mapelName = assignments[0].mapel_nama || 'Mapel';
     const sheetName = sanitizeSheetName(`${guruName} (${mapelName})`);
-    const worksheet = workbook.addWorksheet(sheetName);
 
     for (const assignment of assignments.sort((a, b) => String(a.kelas_nama || '').localeCompare(String(b.kelas_nama || '')))) {
       const kelasNama = assignment.kelas_nama || assignment.kelas_id || 'Unknown';
@@ -118,9 +89,9 @@ async function generateWorkbook(assignmentsByGuru, siswaDataMap, dataMap, period
       const currentTugasBab = dataMap.allTugasBab[guruId]?.filter(t => t.pengajaran_id === pengajaranId) || [];
       const currentUhKolom = dataMap.allUhKolom[guruId]?.filter(uh => uh.pengajaran_id === pengajaranId) || [];
 
-      await addRekapAbsensiSheet(worksheet, assignment, currentKelasSiswa, currentAbsensi);
-      await addAbsensiHarianSheet(worksheet, assignment, currentKelasSiswa, currentAbsensi);
-      await addNilaiSheet(worksheet, assignment, currentKelasSiswa, {
+      await addRekapAbsensiSheet(workbook, assignment, currentKelasSiswa, currentAbsensi);
+      await addAbsensiHarianSheet(workbook, assignment, currentKelasSiswa, currentAbsensi);
+      await addNilaiSheet(workbook, assignment, currentKelasSiswa, {
         nilaiTugas: currentNilaiTugas,
         nilaiUjian: currentNilaiUjian,
       }, currentBab, currentTugasBab, currentUhKolom);
@@ -130,9 +101,9 @@ async function generateWorkbook(assignmentsByGuru, siswaDataMap, dataMap, period
   return workbook;
 }
 
-async function addRekapAbsensiSheet(worksheet, assignment, siswaList, absensiData) {
-  const sheetTitle = `Rekap Absensi - ${assignment.kelas_nama || assignment.kelas_id}`;
-  const newSheet = worksheet.addWorksheet(sheetTitle);
+async function addRekapAbsensiSheet(workbook, assignment, siswaList, absensiData) {
+  const sheetTitle = sanitizeSheetName(`Rekap Absensi - ${assignment.kelas_nama || assignment.kelas_id}`);
+  const newSheet = workbook.addWorksheet(sheetTitle);
 
   const rekapAbsen = {};
   absensiData.forEach(absen => {
@@ -166,9 +137,9 @@ async function addRekapAbsensiSheet(worksheet, assignment, siswaList, absensiDat
   formatAttendanceSheet(newSheet, headers, sheetSiswa.length + 1);
 }
 
-async function addAbsensiHarianSheet(worksheet, assignment, siswaList, absensiData) {
-  const sheetTitle = `Absensi Harian - ${assignment.kelas_nama || assignment.kelas_id}`;
-  const newSheet = worksheet.addWorksheet(sheetTitle);
+async function addAbsensiHarianSheet(workbook, assignment, siswaList, absensiData) {
+  const sheetTitle = sanitizeSheetName(`Absensi Harian - ${assignment.kelas_nama || assignment.kelas_id}`);
+  const newSheet = workbook.addWorksheet(sheetTitle);
 
   const dates = [...new Set(absensiData.map(a => a.tanggal))].sort();
   const dateHeaders = dates.map(d => formatDate(d));
@@ -249,9 +220,9 @@ function formatAttendanceSheet(sheet, headers, studentRowCount, dateCount = null
   });
 }
 
-async function addNilaiSheet(worksheet, assignment, siswaList, nilaiData, babData, tugasData, uhKolomData) {
-  const sheetTitle = `Nilai - ${assignment.kelas_nama || assignment.kelas_id}`;
-  const sheet = worksheet.addWorksheet(sheetTitle);
+async function addNilaiSheet(workbook, assignment, siswaList, nilaiData, babData, tugasData, uhKolomData) {
+  const sheetTitle = sanitizeSheetName(`Nilai - ${assignment.kelas_nama || assignment.kelas_id}`);
+  const sheet = workbook.addWorksheet(sheetTitle);
 
   const configRows = [
     ['KONFIGURASI BOBOT NILAI'],
@@ -409,7 +380,7 @@ async function addNilaiSheet(worksheet, assignment, siswaList, nilaiData, babDat
     rowNum.push(studentNilai.pas ?? '');
 
     const nilaiAkhirFormula = `=IFERROR((${columnToLetter(rerataTugasCol)}${dataStartRow + studentRowNum - 1}*B$2)+(${columnToLetter(rerataUHCol)}${dataStartRow + studentRowNum - 1}*D$2)+(${columnToLetter(ptsCol)}${dataStartRow + studentRowNum - 1}*F$2)+(${columnToLetter(pasCol)}${dataStartRow + studentRowNum - 1}*H$2),"-")`;
-    const gradeFormula = `=IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=90,\"A\",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=85,\"A-\",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=80,\"B+\",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=75,\"B\",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=60,\"C\",\"D\")))))`;
+    const gradeFormula = `=IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=90,"A",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=85,"A-",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=80,"B+",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=75,"B",IF(${columnToLetter(nilaiAkhirCol)}${dataStartRow + studentRowNum - 1}>=60,"C","D")))))`;
 
     rowNum.push(nilaiAkhirFormula);
     rowNum.push(gradeFormula);
@@ -418,14 +389,14 @@ async function addNilaiSheet(worksheet, assignment, siswaList, nilaiData, babDat
 
   sheet.views = [{ state: 'frozen', ySplit: dataStartRow - 1, xSplit: 1 }];
 
-  for (let i = 1; i <= headers.length; i++) {
+  for (let i = 1; i <= currentColumn; i++) {
     const cell = sheet.getRow(headerStartRow).getCell(i);
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
     cell.alignment = { horizontal: 'center', vertical: 'center', wrapText: true };
   }
 
-  for (let i = 1; i <= headers.length; i++) {
+  for (let i = 1; i <= currentColumn; i++) {
     const cell = sheet.getRow(headerStartRow + 1).getCell(i);
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
@@ -445,7 +416,7 @@ async function addNilaiSheet(worksheet, assignment, siswaList, nilaiData, babDat
 
 async function main() {
   try {
-    console.log('=== Backup SIMSMANSARI - Starting ===');
+    console.log('=== Backup SIMSMANSARI Excel - Starting ===');
     console.log(`Time: ${new Date().toISOString()}`);
 
     if (!process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
@@ -467,11 +438,8 @@ async function main() {
       storageBucket: `${sa.project_id}.appspot.com`
     });
     const db = admin.firestore();
-    const bucket = admin.storage().bucket();
 
     const dateStr = new Date().toISOString().slice(0, 10);
-
-    await cleanOldBackups(bucket, 14);
 
     let period = {
       year: process.env.TAHUN_AJARAN_AKTIF || '2026_2027',
@@ -570,7 +538,6 @@ async function main() {
     const buffer = await workbook.xlsx.writeBuffer();
 
     const fs = require('fs');
-    const path = require('path');
     const fileName = `Laporan-SIMSMANSARI-${dateStr}.xlsx`;
     const outputPath = path.join(process.cwd(), fileName);
     fs.writeFileSync(outputPath, Buffer.from(buffer));
