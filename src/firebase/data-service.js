@@ -463,6 +463,28 @@ export async function deleteDocumentsBatch(collectionName, ids = []) {
   return deleted;
 }
 
+export async function batchWrite(operations = []) {
+  if (!db || !operations.length) return 0;
+  let written = 0;
+  for (let i = 0; i < operations.length; i += 400) {
+    const chunk = operations.slice(i, i + 400);
+    const batch = db.batch();
+    chunk.forEach((op) => {
+      const ref = db.collection(op.collection).doc(op.id);
+      if (op.type === 'delete') {
+        batch.delete(ref);
+      } else if (op.type === 'set') {
+        batch.set(ref, sanitizeForFirestore(op.payload), { merge: op.merge !== false });
+      } else if (op.type === 'update') {
+        batch.update(ref, sanitizeForFirestore(op.payload));
+      }
+    });
+    await batch.commit();
+    written += chunk.length;
+  }
+  return written;
+}
+
 export async function getDocumentsWhere(collectionName, filters = [], options = {}) {
   if (!db) {
     return [];

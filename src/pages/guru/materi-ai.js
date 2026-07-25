@@ -213,12 +213,12 @@ function premiumStyles() {
     .animate-float { animation: floatSoft 5s ease-in-out infinite; }
     .scrollbar-premium::-webkit-scrollbar { width: 6px; height: 6px; }
     .scrollbar-premium::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
-    .premium-input { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
+    .premium-input { transition: border-color 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s cubic-bezier(0.16,1,0.3,1); }
     .premium-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99,102,241,0.12); outline: none; }
-    .btn-premium { transition: all 0.3s cubic-bezier(0.16,1,0.3,1); position: relative; overflow: hidden; }
+    .btn-premium { transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), background 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s cubic-bezier(0.16,1,0.3,1), opacity 0.3s cubic-bezier(0.16,1,0.3,1); position: relative; overflow: hidden; }
     .btn-premium:active { transform: scale(0.97); }
     .btn-premium:disabled { opacity: 0.6; cursor: not-allowed; }
-    .card-hover-premium { transition: all 0.35s cubic-bezier(0.16,1,0.3,1); }
+    .card-hover-premium { transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s cubic-bezier(0.16,1,0.3,1); }
     .card-hover-premium:hover { transform: translateY(-3px); box-shadow: 0 22px 44px -14px rgba(15,23,42,0.2); }
     .ai-preview :where(h1,h2,h3) { font-weight: 700; line-height: 1.3; margin: 1em 0 0.4em; color:#0f172a; }
     .ai-preview h1 { font-size: 1.6rem; }
@@ -1629,8 +1629,8 @@ async function loadHistory(root, userId) {
             </div>
             <div class="flex items-center gap-1.5">
               ${badge}
-              <button type="button" data-load-id="${item.id}" class="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" title="Muat"><i class="fas fa-folder-open"></i></button>
-              <button type="button" data-delete-id="${item.id}" class="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50" title="Hapus"><i class="fas fa-trash"></i></button>
+              <button type="button" data-load-id="${item.id}" class="rounded-lg p-1.5 text-indigo-600 hover:bg-indigo-50" aria-label="Muat materi"><i class="fas fa-folder-open"></i></button>
+              <button type="button" data-delete-id="${item.id}" class="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50" aria-label="Hapus materi"><i class="fas fa-trash"></i></button>
             </div>
           </div>`;
       })

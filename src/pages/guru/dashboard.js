@@ -1,5 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getTeachingAssignmentsForUser, getDocumentsWhere } from '../../firebase/data-service.js';
+import { getLastBackupTimestamp, getDaysSinceLastBackup, isBackupRequiredToday } from '../../utils/backup-excel.js';
 
 export function renderGuruDashboard(container) {
   const context = JSON.parse(localStorage.getItem('simguru_context') || '{}');
@@ -23,6 +24,19 @@ export function renderGuruDashboard(container) {
               <svg viewBox="0 0 24 24" class="h-4 w-4 translate-x-1 transition-transform duration-300 group-hover:translate-x-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
             </span>
           </a>`;
+  const quickCardButton = (id, title, desc, grad, icon, extraBadge = '') => `
+          <button id="${id}" type="button" class="qa-card group relative flex flex-col items-center overflow-hidden rounded-3xl border border-slate-100 bg-white p-3.5 text-center shadow-sm ring-1 ring-slate-50 transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:ring-slate-200 active:scale-[0.98]">
+            ${extraBadge}
+            <div class="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-md shadow-black/10">
+              <span class="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/30 to-white/0"></span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="relative h-6 w-6 drop-shadow-sm" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+            </div>
+            <p class="mt-3 text-sm font-semibold text-slate-900">${title}</p>
+            <p class="mt-1 text-xs leading-snug text-slate-500">${desc}</p>
+            <span class="pointer-events-none absolute right-3 top-3 text-slate-300 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100">
+              <svg viewBox="0 0 24 24" class="h-4 w-4 translate-x-1 transition-transform duration-300 group-hover:translate-x-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </span>
+          </button>`;
   const sunRays = (count = 12, r1 = 36, r2 = 47) => {
     let lines = '';
     for (let i = 0; i < count; i++) {
@@ -158,6 +172,23 @@ export function renderGuruDashboard(container) {
     ? quickCard('#guru/wali-kelas', 'Wali Kelas', `Kelola kelas ${waliCacheDash.kelas_nama}.`, 'from-cyan-500 to-blue-500', '<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M8 20h8M12 16v4"/>')
     : '';
 
+  const lastBackup = getLastBackupTimestamp();
+  const daysSince = getDaysSinceLastBackup();
+  const backupRequired = isBackupRequiredToday();
+  let backupBadge = '';
+  if (backupRequired) {
+    const today = new Date().getDay() === 5;
+    backupBadge = `<span class="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full ${today ? 'bg-rose-100 text-rose-700 ring-1 ring-rose-200' : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'} px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+      <span class="inline-block h-1.5 w-1.5 rounded-full ${today ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}"></span>
+      ${today ? 'Wajib' : 'Perlu'}
+    </span>`;
+  } else if (lastBackup) {
+    backupBadge = `<span class="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+      <svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
+      Aman
+    </span>`;
+  }
+
   const pageHtml = `
     <div class="space-y-6">
       <section>
@@ -226,6 +257,7 @@ export function renderGuruDashboard(container) {
               ${quickCard('#guru/dashboard', 'Jadwal', 'Lihat ringkasan jadwal mengajar.', 'from-violet-500 to-purple-600', '<path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3"/><path d="M8 7h8M8 7v14M16 7v14M12 7v14"/><path d="M4 11h16"/>')}
               ${quickCard('#guru/dashboard', 'Info', 'Pantau informasi terbaru.', 'from-orange-500 to-red-500', '<path d="M12 5.5v8"/><path d="M12 17.5h.01"/><path d="M10.3 3.8 4.8 13.1a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3l-5.5-9.3a2 2 0 0 0-3.4 0Z"/>')}
               ${quickCard('#guru/pengatur-sistem', 'Akun', 'Ubah pengaturan akun.', 'from-slate-700 to-slate-900', '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"/>')}
+              ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan absensi & nilai ke Excel.', 'from-emerald-500 to-green-600', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', backupBadge)}
             </div>
           </div>
         </div>
@@ -328,6 +360,10 @@ export function renderGuruDashboard(container) {
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');
     window.location.hash = '#login';
+  });
+
+  container.querySelector('#btn-backup-data')?.addEventListener('click', () => {
+    window.location.hash = '#guru/backup';
   });
 
   const refreshWali = async () => {

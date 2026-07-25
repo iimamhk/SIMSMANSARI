@@ -113,6 +113,18 @@ export function renderLayout(title, content, opts = {}) {
       `,
     },
     {
+      label: 'Backup',
+      href: '#guru/backup',
+      routes: ['#guru/backup'],
+      icon: (active) => `
+        <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[#4F46E5]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 15V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      `,
+    },
+    {
       label: 'Akun',
       href: '#guru/pengatur-sistem',
       routes: ['#guru/pengatur-sistem'],
@@ -298,6 +310,14 @@ export function renderLayout(title, content, opts = {}) {
     </svg>
   `;
 
+  const iconBackup = (active) => `
+    <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 15V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `;
+
   const iconBookSpark = (active) => `
     <svg viewBox="0 0 24 24" class="h-4 w-4 ${active ? activeNavIconClass : inactiveNavIconClass}" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
@@ -334,6 +354,7 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Pesan', href: '#chat', routes: ['#chat', '#chat/room'], icon: iconChat },
           ...(isWaliKelas ? [{ label: 'Wali Kelas', href: '#guru/wali-kelas', routes: ['#guru/wali-kelas'], icon: iconClassroom }] : []),
           { label: 'Relasi Mengajar', href: '#guru/plotting-jadwal', routes: ['#guru/plotting-jadwal'], icon: iconLink },
+          { label: 'Backup Data', href: '#guru/backup', routes: ['#guru/backup'], icon: iconBackup },
           { label: 'Akun', href: '#guru/pengatur-sistem', routes: ['#guru/pengatur-sistem'], icon: iconSettings },
         ]
       : isSiswa

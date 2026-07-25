@@ -29,6 +29,7 @@ import { renderGuruKasKelasPage } from '../pages/guru/wali/kas-kelas.js';
 import { renderSiswaKuizPage } from '../pages/siswa/kuiz.js';
 import { renderSiswaKasKelasPage } from '../pages/siswa/kas-kelas.js';
 import { renderGuruRpmAiPage } from '../pages/guru/rpm-ai.js';
+import { renderGuruBackupPage } from '../pages/guru/backup.js';
 import { renderChatListPage } from '../pages/chat/list.js';
 import { renderChatRoomPage } from '../pages/chat/room.js';
 import { renderMasterGuruPage } from '../pages/admin/master-guru.js';
@@ -39,6 +40,7 @@ import { renderPlottingJadwalPage } from '../pages/admin/plotting-jadwal.js';
 import { renderMasterPembelajaranPage } from '../pages/admin/master-pembelajaran.js';
 import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
 import { waitForAuthReady } from '../firebase/auth-service.js';
+import { maybeShowBackupReminder } from '../utils/backup-reminder.js';
 
 function getSession() {
   const raw = localStorage.getItem('simguru_session');
@@ -105,6 +107,7 @@ async function renderRoute() {
   const renderAndFinalize = async (renderer, ...args) => {
     await renderer(...args);
     initHeaderClock(container);
+    maybeShowBackupReminder();
   };
 
   if (!container) {
@@ -251,6 +254,11 @@ async function renderRoute() {
 
   if (route === '#guru/rpm-ai') {
     await renderAndFinalize(renderGuruRpmAiPage, container);
+    return;
+  }
+
+  if (route === '#guru/backup') {
+    await renderAndFinalize(renderGuruBackupPage, container);
     return;
   }
 

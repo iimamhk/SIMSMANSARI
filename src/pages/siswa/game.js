@@ -603,7 +603,7 @@ export async function renderSiswaGamePage(container) {
 
   function renderBattleAvatarPicker() {
     if (!battleAvatarOptionsEl) return;
-    battleAvatarOptionsEl.innerHTML = BATTLE_AVATARS.map((avatar) => `<button type="button" data-battle-avatar="${avatar.key}" class="battle-avatar-option ${selectedBattleAvatar.key === avatar.key ? 'is-selected' : ''}" title="${avatar.label}"><img src="${getBattleAvatarUrl(avatar.seed)}" alt="Avatar ${avatar.label}" loading="lazy" /><span>${avatar.label}</span></button>`).join('');
+    battleAvatarOptionsEl.innerHTML = BATTLE_AVATARS.map((avatar) => `<button type="button" data-battle-avatar="${avatar.key}" class="battle-avatar-option ${selectedBattleAvatar.key === avatar.key ? 'is-selected' : ''}" aria-label="${avatar.label}"><img src="${getBattleAvatarUrl(avatar.seed)}" alt="" loading="lazy" width="52" height="52" /><span>${avatar.label}</span></button>`).join('');
     battleAvatarOptionsEl.querySelectorAll('[data-battle-avatar]').forEach((button) => button.addEventListener('click', () => {
       selectedBattleAvatar = BATTLE_AVATARS.find((avatar) => avatar.key === button.dataset.battleAvatar) || BATTLE_AVATARS[0];
       renderBattleAvatarPicker();
@@ -623,7 +623,7 @@ export async function renderSiswaGamePage(container) {
       battleLobbyParticipantsEl.innerHTML = participants.length
         ? participants.map((participant) => {
           const avatar = BATTLE_AVATARS.find((item) => item.key === participant.avatar_key) || BATTLE_AVATARS[0];
-          return `<div class="battle-lobby-player ${participant.ready ? 'is-ready' : ''}"><img src="${getBattleAvatarUrl(participant.avatar_seed || avatar.seed)}" alt="Avatar ${participant.nama || 'Siswa'}" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800">${participant.nama || 'Siswa'}</p><p class="text-[10px] text-slate-500">${participant.ready ? 'Siap bermain' : 'Memilih avatar'}</p></div></div>`;
+          return `<div class="battle-lobby-player ${participant.ready ? 'is-ready' : ''}"><img src="${getBattleAvatarUrl(participant.avatar_seed || avatar.seed)}" alt="" width="42" height="42" loading="lazy" /><div class="min-w-0"><p class="truncate text-xs font-bold text-slate-800">${participant.nama || 'Siswa'}</p><p class="text-[10px] text-slate-500">${participant.ready ? 'Siap bermain' : 'Memilih avatar'}</p></div></div>`;
         }).join('')
         : '<p class="col-span-full rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-500">Menunggu teman-teman masuk...</p>';
     }
@@ -646,7 +646,7 @@ export async function renderSiswaGamePage(container) {
       const left = 12 + ((index * 23) % 76);
       const bottom = 14 + ((index * 17) % 35);
       const delay = (index * 0.55).toFixed(2);
-      return `<div class="battle-arena-player ${participant.ready ? 'is-ready' : ''}" data-arena-player="${participant.id}" style="left:${left}%;bottom:${bottom}%;--walk-delay:${delay}s"><div class="battle-arena-nameplate"><span>${participant.nama || 'Siswa'}</span>${participant.ready ? '<b>SIAP</b>' : ''}</div><img src="${getBattleAvatarUrl(participant.avatar_seed || avatar.seed)}" alt="Avatar ${participant.nama || 'Siswa'}" /></div>`;
+      return `<div class="battle-arena-player ${participant.ready ? 'is-ready' : ''}" data-arena-player="${participant.id}" style="left:${left}%;bottom:${bottom}%;--walk-delay:${delay}s"><div class="battle-arena-nameplate"><span>${participant.nama || 'Siswa'}</span>${participant.ready ? '<b>SIAP</b>' : ''}</div><img src="${getBattleAvatarUrl(participant.avatar_seed || avatar.seed)}" alt="" width="61" height="61" /></div>`;
     }).join('');
     renderBattleSoundboard();
     if (room.status === 'waiting') {
@@ -1221,8 +1221,8 @@ export async function renderSiswaGamePage(container) {
 
     if (gameState.gameType !== 'english_vocab' && current.quiz_type === 'short_answer') {
       answerArea.innerHTML = `
-        <label class="block text-sm font-medium text-slate-700">Jawaban Anda</label>
-        <input id="answer-input" type="number" class="sg-input mt-2" value="${savedAnswer}" />
+        <label id="answer-label" class="block text-sm font-medium text-slate-700" for="answer-input">Jawaban Anda</label>
+        <input id="answer-input" type="number" name="answer-input" autocomplete="off" class="sg-input mt-2" value="${savedAnswer}" />
       `;
       animateAnswerArea();
       return;
@@ -1236,11 +1236,12 @@ export async function renderSiswaGamePage(container) {
     answerArea.innerHTML = `
       <p class="text-sm font-medium text-slate-700">${modeTitle}</p>
       <div class="grid gap-3 sm:grid-cols-2">
-        ${(current.options || []).map((option) => {
+        ${(current.options || []).map((option, idx) => {
           const checked = String(savedAnswer) === String(option);
+          const inputId = `answer-choice-${current.order}-${idx}`;
           return `
-            <label class="sg-choice ${checked ? 'is-selected' : ''}">
-              <input type="radio" name="answer-choice" value="${option}" ${checked ? 'checked' : ''} />
+            <label class="sg-choice ${checked ? 'is-selected' : ''}" for="${inputId}">
+              <input id="${inputId}" type="radio" name="answer-choice" value="${option}" ${checked ? 'checked' : ''} />
               <span>${option}</span>
             </label>
           `;

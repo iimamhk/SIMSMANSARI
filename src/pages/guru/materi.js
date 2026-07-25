@@ -1073,18 +1073,18 @@ export async function renderGuruMateriPage(container) {
         .scrollbar-premium::-webkit-scrollbar-track { background: transparent; }
         .scrollbar-premium::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
         .scrollbar-premium::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .card-hover-premium { transition: all 0.35s cubic-bezier(0.16,1,0.3,1); }
+        .card-hover-premium { transition: transform 0.35s cubic-bezier(0.16,1,0.3,1), box-shadow 0.35s cubic-bezier(0.16,1,0.3,1); }
         .card-hover-premium:hover { transform: translateY(-4px); box-shadow: 0 24px 48px -12px rgba(15,23,42,0.2); }
-        .btn-premium { transition: all 0.3s cubic-bezier(0.16,1,0.3,1); position: relative; overflow: hidden; }
+        .btn-premium { transition: transform 0.3s cubic-bezier(0.16,1,0.3,1), background 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s cubic-bezier(0.16,1,0.3,1), opacity 0.3s cubic-bezier(0.16,1,0.3,1); position: relative; overflow: hidden; }
         .btn-premium::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(255,255,255,0.15), transparent); opacity:0; transition:opacity 0.3s; }
         .btn-premium:hover::after { opacity:1; }
         .btn-premium:active { transform: scale(0.96); }
-        .premium-input { transition: all 0.25s cubic-bezier(0.16,1,0.3,1); }
+        .premium-input { transition: border-color 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s cubic-bezier(0.16,1,0.3,1); }
         .premium-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99,102,241,0.12); }
         .gradient-border { position:relative; }
         .gradient-border::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(135deg, #6366f1, #06b6d4, #6366f1); opacity:0; transition:opacity 0.4s; z-index:-1; }
         .gradient-border:hover::before { opacity:1; }
-        .method-card { transition: all 0.28s cubic-bezier(0.22,1,0.36,1); cursor:pointer; position:relative; }
+        .method-card { transition: transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s cubic-bezier(0.22,1,0.36,1), border-color 0.28s cubic-bezier(0.22,1,0.36,1), background 0.28s cubic-bezier(0.22,1,0.36,1); cursor:pointer; position:relative; }
         .method-card:hover { transform: translateY(-3px); box-shadow: 0 16px 36px -18px rgba(15,23,42,0.22); border-color: #cbd5e1; }
         .method-card.selected { border-color: #0f172a !important; box-shadow: 0 0 0 2px rgba(15,23,42,0.16), 0 18px 40px -18px rgba(15,23,42,0.38); background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(250,250,250,0.96) 100%); }
         .method-card.selected::before { content:''; position:absolute; inset:-1px; border-radius:inherit; background:linear-gradient(125deg, rgba(15,23,42,0.04), rgba(30,41,59,0.03)); pointer-events:none; }
@@ -1094,18 +1094,18 @@ export async function renderGuruMateriPage(container) {
         .method-card.selected .method-check { opacity:1; transform:scale(1); background:linear-gradient(135deg,#0f172a,#334155); }
         .method-card.selected h3 { color: #0f172a; }
         .method-card.selected .method-selected-label { opacity:1; transform:translateY(0); background: linear-gradient(135deg,#0f172a,#334155); }
-        .method-radio { width:22px; height:22px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; transition:all 0.22s; flex-shrink:0; background:#fff; }
-        .method-radio::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; opacity:0; transform:scale(0); transition:all 0.22s; }
-        .method-icon-wrap { width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center; transition:all 0.28s cubic-bezier(0.22,1,0.36,1); }
-        .method-check { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0); transition:all 0.28s cubic-bezier(0.22,1,0.36,1); position:absolute; top:10px; right:10px; }
+        .method-radio { width:22px; height:22px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; transition:border-color 0.22s, background 0.22s; flex-shrink:0; background:#fff; }
+        .method-radio::after { content:''; width:10px; height:10px; border-radius:50%; background:#fff; opacity:0; transform:scale(0); transition:opacity 0.22s, transform 0.22s; }
+        .method-icon-wrap { width:52px; height:52px; border-radius:14px; display:flex; align-items:center; justify-content:center; transition:background 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s cubic-bezier(0.22,1,0.36,1); }
+        .method-check { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#6366f1,#8b5cf6); display:flex; align-items:center; justify-content:center; opacity:0; transform:scale(0); transition:opacity 0.28s cubic-bezier(0.22,1,0.36,1), transform 0.28s cubic-bezier(0.22,1,0.36,1); position:absolute; top:10px; right:10px; }
         .method-check svg { width:12px; height:12px; stroke:#fff; stroke-width:3; fill:none; }
-        .method-selected-label { position:absolute; left:10px; top:10px; display:inline-flex; align-items:center; gap:4px; border-radius:999px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-size:9px; font-weight:700; padding:3px 9px; letter-spacing:.05em; opacity:0; transform:translateY(-4px); transition:all 0.22s; pointer-events:none; }
+        .method-selected-label { position:absolute; left:10px; top:10px; display:inline-flex; align-items:center; gap:4px; border-radius:999px; background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; font-size:9px; font-weight:700; padding:3px 9px; letter-spacing:.05em; opacity:0; transform:translateY(-4px); transition:opacity 0.22s, transform 0.22s; pointer-events:none; }
         .method-selected-label svg { width:11px; height:11px; stroke-width:2.5; }
 
         .wizard-stepper { display:flex; align-items:flex-start; justify-content:center; gap:0; position:relative; padding:16px 0; }
-        .wizard-stepper-item { display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; z-index:2; cursor:pointer; transition:all 0.3s; flex:1; max-width:140px; }
+        .wizard-stepper-item { display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; z-index:2; cursor:pointer; transition:transform 0.3s; flex:1; max-width:140px; }
         .wizard-stepper-item:hover .ws-circle { transform:scale(1.08); border-color:#6366f1; }
-        .ws-circle { width:48px; height:48px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; transition:all 0.4s cubic-bezier(0.16,1,0.3,1); border:2px solid #e2e8f0; background:#fff; color:#94a3b8; position:relative; }
+        .ws-circle { width:48px; height:48px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; transition:background 0.4s cubic-bezier(0.16,1,0.3,1), border-color 0.4s cubic-bezier(0.16,1,0.3,1), color 0.4s cubic-bezier(0.16,1,0.3,1), box-shadow 0.4s cubic-bezier(0.16,1,0.3,1), transform 0.4s cubic-bezier(0.16,1,0.3,1); border:2px solid #e2e8f0; background:#fff; color:#94a3b8; position:relative; }
         .ws-circle svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
         .ws-circle .ws-num { font-size:14px; font-weight:800; }
         .ws-circle .ws-icon { display:none; }
@@ -1135,7 +1135,7 @@ export async function renderGuruMateriPage(container) {
         .step-section-badge { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; color:#fff; flex-shrink:0; }
         .step-section-badge svg { width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
-        .stat-card { transition:all 0.3s; }
+        .stat-card { transition:transform 0.3s, box-shadow 0.3s; }
          .stat-card:hover { transform:translateY(-2px); }
          .material-library-page {
            --library-ink: #172033;
@@ -1631,7 +1631,7 @@ export async function renderGuruMateriPage(container) {
                   border-radius: 20px;
                   box-shadow: 0 25px 60px rgba(0, 20, 50, 0.15);
                   overflow: hidden;
-                  transition: all 0.3s ease;
+                  transition: transform 0.3s ease, box-shadow 0.3s ease, border-radius 0.3s ease, max-width 0.3s ease;
                 }
                 #material-builder-shell .editor-wrapper.fullscreen {
                   position: fixed;
@@ -1675,7 +1675,7 @@ export async function renderGuruMateriPage(container) {
                   font-size: 13px;
                   font-weight: 600;
                   cursor: pointer;
-                  transition: all 0.2s;
+                  transition: background 0.2s, border-color 0.2s;
                   white-space: nowrap;
                 }
                 #material-builder-shell .toolbar button:hover {
@@ -1781,7 +1781,7 @@ export async function renderGuruMateriPage(container) {
                   font-size: 13px;
                   font-weight: 600;
                   opacity: 0;
-                  transition: all 0.3s;
+                  transition: opacity 0.3s, transform 0.3s;
                   z-index: 10001;
                   pointer-events: none;
                 }
@@ -1796,26 +1796,26 @@ export async function renderGuruMateriPage(container) {
                     <input id="builder-chapter" class="w-24 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-600 outline-none focus:border-indigo-300" placeholder="Bab" />
                     <button id="builder-preview-refresh-btn" type="button" class="rounded-xl bg-indigo-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-indigo-700">Preview</button>
                   </div>
-                  <div class="toolbar">
-                    <button type="button" data-builder-action="undo" title="Undo"><i class="fa-solid fa-rotate-left"></i></button>
-                    <button type="button" data-builder-action="redo" title="Redo"><i class="fa-solid fa-rotate-right"></i></button>
+<div class="toolbar">
+                    <button type="button" data-builder-action="undo" aria-label="Undo"><i class="fa-solid fa-rotate-left"></i></button>
+                    <button type="button" data-builder-action="redo" aria-label="Redo"><i class="fa-solid fa-rotate-right"></i></button>
                     <span class="sep"></span>
                     <button type="button" data-builder-command="bold" title="Bold (Ctrl+B)"><b>B</b></button>
                     <button type="button" data-builder-command="italic" title="Italic (Ctrl+I)"><i>I</i></button>
                     <button type="button" data-builder-command="underline" title="Underline (Ctrl+U)"><u>U</u></button>
-                    <button type="button" data-builder-command="strikeThrough" title="Strikethrough"><s>S</s></button>
+                    <button type="button" data-builder-command="strikeThrough" title="Strikethrough"><s>S</button>
                     <button type="button" data-builder-command="superscript" title="Superscript">x<sup>2</sup></button>
                     <button type="button" data-builder-command="subscript" title="Subscript">x<sub>2</sub></button>
                     <span class="sep"></span>
-                    <button type="button" data-builder-command="justifyLeft" title="Align Left"><i class="fa-solid fa-align-left"></i></button>
-                    <button type="button" data-builder-command="justifyCenter" title="Align Center"><i class="fa-solid fa-align-center"></i></button>
-                    <button type="button" data-builder-command="justifyRight" title="Align Right"><i class="fa-solid fa-align-right"></i></button>
-                    <button type="button" data-builder-command="justifyFull" title="Justify"><i class="fa-solid fa-align-justify"></i></button>
+                    <button type="button" data-builder-command="justifyLeft" aria-label="Align Left"><i class="fa-solid fa-align-left"></i></button>
+                    <button type="button" data-builder-command="justifyCenter" aria-label="Align Center"><i class="fa-solid fa-align-center"></i></button>
+                    <button type="button" data-builder-command="justifyRight" aria-label="Align Right"><i class="fa-solid fa-align-right"></i></button>
+                    <button type="button" data-builder-command="justifyFull" aria-label="Justify"><i class="fa-solid fa-align-justify"></i></button>
                     <span class="sep"></span>
-                    <button type="button" data-builder-command="insertUnorderedList" title="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
-                    <button type="button" data-builder-command="insertOrderedList" title="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
-                    <button type="button" data-builder-command="indent" title="Indent"><i class="fa-solid fa-indent"></i></button>
-                    <button type="button" data-builder-command="outdent" title="Outdent"><i class="fa-solid fa-outdent"></i></button>
+                    <button type="button" data-builder-command="insertUnorderedList" aria-label="Bullet List"><i class="fa-solid fa-list-ul"></i></button>
+                    <button type="button" data-builder-command="insertOrderedList" aria-label="Numbered List"><i class="fa-solid fa-list-ol"></i></button>
+                    <button type="button" data-builder-command="indent" aria-label="Indent"><i class="fa-solid fa-indent"></i></button>
+                    <button type="button" data-builder-command="outdent" aria-label="Outdent"><i class="fa-solid fa-outdent"></i></button>
                     <span class="sep"></span>
                     <select id="builder-font-family" class="h-[34px] rounded-xl border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600">
                       <option value="">Font</option><option value="Inter, sans-serif">Inter</option><option value="Georgia, serif">Georgia</option><option value="'Courier New', monospace">Mono</option>
@@ -1823,16 +1823,16 @@ export async function renderGuruMateriPage(container) {
                     <select id="builder-font-size" class="h-[34px] rounded-xl border border-slate-200 bg-white px-2 text-xs font-medium text-slate-600">
                       <option value="">Size</option><option value="1">XS</option><option value="2">S</option><option value="3">M</option><option value="4">L</option><option value="5">XL</option><option value="6">XXL</option><option value="7">XXXL</option>
                     </select>
-                    <input type="color" id="builder-text-color" class="h-[34px] w-[34px] rounded-lg border border-slate-200 cursor-pointer" title="Text Color" />
-                    <input type="color" id="builder-bg-color" class="h-[34px] w-[34px] rounded-lg border border-slate-200 cursor-pointer" title="Background Color" />
+                    <input type="color" id="builder-text-color" class="h-[34px] w-[34px] rounded-lg border border-slate-200 cursor-pointer" aria-label="Text Color" />
+                    <input type="color" id="builder-bg-color" class="h-[34px] w-[34px] rounded-lg border border-slate-200 cursor-pointer" aria-label="Background Color" />
                     <span class="sep"></span>
-                    <button type="button" data-builder-insert="image" title="Insert Image"><i class="fa-solid fa-image"></i></button>
-                    <button type="button" data-builder-insert="link" title="Insert Link"><i class="fa-solid fa-link"></i></button>
-                    <button type="button" data-builder-insert="table" title="Insert Table"><i class="fa-solid fa-table"></i></button>
-                    <button type="button" data-builder-insert="video" title="Insert Video"><i class="fa-solid fa-video"></i></button>
+                    <button type="button" data-builder-insert="image" aria-label="Insert Image"><i class="fa-solid fa-image"></i></button>
+                    <button type="button" data-builder-insert="link" aria-label="Insert Link"><i class="fa-solid fa-link"></i></button>
+                    <button type="button" data-builder-insert="table" aria-label="Insert Table"><i class="fa-solid fa-table"></i></button>
+                    <button type="button" data-builder-insert="video" aria-label="Insert Video"><i class="fa-solid fa-video"></i></button>
                     <button type="button" data-builder-action="toggle-symbols" title="Symbols">Ω</button>
                     <span class="sep"></span>
-                    <button type="button" data-builder-command="removeFormat" title="Clear Format"><i class="fa-solid fa-eraser"></i></button>
+                    <button type="button" data-builder-command="removeFormat" aria-label="Clear Format"><i class="fa-solid fa-eraser"></i></button>
                     <span class="sep"></span>
                     <button type="button" data-builder-template="h1" class="text-indigo-600">H1</button>
                     <button type="button" data-builder-template="h2" class="text-indigo-600">H2</button>
@@ -1843,10 +1843,10 @@ export async function renderGuruMateriPage(container) {
                     <button type="button" data-builder-template="tabs" class="text-violet-600">Tabs</button>
                     <span class="sep"></span>
                     <button type="button" data-builder-action="toggle-code" title="Code View"><i class="fa-solid fa-code"></i> Code</button>
-                    <button type="button" data-builder-action="toggle-preview" title="Preview"><i class="fa-solid fa-eye"></i></button>
-                    <button type="button" data-builder-action="toggle-fullscreen" title="Fullscreen"><i class="fa-solid fa-expand"></i></button>
-                    <button type="button" data-builder-action="help" title="Help"><i class="fa-solid fa-circle-question"></i></button>
-                    <button type="button" data-builder-action="clear" title="Clear All" class="text-rose-600"><i class="fa-solid fa-trash-can"></i></button>
+                    <button type="button" data-builder-action="toggle-preview" aria-label="Preview"><i class="fa-solid fa-eye"></i></button>
+                    <button type="button" data-builder-action="toggle-fullscreen" aria-label="Fullscreen"><i class="fa-solid fa-expand"></i></button>
+                    <button type="button" data-builder-action="help" aria-label="Help"><i class="fa-solid fa-circle-question"></i></button>
+                    <button type="button" data-builder-action="clear" aria-label="Clear All" class="text-rose-600"><i class="fa-solid fa-trash-can"></i></button>
                   </div>
                   <div id="builder-symbol-panel" style="display:none; padding:8px 12px; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
                     <div class="char-grid">${builderSymbolButtons}</div>
