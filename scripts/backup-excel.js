@@ -566,22 +566,15 @@ async function main() {
 
     const buffer = await workbook.xlsx.writeBuffer();
 
+    const fs = require('fs');
+    const path = require('path');
     const fileName = `Laporan-SIMSMANSARI-${dateStr}.xlsx`;
-    const filePath = `backups/${fileName}`;
-    const file = bucket.file(filePath);
-    await file.save(buffer, {
-      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      resumable: false,
-    });
-
-    const [url] = await file.getSignedUrl({
-      action: 'read',
-      expires: '03-01-2040',
-    });
+    const outputPath = path.join(process.cwd(), fileName);
+    fs.writeFileSync(outputPath, Buffer.from(buffer));
 
     console.log(`\n=== Backup process completed successfully ===`);
-    console.log(`Backup file: ${filePath}`);
-    console.log(`Download URL: ${url}`);
+    console.log(`Backup file: ${outputPath}`);
+    console.log(`Size: ${(fs.statSync(outputPath).size / 1024).toFixed(1)} KB`);
   } catch (error) {
     console.error('\n=== Backup FAILED ===');
     console.error(`Error: ${error.message}`);
