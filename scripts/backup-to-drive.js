@@ -54,16 +54,16 @@ async function getFirestoreData(db, collectionName, filters = [], orderBy = null
 
 async function getActiveTeachingAssignments(db, period) {
   const filters = [
-    { field: 'tahun_ajaran_id', value: period.year },
-    { field: 'semester_id', value: period.semester },
+    { field: 'tahun_ajaran_id', operator: '==', value: period.year },
+    { field: 'semester_id', operator: '==', value: period.semester },
   ];
   const pengajaranData = await getFirestoreData(db, 'pengajaran', filters);
+  if (pengajaranData.length) return pengajaranData;
 
-  if (!pengajaranData.length) {
-    // Fallback to pembelajaran if no pengajaran found (for old data compatibility)
-    return getFirestoreData(db, 'pembelajaran', filters);
-  }
-  return pengajaranData;
+  // Fallback to pembelajaran if no pengajaran found
+  console.log('No pengajaran data found, trying pembelajaran collection...');
+  const pembelajaranData = await getFirestoreData(db, 'pembelajaran', filters);
+  return pembelajaranData;
 }
 
 // --- Google Drive & Sheets API Functions ---
@@ -536,23 +536,25 @@ async function main() {
     const dateFolder = await ensureBackupFolder(drive, dateFolderName, rootFolder.id);
     console.log(`Backup folder: ${dateFolderName} (${dateFolder.id})`);
 
-    console.log(`Fetching teaching assignments for ${process.env.TAHUN_AJARAN_AKTIF || '2026_2027'} / ${process.env.SEMESTER_AKTIF || '2026_2027_1'}...`);
-    const pengajaranData = await getFirestoreData(db, 'pengajaran', [
-      { field: 'tahun_ajaran_id', operator: '==', value: process.env.TAHUN_AJARAN_AKTIF || '2026_2027' },
-      { field: 'semester_id', operator: '==', value: process.env.SEMESTER_AKTIF || '2026_2027_1' },
-    ]).catch(e => {
+    const period = {
+      year: process.env.TAHUN_AJARAN_AKTIF || '2026_2027',
+      semester: process.env.SEMESTER_AKTIF || '2026_2027_1',
+    };
+    console.log(`Fetching teaching assignments for ${period.year} / ${period.semester}...`);
+    let pengajaranData;
+    try {
+      pengajaranData = await getActiveTeachingAssignments(db, period);
+    } catch (e) {
       if (isFirestoreIndexError(e)) {
-        console.error('Firestore index error on pengajaran collection.');
-        console.error('Create the required composite index at:');
+        console.error('Firestore index error — create composite indexes at:');
         console.error(`  https://console.firebase.google.com/project/${sa.project_id}/firestore/indexes`);
-        throw e;
       }
       throw e;
-    });
+    }
 
     console.log(`Found ${pengajaranData.length} teaching assignments.`);
     if (pengajaranData.length === 0) {
-      console.warn('No teaching assignments found for the current period. Backup may be empty.');
+      console.warn('No teaching assignments found for the current period (checked pengajaran + pembelajaran). Backup may be empty.');
     }
 
     const assignmentsByGuru = groupBy(pengajaranData, 'guru_id');
