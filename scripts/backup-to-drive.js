@@ -177,6 +177,7 @@ async function createSpreadsheet(sheets, drive, parentFolderId, guruId, guruName
     fields: 'id,name,parents,mimeType,webViewLink',
   });
   const fileId = file.data.id;
+  console.log(`DEBUG: Spreadsheet created with ID: ${fileId}`);
   console.log(`Created spreadsheet for ${guruName}: https://docs.google.com/spreadsheets/d/${fileId}/edit`);
 
   const verifiedFile = await drive.files.get({
@@ -273,6 +274,7 @@ async function generateRekapAbsensi(sheets, spreadsheetId, assignment, siswaList
   const sheetTitle = sanitizeSheetName(`Rekap Absensi - ${assignment.kelas_nama || assignment.kelas_id}`);
   const sheetId = await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
   const rekapAbsen = {};
+  console.log(`DEBUG: generateRekapAbsensi for assignment ${assignment.id}, siswaList size ${siswaList.length}, absensiData size ${absensiData.length}`);
   absensiData.forEach(absen => {
     if (!rekapAbsen[absen.siswa_id]) {
       rekapAbsen[absen.siswa_id] = { nama: absen.siswa_nama, H: 0, S: 0, I: 0, A: 0, Total: 0 };
@@ -333,6 +335,7 @@ async function generateRekapAbsensi(sheets, spreadsheetId, assignment, siswaList
 async function generateAbsensiHarian(sheets, spreadsheetId, assignment, siswaList, absensiData, sheetIndex) {
   const sheetTitle = sanitizeSheetName(`Absensi Harian - ${assignment.kelas_nama || assignment.kelas_id}`);
   const sheetId = await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
+  console.log(`DEBUG: generateAbsensiHarian for assignment ${assignment.id}, siswaList size ${siswaList.length}, absensiData size ${absensiData.length}`);
 
   const dates = [...new Set(absensiData.map(a => a.tanggal))].sort();
   const dateHeaders = dates.map(d => formatDate(d));
@@ -405,6 +408,7 @@ async function generateAbsensiHarian(sheets, spreadsheetId, assignment, siswaLis
 async function generateNilai(sheets, spreadsheetId, assignment, siswaList, nilaiData, babData, tugasData, uhKolomData, sheetIndex) {
   const sheetTitle = sanitizeSheetName(`Nilai - ${assignment.kelas_nama || assignment.kelas_id}`);
   const sheetId = await createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex);
+  console.log(`DEBUG: generateNilai for assignment ${assignment.id}, siswaList size ${siswaList.length}, nilaiTugas size ${nilaiData.nilaiTugas.length}, nilaiUjian size ${nilaiData.nilaiUjian.length}`);
 
   // --- Configuration Section ---
   const configValues = [
@@ -819,6 +823,12 @@ async function main() {
           { field: 'semester_id', operator: '==', value: period.semester },
         ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on ulangan_harian_kolom collection.`); } throw e; }),
       ]);
+      console.log(`DEBUG: Fetched data for guru ${guruName}:`);
+      console.log(`  allAbsensi: ${allAbsensi.length} records`);
+      console.log(`  allNilaiTugas: ${allNilaiTugas.length} records`);
+      console.log(`  allNilaiUjian: ${allNilaiUjian.length} records`);
+      console.log(`  allBab: ${allBab.length} records`);
+      console.log(`  allTugasBab: ${allTugasBab.length} records`);
 
       let sheetIndex = 0;
       for (const assignment of assignments.sort((a,b) => String(a.kelas_nama || '').localeCompare(String(b.kelas_nama || '')))) {
