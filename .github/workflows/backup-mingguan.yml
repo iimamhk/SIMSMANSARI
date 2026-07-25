@@ -33,7 +33,7 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-- name: Validate required secrets
+    - name: Validate required secrets
       run: |
         if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" ]; then
           echo "::error::FIREBASE_SERVICE_ACCOUNT_JSON is not set"
