@@ -405,7 +405,7 @@ export async function renderAdminDashboard(container) {
           const totalAll = Object.values(rekapMap).reduce((s, r) => s + r.Total, 0);
           const pctAll = totalAll > 0 ? `${((totalH / totalAll) * 100).toFixed(1)}%` : '0%';
           rekapRows.push(['', 'Total', totalH, totalS, totalI, totalA, totalAll, pctAll]);
-          addSheet(`Rekap - ${kelasNama}`, rekapRows, { widths: [6, 30, 10, 10, 10, 10, 12, 12], headerRows: 1 });
+          addSheet(`Rekap - ${kelasNama} (${guruId.slice(0,8)})`, rekapRows, { widths: [6, 30, 10, 10, 10, 10, 12, 12], headerRows: 1 });
 
           const dates = [...new Set(absensi.map(a => a.tanggal))].sort();
           const dateHeaders = dates.map(d => d ? new Date(d).toISOString().slice(0, 10) : '');
@@ -432,7 +432,7 @@ export async function renderAdminDashboard(container) {
           });
           footer.push('', '', '', '');
           harianRows.push(footer);
-          addSheet(`Harian - ${kelasNama}`, harianRows, { widths: [6, 30, ...dateHeaders.map(() => 14), 8, 8, 8, 8], headerRows: 1 });
+          addSheet(`Harian - ${kelasNama} (${guruId.slice(0,8)})`, harianRows, { widths: [6, 30, ...dateHeaders.map(() => 14), 8, 8, 8, 8], headerRows: 1 });
 
           const babMap = {};
           bab.forEach(b => { babMap[b.id] = { ...b, tugas: [] }; });
@@ -500,7 +500,7 @@ export async function renderAdminDashboard(container) {
             akhirMap[s.id] = Number(akhir.toFixed(1));
             nilaiRows.push(row);
           });
-          addSheet(`Nilai - ${kelasNama}`, nilaiRows, { widths: [6, 30], headerRows: 1 });
+          addSheet(`Nilai - ${kelasNama} (${guruId.slice(0,8)})`, nilaiRows, { widths: [6, 30], headerRows: 1 });
         }
       }
 
