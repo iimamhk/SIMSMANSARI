@@ -101,14 +101,15 @@ async function ensureBackupFolder(drive, folderName, parentId = null) {
 
 async function createSpreadsheet(sheets, drive, parentFolderId, guruId, guruName, dateStr) {
   const spreadsheetTitle = `Laporan - ${guruName} - ${dateStr}`;
+  // Use Drive API to create the spreadsheet with correct parent folder
   const fileMetadata = {
     name: spreadsheetTitle,
     parents: [parentFolderId],
     mimeType: 'application/vnd.google-apps.spreadsheet',
   };
-  const spreadsheet = await sheets.spreadsheets.create({ resource: fileMetadata, fields: 'spreadsheetId' });
-  console.log(`Created spreadsheet for ${guruName}: ${spreadsheet.data.spreadsheetId}`);
-  return spreadsheet.data.spreadsheetId;
+  const file = await drive.files.create({ resource: fileMetadata, fields: 'id' });
+  console.log(`Created spreadsheet for ${guruName}: ${file.data.id}`);
+  return file.data.id;
 }
 
 async function createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex) {
