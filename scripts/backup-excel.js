@@ -491,38 +491,55 @@ async function main() {
     }
 
     const guruIds = Object.keys(assignmentsByGuru);
-    const [allAbsensi, allNilaiTugas, allNilaiUjian, allBab, allTugasBab, allUhKolom] = await Promise.all([
-      ...guruIds.map(guruId => getFirestoreData(db, 'absensi', [
+
+    // Fetch per collection, grouped by guru
+    const allAbsensi = await Promise.all(guruIds.map(guruId => 
+      getFirestoreData(db, 'absensi', [
         { field: 'guru_id', operator: '==', value: guruId },
         { field: 'tahun_ajaran_id', operator: '==', value: period.year },
         { field: 'semester_id', operator: '==', value: period.semester },
-      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on absensi collection.`); } return []; })),
-      ...guruIds.map(guruId => getFirestoreData(db, 'nilai_tugas', [
+      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on absensi collection.`); } return []; })
+    ));
+
+    const allNilaiTugas = await Promise.all(guruIds.map(guruId => 
+      getFirestoreData(db, 'nilai_tugas', [
         { field: 'guru_id', operator: '==', value: guruId },
         { field: 'tahun_ajaran_id', operator: '==', value: period.year },
         { field: 'semester_id', operator: '==', value: period.semester },
-      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_tugas collection.`); } return []; })),
-      ...guruIds.map(guruId => getFirestoreData(db, 'nilai_ujian', [
+      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_tugas collection.`); } return []; })
+    ));
+
+    const allNilaiUjian = await Promise.all(guruIds.map(guruId => 
+      getFirestoreData(db, 'nilai_ujian', [
         { field: 'guru_id', operator: '==', value: guruId },
         { field: 'tahun_ajaran_id', operator: '==', value: period.year },
         { field: 'semester_id', operator: '==', value: period.semester },
-      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_ujian collection.`); } return []; })),
-      ...guruIds.map(guruId => getFirestoreData(db, 'bab', [
+      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on nilai_ujian collection.`); } return []; })
+    ));
+
+    const allBab = await Promise.all(guruIds.map(guruId => 
+      getFirestoreData(db, 'bab', [
         { field: 'guru_id', operator: '==', value: guruId },
         { field: 'tahun_ajaran_id', operator: '==', value: period.year },
         { field: 'semester_id', operator: '==', value: period.semester },
-      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on bab collection.`); } return []; })),
-      ...guruIds.map(guruId => getFirestoreData(db, 'tugas_bab', [
+      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on bab collection.`); } return []; })
+    ));
+
+    const allTugasBab = await Promise.all(guruIds.map(guruId => 
+      getFirestoreData(db, 'tugas_bab', [
         { field: 'guru_id', operator: '==', value: guruId },
         { field: 'tahun_ajaran_id', operator: '==', value: period.year },
         { field: 'semester_id', operator: '==', value: period.semester },
-      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on tugas_bab collection.`); } return []; })),
-      ...guruIds.map(guruId => getFirestoreData(db, 'ulangan_harian_kolom', [
+      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on tugas_bab collection.`); } return []; })
+    ));
+
+    const allUhKolom = await Promise.all(guruIds.map(guruId => 
+      getFirestoreData(db, 'ulangan_harian_kolom', [
         { field: 'guru_id', operator: '==', value: guruId },
         { field: 'tahun_ajaran_id', operator: '==', value: period.year },
         { field: 'semester_id', operator: '==', value: period.semester },
-      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on ulangan_harian_kolom collection.`); } return []; })),
-    ]);
+      ]).catch(e => { if (isFirestoreIndexError(e)) { console.error(`  Firestore index error on ulangan_harian_kolom collection.`); } return []; })
+    ));
 
     const dataMap = {
       allAbsensi: Object.fromEntries(guruIds.map((id, i) => [id, allAbsensi[i]])),
