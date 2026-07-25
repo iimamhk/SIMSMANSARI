@@ -102,7 +102,7 @@ async function generateWorkbook(assignmentsByGuru, siswaDataMap, dataMap, period
 }
 
 async function addRekapAbsensiSheet(workbook, assignment, siswaList, absensiData) {
-  const sheetTitle = sanitizeSheetName(`Rekap Absensi - ${assignment.kelas_nama || assignment.kelas_id}`);
+  const sheetTitle = sanitizeSheetName(`Rekap Absensi - ${assignment.kelas_nama || assignment.kelas_id} (${assignment.guru_id?.slice(0,8)})`);
   const newSheet = workbook.addWorksheet(sheetTitle);
 
   const rekapAbsen = {};
@@ -138,7 +138,7 @@ async function addRekapAbsensiSheet(workbook, assignment, siswaList, absensiData
 }
 
 async function addAbsensiHarianSheet(workbook, assignment, siswaList, absensiData) {
-  const sheetTitle = sanitizeSheetName(`Absensi Harian - ${assignment.kelas_nama || assignment.kelas_id}`);
+  const sheetTitle = sanitizeSheetName(`Absensi Harian - ${assignment.kelas_nama || assignment.kelas_id} (${assignment.guru_id?.slice(0,8)})`);
   const newSheet = workbook.addWorksheet(sheetTitle);
 
   const dates = [...new Set(absensiData.map(a => a.tanggal))].sort();
@@ -221,7 +221,7 @@ function formatAttendanceSheet(sheet, headers, studentRowCount, dateCount = null
 }
 
 async function addNilaiSheet(workbook, assignment, siswaList, nilaiData, babData, tugasData, uhKolomData) {
-  const sheetTitle = sanitizeSheetName(`Nilai - ${assignment.kelas_nama || assignment.kelas_id}`);
+  const sheetTitle = sanitizeSheetName(`Nilai - ${assignment.kelas_nama || assignment.kelas_id} (${assignment.guru_id?.slice(0,8)})`);
   const sheet = workbook.addWorksheet(sheetTitle);
 
   const configRows = [
