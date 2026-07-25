@@ -99,47 +99,95 @@ async function ensureBackupFolder(drive, folderName, parentId = null) {
   return folder.data;
 }
 
-// Delete backup folders older than N days to free Drive quota
-async function cleanupOldBackups(drive, rootFolderId, keepDays = 30) {
+// Check and report Drive quota
+async function checkDriveQuota(drive) {
+  const about = await drive.about.get({ fields: 'storageQuota' });
+  const quota = about.data.storageQuota;
+  const used = parseInt(quota.usageInDrive || quota.usage || 0, 10);
+  const limit = parseInt(quota.limit || 0, 10);
+  const free = limit - used;
+  console.log(`Drive quota: ${(used / 1073741824).toFixed(2)}GB used / ${(limit / 1073741824).toFixed(2)}GB total (${(free / 1073741824).toFixed(2)}GB free)`);
+  return { used, limit, free };
+}
+
+// Delete backup folders older than N days and empty trash to free quota
+async function cleanupOldBackups(drive, rootFolderId, keepDays = 14) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - keepDays);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   console.log(`Cleaning up backup folders older than ${keepDays} days (before ${cutoffStr})...`);
+
+  // List old folders in the root backup folder
   const res = await drive.files.list({
     q: `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and createdTime < '${cutoffStr}T00:00:00'`,
     fields: 'files(id,name,createdTime)',
   });
 
-  if (!res.data.files.length) {
+  if (res.data.files.length) {
+    let deleted = 0;
+    for (const folder of res.data.files) {
+      try {
+        await drive.files.delete({ fileId: folder.id });
+        console.log(`  Deleted: ${folder.name} from ${folder.createdTime}`);
+        deleted++;
+      } catch (e) {
+        console.warn(`  Failed to delete ${folder.name}: ${e.message}`);
+      }
+    }
+    console.log(`  Deleted ${deleted} old backup folder(s).`);
+  } else {
     console.log('  No old backups to clean up.');
-    return;
   }
 
-  let deleted = 0;
-  for (const folder of res.data.files) {
-    try {
-      await drive.files.delete({ fileId: folder.id });
-      console.log(`  Deleted: ${folder.name} (${folder.createdTime})`);
-      deleted++;
-    } catch (e) {
-      console.warn(`  Failed to delete ${folder.name}: ${e.message}`);
-    }
+  // Empty trash to actually free the quota
+  console.log('  Emptying Drive trash to free quota...');
+  try {
+    await drive.files.emptyTrash();
+    console.log('  Trash emptied.');
+  } catch (e) {
+    console.warn(`  Could not empty trash: ${e.message}`);
   }
-  console.log(`  Cleaned up ${deleted} old backup folder(s).`);
 }
 
 async function createSpreadsheet(sheets, drive, parentFolderId, guruId, guruName, dateStr) {
   const spreadsheetTitle = `Laporan - ${guruName} - ${dateStr}`;
-  // Use Drive API to create the spreadsheet with correct parent folder
   const fileMetadata = {
     name: spreadsheetTitle,
-    parents: [parentFolderId],
     mimeType: 'application/vnd.google-apps.spreadsheet',
   };
   const file = await drive.files.create({ resource: fileMetadata, fields: 'id' });
-  console.log(`Created spreadsheet for ${guruName}: ${file.data.id}`);
-  return file.data.id;
+  const fileId = file.data.id;
+  console.log(`Created spreadsheet for ${guruName}: ${fileId}`);
+
+  // Move to the shared parent folder (so user can see it)
+  if (parentFolderId) {
+    await drive.files.update({
+      fileId,
+      addParents: parentFolderId,
+      fields: 'id,parents',
+    });
+  }
+
+  // Transfer ownership to user's email so storage counts against their quota
+  if (process.env.BACKUP_SHARE_EMAIL) {
+    try {
+      await drive.permissions.create({
+        fileId,
+        requestBody: {
+          type: 'user',
+          role: 'owner',
+          emailAddress: process.env.BACKUP_SHARE_EMAIL,
+        },
+        transferOwnership: true,
+      });
+      console.log(`  Transferred ownership to ${process.env.BACKUP_SHARE_EMAIL}`);
+    } catch (e) {
+      console.warn(`  Could not transfer ownership: ${e.message}`);
+    }
+  }
+
+  return fileId;
 }
 
 async function createSheet(sheets, spreadsheetId, sheetTitle, sheetIndex) {
@@ -562,8 +610,14 @@ async function main() {
       rootFolder = await ensureBackupFolder(drive, rootFolderName);
     }
 
-    // Clean up old backups (older than 30 days) to free Drive quota
-    await cleanupOldBackups(drive, rootFolder.id, 30);
+    // Check Drive quota
+    await checkDriveQuota(drive);
+
+    // Clean up old backups (older than 14 days) and empty trash to free quota
+    await cleanupOldBackups(drive, rootFolder.id, 14);
+
+    // Check quota again after cleanup
+    await checkDriveQuota(drive);
 
     // Find or create the daily folder inside the root folder
     const dateFolderName = `Laporan SIMSMANSARI - ${dateStr}`;
