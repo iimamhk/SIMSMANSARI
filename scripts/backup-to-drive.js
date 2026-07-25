@@ -99,6 +99,36 @@ async function ensureBackupFolder(drive, folderName, parentId = null) {
   return folder.data;
 }
 
+// Delete backup folders older than N days to free Drive quota
+async function cleanupOldBackups(drive, rootFolderId, keepDays = 30) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - keepDays);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  console.log(`Cleaning up backup folders older than ${keepDays} days (before ${cutoffStr})...`);
+  const res = await drive.files.list({
+    q: `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false and createdTime < '${cutoffStr}T00:00:00'`,
+    fields: 'files(id,name,createdTime)',
+  });
+
+  if (!res.data.files.length) {
+    console.log('  No old backups to clean up.');
+    return;
+  }
+
+  let deleted = 0;
+  for (const folder of res.data.files) {
+    try {
+      await drive.files.delete({ fileId: folder.id });
+      console.log(`  Deleted: ${folder.name} (${folder.createdTime})`);
+      deleted++;
+    } catch (e) {
+      console.warn(`  Failed to delete ${folder.name}: ${e.message}`);
+    }
+  }
+  console.log(`  Cleaned up ${deleted} old backup folder(s).`);
+}
+
 async function createSpreadsheet(sheets, drive, parentFolderId, guruId, guruName, dateStr) {
   const spreadsheetTitle = `Laporan - ${guruName} - ${dateStr}`;
   // Use Drive API to create the spreadsheet with correct parent folder
@@ -531,6 +561,9 @@ async function main() {
       // Find or create root folder in the service account's Drive
       rootFolder = await ensureBackupFolder(drive, rootFolderName);
     }
+
+    // Clean up old backups (older than 30 days) to free Drive quota
+    await cleanupOldBackups(drive, rootFolder.id, 30);
 
     // Find or create the daily folder inside the root folder
     const dateFolderName = `Laporan SIMSMANSARI - ${dateStr}`;
