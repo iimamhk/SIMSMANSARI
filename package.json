@@ -1,12 +1,12 @@
 {
   "scripts": {
-    "backup": "node scripts/backup-to-drive.js",
-    "backup:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; require('./scripts/backup-to-drive.js')\""
+    "backup": "node scripts/backup-excel.js",
+    "backup:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; require('./scripts/backup-excel.js')\""
   },
   "dependencies": {
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.2",
-    "firebase-admin": "^13.4.0",
-    "googleapis": "^173.0.0"
+    "exceljs": "^4.4.0",
+    "firebase-admin": "^13.4.0"
   }
 }
