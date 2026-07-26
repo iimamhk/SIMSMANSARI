@@ -27,17 +27,15 @@ function getGreeting() {
 
 function actionCard({ href, title, description, badge, icon }) {
   return `
-    <a href="${href}" class="group relative flex min-h-[128px] flex-col justify-between overflow-hidden rounded-[24px] border border-sky-100/80 bg-white p-4 shadow-[0_14px_34px_-28px_rgba(14,165,233,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_22px_44px_-28px_rgba(14,165,233,0.38)] focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-200">
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-cyan-50 text-sky-600 ring-1 ring-sky-100 transition group-hover:from-sky-500 group-hover:to-cyan-500 group-hover:text-white">
-          ${icon}
-        </div>
-        <span class="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-700 ring-1 ring-sky-100">${badge}</span>
+    <a href="${href}" class="group flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2">
+      <div class="flex items-center justify-between gap-3">
+        <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--color-primary-container)] text-[var(--color-primary)] transition group-hover:scale-105">${icon}</span>
+        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">${badge}</span>
       </div>
-      <div class="mt-4">
+      <div class="min-w-0">
         <div class="flex items-center gap-2">
           <h3 class="text-sm font-semibold text-slate-900">${title}</h3>
-          <span class="text-sky-400 transition group-hover:translate-x-0.5 group-hover:text-sky-600">${adminIcons.arrow}</span>
+          <span class="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-[var(--color-primary)]">${adminIcons.arrow}</span>
         </div>
         <p class="mt-1 text-xs leading-5 text-slate-500">${description}</p>
       </div>
@@ -47,7 +45,7 @@ function actionCard({ href, title, description, badge, icon }) {
 
 function checklistItem({ done, title, description, href, cta }) {
   return `
-    <li class="flex flex-col gap-3 rounded-2xl border border-sky-100/80 bg-gradient-to-br from-white to-sky-50/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <li class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-start gap-3">
         <span class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
           ${done ? adminIcons.check : adminIcons.alert}
@@ -57,7 +55,7 @@ function checklistItem({ done, title, description, href, cta }) {
           <p class="mt-0.5 text-xs leading-5 text-slate-500">${description}</p>
         </div>
       </div>
-      <a href="${href}" class="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus-visible:ring-4 focus-visible:ring-sky-200 ${done ? adminTheme.secondaryBtn : adminTheme.primaryBtn}">
+      <a href="${href}" class="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 ${done ? adminTheme.secondaryBtn : adminTheme.primaryBtn}">
         ${cta}
       </a>
     </li>
@@ -95,7 +93,7 @@ export async function renderAdminDashboard(container) {
       <section aria-label="Ringkasan sistem" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" id="admin-metrics">
         ${adminMetricCard({ label: 'Guru', value: '…', hint: 'Memuat data…', icon: adminIcons.users, tone: 'sky' })}
         ${adminMetricCard({ label: 'Siswa', value: '…', hint: 'Memuat data…', icon: adminIcons.users, tone: 'teal' })}
-        ${adminMetricCard({ label: 'Mata Pelajaran', value: '…', hint: 'Memuat data…', icon: adminIcons.book, tone: 'violet' })}
+        ${adminMetricCard({ label: 'Mata Pelajaran', value: '…', hint: 'Memuat data…', icon: adminIcons.book, tone: 'cyan' })}
         ${adminMetricCard({ label: 'Kelas', value: '…', hint: 'Memuat data…', icon: adminIcons.building, tone: 'amber' })}
       </section>
 
@@ -536,7 +534,7 @@ export async function renderAdminDashboard(container) {
           metricsEl.innerHTML = [
             adminMetricCard({ label: 'Guru', value: formatNumber(guruCount), hint: guruCount ? 'Akun guru aktif di sistem' : 'Belum ada data guru', icon: adminIcons.users, tone: 'sky' }),
             adminMetricCard({ label: 'Siswa', value: formatNumber(siswaCount), hint: siswaCount ? 'Akun siswa terdaftar' : 'Belum ada data siswa', icon: adminIcons.users, tone: 'teal' }),
-            adminMetricCard({ label: 'Mata Pelajaran', value: formatNumber(mapelCount), hint: mapelCount ? 'Mapel master tersedia' : 'Belum ada mapel', icon: adminIcons.book, tone: 'violet' }),
+            adminMetricCard({ label: 'Mata Pelajaran', value: formatNumber(mapelCount), hint: mapelCount ? 'Mapel master tersedia' : 'Belum ada mapel', icon: adminIcons.book, tone: 'cyan' }),
             adminMetricCard({ label: 'Kelas', value: formatNumber(kelasCount), hint: kelasCount ? 'Kelas master tersedia' : 'Belum ada kelas', icon: adminIcons.building, tone: 'amber' }),
           ].join('');
         }
@@ -597,7 +595,7 @@ export async function renderAdminDashboard(container) {
         metricsEl.innerHTML = [
           adminMetricCard({ label: 'Guru', value: formatNumber(guruCount), hint: guruCount ? 'Akun guru aktif di sistem' : 'Belum ada data guru', icon: adminIcons.users, tone: 'sky' }),
           adminMetricCard({ label: 'Siswa', value: formatNumber(siswaCount), hint: siswaCount ? 'Akun siswa terdaftar' : 'Belum ada data siswa', icon: adminIcons.users, tone: 'teal' }),
-          adminMetricCard({ label: 'Mata Pelajaran', value: formatNumber(mapelCount), hint: mapelCount ? 'Mapel master tersedia' : 'Belum ada mapel', icon: adminIcons.book, tone: 'violet' }),
+          adminMetricCard({ label: 'Mata Pelajaran', value: formatNumber(mapelCount), hint: mapelCount ? 'Mapel master tersedia' : 'Belum ada mapel', icon: adminIcons.book, tone: 'cyan' }),
           adminMetricCard({ label: 'Kelas', value: formatNumber(kelasCount), hint: kelasCount ? 'Kelas master tersedia' : 'Belum ada kelas', icon: adminIcons.building, tone: 'amber' }),
         ].join('');
       }

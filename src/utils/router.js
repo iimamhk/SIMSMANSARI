@@ -1,4 +1,4 @@
-import { initHeaderClock } from '../layouts/dashboard-layout.js';
+import { initHeaderClock, initSidebarToggle } from '../layouts/dashboard-layout.js';
 import { renderLoginPage } from '../pages/login.js';
 import { renderPublicHomePage } from '../pages/public-home.js';
 import { renderPublicLobbyDetailPage } from '../pages/public-lobby-detail.js';
@@ -107,6 +107,7 @@ async function renderRoute() {
   const renderAndFinalize = async (renderer, ...args) => {
     await renderer(...args);
     initHeaderClock(container);
+    initSidebarToggle(container);
     maybeShowBackupReminder();
   };
 

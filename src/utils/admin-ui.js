@@ -7,17 +7,17 @@ export const adminTheme = {
   accent: 'from-cyan-400 via-sky-400 to-teal-400',
   accentSoft: 'from-cyan-50 via-sky-50 to-teal-50',
   accentText: 'text-sky-700',
-  hero: 'from-cyan-500 via-sky-500 to-teal-400',
+  hero: 'from-[#0f766e] via-[#0891b2] to-[#0ea5e9]',
   heroPanel: 'from-white/25 via-white/10 to-white/5',
-  primaryBtn: 'bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 text-white shadow-[0_14px_28px_-16px_rgba(14,165,233,0.65)]',
-  secondaryBtn: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-sky-200',
+  primaryBtn: 'bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white',
+  secondaryBtn: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
   dangerBtn: 'bg-rose-50 text-rose-600 ring-1 ring-rose-100 hover:bg-rose-100',
   ghostBtn: 'border border-slate-200 bg-white/80 text-slate-600 hover:bg-white hover:text-slate-900',
-  card: 'rounded-[26px] border border-slate-200/80 bg-white shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]',
-  softCard: 'rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/60 to-cyan-50/40',
+  card: 'rounded-2xl border border-slate-200 bg-white shadow-sm',
+  softCard: 'rounded-2xl border border-slate-200 bg-slate-50',
   input: 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-4 focus:ring-sky-100',
   label: 'mb-1.5 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-500',
-  tableWrap: 'overflow-hidden rounded-[24px] border border-slate-200/80 bg-white shadow-[0_14px_34px_-28px_rgba(15,23,42,0.22)]',
+  tableWrap: 'overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm',
   th: 'px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400',
   td: 'px-3 py-3 text-sm text-slate-600',
   badgeLive: 'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100',
@@ -69,10 +69,9 @@ export function adminPageHero({
     : '';
 
   return `
-    <section class="relative overflow-hidden rounded-[30px] border border-sky-100 bg-gradient-to-br ${adminTheme.hero} p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)] sm:p-6">
-      <div class="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/25 blur-3xl"></div>
-      <div class="pointer-events-none absolute -bottom-12 left-10 h-36 w-36 rounded-full bg-cyan-200/30 blur-3xl"></div>
-      <div class="pointer-events-none absolute right-16 bottom-0 h-24 w-24 rounded-full bg-teal-200/20 blur-2xl"></div>
+    <section class="relative overflow-hidden rounded-2xl bg-gradient-to-br ${adminTheme.hero} p-6 text-white sm:p-8">
+      <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10 blur-3xl"></div>
+      <div class="pointer-events-none absolute -bottom-20 -left-10 h-40 w-40 rounded-full bg-teal-300/20 blur-3xl"></div>
       <div class="relative grid gap-5 lg:grid-cols-[1.4fr_auto] lg:items-end">
         <div>
           <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">${eyebrow}</p>
@@ -89,21 +88,20 @@ export function adminPageHero({
 
 export function adminMetricCard({ label, value, hint = '', icon = adminIcons.spark, tone = 'sky' } = {}) {
   const tones = {
-    sky: 'from-sky-100 to-cyan-50 text-sky-600 ring-sky-100',
-    teal: 'from-teal-100 to-emerald-50 text-teal-600 ring-teal-100',
-    violet: 'from-violet-100 to-fuchsia-50 text-violet-600 ring-violet-100',
-    amber: 'from-amber-100 to-orange-50 text-amber-600 ring-amber-100',
+    sky: 'bg-sky-50 text-sky-600',
+    teal: 'bg-teal-50 text-teal-600',
+    cyan: 'bg-cyan-50 text-cyan-600',
+    amber: 'bg-amber-50 text-amber-600',
   };
   return `
-    <article class="${adminTheme.card} relative overflow-hidden p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_48px_-28px_rgba(14,165,233,0.35)]">
-      <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-400 via-cyan-400 to-teal-400"></div>
+    <article class="${adminTheme.card} p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">${label}</p>
-          <p class="mt-2 text-3xl font-bold tracking-tight text-slate-900">${value}</p>
+          <p class="mt-2 text-2xl font-bold tracking-tight text-slate-900">${value}</p>
           ${hint ? `<p class="mt-1 text-xs text-slate-500">${hint}</p>` : ''}
         </div>
-        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${tones[tone] || tones.sky} ring-1">
+        <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tones[tone] || tones.sky}">
           ${icon}
         </div>
       </div>

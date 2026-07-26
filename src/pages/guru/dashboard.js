@@ -12,31 +12,6 @@ export function renderGuruDashboard(container) {
   const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const todayName = dayNames[new Date().getDay()];
 
-  const quickCard = (href, title, desc, grad, icon) => `
-          <a href="${href}" class="qa-card group relative flex flex-col items-center overflow-hidden rounded-3xl border border-slate-100 bg-white p-3.5 text-center shadow-sm ring-1 ring-slate-50 transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:ring-slate-200 active:scale-[0.98]">
-            <div class="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-md shadow-black/10">
-              <span class="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/30 to-white/0"></span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="relative h-6 w-6 drop-shadow-sm" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
-            </div>
-            <p class="mt-3 text-sm font-semibold text-slate-900">${title}</p>
-            <p class="mt-1 text-xs leading-snug text-slate-500">${desc}</p>
-            <span class="pointer-events-none absolute right-3 top-3 text-slate-300 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100">
-              <svg viewBox="0 0 24 24" class="h-4 w-4 translate-x-1 transition-transform duration-300 group-hover:translate-x-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-            </span>
-          </a>`;
-  const quickCardButton = (id, title, desc, grad, icon, extraBadge = '') => `
-          <button id="${id}" type="button" class="qa-card group relative flex flex-col items-center overflow-hidden rounded-3xl border border-slate-100 bg-white p-3.5 text-center shadow-sm ring-1 ring-slate-50 transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:ring-slate-200 active:scale-[0.98]">
-            ${extraBadge}
-            <div class="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${grad} text-white shadow-md shadow-black/10">
-              <span class="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/30 to-white/0"></span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="relative h-6 w-6 drop-shadow-sm" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
-            </div>
-            <p class="mt-3 text-sm font-semibold text-slate-900">${title}</p>
-            <p class="mt-1 text-xs leading-snug text-slate-500">${desc}</p>
-            <span class="pointer-events-none absolute right-3 top-3 text-slate-300 opacity-0 transition duration-300 group-hover:translate-x-0 group-hover:opacity-100">
-              <svg viewBox="0 0 24 24" class="h-4 w-4 translate-x-1 transition-transform duration-300 group-hover:translate-x-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-            </span>
-          </button>`;
   const sunRays = (count = 12, r1 = 36, r2 = 47) => {
     let lines = '';
     for (let i = 0; i < count; i++) {
@@ -49,7 +24,6 @@ export function renderGuruDashboard(container) {
     }
     return `<svg viewBox="0 0 100 100" class="hc-rays" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">${lines}</svg>`;
   };
-
   const renderCelestial = (theme) => {
     if (theme.celestialType === 'moon') {
       return `<div class="hero-celestial hc-moon ${theme.celestialPos} h-14 w-14 sm:h-16 sm:w-16">
@@ -63,7 +37,6 @@ export function renderGuruDashboard(container) {
       <div class="hc-disk"></div>
     </div>`;
   };
-
   const nightStars = `
     <div class="hero-stars">
       <span class="hc-star" style="left:12%;top:22%;width:3px;height:3px;animation-delay:.2s"></span>
@@ -74,92 +47,85 @@ export function renderGuruDashboard(container) {
       <span class="hc-star" style="left:90%;top:16%;width:2px;height:2px;animation-delay:2s"></span>
     </div>`;
 
-  const heroTheme = hour < 12
-    ? {
-        panel: 'from-sky-600 via-cyan-600 to-emerald-500',
-        subtext: 'text-sky-50/85',
-        eyebrow: 'text-cyan-100',
-        glowA: 'bg-white/22',
-        glowB: 'bg-cyan-200/20',
-        glass: 'bg-white/14',
-        accentLabel: 'Start Kelas',
-        accentIcon: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/>',
-        title: 'Awali Kelas Dengan Ritme Jelas',
-        message: 'Pagi hari ideal untuk menata absensi, materi, dan fokus kelas sebelum aktivitas berjalan penuh.',
-        insightLabel: 'Arah Hari Ini',
-        insightValue: 'Siap Mengajar',
-        insightDetail: 'Susun prioritas utama sejak awal agar pengelolaan kelas tetap ringan dan cepat.',
-        celestialType: 'sun',
-        celestialPos: 'right-6 bottom-3',
-        celestialFloat: true,
-        hcColor: 'rgba(255,243,200,0.85)',
-        hcCore: '#ffe27a',
-        hcEdge: '#ffb43d',
-        hcGlow: 'rgba(255,210,110,0.85)'
-      }
-    : hour < 15
-      ? {
-          panel: 'from-amber-500 via-orange-500 to-rose-500',
-          subtext: 'text-amber-50/90',
-          eyebrow: 'text-amber-100',
-          glowA: 'bg-white/20',
-          glowB: 'bg-amber-100/24',
-          glass: 'bg-white/12',
-          accentLabel: 'Puncak Aktivitas',
-          accentIcon: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>',
-          title: 'Jaga Fokus Saat Aktivitas Padat',
-          message: 'Pertahankan alur kerja yang singkat agar keputusan di tengah jam belajar tetap cepat.',
-          insightLabel: 'Ritme Mengajar',
-          insightValue: 'Sedang Aktif',
-          insightDetail: 'Pertahankan alur kerja yang singkat agar keputusan di tengah jam belajar tetap cepat.',
-          celestialType: 'sun',
-          celestialPos: 'left-1/2 top-0 -translate-x-1/2',
-          celestialFloat: false,
-          hcColor: 'rgba(255,255,255,0.95)',
-          hcCore: '#fff6cf',
-          hcEdge: '#ffd86b',
-          hcGlow: 'rgba(255,236,150,0.95)'
-        }
-      : hour < 18
-        ? {
-            panel: 'from-indigo-600 via-violet-600 to-fuchsia-600',
-            subtext: 'text-violet-50/85',
-            eyebrow: 'text-violet-100',
-            glowA: 'bg-white/18',
-            glowB: 'bg-fuchsia-200/18',
-            glass: 'bg-white/12',
-            accentLabel: 'Sore Terkelola',
-            accentIcon: '<path d="M4 15c2.5-4.8 5.8-7.2 10-7.2 2.4 0 4.3.6 6 1.8-1.4 5-5.2 8.4-10 8.4-2.1 0-4.1-1-6-3z"/><path d="M13 5.5c1.3.5 2.3 1.6 2.7 3"/>',
-            title: 'Rapikan Progres Sebelum Hari Usai',
-            message: 'Sore hari pas untuk merangkum hasil belajar, memperbarui catatan, dan menuntaskan tindak lanjut kelas.',
-            insightLabel: 'Status Kelas',
-            insightValue: 'Terpantau',
-            insightDetail: 'Gunakan jeda sore untuk memastikan materi, nilai, dan aktivitas siswa tetap sinkron.',
-            celestialType: 'sun',
-            celestialPos: 'right-6 bottom-3',
-            celestialFloat: true,
-            hcColor: 'rgba(255,225,180,0.9)',
-            hcCore: '#ffb259',
-            hcEdge: '#ff7a3d',
-            hcGlow: 'rgba(255,140,80,0.85)'
-          }
-        : {
-            panel: 'from-slate-900 via-indigo-900 to-blue-950',
-            subtext: 'text-indigo-50/82',
-            eyebrow: 'text-indigo-200',
-            glowA: 'bg-white/12',
-            glowB: 'bg-indigo-300/16',
-            glass: 'bg-white/10',
-            accentLabel: 'Mode Evaluasi',
-            accentIcon: '<path d="M18.5 14.5A6.5 6.5 0 0 1 9.5 5.5 7.5 7.5 0 1 0 18.5 14.5Z"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="4.5" r="0.8" fill="currentColor" stroke="none"/>',
-            title: 'Tutup Hari Dengan Evaluasi Ringkas',
-            message: 'Malam cocok untuk meninjau hasil, mengecek agenda esok, dan menjaga semua administrasi tetap rapi.',
-            insightLabel: 'Mode Kerja',
-            insightValue: 'Reflektif',
-            insightDetail: 'Selesaikan tinjauan penting malam ini agar esok dimulai tanpa beban yang tertinggal.',
-            celestialType: 'moon',
-            celestialPos: 'left-1/2 top-0 -translate-x-1/2'
-          };
+  const heroTheme = (() => {
+    const m = hour * 60 + new Date().getMinutes();
+    const sun = 'right-6 bottom-3';
+    if (m >= 270 && m < 360) return { // 04:30–06:00 Fajar
+      panel: 'from-[#F6A55F] via-[#FFD7A1] to-[#FFEFD8]', onLight: true, txt: '#47342A',
+      quote: 'Fajar membawa harapan baru — mulai hari dengan niat ikhlas.',
+      celestialType: 'sun', celestialPos: sun, celestialFloat: true,
+      hcColor: 'rgba(255,243,200,0.85)', hcCore: '#ffe27a', hcEdge: '#ffb43d', hcGlow: 'rgba(255,210,110,0.85)',
+    };
+    if (m < 480) return { // 06:00–08:00 Matahari Terbit
+      panel: 'from-[#4FA8FF] via-[#8ED6FF] to-[#FFF4C4]', onLight: true, txt: '#1D3557',
+      quote: 'Setiap pagi adalah kesempatan baru untuk menginspirasi siswa.',
+      celestialType: 'sun', celestialPos: sun, celestialFloat: true,
+      hcColor: 'rgba(255,243,200,0.9)', hcCore: '#fff6cf', hcEdge: '#ffd86b', hcGlow: 'rgba(255,236,150,0.95)',
+    };
+    if (m < 600) return { // 08:00–10:00 Langit Biru Sejuk
+      panel: 'from-[#2F80ED] via-[#6EC6FF] to-[#B9F2FF]', onLight: true, txt: '#23395B',
+      quote: 'Langit cerah cermin pikiran jernih — saatnya fokus mengajar.',
+      celestialType: 'sun', celestialPos: sun, celestialFloat: true,
+      hcColor: 'rgba(255,243,200,0.9)', hcCore: '#fff6cf', hcEdge: '#ffd86b', hcGlow: 'rgba(255,236,150,0.95)',
+    };
+    if (m < 780) return { // 10:00–13:00 Tengah Hari
+      panel: 'from-[#4C8BF5] via-[#7EC9FF] to-[#FFFFFF]', onLight: true, txt: '#223A5E',
+      quote: 'Puncak energi hari ini — pertahankan ritme dan semangat mengajar.',
+      celestialType: 'sun', celestialPos: sun, celestialFloat: true,
+      hcColor: 'rgba(255,243,200,0.95)', hcCore: '#fff6cf', hcEdge: '#ffd86b', hcGlow: 'rgba(255,236,150,0.95)',
+    };
+    if (m < 960) return { // 13:00–16:00 Siang Hangat
+      panel: 'from-[#5C8DFF] via-[#A5D8FF] to-[#FFE5B2]', onLight: true, txt: '#2D3F5F',
+      quote: 'Ke hangatan siang, rapikan progres sebelum sore tiba.',
+      celestialType: 'sun', celestialPos: sun, celestialFloat: true,
+      hcColor: 'rgba(255,243,200,0.9)', hcCore: '#fff6cf', hcEdge: '#ffd86b', hcGlow: 'rgba(255,236,150,0.95)',
+    };
+    if (m < 1080) return { // 16:00–18:00 Senja
+      panel: 'from-[#FF8A5C] via-[#FFC48A] to-[#FFD6C0]', onLight: true, txt: '#50312C',
+      quote: 'Setiap kerja keras hari ini jadi bibit masa depan siswa.',
+      celestialType: 'sun', celestialPos: sun, celestialFloat: true,
+      hcColor: 'rgba(255,225,180,0.9)', hcCore: '#ffb259', hcEdge: '#ff7a3d', hcGlow: 'rgba(255,140,80,0.85)',
+    };
+    if (m < 1260) return { // 18:00–21:00 Malam Awal
+      panel: 'from-[#3949AB] via-[#5C6BC0] to-[#7E8CE0]', onLight: false,
+      quote: 'Malam tenang untuk merangkum dan menyiapkan esok.',
+      celestialType: 'moon', celestialPos: 'right-6 top-4',
+    };
+    return { // 21:00–04:30 Tengah Malam
+      panel: 'from-[#1F2A5A] via-[#394C8D] to-[#5E72E4]', onLight: false,
+      quote: 'Guru hebat tak pernah berhenti belajar, bahkan di tengah malam.',
+      celestialType: 'moon', celestialPos: 'right-6 top-4',
+    };
+  })();
+
+  const toneChip = (tone) => ({
+    teal: 'bg-teal-500/10 text-teal-600',
+    cyan: 'bg-cyan-500/10 text-cyan-600',
+    sky: 'bg-sky-500/10 text-sky-600',
+    amber: 'bg-amber-500/10 text-amber-600',
+    slate: 'bg-slate-500/10 text-slate-600',
+  }[tone] || 'bg-teal-500/10 text-teal-600');
+  const quickCard = (href, title, desc, icon, tone = 'blue') => `
+          <a href="${href}" class="qa-card group flex flex-col items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-center transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 active:scale-[0.98]">
+            <span class="flex h-12 w-12 items-center justify-center rounded-[1rem] ${toneChip(tone)} transition group-hover:scale-105 group-active:scale-95">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+            </span>
+            <span class="min-w-0 w-full">
+              <p class="text-sm font-semibold text-slate-900">${title}</p>
+              <p class="mt-0.5 text-xs leading-snug text-slate-500">${desc}</p>
+            </span>
+          </a>`;
+  const quickCardButton = (id, title, desc, icon, tone = 'amber', extraBadge = '') => `
+          <button id="${id}" type="button" class="qa-card group relative flex flex-col items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-center transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 active:scale-[0.98]">
+            ${extraBadge}
+            <span class="flex h-12 w-12 items-center justify-center rounded-[1rem] ${toneChip(tone)} transition group-hover:scale-105 group-active:scale-95">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+            </span>
+            <span class="min-w-0 w-full">
+              <p class="text-sm font-semibold text-slate-900">${title}</p>
+              <p class="mt-0.5 text-xs leading-snug text-slate-500">${desc}</p>
+            </span>
+          </button>`;
 
   const waliCacheDash = (() => {
     try {
@@ -169,7 +135,7 @@ export function renderGuruDashboard(container) {
     }
   })();
   const waliQuickCard = waliCacheDash && waliCacheDash.kelas_id
-    ? quickCard('#guru/wali-kelas', 'Wali Kelas', `Kelola kelas ${waliCacheDash.kelas_nama}.`, 'from-cyan-500 to-blue-500', '<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M8 20h8M12 16v4"/>')
+    ? quickCard('#guru/wali-kelas', 'Wali Kelas', `Kelola kelas ${waliCacheDash.kelas_nama}.`, '<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M8 20h8M12 16v4"/>', 'sky')
     : '';
 
   const lastBackup = getLastBackupTimestamp();
@@ -189,97 +155,74 @@ export function renderGuruDashboard(container) {
     </span>`;
   }
 
+  const L = heroTheme.onLight;
+  const txt = heroTheme.txt || '#0f172a';
+  const cMain = L ? `text-[${txt}]` : 'text-white';
+  const cEyebrow = L ? `text-[${txt}]/70` : 'text-white/70';
+  const cSub = L ? `text-[${txt}]/75` : 'text-white/80';
+  const cQuote = L ? `text-[${txt}]/85` : 'text-white/90';
+  const cIcon = L ? `text-[${txt}]/50` : 'text-white/70';
+  const chip = L
+    ? `border-black/10 bg-black/5 ${cEyebrow}`
+    : 'border-white/15 bg-white/10 text-white/70 backdrop-blur-sm';
+
   const pageHtml = `
     <div class="space-y-6">
       <section>
-        <article class="relative overflow-hidden rounded-[28px] bg-gradient-to-br ${heroTheme.panel} p-4 text-white shadow-[0_20px_60px_rgba(15,23,42,0.2)] sm:p-5">
-          <div class="absolute -right-12 -top-12 h-32 w-32 rounded-full ${heroTheme.glowA} blur-3xl"></div>
-          <div class="absolute -left-10 bottom-0 h-28 w-28 rounded-full ${heroTheme.glowB} blur-3xl"></div>
-          <div class="absolute bottom-0 right-0 h-20 w-32 rounded-tl-[36px] bg-white/5"></div>
-
+        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br ${heroTheme.panel} p-6 ${cMain} shadow-lg sm:p-8">
+          <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full ${L ? 'bg-white/30' : 'bg-white/10'} blur-3xl"></div>
+          <div class="pointer-events-none absolute -bottom-20 -left-10 h-40 w-40 rounded-full ${L ? 'bg-white/25' : 'bg-white/10'} blur-3xl"></div>
           ${renderCelestial(heroTheme)}
           ${heroTheme.celestialType === 'moon' ? nightStars : ''}
-
-          <div class="relative flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-[10px] font-semibold uppercase tracking-[0.22em] ${heroTheme.eyebrow}">${greeting}, ${shortName}.</p>
-              <div class="mt-1.5 flex flex-wrap items-center gap-2">
-                <h1 class="text-xl font-semibold text-white sm:text-2xl">${heroTheme.title}</h1>
-                <span class="rounded-full border border-white/20 ${heroTheme.glass} px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">${heroTheme.accentLabel}</span>
+          <div class="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0 max-w-xl">
+              <p class="text-xs font-medium uppercase tracking-[0.2em] ${cEyebrow}">${greeting}</p>
+              <h1 class="mt-1.5 text-2xl font-semibold sm:text-3xl">${shortName}</h1>
+              <p class="mt-2 text-sm ${cSub}">${todayName}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</p>
+              <p class="mt-3 flex items-start gap-2 text-sm font-medium italic ${cQuote}">
+                <svg viewBox="0 0 24 24" class="mt-0.5 h-4 w-4 shrink-0 ${cIcon}" fill="currentColor"><path d="M9.5 7C6.5 7 5 9 5 12v5h6v-6H8c0-1.5.5-2 2-2V7zm9 0c-3 0-4.5 2-4.5 5v5h6v-6h-3c0-1.5.5-2 2-2V7z"/></svg>
+                <span>${heroTheme.quote}</span>
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <div class="rounded-xl border ${chip} px-4 py-2.5">
+                <p class="text-[11px] font-medium uppercase tracking-wide ${cEyebrow}">Jadwal hari ini</p>
+                <p class="text-lg font-semibold ${cMain}"><span id="hero-jadwal-count">-</span> kelas</p>
               </div>
-            </div>
-            <div class="flex shrink-0 items-center justify-end gap-3 text-right">
-              <div>
-                <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/70">Cuaca</p>
-                <div class="mt-0.5 flex items-center justify-end gap-1.5">
-                  <div class="text-right">
-                    <p id="dashboard-weather-temp" class="text-2xl font-semibold leading-none text-white sm:text-3xl">--°</p>
-                    <p id="dashboard-weather-desc" class="mt-1 text-[10px] text-white/80 sm:text-[11px]">Memuat cuaca...</p>
-                  </div>
-                  <svg id="dashboard-weather-icon" viewBox="0 0 24 24" class="h-5 w-5 stroke-current text-amber-200" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="4.5" />
-                    <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <p class="relative mt-2 max-w-2xl text-[13px] leading-snug ${heroTheme.subtext}">${heroTheme.message}</p>
-        </article>
-
-      </section>
-
-      <section>
-        <div class="rounded-3xl bg-white p-5 shadow-md ring-1 ring-slate-100">
-          <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Menu Cepat</p>
-              <h2 class="text-2xl font-semibold text-slate-900">Semua Menu</h2>
-            </div>
-          </div>
-
-          <div class="overflow-y-auto scroll-smooth pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style="max-height: 15rem;">
-            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-              ${quickCard('#guru/input-absen', 'Absensi', 'Input kehadiran harian siswa.', 'from-emerald-500 to-teal-500', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>')}
-              ${quickCard('#guru/penilaian', 'Penilaian', 'Kelola nilai per mapel.', 'from-blue-600 to-indigo-500', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>')}
-              ${quickCard('#guru/jurnal', 'Jurnal', 'Catat jurnal mengajar harian.', 'from-indigo-500 to-violet-500', '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 11h8M8 15h6"/>')}
-              ${quickCard('#guru/materi', 'Materi', 'Buat dan publikasikan materi.', 'from-sky-500 to-cyan-500', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/><path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z"/>')}
-               ${quickCard('#guru/materi-ai', 'Materi AI', 'Buat materi dengan bantuan AI.', 'from-fuchsia-500 to-purple-500', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"/><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/>')}
-               ${quickCard('#guru/plotting-jadwal', 'Mapping Pelajaran', 'Atur relasi mapel dan kelas.', 'from-teal-500 to-cyan-600', '<path d="M10 14l4-4M8.5 16.5l-2 2a3 3 0 1 1-4.2-4.2l2-2M15.5 7.5l2-2a3 3 0 0 1 4.2 4.2l-2 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>')}
-               ${waliQuickCard}
-              ${quickCard('#guru/game', 'Game', 'Atur aktivitas game kelas.', 'from-pink-500 to-rose-500', '<rect x="3" y="8" width="18" height="8" rx="4"/><path d="M8 12h4M10 10v4M16.5 11.5h.01M18 12.5h.01"/>')}
-               ${quickCard('#guru/kuiz', 'Ujian', 'Buat dan kelola ujian kelas.', 'from-amber-500 to-orange-500', '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>')}
-              ${quickCard('#guru/pengumuman', 'Pengumuman', 'Sampaikan info ke kelas.', 'from-amber-500 to-yellow-500', '<path d="M3 11l14-7v16L3 13z"/><path d="M3 11v2a2 2 0 0 0 2 2h2"/><path d="M19 8v8"/>')}
-              ${quickCard('#guru/rpm-ai', 'RPM AI', 'Buat Rencana Pembelajaran Mendalam dengan AI.', 'from-indigo-500 to-purple-600', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/></path>')}
-              ${quickCard('#chat', 'Pesan', 'Kirim pesan ke guru & siswa.', 'from-emerald-500 to-teal-500', '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.6 9.6 0 0 1-3.5-.6L3 21l1.3-4A8.4 8.4 0 1 1 21 11.5z"/>')}
-              ${quickCard('#guru/pembayaran-buku', 'Pembayaran', 'Kelola pembayaran buku siswa.', 'from-emerald-500 to-teal-500', '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="13.5" r="1.4" fill="currentColor" stroke="none"/>')}
-              ${quickCard('#guru/dashboard', 'Jadwal', 'Lihat ringkasan jadwal mengajar.', 'from-violet-500 to-purple-600', '<path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3"/><path d="M8 7h8M8 7v14M16 7v14M12 7v14"/><path d="M4 11h16"/>')}
-              ${quickCard('#guru/dashboard', 'Info', 'Pantau informasi terbaru.', 'from-orange-500 to-red-500', '<path d="M12 5.5v8"/><path d="M12 17.5h.01"/><path d="M10.3 3.8 4.8 13.1a2 2 0 0 0 1.7 3h11a2 2 0 0 0 1.7-3l-5.5-9.3a2 2 0 0 0-3.4 0Z"/>')}
-              ${quickCard('#guru/pengatur-sistem', 'Akun', 'Ubah pengaturan akun.', 'from-slate-700 to-slate-900', '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"/>')}
-              ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan absensi & nilai ke Excel.', 'from-emerald-500 to-green-600', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', backupBadge)}
+              <a href="#guru/input-absen" class="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-[0.98]">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/></svg>
+                Mulai Absensi
+              </a>
             </div>
           </div>
         </div>
       </section>
 
       <section>
-        <div class="rounded-3xl bg-white p-5 shadow-md ring-1 ring-slate-100">
-          <div class="mb-4 flex items-center justify-between">
-            <div>
-              <p class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">Jadwal Mengajar</p>
-              <h2 class="text-2xl font-semibold text-slate-900">${todayName}</h2>
-            </div>
-            <span id="jadwal-count" class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">0 jadwal</span>
-          </div>
-
-          <div id="jadwal-hari-ini" class="space-y-2.5"></div>
+        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">Menu Cepat</h2>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          ${quickCard('#guru/input-absen', 'Absensi', 'Input kehadiran harian.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', 'teal')}
+          ${quickCard('#guru/penilaian', 'Penilaian', 'Kelola nilai per mapel.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan')}
+          ${quickCard('#guru/jurnal', 'Jurnal', 'Catat jurnal mengajar.', '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 11h8M8 15h6"/>', 'sky')}
+          ${quickCard('#guru/materi', 'Materi', 'Buat & publikasi materi.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'teal')}
+          ${quickCard('#guru/materi-ai', 'Materi AI', 'Materi bantuan AI.', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"/><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/>', 'cyan')}
+          ${waliQuickCard}
+          ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan ke Excel.', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', 'amber', backupBadge)}
+          ${quickCard('#guru/pengatur-sistem', 'Akun', 'Pengaturan akun.', '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"/>', 'slate')}
         </div>
+      </section>
+
+      <section>
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Jadwal Mengajar</h2>
+          <span id="jadwal-count" class="rounded-full bg-[var(--color-primary-container)] px-2.5 py-1 text-xs font-semibold text-[var(--color-primary)]">0 jadwal</span>
+        </div>
+        <div id="jadwal-hari-ini" class="space-y-2"></div>
       </section>
     </div>
   `;
 
-  const html = renderLayout('Dashboard Guru', pageHtml, { accentPanel: heroTheme.panel });
+  const html = renderLayout('Dashboard Guru', pageHtml);
 
   container.innerHTML = html;
 
@@ -297,17 +240,21 @@ export function renderGuruDashboard(container) {
     if (badge) {
       badge.textContent = `${todaySchedules.length} jadwal`;
     }
+    const heroCount = container.querySelector('#hero-jadwal-count');
+    if (heroCount) {
+      heroCount.textContent = String(todaySchedules.length);
+    }
 
     if (!todaySchedules.length) {
       wrap.innerHTML = `
-        <div class="flex flex-col items-center justify-center rounded-2xl bg-slate-50 py-10 text-center">
-          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <div class="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br ${heroTheme.panel} py-10 text-center text-white shadow-sm">
+          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6 text-white/90" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="17" rx="3" />
               <path d="M3 9h18M8 2v4M16 2v4" />
             </svg>
           </div>
-          <p class="mt-3 text-sm font-medium text-slate-500">Tidak ada jadwal hari ini</p>
+          <p class="mt-3 text-sm font-medium text-white/90">Tidak ada jadwal hari ini</p>
         </div>`;
       return;
     }
@@ -336,26 +283,6 @@ export function renderGuruDashboard(container) {
   };
 
   renderJadwal();
-
-  const updateWeather = () => {
-    const tempEl = container.querySelector('#dashboard-weather-temp');
-    const descEl = container.querySelector('#dashboard-weather-desc');
-    const iconEl = container.querySelector('#dashboard-weather-icon');
-    if (!tempEl || !descEl) return;
-    const hour = new Date().getHours();
-    const isDay = hour >= 6 && hour < 18;
-    const sample = isDay
-      ? { temp: 29, desc: 'Cerah Berawan', icon: '<circle cx="12" cy="12" r="4.5" /><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" />', color: 'text-amber-200' }
-      : { temp: 24, desc: 'Cerah', icon: '<path d="M18.5 14.5A6.5 6.5 0 0 1 9.5 5.5 7.5 7.5 0 1 0 18.5 14.5Z" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" /><circle cx="14.5" cy="4.5" r="0.8" fill="currentColor" stroke="none" />', color: 'text-indigo-200' };
-    tempEl.textContent = `${sample.temp}°`;
-    descEl.textContent = sample.desc;
-    if (iconEl) {
-      iconEl.innerHTML = sample.icon;
-      iconEl.setAttribute('class', `h-5 w-5 stroke-current ${sample.color}`);
-    }
-  };
-
-  updateWeather();
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');
