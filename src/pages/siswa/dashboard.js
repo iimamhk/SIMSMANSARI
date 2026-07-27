@@ -41,24 +41,29 @@ function getInitials(name = '') {
     .toUpperCase() || '?';
 }
 
-  const toneChip = (tone) => ({
-    teal: 'bg-teal-500/10 text-teal-600',
-    cyan: 'bg-cyan-500/10 text-cyan-600',
-    sky: 'bg-sky-500/10 text-sky-600',
-    amber: 'bg-amber-500/10 text-amber-600',
-    slate: 'bg-slate-500/10 text-slate-600',
-    rose: 'bg-rose-500/10 text-rose-600',
-  }[tone] || 'bg-teal-500/10 text-teal-600');
-  const quickCard = (href, title, desc, icon, tone = 'blue') => `
-          <a href="${href}" class="qa-card group flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 active:scale-[0.99]">
-            <span class="flex h-11 w-11 items-center justify-center rounded-xl ${toneChip(tone)} transition group-hover:scale-105">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+const studentToneChip = (tone) => ({
+  teal: 'student-app-icon--green',
+  cyan: 'student-app-icon--blue',
+  sky: 'student-app-icon--indigo',
+  amber: 'student-app-icon--orange',
+  slate: 'student-app-icon--slate',
+  rose: 'student-app-icon--rose',
+}[tone] || 'student-app-icon--blue');
+
+const quickCard = (href, title, desc, icon, tone = 'blue', options = {}) => {
+  const { featured = false, badge = '' } = options;
+  return `
+          <a href="${href}" class="student-app group ${featured ? 'student-app--primary' : ''}" title="${escapeHtml(desc)}">
+            <span class="student-app-icon ${studentToneChip(tone)}">
+              <span class="student-app-gloss"></span>
+              ${badge}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
             </span>
-            <span class="min-w-0">
-              <p class="text-sm font-semibold text-slate-900">${title}</p>
-              <p class="mt-0.5 text-xs leading-snug text-slate-500">${desc}</p>
-            </span>
+            <span class="student-app-label">${escapeHtml(title)}</span>
+            ${featured ? `<span class="student-app-featured-copy">${escapeHtml(desc)}<br><strong>Lihat hasilmu</strong></span>` : ''}
+            <span class="visually-hidden">${escapeHtml(desc)}</span>
           </a>`;
+};
 
 export async function renderSiswaDashboardPage(container) {
   const context = getStoredContext();
@@ -87,6 +92,12 @@ export async function renderSiswaDashboardPage(container) {
   const hitungBelumDibaca = () =>
     semuaPengumuman.filter((item) => !readMap.has(readKey(item.id))).length;
   const belumDibaca = hitungBelumDibaca();
+  const attendanceBadge = hasAlpaWarning
+    ? `<span class="student-notification-badge" aria-label="${totalAlpa} kali alpa">${totalAlpa > 9 ? '9+' : totalAlpa}</span>`
+    : '';
+  const announcementBadge = belumDibaca > 0
+    ? `<span class="student-notification-badge" aria-label="${belumDibaca} pengumuman belum dibaca">${belumDibaca > 9 ? '9+' : belumDibaca}</span>`
+    : '';
 
   function renderDashboardTimeline() {
     const timeline = container.querySelector('#dashboard-timeline-pengumuman');
@@ -228,13 +239,16 @@ export async function renderSiswaDashboardPage(container) {
       </section>
 
       <section>
-        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">Menu Cepat</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          ${quickCard('#siswa/nilai', 'Nilai', 'Lihat hasil belajar per mapel.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan')}
-          ${quickCard('#siswa/absensi', 'Absensi', hasAlpaWarning ? 'Perhatian kehadiran!' : 'Pantau kehadiran harian.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', hasAlpaWarning ? 'rose' : 'teal')}
+        <div class="mb-3">
+          <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-600">Ruang belajar</p>
+          <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Akses cepat untukmu</h2>
+        </div>
+        <div class="student-action-grid">
+          ${quickCard('#siswa/nilai', 'Nilai', 'Pantau perkembangan belajar per mata pelajaran.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan', { featured: true })}
+          ${quickCard('#siswa/absensi', 'Absensi', hasAlpaWarning ? 'Perhatian kehadiran!' : 'Pantau kehadiran harian.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', hasAlpaWarning ? 'rose' : 'teal', { badge: attendanceBadge })}
           ${quickCard('#siswa/materi', 'Materi', 'Baca materi dari guru.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'sky')}
           ${quickCard('#siswa/kuiz', 'Ujian', 'Masuk ke ujian kelas.', '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>', 'teal')}
-          ${quickCard('#siswa/pengumuman', 'Woro-woro', 'Pengumuman dari guru.', '<path d="M3 11l14-7v16L3 13z"/><path d="M3 11v2a2 2 0 0 0 2 2h2"/><path d="M19 8v8"/>', 'amber')}
+          ${quickCard('#siswa/pengumuman', 'Woro-woro', 'Pengumuman dari guru.', '<path d="M3 11l14-7v16L3 13z"/><path d="M3 11v2a2 2 0 0 0 2 2h2"/><path d="M19 8v8"/>', 'amber', { badge: announcementBadge })}
           ${quickCard('#siswa/kas-kelas', 'Kas Kelas', 'Cek iuran & saldo kelas.', '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><circle cx="16.5" cy="13.5" r="1.4" fill="currentColor" stroke="none"/>', 'amber')}
           ${quickCard('#siswa/pengatur-sistem', 'Akun', 'Kelola profil dan sandi.', '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"/>', 'slate')}
         </div>

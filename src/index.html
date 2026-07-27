@@ -7,8 +7,7 @@
     <title>SIM SMANSARI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/inter/v19/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfAZ9hjp-Ek-_EeA.woff2" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" />
     <link rel="stylesheet" href="./styles/design-tokens.css" />
@@ -29,7 +28,7 @@
               },
             },
             fontFamily: {
-              sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+              sans: ['Manrope', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
             },
           },
         },
@@ -65,7 +64,7 @@
         --mobile-bottom-nav-scale: 1;
         --quiz-math-display-font: 0.98rem;
         --quiz-math-inline-font: 1em;
-        --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
         --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       }
 
@@ -156,6 +155,23 @@
       }
       .hero-stars { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
 
+      /* Guru hero — iOS wallpaper card */
+      .guru-ios-hero { isolation:isolate; border:1px solid rgba(255,255,255,.42); border-radius:1.85rem; box-shadow:0 26px 55px -32px rgba(15,23,42,.65),inset 0 1px 0 rgba(255,255,255,.55); }
+      .guru-ios-hero-glass { position:absolute; inset:0; z-index:0; background:linear-gradient(135deg,rgba(255,255,255,.15),rgba(255,255,255,.02) 45%,rgba(15,23,42,.06)); pointer-events:none; }
+      .guru-ios-hero::after { content:""; position:absolute; inset:0; z-index:0; border-radius:inherit; background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 38%); pointer-events:none; }
+      .guru-ios-hero-orb { position:absolute; z-index:0; border-radius:999px; filter:blur(2px); pointer-events:none; }
+      .guru-ios-hero-orb--one { width:7rem; height:7rem; left:42%; top:-4.2rem; background:rgba(255,255,255,.2); }
+      .guru-ios-hero-orb--two { width:4rem; height:4rem; right:27%; bottom:-2.5rem; background:rgba(255,255,255,.12); }
+      .guru-ios-eyebrow { display:inline-flex; align-items:center; border:1px solid rgba(255,255,255,.22); border-radius:999px; padding:.28rem .62rem; background:rgba(255,255,255,.13); font-size:.61rem; font-weight:800; letter-spacing:.16em; text-transform:uppercase; box-shadow:inset 0 1px 0 rgba(255,255,255,.18); }
+      .guru-ios-title { font-size:clamp(1.75rem,4vw,2.35rem); font-weight:750; letter-spacing:-.045em; line-height:1.05; text-shadow:0 2px 18px rgba(15,23,42,.1); }
+      .guru-ios-date { font-size:.78rem; font-weight:600; }
+      .guru-ios-quote { max-width:31rem; font-size:.82rem; font-weight:550; font-style:italic; line-height:1.55; }
+      .guru-ios-schedule { min-width:8.8rem; border-radius:1.2rem; padding:.72rem 1rem; box-shadow:inset 0 1px 0 rgba(255,255,255,.24),0 10px 25px -20px rgba(15,23,42,.5); -webkit-backdrop-filter:blur(16px); backdrop-filter:blur(16px); }
+      .guru-ios-hero-button { display:inline-flex; align-items:center; gap:.5rem; border:1px solid rgba(255,255,255,.7); border-radius:1.05rem; background:rgba(255,255,255,.92); padding:.72rem 1rem; color:#0f172a; font-size:.78rem; font-weight:750; box-shadow:0 12px 25px -17px rgba(15,23,42,.65),inset 0 1px 0 #fff; transition:transform .18s ease,background .18s ease,box-shadow .18s ease; -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+      .guru-ios-hero-button:hover { transform:translateY(-2px); background:#fff; box-shadow:0 16px 28px -16px rgba(15,23,42,.72),inset 0 1px 0 #fff; }
+      .guru-ios-hero-button:active { transform:scale(.96); }
+      .guru-ios-hero-button:focus-visible { outline:3px solid rgba(255,255,255,.58); outline-offset:3px; }
+
       @keyframes qaPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
       .qa-card { animation: qaPop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
       .qa-card:nth-child(1) { animation-delay: 0.03s; }
@@ -166,6 +182,159 @@
       .qa-card:nth-child(6) { animation-delay: 0.18s; }
       .qa-card:nth-child(7) { animation-delay: 0.21s; }
       .qa-card:nth-child(8) { animation-delay: 0.24s; }
+
+      /* Guru dashboard — calm premium workspace */
+      .guru-workspace-grid { display:grid; gap:1.25rem; align-items:start; }
+      .guru-action-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:minmax(5.25rem,auto); gap:.65rem .35rem; padding:.65rem .25rem; border-radius:1.5rem; background:linear-gradient(145deg,rgba(255,255,255,.72),rgba(241,245,249,.66)); border:1px solid rgba(226,232,240,.8); box-shadow:inset 0 1px 0 rgba(255,255,255,.9); }
+      .ios-app { display:flex; min-width:0; flex-direction:column; align-items:center; gap:.45rem; border-radius:1rem; padding:.2rem .15rem .35rem; color:#334155; text-align:center; transition:transform .18s ease,background .18s ease; }
+      .ios-app:hover { transform:translateY(-3px); }
+      .ios-app:active { transform:scale(.94); }
+      .ios-app:focus-visible { outline:3px solid rgba(13,148,136,.35); outline-offset:3px; }
+      .ios-app-icon { position:relative; display:flex; width:4.15rem; height:4.15rem; flex:none; align-items:center; justify-content:center; overflow:visible; border-radius:1.18rem; color:#fff; box-shadow:0 8px 14px -7px rgba(15,23,42,.42),inset 0 1px 1px rgba(255,255,255,.52); transition:transform .18s ease,box-shadow .18s ease; }
+      .ios-app:hover .ios-app-icon { transform:scale(1.06); box-shadow:0 13px 20px -8px rgba(15,23,42,.45),inset 0 1px 1px rgba(255,255,255,.58); }
+      .ios-app-icon svg { position:relative; z-index:2; width:2rem; height:2rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.12)); }
+      .ios-app-gloss { position:absolute; inset:0 0 52%; z-index:1; border-radius:inherit; background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0)); pointer-events:none; }
+      .ios-app-icon--green { background:linear-gradient(145deg,#34d399,#059669); }
+      .ios-app-icon--blue { background:linear-gradient(145deg,#38bdf8,#2563eb); }
+      .ios-app-icon--indigo { background:linear-gradient(145deg,#818cf8,#6d28d9); }
+      .ios-app-icon--orange { background:linear-gradient(145deg,#fbbf24,#ea580c); }
+      .ios-app-icon--slate { background:linear-gradient(145deg,#94a3b8,#475569); }
+      .ios-app-label { max-width:5.8rem; overflow:hidden; color:#334155; font-size:.72rem; font-weight:600; line-height:1.15; text-overflow:ellipsis; white-space:nowrap; }
+      .ios-app--primary { position:relative; grid-column:span 2; grid-row:span 2; align-items:flex-start; justify-content:flex-end; overflow:hidden; min-height:11.15rem; border-radius:1.65rem; padding:1rem; background:linear-gradient(145deg,#34d399 0%,#059669 64%,#047857 100%); box-shadow:0 18px 35px -20px rgba(5,150,105,.85),inset 0 1px 1px rgba(255,255,255,.5); text-align:left; }
+      .ios-app--primary::after { content:""; position:absolute; width:8rem; height:8rem; right:-2.5rem; top:-3rem; border-radius:999px; background:rgba(255,255,255,.14); }
+      .ios-app--primary .ios-app-icon { position:absolute; left:1rem; top:1rem; width:5.35rem; height:5.35rem; border-radius:1.5rem; background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.22); box-shadow:inset 0 1px 1px rgba(255,255,255,.38); }
+      .ios-app--primary .ios-app-icon svg { width:2.65rem; height:2.65rem; }
+      .ios-app--primary .ios-app-gloss { background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,0)); }
+      .ios-app--primary .ios-app-label { position:relative; z-index:2; max-width:none; color:#fff; font-size:1rem; font-weight:800; }
+      .ios-app-featured-copy { position:relative; z-index:2; color:rgba(255,255,255,.76); font-size:.68rem; line-height:1.35; }
+      .ios-app-featured-copy strong { color:#fff; font-weight:800; }
+      .ios-app--primary:hover { transform:translateY(-3px); box-shadow:0 24px 40px -20px rgba(5,150,105,.95),inset 0 1px 1px rgba(255,255,255,.55); }
+      .ios-app--primary:hover .ios-app-icon { transform:scale(1.03); box-shadow:inset 0 1px 1px rgba(255,255,255,.45); }
+      .ios-notification-badge { position:absolute; right:-.35rem; top:-.35rem; z-index:4; display:flex; width:1.35rem; height:1.35rem; align-items:center; justify-content:center; border:2px solid #fff; border-radius:999px; background:#ef4444; color:#fff; font-size:.7rem; font-weight:800; box-shadow:0 3px 7px rgba(239,68,68,.42); }
+      .ios-status-dot { position:absolute; right:-.18rem; top:-.18rem; z-index:4; width:.78rem; height:.78rem; border:2px solid #fff; border-radius:999px; background:#22c55e; box-shadow:0 2px 5px rgba(34,197,94,.4); }
+      .ios-today-widget { grid-column:span 2; display:flex; min-width:0; align-items:center; gap:.75rem; overflow:hidden; border:1px solid rgba(191,219,254,.8); border-radius:1.25rem; padding:.75rem; background:linear-gradient(135deg,#eff6ff,#e0f2fe 55%,#ecfeff); box-shadow:0 10px 25px -20px rgba(2,132,199,.65),inset 0 1px 0 rgba(255,255,255,.9); }
+      .ios-today-date { display:flex; width:3.2rem; height:3.2rem; flex:none; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; border-radius:.9rem; background:#fff; box-shadow:0 5px 12px -8px rgba(15,23,42,.5); }
+      .ios-today-date span { width:100%; background:#ef4444; padding:.12rem 0; color:#fff; font-size:.5rem; font-weight:800; letter-spacing:.08em; line-height:1; text-align:center; text-transform:uppercase; }
+      .ios-today-date strong { margin-top:.16rem; color:#0f172a; font-size:1.15rem; line-height:1; }
+      .ios-today-kicker { color:#0284c7; font-size:.56rem; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+      .ios-today-summary { margin-top:.15rem; overflow:hidden; color:#334155; font-size:.68rem; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
+      .ios-today-summary strong { color:#0369a1; font-size:.85rem; }
+      .ios-today-progress { height:.25rem; margin-top:.45rem; overflow:hidden; border-radius:999px; background:rgba(14,165,233,.14); }
+      .ios-today-progress span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#0ea5e9,#22d3ee); }
+      @keyframes dashboardScheduleShimmer { to { transform:translateX(100%); } }
+      .dashboard-schedule-skeleton { position:relative; height:5rem; overflow:hidden; border:1px solid #e2e8f0; border-radius:1.2rem; background:linear-gradient(90deg,#f8fafc,#f1f5f9); }
+      .dashboard-schedule-skeleton::after { content:""; position:absolute; inset:0; transform:translateX(-100%); background:linear-gradient(90deg,transparent,rgba(255,255,255,.9),transparent); animation:dashboardScheduleShimmer 1.25s ease-in-out infinite; }
+      .dashboard-schedule-card { display:flex; align-items:center; gap:.8rem; border:1px solid rgba(226,232,240,.92); border-radius:1.25rem; padding:.72rem; background:rgba(255,255,255,.9); box-shadow:0 10px 28px -25px rgba(15,23,42,.6),inset 0 1px 0 #fff; transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+      .dashboard-schedule-card:hover { transform:translateY(-1px); border-color:#cbd5e1; box-shadow:0 16px 30px -24px rgba(15,23,42,.58),inset 0 1px 0 #fff; }
+      .dashboard-schedule-card.is-next { border-color:rgba(45,212,191,.62); background:linear-gradient(110deg,#f0fdfa,#fff 52%); box-shadow:0 14px 34px -27px rgba(13,148,136,.85),inset 0 1px 0 #fff; }
+      .dashboard-schedule-status { display:inline-flex; align-items:center; margin-top:.28rem; border-radius:999px; padding:.15rem .45rem; font-size:.54rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }
+      .dashboard-schedule-status.next { background:#ccfbf1; color:#0f766e; }
+      .dashboard-schedule-status.live { background:#dcfce7; color:#15803d; box-shadow:0 0 0 3px rgba(34,197,94,.1); }
+      .dashboard-schedule-status.planned { background:#eef2ff; color:#4f46e5; }
+      .dashboard-schedule-status.done { background:#f1f5f9; color:#64748b; }
+      .dashboard-schedule-action { display:inline-flex; min-height:2.1rem; align-items:center; justify-content:center; border-radius:.75rem; padding:.42rem .68rem; font-size:.66rem; font-weight:800; transition:transform .15s ease,background .15s ease; }
+      .dashboard-schedule-action:hover { transform:translateY(-1px); }
+      .dashboard-schedule-action.primary { background:#0f766e; color:#fff; box-shadow:0 8px 16px -12px rgba(15,118,110,.9); }
+      .dashboard-schedule-action.secondary { border:1px solid #e2e8f0; background:#fff; color:#475569; }
+      .dashboard-schedule-error { display:flex; align-items:center; justify-content:space-between; gap:1rem; border:1px solid #fecdd3; border-radius:1.2rem; background:#fff1f2; padding:1rem; color:#9f1239; font-size:.78rem; }
+      .dashboard-schedule-error button { flex:none; border-radius:.8rem; background:#be123c; padding:.55rem .75rem; color:#fff; font-size:.68rem; font-weight:800; }
+      /* Student dashboard — same app-icon language as the guru workspace */
+      .student-action-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-auto-rows:minmax(5.25rem,auto); gap:.65rem .35rem; padding:.65rem .25rem; border:1px solid rgba(226,232,240,.8); border-radius:1.5rem; background:linear-gradient(145deg,rgba(255,255,255,.76),rgba(239,246,255,.7)); box-shadow:inset 0 1px 0 rgba(255,255,255,.92); }
+      .student-app { display:flex; min-width:0; flex-direction:column; align-items:center; gap:.45rem; border-radius:1rem; padding:.2rem .15rem .35rem; color:#334155; text-align:center; transition:transform .18s ease,background .18s ease; }
+      .student-app:hover { transform:translateY(-3px); }
+      .student-app:active { transform:scale(.94); }
+      .student-app:focus-visible { outline:3px solid rgba(14,165,233,.35); outline-offset:3px; }
+      .student-app-icon { position:relative; display:flex; width:4.15rem; height:4.15rem; flex:none; align-items:center; justify-content:center; overflow:visible; border-radius:1.18rem; color:#fff; box-shadow:0 8px 14px -7px rgba(15,23,42,.42),inset 0 1px 1px rgba(255,255,255,.52); transition:transform .18s ease,box-shadow .18s ease; }
+      .student-app:hover .student-app-icon { transform:scale(1.06); box-shadow:0 13px 20px -8px rgba(15,23,42,.45),inset 0 1px 1px rgba(255,255,255,.58); }
+      .student-app-icon svg { position:relative; z-index:2; width:2rem; height:2rem; filter:drop-shadow(0 1px 1px rgba(0,0,0,.12)); }
+      .student-app-gloss { position:absolute; inset:0 0 52%; z-index:1; border-radius:inherit; background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,0)); pointer-events:none; }
+      .student-app-icon--green { background:linear-gradient(145deg,#34d399,#059669); }
+      .student-app-icon--blue { background:linear-gradient(145deg,#38bdf8,#2563eb); }
+      .student-app-icon--indigo { background:linear-gradient(145deg,#818cf8,#6d28d9); }
+      .student-app-icon--orange { background:linear-gradient(145deg,#fbbf24,#ea580c); }
+      .student-app-icon--slate { background:linear-gradient(145deg,#94a3b8,#475569); }
+      .student-app-icon--rose { background:linear-gradient(145deg,#fb7185,#e11d48); }
+      .student-app-label { max-width:5.8rem; overflow:hidden; color:#334155; font-size:.72rem; font-weight:650; line-height:1.15; text-overflow:ellipsis; white-space:nowrap; }
+      .student-app--primary { position:relative; grid-column:span 2; grid-row:span 2; align-items:flex-start; justify-content:flex-end; overflow:hidden; min-height:11.15rem; border-radius:1.65rem; padding:1rem; background:linear-gradient(145deg,#38bdf8 0%,#0284c7 58%,#2563eb 100%); box-shadow:0 18px 35px -20px rgba(2,132,199,.9),inset 0 1px 1px rgba(255,255,255,.5); text-align:left; }
+      .student-app--primary::after { content:""; position:absolute; width:8rem; height:8rem; right:-2.5rem; top:-3rem; border-radius:999px; background:rgba(255,255,255,.14); }
+      .student-app--primary .student-app-icon { position:absolute; left:1rem; top:1rem; width:5.35rem; height:5.35rem; border:1px solid rgba(255,255,255,.22); border-radius:1.5rem; background:rgba(255,255,255,.18); box-shadow:inset 0 1px 1px rgba(255,255,255,.38); }
+      .student-app--primary .student-app-icon svg { width:2.65rem; height:2.65rem; }
+      .student-app--primary .student-app-label { position:relative; z-index:2; max-width:none; color:#fff; font-size:1rem; font-weight:800; }
+      .student-app-featured-copy { position:relative; z-index:2; color:rgba(255,255,255,.78); font-size:.68rem; line-height:1.35; }
+      .student-app-featured-copy strong { color:#fff; font-weight:800; }
+      .student-app--primary:hover { transform:translateY(-3px); box-shadow:0 24px 40px -20px rgba(2,132,199,.98),inset 0 1px 1px rgba(255,255,255,.55); }
+      .student-notification-badge { position:absolute; right:-.38rem; top:-.38rem; z-index:4; display:flex; min-width:1.4rem; height:1.4rem; align-items:center; justify-content:center; border:2px solid #fff; border-radius:999px; background:#ef4444; padding:0 .22rem; color:#fff; font-size:.58rem; font-weight:900; box-shadow:0 3px 7px rgba(239,68,68,.42); }
+      .guru-action-grid .qa-card {
+        min-height:9rem; justify-content:center; border-color:rgba(203,213,225,.72);
+        background:linear-gradient(145deg,#fff 0%,#fff 66%,#f8fafc 100%);
+        box-shadow:0 1px 2px rgba(15,23,42,.03),0 10px 30px -24px rgba(15,118,110,.4);
+      }
+      .guru-action-grid .qa-card:hover {
+        border-color:rgba(13,148,136,.28); box-shadow:0 16px 35px -24px rgba(13,148,136,.55);
+      }
+      .guru-secondary-card { animation: none; }
+      .guru-action-card {
+        position:relative; isolation:isolate; min-height:9rem; overflow:hidden; border-radius:1rem;
+        display:flex; align-items:center; gap:1rem; padding:1.25rem; color:#fff;
+        transition:transform .2s ease,box-shadow .2s ease;
+      }
+      .guru-action-card--primary {
+        background:linear-gradient(135deg,#0f766e 0%,#0891b2 58%,#0ea5e9 100%);
+        box-shadow:0 18px 38px -22px rgba(8,145,178,.85);
+      }
+      .guru-action-card:hover { transform:translateY(-2px); box-shadow:0 22px 42px -20px rgba(8,145,178,.95); }
+      .guru-action-card:focus-visible { outline:3px solid rgba(13,148,136,.45); outline-offset:3px; }
+      .guru-action-glow { position:absolute; right:-2.5rem; top:-4rem; width:12rem; height:12rem; border-radius:999px; background:rgba(255,255,255,.15); filter:blur(4px); }
+      .guru-action-icon { position:relative; display:flex; width:3.25rem; height:3.25rem; flex:none; align-items:center; justify-content:center; border-radius:1rem; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.2); backdrop-filter:blur(8px); }
+      .guru-action-icon svg { width:1.5rem; height:1.5rem; }
+      .guru-action-arrow { position:relative; width:1.2rem; height:1.2rem; margin-left:auto; transition:transform .2s ease; }
+      .guru-action-card:hover .guru-action-arrow { transform:translateX(3px); }
+      .guru-insight-panel {
+        position:relative; overflow:hidden; border:1px solid rgba(203,213,225,.75); border-radius:1.25rem;
+        padding:1.25rem; background:linear-gradient(155deg,rgba(255,255,255,.98),rgba(240,253,250,.88));
+        box-shadow:0 18px 45px -34px rgba(15,118,110,.55);
+      }
+      .guru-insight-panel,
+      .guru-action-icon { -webkit-backdrop-filter:blur(8px); }
+      .guru-insight-panel::after { content:""; position:absolute; width:8rem; height:8rem; right:-4rem; bottom:-4rem; border-radius:999px; background:rgba(34,211,238,.12); filter:blur(3px); pointer-events:none; }
+      .guru-sparkle { display:flex; width:2.5rem; height:2.5rem; flex:none; align-items:center; justify-content:center; border-radius:.9rem; color:#0f766e; background:#ccfbf1; box-shadow:inset 0 0 0 1px rgba(13,148,136,.1); }
+
+      @media (min-width: 1024px) {
+        .guru-workspace-grid { grid-template-columns:minmax(0,1.65fr) minmax(17rem,.65fr); gap:1.5rem; }
+        .guru-insight-panel { position:sticky; top:5.5rem; }
+      }
+      @media (min-width: 640px) {
+        .guru-action-grid { grid-auto-rows:minmax(5.7rem,auto); gap:.85rem .8rem; padding:1rem .75rem; }
+        .ios-app--primary { min-height:12.25rem; }
+        .student-action-grid { grid-auto-rows:minmax(5.7rem,auto); gap:.85rem .8rem; padding:1rem .75rem; }
+        .student-app--primary { min-height:12.25rem; }
+      }
+      @media (max-width: 639px) {
+        .guru-ios-hero { border-radius:1.5rem; }
+        .guru-ios-title { font-size:1.8rem; }
+        .guru-ios-schedule { min-width:7.8rem; padding:.65rem .8rem; }
+        .guru-ios-hero-button { padding:.65rem .82rem; }
+        .ios-app-icon { width:3.45rem; height:3.45rem; border-radius:1rem; }
+        .ios-app-icon svg { width:1.65rem; height:1.65rem; }
+        .ios-app-label { max-width:4.5rem; font-size:.64rem; }
+        .ios-app--primary { min-height:11.15rem; padding:.8rem; border-radius:1.35rem; }
+        .ios-app--primary .ios-app-icon { left:.8rem; top:.8rem; width:4.65rem; height:4.65rem; border-radius:1.3rem; }
+        .ios-app--primary .ios-app-icon svg { width:2.25rem; height:2.25rem; }
+        .ios-app--primary .ios-app-label { font-size:.88rem; }
+        .ios-app-featured-copy { font-size:.61rem; }
+        .ios-today-widget { gap:.55rem; padding:.6rem; border-radius:1.05rem; }
+        .ios-today-date { width:2.8rem; height:2.8rem; border-radius:.78rem; }
+        .ios-today-date strong { font-size:1rem; }
+        .ios-today-summary { font-size:.6rem; }
+        .student-app-icon { width:3.45rem; height:3.45rem; border-radius:1rem; }
+        .student-app-icon svg { width:1.65rem; height:1.65rem; }
+        .student-app-label { max-width:4.5rem; font-size:.64rem; }
+        .student-app--primary { min-height:11.15rem; padding:.8rem; border-radius:1.35rem; }
+        .student-app--primary .student-app-icon { left:.8rem; top:.8rem; width:4.65rem; height:4.65rem; border-radius:1.3rem; }
+        .student-app--primary .student-app-icon svg { width:2.25rem; height:2.25rem; }
+        .student-app--primary .student-app-label { font-size:.88rem; }
+        .student-app-featured-copy { font-size:.61rem; }
+      }
 
       @media (max-width: 767px) {
         :root {

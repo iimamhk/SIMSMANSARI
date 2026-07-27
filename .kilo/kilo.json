@@ -1,0 +1,32 @@
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "mcp": {
+    "google-workspace": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "workspace-mcp==1.4.7",
+        "--hash",
+        "sha256:4e98810f46bd370007e7c9a9337bcaf47cb91e21fed8fb59cf7c68d5a539a49f",
+        "workspace-mcp",
+        "--tool-tier",
+        "core"
+      ],
+      "environment": {
+        "GOOGLE_OAUTH_CLIENT_ID": "436294214547-kapg4i4ksbeh5td3hmag4c3q2u6diu7j.apps.googleusercontent.com",
+        "GOOGLE_OAUTH_CLIENT_SECRET": "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",
+        "OAUTHLIB_INSECURE_TRANSPORT": "1"
+      }
+    },
+    "firebase": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "firebase-tools@14.15.2",
+        "experimental:mcp"
+      ]
+    }
+  }
+}

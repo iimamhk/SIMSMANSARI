@@ -99,32 +99,31 @@ export function renderGuruDashboard(container) {
   })();
 
   const toneChip = (tone) => ({
-    teal: 'bg-teal-500/10 text-teal-600',
-    cyan: 'bg-cyan-500/10 text-cyan-600',
-    sky: 'bg-sky-500/10 text-sky-600',
-    amber: 'bg-amber-500/10 text-amber-600',
-    slate: 'bg-slate-500/10 text-slate-600',
-  }[tone] || 'bg-teal-500/10 text-teal-600');
-  const quickCard = (href, title, desc, icon, tone = 'blue') => `
-          <a href="${href}" class="qa-card group flex flex-col items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-center transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 active:scale-[0.98]">
-            <span class="flex h-12 w-12 items-center justify-center rounded-[1rem] ${toneChip(tone)} transition group-hover:scale-105 group-active:scale-95">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+    teal: 'ios-app-icon--green',
+    cyan: 'ios-app-icon--blue',
+    sky: 'ios-app-icon--indigo',
+    amber: 'ios-app-icon--orange',
+    slate: 'ios-app-icon--slate',
+  }[tone] || 'ios-app-icon--blue');
+  const quickCard = (href, title, desc, icon, tone = 'blue', featured = false) => `
+          <a href="${href}" class="ios-app group ${featured ? 'ios-app--primary' : ''}" title="${desc}">
+            <span class="ios-app-icon ${toneChip(tone)}">
+              <span class="ios-app-gloss"></span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
             </span>
-            <span class="min-w-0 w-full">
-              <p class="text-sm font-semibold text-slate-900">${title}</p>
-              <p class="mt-0.5 text-xs leading-snug text-slate-500">${desc}</p>
-            </span>
+            <span class="ios-app-label">${title}</span>
+            ${featured ? `<span class="ios-app-featured-copy">${desc}<br><strong>Mulai sekarang</strong></span>` : ''}
+            <span class="visually-hidden">${desc}</span>
           </a>`;
   const quickCardButton = (id, title, desc, icon, tone = 'amber', extraBadge = '') => `
-          <button id="${id}" type="button" class="qa-card group relative flex flex-col items-center gap-2.5 rounded-2xl border border-slate-200 bg-white p-4 text-center transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 active:scale-[0.98]">
-            ${extraBadge}
-            <span class="flex h-12 w-12 items-center justify-center rounded-[1rem] ${toneChip(tone)} transition group-hover:scale-105 group-active:scale-95">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
+          <button id="${id}" type="button" class="ios-app group" title="${desc}">
+            <span class="ios-app-icon ${toneChip(tone)}">
+              <span class="ios-app-gloss"></span>
+              ${extraBadge}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
             </span>
-            <span class="min-w-0 w-full">
-              <p class="text-sm font-semibold text-slate-900">${title}</p>
-              <p class="mt-0.5 text-xs leading-snug text-slate-500">${desc}</p>
-            </span>
+            <span class="ios-app-label">${title}</span>
+            <span class="visually-hidden">${desc}</span>
           </button>`;
 
   const waliCacheDash = (() => {
@@ -144,15 +143,9 @@ export function renderGuruDashboard(container) {
   let backupBadge = '';
   if (backupRequired) {
     const today = new Date().getDay() === 5;
-    backupBadge = `<span class="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full ${today ? 'bg-rose-100 text-rose-700 ring-1 ring-rose-200' : 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'} px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide">
-      <span class="inline-block h-1.5 w-1.5 rounded-full ${today ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}"></span>
-      ${today ? 'Wajib' : 'Perlu'}
-    </span>`;
+    backupBadge = `<span class="ios-notification-badge" title="${today ? 'Backup wajib dilakukan' : 'Backup perlu dilakukan'}">!</span>`;
   } else if (lastBackup) {
-    backupBadge = `<span class="absolute right-3 top-3 z-10 inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide">
-      <svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
-      Aman
-    </span>`;
+    backupBadge = `<span class="ios-status-dot" title="Backup aman"><span class="visually-hidden">Backup aman</span></span>`;
   }
 
   const L = heroTheme.onLight;
@@ -166,30 +159,84 @@ export function renderGuruDashboard(container) {
     ? `border-black/10 bg-black/5 ${cEyebrow}`
     : 'border-white/15 bg-white/10 text-white/70 backdrop-blur-sm';
 
+  // Konten berikut sengaja bersifat lokal dan deterministik. Dashboard tetap
+  // terasa hidup tanpa menambah pembacaan data dari Firestore.
+  const dayProgress = Math.min(100, Math.max(8, Math.round(((hour * 60 + new Date().getMinutes()) / 1440) * 100)));
+  const focusCopy = hour < 12
+    ? 'Awali dengan absensi dan satu target mengajar yang paling penting.'
+    : hour < 18
+      ? 'Rapikan catatan pembelajaran selagi konteks kelas masih segar.'
+      : 'Gunakan sore ini untuk refleksi singkat dan menyiapkan esok.';
+  const localTip = hour % 2 === 0
+    ? 'Tip hari ini: simpan satu kalimat refleksi setelah setiap sesi mengajar.'
+    : 'Tip hari ini: beri ruang 2 menit bagi siswa untuk merangkum pelajaran dengan kata mereka sendiri.';
+
+  const scheduleSortValue = (item) => {
+    const raw = String(item?.jam_ke || '').trim();
+    const timeMatch = raw.match(/(?:^|\s)(\d{1,2})[.:](\d{2})/);
+    if (timeMatch) return (Number(timeMatch[1]) * 60) + Number(timeMatch[2]);
+    const numberMatch = raw.match(/\d+/);
+    return numberMatch ? Number(numberMatch[0]) : Number.MAX_SAFE_INTEGER;
+  };
+  const getScheduleTimeRange = (item) => {
+    const raw = String(item?.jam_ke || '').trim();
+    const matches = [...raw.matchAll(/(\d{1,2})[.:](\d{2})/g)];
+    if (!matches.length) return null;
+    const toMinutes = (match) => (Number(match[1]) * 60) + Number(match[2]);
+    return { start: toMinutes(matches[0]), end: matches[1] ? toMinutes(matches[1]) : null };
+  };
+  const getScheduleStatus = (item, index, schedules) => {
+    const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+    const range = getScheduleTimeRange(item);
+    if (range) {
+      if (currentMinutes < range.start) {
+        const hasEarlierActiveOrUpcoming = schedules.slice(0, index).some((entry) => {
+          const earlierRange = getScheduleTimeRange(entry);
+          return earlierRange && (!earlierRange.end || currentMinutes <= earlierRange.end);
+        });
+        return hasEarlierActiveOrUpcoming
+          ? { label: 'Terjadwal', tone: 'planned' }
+          : { label: 'Berikutnya', tone: 'next' };
+      }
+      if (range.end && currentMinutes <= range.end) return { label: 'Berlangsung', tone: 'live' };
+      if (range.end && currentMinutes > range.end) return { label: 'Selesai', tone: 'done' };
+    }
+    const hasEarlierPending = schedules.slice(0, index).some((entry, earlierIndex) => {
+      const earlierStatus = getScheduleStatus(entry, earlierIndex, schedules.slice(0, index));
+      return earlierStatus.tone === 'live' || earlierStatus.tone === 'next';
+    });
+    return !hasEarlierPending
+      ? { label: 'Berikutnya', tone: 'next' }
+      : { label: 'Terjadwal', tone: 'planned' };
+  };
+
   const pageHtml = `
     <div class="space-y-6">
       <section>
-        <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br ${heroTheme.panel} p-6 ${cMain} shadow-lg sm:p-8">
+        <div class="guru-ios-hero relative overflow-hidden bg-gradient-to-br ${heroTheme.panel} p-6 ${cMain} sm:p-8">
+          <div class="guru-ios-hero-glass"></div>
+          <div class="guru-ios-hero-orb guru-ios-hero-orb--one"></div>
+          <div class="guru-ios-hero-orb guru-ios-hero-orb--two"></div>
           <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full ${L ? 'bg-white/30' : 'bg-white/10'} blur-3xl"></div>
           <div class="pointer-events-none absolute -bottom-20 -left-10 h-40 w-40 rounded-full ${L ? 'bg-white/25' : 'bg-white/10'} blur-3xl"></div>
           ${renderCelestial(heroTheme)}
           ${heroTheme.celestialType === 'moon' ? nightStars : ''}
           <div class="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
             <div class="min-w-0 max-w-xl">
-              <p class="text-xs font-medium uppercase tracking-[0.2em] ${cEyebrow}">${greeting}</p>
-              <h1 class="mt-1.5 text-2xl font-semibold sm:text-3xl">${shortName}</h1>
-              <p class="mt-2 text-sm ${cSub}">${todayName}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</p>
-              <p class="mt-3 flex items-start gap-2 text-sm font-medium italic ${cQuote}">
+              <p class="guru-ios-eyebrow ${cEyebrow}">${greeting}</p>
+              <h1 class="guru-ios-title mt-1.5">${shortName}</h1>
+              <p class="guru-ios-date mt-2 ${cSub}">${todayName}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</p>
+              <p class="guru-ios-quote mt-3 flex items-start gap-2 ${cQuote}">
                 <svg viewBox="0 0 24 24" class="mt-0.5 h-4 w-4 shrink-0 ${cIcon}" fill="currentColor"><path d="M9.5 7C6.5 7 5 9 5 12v5h6v-6H8c0-1.5.5-2 2-2V7zm9 0c-3 0-4.5 2-4.5 5v5h6v-6h-3c0-1.5.5-2 2-2V7z"/></svg>
                 <span>${heroTheme.quote}</span>
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-3">
-              <div class="rounded-xl border ${chip} px-4 py-2.5">
+              <div class="guru-ios-schedule border ${chip}">
                 <p class="text-[11px] font-medium uppercase tracking-wide ${cEyebrow}">Jadwal hari ini</p>
                 <p class="text-lg font-semibold ${cMain}"><span id="hero-jadwal-count">-</span> kelas</p>
               </div>
-              <a href="#guru/input-absen" class="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-transparent active:scale-[0.98]">
+              <a href="#guru/input-absen" class="guru-ios-hero-button">
                 <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/></svg>
                 Mulai Absensi
               </a>
@@ -198,26 +245,51 @@ export function renderGuruDashboard(container) {
         </div>
       </section>
 
-      <section>
-        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">Menu Cepat</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          ${quickCard('#guru/input-absen', 'Absensi', 'Input kehadiran harian.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', 'teal')}
-          ${quickCard('#guru/penilaian', 'Penilaian', 'Kelola nilai per mapel.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan')}
-          ${quickCard('#guru/jurnal', 'Jurnal', 'Catat jurnal mengajar.', '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 11h8M8 15h6"/>', 'sky')}
-          ${quickCard('#guru/materi', 'Materi', 'Buat & publikasi materi.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'teal')}
-          ${quickCard('#guru/materi-ai', 'Materi AI', 'Materi bantuan AI.', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"/><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/>', 'cyan')}
-          ${waliQuickCard}
-          ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan ke Excel.', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', 'amber', backupBadge)}
-          ${quickCard('#guru/pengatur-sistem', 'Akun', 'Pengaturan akun.', '<path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1 1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.4a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1-1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.4a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1-1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.4a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1 1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.4a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"/>', 'slate')}
+      <section class="guru-workspace-grid">
+        <div class="min-w-0">
+          <div class="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-600">Ruang kerja</p>
+              <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Mulai dari yang penting</h2>
+            </div>
+            <span class="hidden rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 sm:inline-flex">${dayProgress}% waktu hari berjalan</span>
+          </div>
+          <div class="guru-action-grid">
+            ${quickCard('#guru/input-absen', 'Absensi', 'Catat kehadiran kelas.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', 'teal', true)}
+            ${quickCard('#guru/penilaian', 'Penilaian', 'Kelola nilai dengan rapi.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan')}
+            ${quickCard('#guru/jurnal', 'Jurnal', 'Simpan refleksi mengajar.', '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 11h8M8 15h6"/>', 'sky')}
+            ${quickCard('#guru/materi', 'Materi', 'Buat bahan belajar.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'teal')}
+            ${quickCard('#guru/materi-ai', 'Materi AI', 'Mulai dari ide cerdas.', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"/><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/>', 'cyan')}
+            ${waliQuickCard}
+            ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan ke Excel.', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', 'amber', backupBadge)}
+            <div class="ios-today-widget" aria-label="Ringkasan hari ini">
+              <div class="ios-today-date"><span>${todayName.slice(0, 3)}</span><strong>${new Date().getDate()}</strong></div>
+              <div class="min-w-0 flex-1">
+                <p class="ios-today-kicker">Kelas berikutnya</p>
+                <p id="workspace-next-class" class="ios-today-summary"><strong>Memuat jadwal...</strong></p>
+                <div class="ios-today-progress"><span style="width:${dayProgress}%"></span></div>
+              </div>
+            </div>
+          </div>
         </div>
+        <aside class="guru-insight-panel">
+          <div class="flex items-start justify-between gap-3"><div><p class="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-600">Fokus hari ini</p><h3 class="mt-1 text-lg font-bold text-slate-900">Tetap ringan, tetap berdampak.</h3></div><span class="guru-sparkle">✦</span></div>
+          <p class="mt-3 text-sm leading-relaxed text-slate-600">${focusCopy}</p>
+          <div class="mt-5"><div class="mb-2 flex justify-between text-xs font-semibold text-slate-500"><span>Waktu hari berjalan</span><span>${dayProgress}%</span></div><div class="h-2 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-400" style="width:${dayProgress}%"></div></div></div>
+          <div class="mt-5 rounded-xl border border-amber-100 bg-amber-50/80 p-3 text-xs leading-relaxed text-amber-900">${localTip}</div>
+        </aside>
       </section>
 
       <section>
         <div class="mb-3 flex items-center justify-between">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Jadwal Mengajar</h2>
-          <span id="jadwal-count" class="rounded-full bg-[var(--color-primary-container)] px-2.5 py-1 text-xs font-semibold text-[var(--color-primary)]">0 jadwal</span>
+          <span id="jadwal-count" class="rounded-full bg-[var(--color-primary-container)] px-2.5 py-1 text-xs font-semibold text-[var(--color-primary)]">Memuat...</span>
         </div>
-        <div id="jadwal-hari-ini" class="space-y-2"></div>
+        <div id="jadwal-hari-ini" class="space-y-2" aria-live="polite">
+          <div class="dashboard-schedule-skeleton"></div>
+          <div class="dashboard-schedule-skeleton"></div>
+          <div class="dashboard-schedule-skeleton"></div>
+        </div>
       </section>
     </div>
   `;
@@ -231,11 +303,12 @@ export function renderGuruDashboard(container) {
     const badge = container.querySelector('#jadwal-count');
     if (!wrap) return;
 
-    const userId = session?.user?.username || '';
-    const assignments = await getTeachingAssignmentsForUser(context, userId);
-    const todaySchedules = assignments
-      .filter((item) => String(item.hari || '').toLowerCase() === todayName.toLowerCase())
-      .sort((a, b) => String(a.jam_ke || '').localeCompare(String(b.jam_ke || '')));
+    try {
+      const userId = session?.user?.username || '';
+      const assignments = await getTeachingAssignmentsForUser(context, userId);
+      const todaySchedules = assignments
+        .filter((item) => String(item.hari || '').toLowerCase() === todayName.toLowerCase())
+        .sort((a, b) => scheduleSortValue(a) - scheduleSortValue(b));
 
     if (badge) {
       badge.textContent = `${todaySchedules.length} jadwal`;
@@ -244,9 +317,15 @@ export function renderGuruDashboard(container) {
     if (heroCount) {
       heroCount.textContent = String(todaySchedules.length);
     }
+    const nextClass = container.querySelector('#workspace-next-class');
+    if (nextClass) {
+      nextClass.innerHTML = todaySchedules.length
+        ? `<strong>${todaySchedules[0].mapel_nama || '-'}</strong><br><span>Kelas ${todaySchedules[0].kelas_nama || '-'} · Jam ${todaySchedules[0].jam_ke || '-'}</span>`
+        : '<strong>Tidak ada kelas lagi</strong><br><span>Waktu untuk menyiapkan esok.</span>';
+    }
 
     if (!todaySchedules.length) {
-      wrap.innerHTML = `
+        wrap.innerHTML = `
         <div class="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br ${heroTheme.panel} py-10 text-center text-white shadow-sm">
           <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20 backdrop-blur-sm">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6 text-white/90" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -256,13 +335,30 @@ export function renderGuruDashboard(container) {
           </div>
           <p class="mt-3 text-sm font-medium text-white/90">Tidak ada jadwal hari ini</p>
         </div>`;
-      return;
+        return;
     }
 
-    wrap.innerHTML = todaySchedules
-      .map(
-        (item) => `
-          <div class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3 transition hover:bg-slate-100">
+      const currentScheduleIndex = todaySchedules.findIndex((item, index) => {
+        const status = getScheduleStatus(item, index, todaySchedules);
+        return status.tone === 'live';
+      });
+      const nextScheduleIndex = todaySchedules.findIndex((item, index) => getScheduleStatus(item, index, todaySchedules).tone === 'next');
+      const effectiveNextIndex = currentScheduleIndex >= 0 ? currentScheduleIndex : nextScheduleIndex;
+      if (nextClass) {
+        if (effectiveNextIndex >= 0) {
+          const nextItem = todaySchedules[effectiveNextIndex];
+          const nextStatus = getScheduleStatus(nextItem, effectiveNextIndex, todaySchedules);
+          nextClass.innerHTML = `<strong>${nextItem.mapel_nama || '-'}</strong><br><span>${nextStatus.label} · Kelas ${nextItem.kelas_nama || '-'} · Jam ${nextItem.jam_ke || '-'}</span>`;
+        } else {
+          nextClass.innerHTML = '<strong>Semua kelas selesai</strong><br><span>Jadwal mengajar hari ini telah berakhir.</span>';
+        }
+      }
+
+      wrap.innerHTML = todaySchedules
+      .map((item, index) => {
+        const status = getScheduleStatus(item, index, todaySchedules);
+        return `
+          <div class="dashboard-schedule-card ${status.tone === 'next' || status.tone === 'live' ? 'is-next' : ''}">
             <div class="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
               <span class="text-[10px] font-semibold uppercase leading-none">Jam</span>
               <span class="text-sm font-bold leading-tight">${item.jam_ke || '-'}</span>
@@ -270,16 +366,27 @@ export function renderGuruDashboard(container) {
             <div class="min-w-0">
               <p class="truncate text-sm font-semibold text-slate-900">${item.mapel_nama || '-'}</p>
               <p class="truncate text-xs text-slate-500">Kelas ${item.kelas_nama || '-'}</p>
+              <span class="dashboard-schedule-status ${status.tone}">${status.label}</span>
             </div>
-            <div class="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-indigo-500 ring-1 ring-slate-100">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="8.5" />
-                <path d="M12 7.5V12l3 2" />
-              </svg>
+            <div class="ml-auto flex shrink-0 items-center gap-1.5">
+              <a href="#guru/input-absen" class="dashboard-schedule-action primary">Absen</a>
+              <a href="#guru/jurnal" class="dashboard-schedule-action secondary hidden sm:inline-flex">Jurnal</a>
             </div>
           </div>`
-      )
+      })
       .join('');
+    } catch (error) {
+      console.error('Gagal memuat jadwal dashboard guru:', error);
+      if (badge) badge.textContent = 'Gagal memuat';
+      const nextClass = container.querySelector('#workspace-next-class');
+      if (nextClass) nextClass.innerHTML = '<strong>Jadwal belum tersedia</strong><br><span>Periksa koneksi lalu coba lagi.</span>';
+      wrap.innerHTML = `<div class="dashboard-schedule-error"><div><strong>Jadwal belum dapat dimuat.</strong><p class="mt-1">Data belum berhasil diambil dari server.</p></div><button id="retry-jadwal" type="button">Coba lagi</button></div>`;
+      container.querySelector('#retry-jadwal')?.addEventListener('click', () => {
+        if (badge) badge.textContent = 'Memuat...';
+        wrap.innerHTML = '<div class="dashboard-schedule-skeleton"></div><div class="dashboard-schedule-skeleton"></div><div class="dashboard-schedule-skeleton"></div>';
+        renderJadwal();
+      }, { once: true });
+    }
   };
 
   renderJadwal();
