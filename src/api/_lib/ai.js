@@ -596,9 +596,14 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
       if (content) {
         yield content;
       } else if (parsed.error) {
-        console.warn('[AI upstream JSON error]', JSON.stringify(parsed.error).slice(0, 300));
+        const errMsg = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || JSON.stringify(parsed.error));
+        console.warn('[AI upstream JSON error]', errMsg.slice(0, 300));
+        throw new AiServiceError(`Layanan AI menolak: ${errMsg.slice(0, 200)}`, 502, 'upstream_error');
+      } else if (parsed.choices?.[0]?.delta?.content) {
+        yield parsed.choices[0].delta.content;
       }
-    } catch {
+    } catch (parseError) {
+      if (parseError instanceof AiServiceError) throw parseError;
       if (fullBody.trim()) {
         console.warn('[AI upstream non-JSON body]', fullBody.slice(0, 300));
         yield fullBody;
