@@ -5,11 +5,17 @@
     "api/ai/generate-material.js": {
       "maxDuration": 60
     },
+    "api/ai/generate-material-json.js": {
+      "maxDuration": 60
+    },
     "api/ai/generate-rpm.js": {
       "maxDuration": 60
     },
     "api/ai/model-options.js": {
       "maxDuration": 10
+    },
+    "api/ai/config.js": {
+      "maxDuration": 30
     },
     "api/ai/test-connection.js": {
       "maxDuration": 30
@@ -44,12 +50,20 @@
       "destination": "/api/ai/test-connection.js"
     },
     {
+      "source": "/api/ai/config",
+      "destination": "/api/ai/config.js"
+    },
+    {
       "source": "/api/ai/model-options",
       "destination": "/api/ai/model-options.js"
     },
     {
       "source": "/api/ai/generate-material",
       "destination": "/api/ai/generate-material.js"
+    },
+    {
+      "source": "/api/ai/generate-material-json",
+      "destination": "/api/ai/generate-material-json.js"
     },
     {
       "source": "/api/ai/generate-rpm",
