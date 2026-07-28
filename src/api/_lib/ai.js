@@ -593,9 +593,16 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
     try {
       const parsed = JSON.parse(fullBody);
       const content = parsed.choices?.[0]?.message?.content ?? '';
-      if (content) yield content;
+      if (content) {
+        yield content;
+      } else if (parsed.error) {
+        console.warn('[AI upstream JSON error]', JSON.stringify(parsed.error).slice(0, 300));
+      }
     } catch {
-      if (fullBody.trim()) yield fullBody;
+      if (fullBody.trim()) {
+        console.warn('[AI upstream non-JSON body]', fullBody.slice(0, 300));
+        yield fullBody;
+      }
     }
   } finally {
     clear();
@@ -666,12 +673,15 @@ async function testUpstreamConnection(options = {}) {
       received = true;
       break;
     }
+    if (!received) {
+      return { ok: false, model: activeModel, profileId: profile.id, modelFallbackUsed, error: 'Layanan AI merespons tanpa konten. Periksa apakah model tersedia dan base URL benar.', code: 'empty_response' };
+    }
     return { ok: received, model: activeModel, profileId: profile.id, modelFallbackUsed };
   } catch (error) {
     if (error instanceof AiServiceError) {
       return { ok: false, model: profile.model, profileId: profile.id, error: error.message, code: error.code };
     }
-    return { ok: false, model: profile.model, profileId: profile.id, error: 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
+    return { ok: false, model: profile.model, profileId: profile.id, error: error?.message || 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
   }
 }
 
