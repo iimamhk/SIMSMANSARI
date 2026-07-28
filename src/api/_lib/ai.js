@@ -674,7 +674,7 @@ async function testUpstreamConnection(options = {}) {
       break;
     }
     if (!received) {
-      return { ok: false, model: activeModel, profileId: profile.id, modelFallbackUsed, error: 'Layanan AI merespons tanpa konten. Periksa apakah model tersedia dan base URL benar.', code: 'empty_response' };
+      return { ok: false, model: activeModel, profileId: profile.id, modelFallbackUsed, baseUrl: profile.baseUrl, error: `Layanan AI merespons tanpa konten. Periksa model "${activeModel}" tersedia di ${profile.baseUrl}.`, code: 'empty_response' };
     }
     return { ok: received, model: activeModel, profileId: profile.id, modelFallbackUsed };
   } catch (error) {
