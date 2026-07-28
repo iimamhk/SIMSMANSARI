@@ -574,8 +574,11 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
           if (data === '[DONE]') return;
           try {
             const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta?.content;
+            const choice = parsed.choices?.[0];
+            const delta = choice?.delta?.content;
+            const reasoning = choice?.delta?.reasoning_content;
             if (delta) yield delta;
+            else if (reasoning) yield reasoning;
           } catch {
             // Abaikan keep-alive / SSE yang tidak valid.
           }

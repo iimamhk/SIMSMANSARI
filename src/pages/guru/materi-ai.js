@@ -230,7 +230,18 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
     setStatus('');
     progressEl.textContent = '';
     progressWrap.hidden = false;
+    const progressLabel = root.querySelector('#maip-progress-label');
+    if (progressLabel) progressLabel.textContent = 'AI sedang berpikir dan menulis materi...';
     abortController = new AbortController();
+
+    const startTime = Date.now();
+    const elapsedTimer = setInterval(() => {
+      if (!isGenerating) { clearInterval(elapsedTimer); return; }
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      if (elapsed > 10 && progressLabel) {
+        progressLabel.textContent = `AI sedang berpikir dan menulis materi... (${elapsed}s)`;
+      }
+    }, 5000);
 
     const previousMaterial = currentMaterial;
     const currentJson = isRevision ? JSON.stringify(previousMaterial) : undefined;
@@ -268,6 +279,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
       }
       progressWrap.hidden = true;
     } finally {
+      clearInterval(elapsedTimer);
       // Revisi gagal → kembalikan materi lama agar tidak rusak.
       if (isRevision && !gotMaterial && previousMaterial) {
         currentMaterial = previousMaterial;

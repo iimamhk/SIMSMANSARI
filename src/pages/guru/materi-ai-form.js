@@ -181,7 +181,7 @@ export function resultHtml() {
         </div>
       </div>
       <div id="maip-progress-wrap" hidden>
-        <p style="margin:0 0 6px; font-size:.72rem; color:var(--mai-muted)"><span class="maip-typing"></span><span class="maip-typing"></span><span class="maip-typing"></span> AI sedang menulis materi&hellip;</p>
+        <p id="maip-progress-label" style="margin:0 0 6px; font-size:.72rem; color:var(--mai-muted)"><span class="maip-typing"></span><span class="maip-typing"></span><span class="maip-typing"></span> AI sedang berpikir dan menulis materi&hellip;</p>
         <div id="maip-progress" class="maip-progress"></div>
       </div>
       <div id="maip-preview-wrap">
