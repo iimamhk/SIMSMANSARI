@@ -112,7 +112,7 @@ export function renderGuruDashboard(container) {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
             </span>
             <span class="ios-app-label">${title}</span>
-            ${featured ? `<span class="ios-app-featured-copy">${desc}</span>` : `<span class="visually-hidden">${desc}</span>`}
+            <span class="visually-hidden">${desc}</span>
           </a>`;
   const quickCardButton = (id, title, desc, icon, tone = 'amber', extraBadge = '') => `
           <button id="${id}" type="button" class="ios-app group" title="${desc}">

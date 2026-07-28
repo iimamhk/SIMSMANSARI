@@ -60,7 +60,7 @@ const quickCard = (href, title, desc, icon, tone = 'blue', options = {}) => {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
             </span>
             <span class="student-app-label">${escapeHtml(title)}</span>
-            ${featured ? `<span class="student-app-featured-copy">${escapeHtml(desc)}</span>` : `<span class="visually-hidden">${escapeHtml(desc)}</span>`}
+            <span class="visually-hidden">${escapeHtml(desc)}</span>
           </a>`;
 };
 
