@@ -128,7 +128,7 @@ module.exports = async (req, res) => {
       resolvedProfile: profile,
       model: profile.model,
       temperature: options.temperature ?? 0.7,
-      maxTokens: options.maxTokens ?? 6000,
+      maxTokens: options.maxTokens ?? 8000,
       signal: abortController.signal,
       onModelSelected: (selectedModel) => {
         activeModel = selectedModel;

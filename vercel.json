@@ -54,10 +54,6 @@
       "destination": "/api/ai/config.js"
     },
     {
-      "source": "/api/ai/debug-connection",
-      "destination": "/api/ai/debug-connection.js"
-    },
-    {
       "source": "/api/ai/model-options",
       "destination": "/api/ai/model-options.js"
     },

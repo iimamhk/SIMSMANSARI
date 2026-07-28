@@ -488,7 +488,7 @@ function withTimeout(signal, ms) {
 }
 
 function clampTokens(value) {
-  const fallback = 2000;
+  const fallback = 4000;
   if (value === undefined || !Number.isFinite(value) || value <= 0) return fallback;
   return Math.min(Math.floor(value), MAX_TOKENS_CAP);
 }
@@ -592,9 +592,12 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
     }
     try {
       const parsed = JSON.parse(fullBody);
-      const content = parsed.choices?.[0]?.message?.content ?? '';
+      const msg = parsed.choices?.[0]?.message ?? {};
+      const content = msg.content ?? '';
       if (content) {
         yield content;
+      } else if (msg.reasoning_content) {
+        yield msg.reasoning_content;
       } else if (parsed.error) {
         const errMsg = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || JSON.stringify(parsed.error));
         console.warn('[AI upstream JSON error]', errMsg.slice(0, 300));
@@ -663,7 +666,7 @@ async function testUpstreamConnection(options = {}) {
     let modelFallbackUsed = false;
     // Untuk tes koneksi, pakai non-stream agar lebih reliable dengan provider
     // yang mungkin tidak mendukung SSE dengan benar.
-    const testOptions = { maxTokens: 8, temperature: 0, isTest: true, forceNonStream: true };
+    const testOptions = { maxTokens: 256, temperature: 0, isTest: true, forceNonStream: true };
     for await (const _delta of streamChatCompletions([{ role: 'user', content: 'Balas dengan kata: OK' }], {
       profileId: profile.id,
       resolvedProfile: options.overrideProfile || null,
