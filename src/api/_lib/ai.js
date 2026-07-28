@@ -561,7 +561,15 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
       const decoder = new TextDecoder();
       let buffer = '';
       while (true) {
-        const { done, value } = await reader.read();
+        let chunk;
+        try {
+          chunk = await reader.read();
+        } catch (readError) {
+          // Koneksi terputus di tengah stream — hentikan tanpa error fatal
+          // agar pemanggil dapat menyelamatkan konten parsial.
+          break;
+        }
+        const { done, value } = chunk;
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');

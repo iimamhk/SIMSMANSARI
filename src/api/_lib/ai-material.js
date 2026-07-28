@@ -161,13 +161,44 @@ function extractJson(text) {
   // Cari blok { ... } terluar.
   const start = unfenced.indexOf('{');
   const end = unfenced.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) return null;
-  const candidate = unfenced.slice(start, end + 1);
+  if (start === -1) return null;
+  const candidate = end > start ? unfenced.slice(start, end + 1) : unfenced.slice(start);
   try {
     return JSON.parse(candidate);
+  } catch { /* lanjut */ }
+  // Auto-repair: tutup kurung kurawal/string yang belum tertutup (stream terputus).
+  const repaired = repairPartialJson(candidate);
+  try {
+    return JSON.parse(repaired);
   } catch {
     return null;
   }
+}
+
+function repairPartialJson(text) {
+  let s = String(text || '');
+  // Track stack bracket untuk mengetahui apa yang perlu ditutup.
+  const stack = [];
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\') { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  // Tutup string yang masih terbuka.
+  if (inString) s += '"';
+  // Tutup bracket dalam urutan terbalik.
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    s += (stack[i] === '{') ? '}' : ']';
+  }
+  // Buang koma trailing sebelum tutup.
+  s = s.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
+  return s;
 }
 
 function validateLatexBalance(text) {

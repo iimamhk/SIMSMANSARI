@@ -122,29 +122,43 @@ module.exports = async (req, res) => {
     const profile = await resolveEffectiveProfile('');
     let fullText = '';
     let activeModel = profile.model;
+    let streamInterrupted = false;
 
-    for await (const delta of streamChatCompletions(messages, {
-      profileId: profile.id,
-      resolvedProfile: profile,
-      model: profile.model,
-      temperature: options.temperature ?? 0.7,
-      maxTokens: options.maxTokens ?? 8000,
-      signal: abortController.signal,
-      onModelSelected: (selectedModel) => {
-        activeModel = selectedModel;
-      },
-    })) {
-      if (!delta) continue;
-      fullText += delta;
-      sendSseEvent(res, 'delta', { content: delta });
+    try {
+      for await (const delta of streamChatCompletions(messages, {
+        profileId: profile.id,
+        resolvedProfile: profile,
+        model: profile.model,
+        temperature: options.temperature ?? 0.7,
+        maxTokens: options.maxTokens ?? 8000,
+        signal: abortController.signal,
+        onModelSelected: (selectedModel) => {
+          activeModel = selectedModel;
+        },
+      })) {
+        if (!delta) continue;
+        fullText += delta;
+        sendSseEvent(res, 'delta', { content: delta });
+      }
+    } catch (streamError) {
+      // Stream terputus di tengah — coba selamatkan konten parsial.
+      if (fullText.length > 200) {
+        streamInterrupted = true;
+        console.warn('[AI stream interrupted, attempting partial recovery]', streamError?.message);
+      } else {
+        throw streamError;
+      }
     }
 
-    // Validasi hasil final di server.
+    // Validasi hasil (lengkap atau parsial).
     const validation = validateMaterial(fullText);
     if (!validation.material) {
+      const hint = streamInterrupted
+        ? 'Koneksi terputus saat AI sedang menulis. Materi belum lengkap — coba generate ulang, atau gunakan model yang lebih cepat.'
+        : 'AI tidak menghasilkan struktur materi yang valid. Coba generate ulang.';
       sendSseEvent(res, 'error', {
-        error: 'AI tidak menghasilkan struktur materi yang valid. Coba generate ulang.',
-        code: 'invalid_structure',
+        error: hint,
+        code: streamInterrupted ? 'stream_interrupted' : 'invalid_structure',
       });
       res.end();
       return;
@@ -155,6 +169,7 @@ module.exports = async (req, res) => {
       issues: validation.issues,
       model: activeModel,
       profileId: profile.id,
+      partial: streamInterrupted,
     });
     sendSseEvent(res, 'done', { model: activeModel, profileId: profile.id });
     res.end();
