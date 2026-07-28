@@ -136,6 +136,121 @@ function showNotification(message, type = 'success', duration = 3000) {
   setTimeout(() => notification.remove(), duration);
 }
 
+function escapePenilaianHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getPenilaianShell(container) {
+  return container?.closest('[data-penilaian-shell]') || container;
+}
+
+function setPenilaianSyncStatus(container, state = 'idle', message = '') {
+  const shell = getPenilaianShell(container);
+  const status = shell?.querySelector('#penilaian-sync-status');
+  if (!status) return;
+
+  const config = {
+    idle: { icon: '○', label: message || 'Siap menerima perubahan', className: 'border-slate-200 bg-white text-slate-500' },
+    pending: { icon: '◌', label: message || 'Perubahan belum tersimpan', className: 'border-amber-200 bg-amber-50 text-amber-700' },
+    saving: { icon: '◌', label: message || 'Menyimpan perubahan…', className: 'border-blue-200 bg-blue-50 text-blue-700' },
+    saved: { icon: '✓', label: message || `Tersimpan ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`, className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+    error: { icon: '!', label: message || 'Gagal menyimpan · Coba lagi', className: 'border-rose-200 bg-rose-50 text-rose-700' },
+  }[state] || { icon: '○', label: message || 'Siap menerima perubahan', className: 'border-slate-200 bg-white text-slate-500' };
+
+  status.className = `inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${config.className}`;
+  status.innerHTML = `<span aria-hidden="true" class="text-sm leading-none">${config.icon}</span><span>${escapePenilaianHtml(config.label)}</span>`;
+  status.setAttribute('aria-label', config.label);
+  status.dataset.state = state;
+}
+
+function openPenilaianDialog(container, {
+  title,
+  description = '',
+  value = '',
+  label = 'Nama',
+  submitLabel = 'Simpan',
+  mode = 'input',
+  danger = false,
+} = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    const inputMode = mode === 'input';
+    overlay.className = 'fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-3 backdrop-blur-sm sm:items-center sm:p-4';
+    overlay.setAttribute('role', 'presentation');
+    overlay.innerHTML = `
+      <div class="w-full max-w-md overflow-hidden rounded-[24px] border border-white/70 bg-white shadow-[0_30px_80px_-28px_rgba(15,23,42,0.45)]" role="dialog" aria-modal="true" aria-labelledby="penilaian-dialog-title" aria-describedby="penilaian-dialog-description">
+        <div class="border-b border-slate-100 bg-slate-50/80 px-5 py-4 sm:px-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 id="penilaian-dialog-title" class="text-base font-bold text-slate-900">${escapePenilaianHtml(title)}</h2>
+              <p id="penilaian-dialog-description" class="mt-1 text-xs leading-relaxed text-slate-500">${escapePenilaianHtml(description)}</p>
+            </div>
+            <button type="button" data-dialog-cancel aria-label="Tutup" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-slate-200">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+        </div>
+        <form data-dialog-form class="p-5 sm:p-6">
+          ${inputMode ? `
+            <label for="penilaian-dialog-input" class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">${escapePenilaianHtml(label)}</label>
+            <input id="penilaian-dialog-input" name="value" type="text" maxlength="120" value="${escapePenilaianHtml(value)}" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-100" />
+            <p data-dialog-error class="mt-2 hidden text-xs font-medium text-rose-600">Nama tidak boleh kosong.</p>
+          ` : `
+            <div class="rounded-2xl border ${danger ? 'border-rose-100 bg-rose-50/70' : 'border-slate-200 bg-slate-50'} p-3.5 text-sm leading-relaxed ${danger ? 'text-rose-800' : 'text-slate-600'}">${escapePenilaianHtml(description)}</div>
+          `}
+          <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" data-dialog-cancel class="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200">Batal</button>
+            <button type="submit" class="inline-flex min-h-11 items-center justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition focus:outline-none focus:ring-4 ${danger ? 'bg-rose-600 hover:bg-rose-700 focus:ring-rose-200' : 'bg-teal-600 hover:bg-teal-700 focus:ring-teal-200'}">${escapePenilaianHtml(submitLabel)}</button>
+          </div>
+        </form>
+      </div>
+    `;
+
+    const dialogInput = overlay.querySelector('#penilaian-dialog-input');
+    const form = overlay.querySelector('[data-dialog-form]');
+    const error = overlay.querySelector('[data-dialog-error]');
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKeydown);
+      overlay.remove();
+      resolve(result);
+    };
+    const onKeydown = (event) => {
+      if (event.key === 'Escape') finish(null);
+    };
+
+    overlay.querySelectorAll('[data-dialog-cancel]').forEach((button) => button.addEventListener('click', () => finish(null)));
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) finish(null);
+    });
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!inputMode) {
+        finish(true);
+        return;
+      }
+      const nextValue = String(dialogInput?.value || '').trim();
+      if (!nextValue) {
+        error?.classList.remove('hidden');
+        dialogInput?.focus();
+        return;
+      }
+      finish(nextValue);
+    });
+
+    container.appendChild(overlay);
+    document.addEventListener('keydown', onKeydown);
+    requestAnimationFrame(() => (inputMode ? dialogInput : overlay.querySelector('[data-dialog-cancel]'))?.focus());
+  });
+}
+
 function sortMembersByName(members) {
   return [...members].sort((a, b) => {
     const nameA = (a.siswa_nama || a.nama || '').toLowerCase();
@@ -797,18 +912,18 @@ async function renderTabNilaiTugas(context, assignment, members, container) {
       <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div class="mb-4">
           <label class="text-xs font-semibold text-slate-600">Pilih BAB</label>
-          <div class="flex gap-2 mt-2">
-            <select id="bab-select" class="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+          <div class="mt-2 grid grid-cols-3 gap-1.5 sm:flex sm:gap-2">
+            <select id="bab-select" class="col-span-3 min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm sm:flex-1">
               ${babOptions || '<option value="">-- Pilih BAB --</option>'}
             </select>
-            <button id="btn-tambah-bab" class="flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Tambah
+            <button id="btn-tambah-bab" type="button" class="inline-flex min-h-8 items-center justify-center gap-1 rounded-lg bg-emerald-500 px-1.5 py-1 text-[10px] font-semibold text-white transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-200 sm:min-h-9 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs">
+              <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> Tambah
             </button>
-            <button id="btn-edit-bab" class="flex items-center gap-2 rounded-lg bg-sky-500 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-600 transition" ${babs.length ? '' : 'disabled style="opacity:0.5;cursor:not-allowed"'}>
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> Edit
+            <button id="btn-edit-bab" type="button" class="inline-flex min-h-8 items-center justify-center gap-1 rounded-lg bg-sky-500 px-1.5 py-1 text-[10px] font-semibold text-white transition hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-200 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs" ${babs.length ? '' : 'disabled'}>
+              <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg> Edit
             </button>
-            <button id="btn-hapus-bab" class="flex items-center gap-2 rounded-lg bg-red-500 px-3 py-2 text-xs font-semibold text-white hover:bg-red-600 transition" ${babs.length ? '' : 'disabled style="opacity:0.5;cursor:not-allowed"'}>
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> Hapus
+            <button id="btn-hapus-bab" type="button" class="inline-flex min-h-8 items-center justify-center gap-1 rounded-lg bg-red-500 px-1.5 py-1 text-[10px] font-semibold text-white transition hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-200 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9 sm:gap-2 sm:px-3 sm:py-2 sm:text-xs" ${babs.length ? '' : 'disabled'}>
+              <svg class="h-3.5 w-3.5 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> Hapus
             </button>
           </div>
         </div>
@@ -876,10 +991,10 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
         <tr class="bg-gradient-to-r from-slate-100 to-slate-200">
           <th class="${noColumnClass} border border-slate-300 px-1.5 py-1.5 text-left font-semibold text-slate-700 sm:px-2 sm:py-2">No</th>
           <th class="${siswaColumnClass} border border-slate-300 px-1.5 py-1.5 text-left font-semibold text-slate-700 sm:px-2 sm:py-2">Siswa</th>
-          ${tugasBab.map(t => `<th class="sticky top-0 z-10 border border-slate-300 bg-slate-100 px-1.5 py-1.5 text-center font-semibold text-slate-700 whitespace-nowrap sm:px-2 sm:py-2" title="${t.nama}">
+          ${tugasBab.map((t, taskIndex) => `<th class="sticky top-0 z-10 border border-slate-300 bg-slate-100 px-1.5 py-1.5 text-center font-semibold text-slate-700 whitespace-nowrap sm:px-2 sm:py-2" title="${t.nama}">
             <div class="flex items-center justify-center gap-1 group">
               <span>${t.nama}</span>
-              <button class="btn-edit-tugas text-slate-400 hover:text-sky-500 opacity-0 group-hover:opacity-100 transition-opacity" data-bab="${selectedBab.id}" data-tugas="${t.id}" title="Edit tugas">
+              <button class="btn-edit-tugas inline-flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition hover:bg-sky-100 hover:text-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-300 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" data-bab="${selectedBab.id}" data-tugas="${t.id}" title="Edit tugas" aria-label="Edit tugas nomor ${taskIndex + 1}">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
               </button>
             </div>
@@ -900,7 +1015,7 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
             <tr class="hover:bg-slate-50 transition" data-student-id="${studentId}">
               <td class="${noCellClass} border border-slate-300 px-1.5 py-1 text-slate-700 font-medium sm:px-2">${idx + 1}</td>
               <td class="${siswaCellClass} border border-slate-300 px-1.5 py-1 text-slate-700 font-medium whitespace-nowrap sm:px-2">${member.siswa_nama || member.nama}</td>
-              ${tugasBab.map(t => {
+              ${tugasBab.map((t, taskIndex) => {
                 const val = nilai[`${selectedBab.id}_${t.id}_${studentId}`];
                 return `
                   <td class="border border-slate-300 px-1 py-1 bg-slate-50 sm:px-2">
@@ -908,10 +1023,12 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
                       type="number" 
                       min="0" 
                       max="100" 
-                      class="nilai-input h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] bg-white focus:ring-2 focus:ring-emerald-400 focus:border-transparent sm:h-10 sm:w-20 sm:rounded-lg sm:px-2 sm:text-sm md:w-24"
+                      class="nilai-input h-9 w-16 rounded-lg border border-slate-200 bg-white px-1 text-center text-xs font-semibold tabular-nums text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 sm:h-10 sm:w-20 sm:px-2 sm:text-sm md:w-24"
                       data-bab="${selectedBab.id}" 
                       data-tugas="${t.id}" 
                       data-siswa="${studentId}" 
+                      aria-label="Input nilai siswa nomor ${idx + 1} untuk tugas nomor ${taskIndex + 1}"
+                      inputmode="decimal"
                       value="${val || '0'}"
                     />
                   </td>
@@ -1412,7 +1529,7 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
             .map((col) => `
               <div class="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-medium text-sky-800">
                 <span>${col.nama}</span>
-                <button type="button" class="btn-hapus-uh text-rose-600 hover:text-rose-700" data-uh-id="${col.id}" data-uh-firestore-id="${col.firestoreId || ''}" title="Hapus kolom UH">
+                <button type="button" class="btn-hapus-uh inline-flex h-7 w-7 items-center justify-center rounded-full text-rose-600 hover:bg-rose-100 hover:text-rose-700" data-uh-id="${col.id}" data-uh-firestore-id="${col.firestoreId || ''}" title="Hapus kolom UH" aria-label="Hapus kolom ${col.nama}">
                   <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
               </div>
@@ -1489,8 +1606,8 @@ async function renderTabUlanganHarian(context, assignment, members, container) {
                           }
                           
                           return `
-                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-uh h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-uh="${col.id}_murni" value="${murniVal}" /></td>
-                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-uh h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-uh="${col.id}_remidi" value="${remidiVal}" /></td>
+                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" aria-label="Nilai murni ${col.nama} untuk ${member.siswa_nama || member.nama}" class="nilai-uh h-8 w-14 rounded-lg border border-slate-200 bg-white px-1 text-center text-[11px] shadow-sm sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-uh="${col.id}_murni" value="${murniVal}" /></td>
+                            <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" aria-label="Nilai remidi ${col.nama} untuk ${member.siswa_nama || member.nama}" class="nilai-uh h-8 w-14 rounded-lg border border-slate-200 bg-white px-1 text-center text-[11px] shadow-sm sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-uh="${col.id}_remidi" value="${remidiVal}" /></td>
                             <td class="border border-slate-300 px-1 py-1 text-center font-bold text-slate-500 bg-slate-50" data-max-uh="${col.id}">${maxVal}</td>
                           `;
                         })
@@ -2119,8 +2236,8 @@ async function renderTabPTSPAS(context, assignment, members, container) {
         <tr class="hover:bg-slate-100">
           <td class="border border-slate-300 px-1.5 py-1 sm:px-2">${idx + 1}</td>
           <td class="border border-slate-300 px-1.5 py-1 whitespace-nowrap sm:px-2">${member.siswa_nama || member.nama}</td>
-          <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-${type} h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-tipe="murni" value="${murniVal}" /></td>
-          <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" class="nilai-${type} h-8 w-14 text-center border border-slate-200 rounded-md px-1 text-[11px] sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-tipe="remidi" value="${remidiVal}" /></td>
+          <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" aria-label="Nilai ${type.toUpperCase()} murni untuk ${member.siswa_nama || member.nama}" class="nilai-${type} h-8 w-14 rounded-lg border border-slate-200 bg-white px-1 text-center text-[11px] shadow-sm sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-tipe="murni" value="${murniVal}" /></td>
+          <td class="border border-slate-300 px-1 py-1"><input type="number" min="0" max="100" aria-label="Nilai ${type.toUpperCase()} remidi untuk ${member.siswa_nama || member.nama}" class="nilai-${type} h-8 w-14 rounded-lg border border-slate-200 bg-white px-1 text-center text-[11px] shadow-sm sm:h-10 sm:w-16 sm:px-2 sm:text-sm md:w-20" data-siswa="${siswa}" data-tipe="remidi" value="${remidiVal}" /></td>
           <td class="border border-slate-300 px-1.5 py-1 text-center font-bold text-slate-500 bg-slate-50 sm:px-2">${maxScore}</td>
         </tr>
       `;
@@ -2160,12 +2277,14 @@ async function renderTabPTSPAS(context, assignment, members, container) {
     <div class="space-y-4 min-w-0">
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-2 shadow-sm">
         <div class="flex gap-2 overflow-x-auto">
-          <button type="button" class="btn-exam-subtab whitespace-nowrap rounded-xl border-b-2 px-4 py-2 text-sm font-semibold transition ${activeExamTab === 'pts' ? examPanels.pts.buttonClass : examPanels.pts.idleButtonClass}" data-exam-tab="pts">PTS</button>
-          <button type="button" class="btn-exam-subtab whitespace-nowrap rounded-xl border-b-2 px-4 py-2 text-sm font-semibold transition ${activeExamTab === 'pas' ? examPanels.pas.buttonClass : examPanels.pas.idleButtonClass}" data-exam-tab="pas">PAS</button>
+          <div class="flex min-w-max gap-1 rounded-full bg-slate-200/70 p-1" role="tablist" aria-label="Jenis ujian">
+            <button id="exam-tab-pts" type="button" role="tab" aria-controls="exam-panel-pts" aria-selected="${activeExamTab === 'pts'}" tabindex="${activeExamTab === 'pts' ? '0' : '-1'}" class="btn-exam-subtab rounded-full border-b-2 px-3 py-1.5 text-xs font-semibold transition ${activeExamTab === 'pts' ? examPanels.pts.buttonClass : examPanels.pts.idleButtonClass}" data-exam-tab="pts">PTS</button>
+            <button id="exam-tab-pas" type="button" role="tab" aria-controls="exam-panel-pas" aria-selected="${activeExamTab === 'pas'}" tabindex="${activeExamTab === 'pas' ? '0' : '-1'}" class="btn-exam-subtab rounded-full border-b-2 px-3 py-1.5 text-xs font-semibold transition ${activeExamTab === 'pas' ? examPanels.pas.buttonClass : examPanels.pas.idleButtonClass}" data-exam-tab="pas">PAS</button>
+          </div>
         </div>
       </div>
 
-      <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+       <div id="exam-panel-${activeExamTab}" role="tabpanel" aria-labelledby="exam-tab-${activeExamTab}" tabindex="0" class="min-w-0 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:p-4">
         <h3 class="mb-4 flex items-center gap-2 text-sm font-bold text-slate-700"><svg class="w-5 h-5 ${activePanel.iconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> ${activePanel.title}</h3>
         <div class="overflow-x-auto mb-4">
           <table class="min-w-[500px] w-full text-[11px] sm:min-w-[560px] sm:text-xs">
@@ -2208,6 +2327,19 @@ async function renderTabPTSPAS(context, assignment, members, container) {
 
       container.dataset.examTab = nextTab;
       await renderTabPTSPAS(context, assignment, members, container);
+    });
+    button.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = Array.from(container.querySelectorAll('.btn-exam-subtab'));
+      const currentIndex = tabs.indexOf(button);
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      tabs[nextIndex]?.focus();
+      tabs[nextIndex]?.click();
     });
   });
 
@@ -4099,52 +4231,42 @@ export async function renderGuruPenilaianPage(container) {
     .join('');
 
   const html = renderLayout('Penilaian', `
-    <div class="space-y-4">
+    <div class="space-y-2.5 sm:space-y-4">
       <!-- Assignment Selector -->
-      <div class="relative overflow-hidden rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-sky-50 to-white p-4 shadow-sm sm:p-5">
-        <div class="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-white/70 to-transparent"></div>
-        <div class="absolute -left-10 top-0 h-24 w-24 rounded-full bg-emerald-200/40 blur-2xl"></div>
-        <div class="absolute bottom-0 right-6 h-20 w-20 rounded-full bg-sky-200/40 blur-2xl"></div>
+      <div class="relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-slate-100/80 p-2.5 shadow-sm ring-1 ring-white/80 backdrop-blur-xl sm:rounded-3xl sm:p-4">
+        <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/70 via-transparent to-blue-50/70"></div>
         <div class="relative">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div class="max-w-2xl">
-              <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700 backdrop-blur-sm">
-                <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
-                Area Aktif Penilaian
-              </div>
-              <label for="assignment-select" class="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                <span class="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm ring-1 ring-emerald-100">
+          <div class="flex items-center gap-2.5 sm:gap-4">
+            <label for="assignment-select" class="flex min-w-0 flex-1 items-center gap-2.5 text-slate-800">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm ring-1 ring-black/5 sm:h-10 sm:w-10 sm:rounded-2xl">
                   <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 </span>
-                <span>Pilih Kelas & Mata Pelajaran</span>
-              </label>
-              <p class="mt-2 text-xs leading-5 text-slate-600 sm:text-sm sm:max-w-2xl">Pilih relasi mengajar yang sedang dinilai agar tabel nilai, ulangan harian, dan rekap akhir tetap fokus pada kelas aktif.</p>
-            </div>
-            <div class="w-full lg:max-w-xl">
-              <div class="rounded-2xl border border-emerald-200/80 bg-white p-2 shadow-[0_12px_30px_-18px_rgba(15,23,42,0.35)]">
-                <select id="assignment-select" class="w-full appearance-none rounded-xl border-2 border-blue-600 bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-4 py-3 text-sm font-bold text-white shadow-[0_14px_30px_-18px_rgba(59,130,246,0.95)] outline-none transition hover:from-indigo-700 hover:via-blue-600 hover:to-orange-600 focus:border-orange-300 focus:ring-4 focus:ring-orange-200/70">
+                <span class="min-w-0">
+                  <span class="block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:text-xs">Kelas aktif</span>
+                  <span class="hidden text-xs text-slate-500 sm:block">Kelas & mata pelajaran</span>
+                </span>
+            </label>
+            <div class="min-w-0 flex-[1.55] sm:max-w-xl">
+                <select id="assignment-select" aria-label="Pilih kelas dan mata pelajaran aktif" class="w-full truncate rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 shadow-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100 sm:rounded-2xl sm:px-4 sm:py-3">
                   ${assignmentOptions || '<option value="">Tidak ada relasi aktif</option>'}
                 </select>
-              </div>
             </div>
           </div>
-
         </div>
       </div>
 
       <!-- Tabs -->
-      <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.35)] ring-1 ring-white/60 backdrop-blur-sm">
-        <div class="border-b border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-emerald-50/60 px-3 py-3 sm:px-4">
-          <div class="mb-3 flex items-center justify-between gap-3">
+      <div class="overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-sm ring-1 ring-black/[0.02] sm:rounded-[28px] sm:shadow-[0_24px_70px_-34px_rgba(15,23,42,0.35)]">
+        <div class="border-b border-slate-200/70 bg-slate-50/90 p-1.5 sm:px-4 sm:py-3">
+          <div class="mb-3 hidden items-center justify-between gap-3 sm:flex">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Workspace Penilaian</p>
             </div>
             <div class="hidden rounded-full border border-emerald-100 bg-white/90 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm sm:block">Sinkron ke kelas aktif</div>
           </div>
-          <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-1">
+          <div class="grid grid-cols-2 gap-1 rounded-2xl bg-slate-200/70 p-1 sm:grid-cols-4 xl:grid-cols-7" role="tablist" aria-label="Menu penilaian guru" aria-orientation="horizontal">
           <button id="tab-tugas" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap" data-tab="tugas"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span>Nilai Tugas</span></button>
           <button id="tab-uh" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="uh"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg><span>Ulangan Harian</span></button>
-          <button id="tab-keaktifan" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="keaktifan"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"></path><circle cx="5" cy="19" r="1.2" fill="currentColor"></circle><circle cx="12" cy="6" r="1.2" fill="currentColor"></circle><circle cx="19" cy="13" r="1.2" fill="currentColor"></circle></svg><span>Keaktifan</span></button>
           <button id="tab-pts" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="pts"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><span>PTS & PAS</span></button>
           <button id="tab-akhir" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="akhir"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg><span>Nilai Akhir</span></button>
           <button id="tab-backup" class="flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap" data-tab="backup"><svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16v-8m0 8l-3-3m3 3l3-3M4 20h16"></path></svg><span>Backup Nilai</span></button>
@@ -4152,7 +4274,7 @@ export async function renderGuruPenilaianPage(container) {
           </div>
         </div>
 
-        <div id="tab-content" class="bg-gradient-to-b from-white to-slate-50/70 p-4 sm:p-5">
+        <div id="penilaian-tabpanel" role="tabpanel" aria-live="polite" tabindex="0" class="bg-gradient-to-b from-white to-slate-50/70 p-2 sm:p-5">
           <!-- Konten tab akan diisi di sini -->
         </div>
       </div>
@@ -4163,7 +4285,7 @@ export async function renderGuruPenilaianPage(container) {
 
   // Tab Event Listeners
   const tabButtons = container.querySelectorAll('[data-tab]');
-  const tabContent = container.querySelector('#tab-content');
+  const tabContent = container.querySelector('#penilaian-tabpanel');
   let activeAssignment = selectedAssignment;
   let activeMembers = members;
 
@@ -4173,8 +4295,6 @@ export async function renderGuruPenilaianPage(container) {
       await renderTabNilaiTugas(context, activeAssignment, activeMembers, tabContent);
     } else if (tabName === 'uh') {
       await renderTabUlanganHarian(context, activeAssignment, activeMembers, tabContent);
-    } else if (tabName === 'keaktifan') {
-      await renderTabKeaktifanWorkspace(context, activeAssignment, activeMembers, tabContent);
     } else if (tabName === 'pts') {
       await renderTabPTSPAS(context, activeAssignment, activeMembers, tabContent);
     } else if (tabName === 'akhir') {
@@ -4190,11 +4310,16 @@ export async function renderGuruPenilaianPage(container) {
     tabButtons.forEach((button) => {
       const isActive = button === activeBtn;
       button.className = isActive
-        ? 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-3 py-2.5 text-center text-xs font-semibold text-white shadow-[0_14px_28px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/15 transition whitespace-normal sm:whitespace-nowrap'
-        : 'flex min-w-0 items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-3 py-2.5 text-center text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 whitespace-normal sm:whitespace-nowrap';
+        ? 'flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-transparent bg-gradient-to-r from-indigo-600 via-blue-500 to-orange-500 px-2 py-2.5 text-center text-[11px] font-semibold leading-tight text-white shadow-[0_14px_28px_-16px_rgba(59,130,246,0.9)] ring-1 ring-white/15 transition last:col-span-2 sm:last:col-span-1 sm:rounded-full sm:px-3 sm:text-xs'
+        : 'flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200/80 bg-white/80 px-2 py-2.5 text-center text-[11px] font-semibold leading-tight text-slate-600 shadow-sm transition last:col-span-2 hover:bg-white hover:text-slate-900 hover:ring-1 hover:ring-emerald-200 sm:last:col-span-1 sm:rounded-full sm:px-3 sm:text-xs';
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-selected', String(isActive));
+      button.setAttribute('aria-controls', 'penilaian-tabpanel');
+      button.setAttribute('tabindex', isActive ? '0' : '-1');
       if (isActive) button.dataset.active = 'true';
       else delete button.dataset.active;
     });
+    if (activeBtn) tabContent?.setAttribute('aria-labelledby', activeBtn.id);
   };
 
   tabButtons.forEach((btn) => {
@@ -4202,6 +4327,21 @@ export async function renderGuruPenilaianPage(container) {
       setActiveMainTab(btn);
       const tabName = btn.getAttribute('data-tab');
       await renderTabByName(tabName);
+    });
+    btn.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const tabs = Array.from(tabButtons);
+      const currentIndex = tabs.indexOf(btn);
+      const nextIndex = event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      const nextTab = tabs[nextIndex];
+      nextTab?.focus();
+      nextTab?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      nextTab?.click();
     });
   });
 

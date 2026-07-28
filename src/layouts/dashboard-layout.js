@@ -30,6 +30,7 @@ export function renderLayout(title, content, opts = {}) {
   const headerClockRoutes = [
     '#guru/dashboard',
     '#guru/input-absen',
+    '#guru/keaktifan',
     '#guru/jurnal',
     '#guru/input-nilai',
     '#guru/penilaian',
@@ -88,14 +89,15 @@ export function renderLayout(title, content, opts = {}) {
       `,
     },
     {
-      label: 'Materi',
-      href: '#guru/materi',
-      routes: ['#guru/materi'],
+      label: 'Aktif',
+      href: '#guru/keaktifan',
+      routes: ['#guru/keaktifan'],
       icon: (active) => `
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[var(--color-primary)]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-          <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          <path d="M17.5 4l.7 1.9L20 6.5l-1.8.6-.7 1.9-.7-1.9-1.8-.6 1.8-.6.7-1.9z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="5" cy="19" r="1.2" fill="currentColor"/>
+          <circle cx="12" cy="6" r="1.2" fill="currentColor"/>
+          <circle cx="19" cy="13" r="1.2" fill="currentColor"/>
         </svg>
       `,
     },
@@ -113,14 +115,13 @@ export function renderLayout(title, content, opts = {}) {
       `,
     },
     {
-      label: 'Backup',
-      href: '#guru/backup',
-      routes: ['#guru/backup'],
+      label: 'Materi',
+      href: '#guru/materi',
+      routes: ['#guru/materi'],
       icon: (active) => `
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[var(--color-primary)]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M12 15V3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M8 19h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
       `,
     },
@@ -338,6 +339,7 @@ export function renderLayout(title, content, opts = {}) {
           { label: 'Dashboard', href: '#guru/dashboard', routes: ['#guru/dashboard'], icon: iconHome },
           { label: 'Input Absensi', href: '#guru/input-absen', routes: ['#guru/input-absen'], icon: iconCalendar },
           { label: 'Jurnal', href: '#guru/jurnal', routes: ['#guru/jurnal'], icon: iconBookSpark },
+          { label: 'Keaktifan', href: '#guru/keaktifan', routes: ['#guru/keaktifan'], icon: iconChart },
           { label: 'Input Nilai', href: '#guru/penilaian', routes: ['#guru/penilaian', '#guru/input-nilai'], icon: iconChart },
           { label: 'Materi', href: '#guru/materi', routes: ['#guru/materi'], icon: iconBookSpark },
           { label: 'Materi AI', href: '#guru/materi-ai', routes: ['#guru/materi-ai'], icon: iconSparkle },

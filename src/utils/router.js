@@ -7,6 +7,7 @@ import { renderAdminLobbySchoolPage } from '../pages/admin/lobi-sekolah.js';
 import { renderSystemSettingsPage } from '../pages/admin/pengatur-sistem.js';
 import { renderGuruDashboard } from '../pages/guru/dashboard.js';
 import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
+import { renderGuruKeaktifanPage } from '../pages/guru/keaktifan.js';
 import { renderGuruJurnalPage } from '../pages/guru/jurnal.js';
 import { renderGuruPenilaianPage } from '../pages/guru/penilaian.js';
 import { renderGuruMateriPage } from '../pages/guru/materi.js';
@@ -117,7 +118,7 @@ async function renderRoute() {
 
   if (typeof container.routeCleanup === 'function') {
     try {
-      container.routeCleanup();
+      await container.routeCleanup();
     } finally {
       container.routeCleanup = null;
     }
@@ -190,6 +191,11 @@ async function renderRoute() {
 
   if (route === '#guru/input-absen') {
     await renderAndFinalize(renderGuruInputAbsenPage, container);
+    return;
+  }
+
+  if (route === '#guru/keaktifan') {
+    await renderAndFinalize(renderGuruKeaktifanPage, container);
     return;
   }
 

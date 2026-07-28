@@ -275,8 +275,11 @@ export async function renderGuruInputAbsenPage(container) {
         <section id="absensi-subtab-keluar-kelas" class="hidden grid max-w-full gap-3 xl:grid-cols-[1.1fr_0.9fr]">
           <div class="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 p-3 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.24)] sm:p-4">
             <div class="mb-4">
-              <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Catatan Siswa Keluar Kelas</h2>
-              <p class="mt-1 text-sm text-slate-500">Catat alasan siswa keluar kelas seperti izin, ke kantin, ikut organisasi, membolos, atau kebutuhan khusus lain pada jam pelajaran aktif.</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-lg font-semibold text-slate-900 sm:text-xl">Catatan Cepat Satu Siswa</h2>
+                <span class="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-sky-700">Input individual</span>
+              </div>
+              <p class="mt-1 text-sm text-slate-500">Pilih satu siswa untuk mencatat izin keluar, ke kantin, organisasi, membolos, atau kebutuhan khusus lain. Setelah disimpan, status absensi siswa otomatis menjadi K.</p>
             </div>
 
             <div class="grid gap-3 sm:grid-cols-2">
@@ -310,13 +313,22 @@ export async function renderGuruInputAbsenPage(container) {
             </div>
 
             <div class="mt-4 flex flex-wrap items-center gap-3">
-              <button id="save-special-note-btn" type="button" class="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(245,158,11,0.95)] transition hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600">Simpan Semua Catatan K</button>
-              <p id="special-note-message" class="text-xs text-slate-500">Catatan akan tersimpan pada tanggal absensi yang sedang aktif.</p>
+              <button id="save-single-special-note-btn" type="button" class="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_-18px_rgba(245,158,11,0.95)] transition hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600 disabled:cursor-wait disabled:opacity-60">Simpan Catatan Siswa</button>
+              <p id="special-note-message" class="text-xs text-slate-500">Menyimpan satu catatan untuk siswa yang dipilih pada tanggal absensi aktif.</p>
             </div>
 
             <div class="mt-5 rounded-[24px] border border-amber-100 bg-amber-50/60 p-3">
-              <p class="text-sm font-semibold text-amber-900">Daftar Siswa Berstatus K</p>
-              <p class="mt-1 text-xs text-amber-800">Nama siswa berstatus K pada tanggal aktif muncul otomatis. Lengkapi jenis catatan, jam, dan keterangan per baris lalu simpan sekali.</p>
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-sm font-semibold text-amber-900">Catatan Massal Siswa Berstatus K</p>
+                    <span class="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-700">Input massal</span>
+                  </div>
+                  <p class="mt-1 text-xs text-amber-800">Siswa yang sudah diberi status K pada daftar absensi muncul otomatis. Lengkapi semua baris, lalu simpan sekaligus.</p>
+                </div>
+                <button id="save-all-k-notes-btn" type="button" class="shrink-0 rounded-full bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60">Simpan Semua Catatan K</button>
+              </div>
+              <p id="bulk-k-note-message" class="mt-2 text-xs text-amber-800">Belum ada perubahan massal yang disimpan.</p>
               <div id="keluar-kelas-k-list" class="mt-3 space-y-3"></div>
             </div>
           </div>
@@ -581,8 +593,10 @@ export async function renderGuruInputAbsenPage(container) {
   const specialNoteType = container.querySelector('#special-note-type');
   const specialNoteTime = container.querySelector('#special-note-time');
   const specialNoteText = container.querySelector('#special-note-text');
-  const saveSpecialNoteBtn = container.querySelector('#save-special-note-btn');
+  const saveSingleSpecialNoteBtn = container.querySelector('#save-single-special-note-btn');
+  const saveAllKNotesBtn = container.querySelector('#save-all-k-notes-btn');
   const specialNoteMessage = container.querySelector('#special-note-message');
+  const bulkKNoteMessage = container.querySelector('#bulk-k-note-message');
   const keluarKelasKList = container.querySelector('#keluar-kelas-k-list');
   const specialNoteHistory = container.querySelector('#special-note-history');
   const specialNoteHistoryStudent = container.querySelector('#special-note-history-student');
@@ -674,6 +688,14 @@ export async function renderGuruInputAbsenPage(container) {
     }
     specialNoteMessage.textContent = text;
     specialNoteMessage.className = isError ? 'text-xs text-rose-600' : 'text-xs text-slate-500';
+  }
+
+  function setBulkKNoteMessage(text, isError = false) {
+    if (!bulkKNoteMessage) {
+      return;
+    }
+    bulkKNoteMessage.textContent = text;
+    bulkKNoteMessage.className = isError ? 'mt-2 text-xs text-rose-600' : 'mt-2 text-xs text-amber-800';
   }
 
   async function refreshSpecialNotes() {
@@ -1301,6 +1323,13 @@ export async function renderGuruInputAbsenPage(container) {
       return;
     }
 
+    const originalButtonText = saveSingleSpecialNoteBtn?.textContent || 'Simpan Catatan Siswa';
+    if (saveSingleSpecialNoteBtn) {
+      saveSingleSpecialNoteBtn.disabled = true;
+      saveSingleSpecialNoteBtn.textContent = 'Menyimpan…';
+    }
+    setSpecialNoteMessage('Menyimpan catatan siswa…');
+
     try {
       const now = Date.now();
       const docId = `${assignment.id}_${target.siswaId}_${selectedDate}_${now}`;
@@ -1350,19 +1379,24 @@ export async function renderGuruInputAbsenPage(container) {
     } catch (error) {
       console.error('Gagal menyimpan catatan khusus:', error);
       setSpecialNoteMessage('Gagal menyimpan catatan khusus.', true);
+    } finally {
+      if (saveSingleSpecialNoteBtn) {
+        saveSingleSpecialNoteBtn.disabled = false;
+        saveSingleSpecialNoteBtn.textContent = originalButtonText;
+      }
     }
   }
 
   async function saveAllKSpecialNotes() {
     const assignment = getCurrentAssignment();
     if (!assignment) {
-      setSpecialNoteMessage('Relasi mengajar belum dipilih.', true);
+      setBulkKNoteMessage('Relasi mengajar belum dipilih.', true);
       return;
     }
 
     const rowElements = Array.from(keluarKelasKList?.querySelectorAll('[data-k-student-row]') || []);
     if (!rowElements.length) {
-      setSpecialNoteMessage('Belum ada siswa berstatus K untuk disimpan.', true);
+      setBulkKNoteMessage('Belum ada siswa berstatus K untuk disimpan.', true);
       return;
     }
 
@@ -1395,9 +1429,16 @@ export async function renderGuruInputAbsenPage(container) {
     });
 
     if (hasValidationError) {
-      setSpecialNoteMessage('Masih ada baris K yang belum lengkap. Periksa semua baris lalu simpan lagi.', true);
+      setBulkKNoteMessage('Masih ada baris K yang belum lengkap. Periksa semua baris lalu simpan lagi.', true);
       return;
     }
+
+    const originalButtonText = saveAllKNotesBtn?.textContent || 'Simpan Semua Catatan K';
+    if (saveAllKNotesBtn) {
+      saveAllKNotesBtn.disabled = true;
+      saveAllKNotesBtn.textContent = 'Menyimpan semua…';
+    }
+    setBulkKNoteMessage(`Menyimpan ${rowsPayload.length} catatan status K…`);
 
     try {
       await Promise.all(rowsPayload.map(async (item, index) => {
@@ -1450,10 +1491,15 @@ export async function renderGuruInputAbsenPage(container) {
 
       await refreshCurrentData();
       setAbsensiSubtab('keluar-kelas');
-      setSpecialNoteMessage(`${rowsPayload.length} catatan status K berhasil disimpan.`);
+      setBulkKNoteMessage(`${rowsPayload.length} catatan status K berhasil disimpan.`);
     } catch (error) {
       console.error('Gagal menyimpan catatan status K secara batch:', error);
-      setSpecialNoteMessage('Gagal menyimpan semua catatan K.', true);
+      setBulkKNoteMessage('Gagal menyimpan semua catatan K.', true);
+    } finally {
+      if (saveAllKNotesBtn) {
+        saveAllKNotesBtn.disabled = false;
+        saveAllKNotesBtn.textContent = originalButtonText;
+      }
     }
   }
 
@@ -1714,7 +1760,10 @@ export async function renderGuruInputAbsenPage(container) {
     renderPencapaian();
   });
   saveAbsenBtn?.addEventListener('click', saveAttendance);
-  saveSpecialNoteBtn?.addEventListener('click', async () => {
+  saveSingleSpecialNoteBtn?.addEventListener('click', async () => {
+    await saveSpecialNote();
+  });
+  saveAllKNotesBtn?.addEventListener('click', async () => {
     await saveAllKSpecialNotes();
   });
   [specialNoteHistoryStudent, specialNoteHistoryType, specialNoteHistoryStart, specialNoteHistoryEnd].forEach((el) => {

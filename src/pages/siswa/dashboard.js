@@ -51,17 +51,16 @@ const studentToneChip = (tone) => ({
 }[tone] || 'student-app-icon--blue');
 
 const quickCard = (href, title, desc, icon, tone = 'blue', options = {}) => {
-  const { featured = false, badge = '' } = options;
+  const { badge = '', featured = false } = options;
   return `
-          <a href="${href}" class="student-app group ${featured ? 'student-app--primary' : ''}" title="${escapeHtml(desc)}">
+          <a href="${href}" class="student-app group ${featured ? 'student-app--primary' : ''}"${featured ? '' : ` title="${escapeHtml(desc)}"`}>
             <span class="student-app-icon ${studentToneChip(tone)}">
               <span class="student-app-gloss"></span>
               ${badge}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${icon}</svg>
             </span>
             <span class="student-app-label">${escapeHtml(title)}</span>
-            ${featured ? `<span class="student-app-featured-copy">${escapeHtml(desc)}<br><strong>Lihat hasilmu</strong></span>` : ''}
-            <span class="visually-hidden">${escapeHtml(desc)}</span>
+            ${featured ? `<span class="student-app-featured-copy">${escapeHtml(desc)}</span>` : `<span class="visually-hidden">${escapeHtml(desc)}</span>`}
           </a>`;
 };
 
@@ -244,8 +243,8 @@ export async function renderSiswaDashboardPage(container) {
           <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Akses cepat untukmu</h2>
         </div>
         <div class="student-action-grid">
-          ${quickCard('#siswa/nilai', 'Nilai', 'Pantau perkembangan belajar per mata pelajaran.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan', { featured: true })}
-          ${quickCard('#siswa/absensi', 'Absensi', hasAlpaWarning ? 'Perhatian kehadiran!' : 'Pantau kehadiran harian.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', hasAlpaWarning ? 'rose' : 'teal', { badge: attendanceBadge })}
+          ${quickCard('#siswa/nilai', 'Nilai', 'Pantau perkembangan belajar per mata pelajaran.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan')}
+          ${quickCard('#siswa/absensi', 'Absensi', hasAlpaWarning ? 'Perhatian kehadiran!' : 'Pantau kehadiran harian.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', hasAlpaWarning ? 'rose' : 'teal', { badge: attendanceBadge, featured: true })}
           ${quickCard('#siswa/materi', 'Materi', 'Baca materi dari guru.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'sky')}
           ${quickCard('#siswa/kuiz', 'Ujian', 'Masuk ke ujian kelas.', '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/>', 'teal')}
           ${quickCard('#siswa/pengumuman', 'Woro-woro', 'Pengumuman dari guru.', '<path d="M3 11l14-7v16L3 13z"/><path d="M3 11v2a2 2 0 0 0 2 2h2"/><path d="M19 8v8"/>', 'amber', { badge: announcementBadge })}
