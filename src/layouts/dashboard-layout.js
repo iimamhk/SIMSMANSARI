@@ -89,15 +89,12 @@ export function renderLayout(title, content, opts = {}) {
       `,
     },
     {
-      label: 'Aktif',
+      label: 'Keaktifan',
       href: '#guru/keaktifan',
       routes: ['#guru/keaktifan'],
       icon: (active) => `
         <svg viewBox="0 0 24 24" class="h-6 w-6 ${active ? 'text-[var(--color-primary)]' : 'text-slate-500'}" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-          <circle cx="5" cy="19" r="1.2" fill="currentColor"/>
-          <circle cx="12" cy="6" r="1.2" fill="currentColor"/>
-          <circle cx="19" cy="13" r="1.2" fill="currentColor"/>
+          <path d="M3.5 12h4l2.2-5.5 4.1 11 2.2-5.5h4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       `,
     },

@@ -26,12 +26,12 @@ export function renderGuruDashboard(container) {
   };
   const renderCelestial = (theme) => {
     if (theme.celestialType === 'moon') {
-      return `<div class="hero-celestial hc-moon ${theme.celestialPos} h-14 w-14 sm:h-16 sm:w-16">
+      return `<div class="hero-celestial hc-moon ${theme.celestialPos} h-11 w-11 sm:h-16 sm:w-16">
         <div class="hc-halo"></div>
         <div class="hc-disk"></div>
       </div>`;
     }
-    return `<div class="hero-celestial ${theme.celestialFloat ? 'hc-float' : ''} ${theme.celestialPos} h-16 w-16 sm:h-20 sm:w-20" style="--hc-color:${theme.hcColor};--hc-core:${theme.hcCore};--hc-edge:${theme.hcEdge};--hc-glow:${theme.hcGlow}">
+    return `<div class="hero-celestial ${theme.celestialFloat ? 'hc-float' : ''} ${theme.celestialPos} h-12 w-12 sm:h-20 sm:w-20" style="--hc-color:${theme.hcColor};--hc-core:${theme.hcCore};--hc-edge:${theme.hcEdge};--hc-glow:${theme.hcGlow}">
       <div class="hc-halo"></div>
       ${sunRays()}
       <div class="hc-disk"></div>
@@ -210,30 +210,29 @@ export function renderGuruDashboard(container) {
   const pageHtml = `
     <div class="space-y-6">
       <section>
-        <div class="guru-ios-hero relative overflow-hidden bg-gradient-to-br ${heroTheme.panel} p-6 ${cMain} sm:p-8">
+        <div class="guru-ios-hero relative overflow-hidden bg-gradient-to-br ${heroTheme.panel} px-4 py-4 ${cMain} sm:px-8 sm:py-7">
           <div class="guru-ios-hero-glass"></div>
           <div class="guru-ios-hero-orb guru-ios-hero-orb--one"></div>
           <div class="guru-ios-hero-orb guru-ios-hero-orb--two"></div>
-          <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full ${L ? 'bg-white/30' : 'bg-white/10'} blur-3xl"></div>
-          <div class="pointer-events-none absolute -bottom-20 -left-10 h-40 w-40 rounded-full ${L ? 'bg-white/25' : 'bg-white/10'} blur-3xl"></div>
+          <div class="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full ${L ? 'bg-white/30' : 'bg-white/10'} blur-3xl"></div>
+          <div class="pointer-events-none absolute -bottom-20 -left-10 h-36 w-36 rounded-full ${L ? 'bg-white/25' : 'bg-white/10'} blur-3xl"></div>
           ${renderCelestial(heroTheme)}
           ${heroTheme.celestialType === 'moon' ? nightStars : ''}
-          <div class="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div class="min-w-0 max-w-xl">
-              <p class="guru-ios-eyebrow ${cEyebrow}">${greeting}</p>
-              <h1 class="guru-ios-title mt-1.5">${shortName}</h1>
-              <p class="guru-ios-date mt-2 ${cSub}">${todayName}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</p>
-              <p class="guru-ios-quote mt-3 flex items-start gap-2 ${cQuote}">
-                <svg viewBox="0 0 24 24" class="mt-0.5 h-4 w-4 shrink-0 ${cIcon}" fill="currentColor"><path d="M9.5 7C6.5 7 5 9 5 12v5h6v-6H8c0-1.5.5-2 2-2V7zm9 0c-3 0-4.5 2-4.5 5v5h6v-6h-3c0-1.5.5-2 2-2V7z"/></svg>
+          <div class="relative flex flex-col">
+            <div class="min-w-0">
+              <h1 class="guru-ios-title">${greeting}, ${shortName}</h1>
+              <p class="guru-ios-date mt-1 ${cSub}">${todayName}, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}</p>
+              <p class="guru-ios-quote mt-1.5 flex items-start gap-1.5 ${cQuote}">
+                <svg viewBox="0 0 24 24" class="mt-0.5 h-3.5 w-3.5 shrink-0 ${cIcon}" fill="currentColor"><path d="M9.5 7C6.5 7 5 9 5 12v5h6v-6H8c0-1.5.5-2 2-2V7zm9 0c-3 0-4.5 2-4.5 5v5h6v-6h-3c0-1.5.5-2 2-2V7z"/></svg>
                 <span>${heroTheme.quote}</span>
               </p>
             </div>
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="mt-3 flex items-center gap-2.5 border-t pt-3 ${L ? 'border-black/10' : 'border-white/15'}">
               <div class="guru-ios-schedule border ${chip}">
                 <p class="text-[11px] font-medium uppercase tracking-wide ${cEyebrow}">Jadwal hari ini</p>
-                <p class="text-lg font-semibold ${cMain}"><span id="hero-jadwal-count">-</span> kelas</p>
+                <p class="text-base font-semibold ${cMain}"><span id="hero-jadwal-count">-</span> kelas</p>
               </div>
-              <a href="#guru/input-absen" class="guru-ios-hero-button">
+              <a href="#guru/input-absen" class="guru-ios-hero-button ml-auto">
                 <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/></svg>
                 Mulai Absensi
               </a>
