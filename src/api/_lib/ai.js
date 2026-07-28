@@ -520,7 +520,7 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
         messages,
         temperature,
         max_tokens: maxTokens,
-        stream: true,
+        stream: !options.forceNonStream,
       }),
     });
   } catch (error) {
@@ -661,12 +661,14 @@ async function testUpstreamConnection(options = {}) {
     let received = false;
     let activeModel = options.model || profile.model;
     let modelFallbackUsed = false;
-    for await (const _delta of streamChatCompletions([{ role: 'user', content: 'ping' }], {
+    // Untuk tes koneksi, pakai non-stream agar lebih reliable dengan provider
+    // yang mungkin tidak mendukung SSE dengan benar.
+    const testOptions = { maxTokens: 8, temperature: 0, isTest: true, forceNonStream: true };
+    for await (const _delta of streamChatCompletions([{ role: 'user', content: 'Balas dengan kata: OK' }], {
       profileId: profile.id,
       resolvedProfile: options.overrideProfile || null,
       model: options.model || profile.model,
-      maxTokens: 4,
-      temperature: 0,
+      ...testOptions,
       onModelSelected: (model) => {
         activeModel = model;
       },
@@ -679,14 +681,14 @@ async function testUpstreamConnection(options = {}) {
       break;
     }
     if (!received) {
-      return { ok: false, model: activeModel, profileId: profile.id, modelFallbackUsed, baseUrl: profile.baseUrl, error: `Layanan AI merespons tanpa konten. Periksa model "${activeModel}" tersedia di ${profile.baseUrl}.`, code: 'empty_response' };
+      return { ok: false, model: activeModel, profileId: profile.id, modelFallbackUsed, baseUrl: profile.baseUrl, error: `Layanan AI merespons tanpa konten. Periksa model "${activeModel}" tersedia di ${profile.baseUrl} dan API key valid.`, code: 'empty_response' };
     }
     return { ok: received, model: activeModel, profileId: profile.id, modelFallbackUsed };
   } catch (error) {
     if (error instanceof AiServiceError) {
-      return { ok: false, model: profile.model, profileId: profile.id, error: error.message, code: error.code };
+      return { ok: false, model: profile.model, profileId: profile.id, baseUrl: profile.baseUrl, error: error.message, code: error.code };
     }
-    return { ok: false, model: profile.model, profileId: profile.id, error: error?.message || 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
+    return { ok: false, model: profile.model, profileId: profile.id, baseUrl: profile.baseUrl, error: error?.message || 'Tidak dapat menghubungi layanan AI.', code: 'upstream_unreachable' };
   }
 }
 
