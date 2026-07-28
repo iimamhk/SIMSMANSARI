@@ -9,6 +9,7 @@ const {
   parseGenerationOptions,
   parseJsonBody,
   resolveAiProfile,
+  resolveEffectiveProfile,
   sanitizeMaterialInput,
   sendJson,
   sendSseComment,
@@ -77,12 +78,15 @@ module.exports = async (req, res) => {
   });
 
   try {
-    const fallbackProfiles = getConfig().aiProfiles && getConfig().aiProfiles.length
-      ? [resolveAiProfile(profileId), ...getConfig().aiProfiles.filter((profile) => profile.id !== resolveAiProfile(profileId).id)]
-      : [resolveAiProfile(profileId)];
-    let requestedModel = model || resolveAiProfile(profileId).model || getConfig().model;
+    // Resolusi profil efektif (async): prioritaskan konfigurasi admin di Firestore.
+    const primaryProfile = await resolveEffectiveProfile(profileId);
+    const envProfiles = getConfig().aiProfiles && getConfig().aiProfiles.length
+      ? getConfig().aiProfiles.filter((profile) => profile.id !== primaryProfile.id)
+      : [];
+    const fallbackProfiles = [primaryProfile, ...envProfiles];
+    let requestedModel = model || primaryProfile.model || getConfig().model;
     let activeModel = requestedModel;
-    let activeProfileId = resolveAiProfile(profileId).id;
+    let activeProfileId = primaryProfile.id;
     let modelFallbackUsed = false;
 
     for (let index = 0; index < fallbackProfiles.length; index += 1) {
@@ -96,7 +100,8 @@ module.exports = async (req, res) => {
       try {
         for await (const delta of streamChatCompletions(messages, {
           profileId: profile.id,
-          model,
+          resolvedProfile: profile,
+          model: model || profile.model,
           temperature: options.temperature,
           maxTokens: options.maxTokens,
           signal: abortController.signal,

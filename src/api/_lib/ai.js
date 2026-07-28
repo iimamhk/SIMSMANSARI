@@ -5,6 +5,17 @@ const DEFAULT_RATE_LIMIT_WINDOW_MS = 900000;
 const DEFAULT_TIMEOUT_MS = 120000;
 const MAX_TOKENS_CAP = 8000;
 
+let aiConfigModule = null;
+function loadAiConfigModule() {
+  if (aiConfigModule) return aiConfigModule;
+  try {
+    aiConfigModule = require('./ai-config');
+  } catch {
+    aiConfigModule = null;
+  }
+  return aiConfigModule;
+}
+
 function sanitizeProfileId(value, fallback) {
   const cleaned = String(value || '')
     .trim()
@@ -183,8 +194,36 @@ function resolveAiProfile(profileId) {
   return env.aiProfiles.find((profile) => profile.id === normalized) || env.aiProfiles[0];
 }
 
-function getAiProfileModelCandidates(profileId, preferredModel) {
-  const profile = resolveAiProfile(profileId);
+/**
+ * Resolusi profil efektif secara async: prioritaskan konfigurasi yang disimpan
+ * admin di Firestore (settings/ai). Bila kosong/tidak aktif, fallback ke profil
+ * env. Mengembalikan objek profil dengan bentuk yang sama seperti resolveAiProfile.
+ */
+async function resolveEffectiveProfile(profileId) {
+  const aiConfig = loadAiConfigModule();
+  if (aiConfig && typeof aiConfig.readStoredConfig === 'function') {
+    try {
+      const stored = await aiConfig.readStoredConfig();
+      if (stored && stored.apiKey && stored.baseUrl && stored.model) {
+        return {
+          id: 'firestore',
+          label: 'AI (Konfigurasi Admin)',
+          apiKey: stored.apiKey,
+          baseUrl: stored.baseUrl,
+          model: stored.model,
+          models: Array.isArray(stored.models) && stored.models.length ? stored.models : [stored.model],
+          isDefault: true,
+        };
+      }
+    } catch (error) {
+      console.warn('Fallback ke profil env:', error?.message || error);
+    }
+  }
+  return resolveAiProfile(profileId);
+}
+
+function getAiProfileModelCandidates(profileId, preferredModel, profileOverride) {
+  const profile = profileOverride || resolveAiProfile(profileId);
   const preferred = typeof preferredModel === 'string' ? preferredModel.trim() : '';
   const candidates = [preferred, profile.model, ...(Array.isArray(profile.models) ? profile.models : [])]
     .map((model) => String(model || '').trim())
@@ -569,8 +608,8 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
 }
 
 async function* streamChatCompletions(messages, options = {}) {
-  const profile = resolveAiProfile(options.profileId);
-  const candidates = getAiProfileModelCandidates(profile.id, options.model);
+  const profile = options.resolvedProfile || resolveAiProfile(options.profileId);
+  const candidates = getAiProfileModelCandidates(profile.id, options.model || profile.model, options.resolvedProfile || null);
   if (!candidates.length) {
     throw new AiServiceError('Model AI belum dikonfigurasi.', 503, 'not_configured');
   }
@@ -601,7 +640,7 @@ async function* streamChatCompletions(messages, options = {}) {
 }
 
 async function testUpstreamConnection(options = {}) {
-  const profile = resolveAiProfile(options.profileId);
+  const profile = options.overrideProfile || resolveAiProfile(options.profileId);
   if (!profile?.apiKey || profile.apiKey === 'sk-xxxxxxxxxxxxxxxx') {
     return { ok: false, model: profile?.model || DEFAULT_MODEL, error: 'API key belum dikonfigurasi di server.', code: 'not_configured' };
   }
@@ -612,7 +651,8 @@ async function testUpstreamConnection(options = {}) {
     let modelFallbackUsed = false;
     for await (const _delta of streamChatCompletions([{ role: 'user', content: 'ping' }], {
       profileId: profile.id,
-      model: options.model,
+      resolvedProfile: options.overrideProfile || null,
+      model: options.model || profile.model,
       maxTokens: 4,
       temperature: 0,
       onModelSelected: (model) => {
@@ -675,6 +715,7 @@ module.exports = {
   parseGenerationOptions,
   parseJsonBody,
   resolveAiProfile,
+  resolveEffectiveProfile,
   sanitizeMaterialInput,
   sendJson,
   sendSseComment,

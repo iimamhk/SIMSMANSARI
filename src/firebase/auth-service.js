@@ -229,6 +229,35 @@ export async function changePassword(password) {
   return true;
 }
 
+export async function getAiAdminConfig() {
+  const response = await authenticatedFetch('/api/ai/config');
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Konfigurasi AI tidak dapat dimuat.');
+  return result;
+}
+
+export async function saveAiAdminConfig(config) {
+  const response = await authenticatedFetch('/api/ai/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Konfigurasi AI tidak dapat disimpan.');
+  return result;
+}
+
+export async function testAiAdminConfig(config) {
+  const response = await authenticatedFetch('/api/ai/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...config, action: 'test' }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Koneksi AI tidak dapat diuji.');
+  return result;
+}
+
 export async function loginUser(username, password) {
   try {
     const response = await fetch(backendUrl('/api/auth/login'), {
