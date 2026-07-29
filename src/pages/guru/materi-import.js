@@ -66,6 +66,7 @@ function pageStyles() {
   return `
     .mi { --mi-primary:#2563eb; --mi-bg:#f1f5f9; --mi-surface:#fff; --mi-text:#0f172a; --mi-muted:#64748b; --mi-line:#e2e8f0; --mi-radius:18px; min-height:calc(100vh - 2rem); color:var(--mi-text); }
     .mi * { box-sizing:border-box; }
+    .mi [hidden] { display:none !important; }
     .mi-hero { position:relative; overflow:hidden; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:22px 26px; border-radius:22px; color:#fff; background:linear-gradient(125deg,#0f172a,#1e293b 50%,#0d9488); box-shadow:0 22px 50px -32px rgba(13,148,136,.5); }
     .mi-hero-copy { position:relative; z-index:1; }
     .mi-hero p.mi-kicker { display:flex; align-items:center; gap:8px; margin:0 0 8px; color:rgba(255,255,255,.7); font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
