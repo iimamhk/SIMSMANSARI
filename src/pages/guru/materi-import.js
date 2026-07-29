@@ -24,30 +24,28 @@ function documentIdToken(v) { return String(v || '').trim().replace(/[^a-zA-Z0-9
 function escapeHtml(v) { return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
 const ALLOWED_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','br','hr','ul','ol','li','img','table','thead','tbody','tr','td','th','code','pre','strong','em','b','i','u','s','span','div','blockquote','a','sup','sub','dl','dt','dd','figure','figcaption','mark','small','details','summary']);
-const ALLOWED_ATTRS = new Set(['href','src','alt','title','width','height','style','class','colspan','rowspan','target','rel','lang','dir','align','valign','bgcolor','color','data-latex','data-display']);
+const ALLOWED_ATTRS = new Set(['href','src','alt','title','width','height','style','class','colspan','rowspan','target','rel','lang','dir','align','valign','bgcolor','color','data-latex','data-display','type','name','value','id','min','max','step','placeholder','draggable','data-answer','for']);
 const DANGEROUS_ATTR_PREFIXES = ['on'];
 
 /**
- * Sanitasi HTML mentah: hapus script, event handler, javascript: URI.
- * Output aman untuk iframe srcdoc sandbox.
+ * Sanitasi OPSIONAL: hapus <script> + event handler (onclick, onerror, dll).
+ * Pertahankan <style>, <link>, <form>, <input>, <button>, Tailwind, MathJax.
+ * Mode Mentah default TIDAK memanggil ini — guru pilih via tombol Sanitasi.
  */
 function sanitizeHtml(raw) {
   if (!raw || typeof raw !== 'string') return '';
   const doc = new DOMParser().parseFromString(raw, 'text/html');
-  const body = doc.body || doc.createElement('body');
-  body.querySelectorAll('script,style,link,meta,noscript,iframe,object,embed,base,form,input,button,textarea,select').forEach((el) => el.remove());
-  body.querySelectorAll('*').forEach((el) => {
-    if (!ALLOWED_TAGS.has(el.tagName.toLowerCase())) { el.replaceWith(...el.childNodes); return; }
+  doc.querySelectorAll('script').forEach((el) => el.remove());
+  doc.querySelectorAll('*').forEach((el) => {
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
       const value = String(attr.value || '');
       if (DANGEROUS_ATTR_PREFIXES.some((p) => name.startsWith(p))) { el.removeAttribute(attr.name); return; }
-      if (!ALLOWED_ATTRS.has(name)) { el.removeAttribute(attr.name); return; }
-      if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(value)) { el.removeAttribute(attr.name); return; }
-      if (name === 'href') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
+      if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(value)) { el.removeAttribute(attr.name); }
     });
   });
-  return body.innerHTML;
+  const isFullDoc = /^\s*<!doctype|^\s*<html/i.test(raw.trim());
+  return isFullDoc ? `<!doctype html>${doc.documentElement.outerHTML}` : (doc.body ? doc.body.innerHTML : '');
 }
 
 /** Ekstrak judul dari <h1>, <title>, atau baris pertama teks. */
@@ -180,8 +178,9 @@ export async function renderGuruMateriImportPage(container) {
       <ul>
         <li>Salin HTML dari penyedia AI (klik "Copy HTML" atau "Export").</li>
         <li>Tempel ke kolom di kiri — pratinjau muncul otomatis di kanan.</li>
-        <li>Kode <code>&lt;script&gt;</code>, <code>onclick</code>, dan iframe eksternal otomatis dihapus demi keamanan.</li>
-        <li>Isi judul/mapel/kelas di bawah, lalu Simpan (draft) atau Publish (distribusi ke kelas).</li>
+        <li>Tailwind, MathJax, font, dan interaktivitas (drag-drop, kuis) tetap berfungsi.</li>
+        <li>Tombol <strong>Sanitasi</strong> opsional: hapus script & event handler untuk versi statis.</li>
+        <li>Isi judul/mapel/kelas, lalu Simpan (draft) atau Publish (distribusi ke kelas).</li>
       </ul>
     </div>
 
@@ -206,7 +205,7 @@ export async function renderGuruMateriImportPage(container) {
         <div class="mi-panel-body">
           <div class="mi-preview-wrap" id="mi-preview-wrap">
             <div class="mi-empty" id="mi-preview-empty"><span>📄</span><p>Pratinjau muncul di sini setelah HTML ditempel.</p></div>
-            <iframe id="mi-preview-frame" class="mi-preview-frame" hidden sandbox="allow-same-origin" title="Pratinjau materi"></iframe>
+            <iframe id="mi-preview-frame" class="mi-preview-frame" hidden sandbox="allow-scripts allow-same-origin" title="Pratinjau materi"></iframe>
             <pre id="mi-preview-source" hidden style="margin:0;white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.6;color:#475569"></pre>
           </div>
         </div>
@@ -281,19 +280,20 @@ export async function renderGuruMateriImportPage(container) {
       publishBtn.disabled = true;
       return;
     }
-    sanitizedHtml = sanitizeHtml(rawHtml);
-    sanitizeBtn.disabled = (sanitizedHtml === rawHtml);
+    sanitizedHtml = rawHtml;
+    sanitizeBtn.disabled = false;
     saveBtn.disabled = false;
     publishBtn.disabled = false;
     if (!titleInput.value.trim()) {
-      autoTitle = extractTitle(sanitizedHtml);
+      autoTitle = extractTitle(rawHtml);
       titleInput.value = autoTitle;
     }
     previewEmpty.hidden = true;
     if (previewMode === 'rendered') {
       previewFrame.hidden = false;
       previewSource.hidden = true;
-      previewFrame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;line-height:1.6;padding:8px;margin:0}img{max-width:100%;border-radius:8px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #e2e8f0;padding:6px 10px;font-size:13px}th{background:#f1f5f9}pre{background:#f1f5f9;border-radius:8px;padding:10px;overflow-x:auto;font-size:12px}code{background:#f1f5f9;padding:2px 5px;border-radius:4px;font-size:12px}blockquote{border-left:3px solid #cbd5e1;margin:0;padding-left:12px;color:#475569}a{color:#2563eb}</style></head><body>${sanitizedHtml}</body></html>`;
+      const isFullDoc = /^\s*<!doctype|^\s*<html/i.test(rawHtml);
+      previewFrame.srcdoc = isFullDoc ? rawHtml : `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>${rawHtml}</body></html>`;
     } else {
       previewFrame.hidden = true;
       previewSource.hidden = false;
@@ -311,11 +311,12 @@ export async function renderGuruMateriImportPage(container) {
   }));
 
   sanitizeBtn.addEventListener('click', () => {
-    if (!sanitizedHtml) return;
-    ta.value = sanitizedHtml;
+    if (!rawHtml) return;
+    const cleaned = sanitizeHtml(rawHtml);
+    ta.value = cleaned;
     updatePreview();
-    const removed = rawHtml.length - sanitizedHtml.length;
-    showToast(removed > 0 ? `Sanitasi selesai · ${removed} karakter berbahaya dihapus` : 'HTML sudah aman');
+    const removed = rawHtml.length - cleaned.length;
+    showToast(removed > 0 ? `Sanitasi selesai · ${removed} karakter dihapus (script & event handler)` : 'Tidak ada script/event handler terdeteksi');
   });
 
   pasteBtn.addEventListener('click', async () => {
