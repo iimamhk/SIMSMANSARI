@@ -254,7 +254,8 @@ export function renderGuruDashboard(container) {
             ${quickCard('#guru/input-absen', 'Absensi', 'Catat kehadiran kelas.', '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3.5v3M16 3.5v3M8 12h8M8 16h5"/>', 'teal', true)}
             ${quickCard('#guru/penilaian', 'Penilaian', 'Kelola nilai dengan rapi.', '<path d="M5 18.5V9.5M12 18.5V5.5M19 18.5V12.5"/><circle cx="5" cy="19" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="19" cy="13" r="1.2" fill="currentColor" stroke="none"/>', 'cyan')}
             ${quickCard('#guru/jurnal', 'Jurnal', 'Simpan refleksi mengajar.', '<path d="M5 4h11l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8 11h8M8 15h6"/>', 'sky')}
-            ${quickCard('#guru/materi', 'Materi', 'Buat bahan belajar & AI.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'teal')}
+            ${quickCard('#guru/materi', 'Materi', 'Buat bahan belajar.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'teal')}
+            ${quickCard('#guru/materi-ai', 'Materi AI', 'Mulai dari ide cerdas.', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"/><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/>', 'cyan')}
             ${waliQuickCard}
             ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan ke Excel.', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', 'amber', backupBadge)}
             <div class="ios-today-widget" aria-label="Ringkasan hari ini">
