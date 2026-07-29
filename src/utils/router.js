@@ -10,7 +10,7 @@ import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
 import { renderGuruKeaktifanPage } from '../pages/guru/keaktifan.js';
 import { renderGuruJurnalPage } from '../pages/guru/jurnal.js';
 import { renderGuruPenilaianPage } from '../pages/guru/penilaian.js';
-import { renderGuruMateriPage } from '../pages/guru/materi.js';
+import { renderGuruMateriPage } from '../pages/guru/materi-workspace.js';
 import { renderGuruMateriAiPage } from '../pages/guru/materi-ai.js';
 import { renderGuruSystemSettingsPage } from '../pages/guru/pengatur-sistem.js';
 import { renderGuruGamePage } from '../pages/guru/game.js';
