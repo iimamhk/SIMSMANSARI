@@ -34,8 +34,9 @@ const DANGEROUS_ATTR_PREFIXES = ['on'];
 function sanitizeHtml(raw) {
   if (!raw || typeof raw !== 'string') return '';
   const doc = new DOMParser().parseFromString(raw, 'text/html');
-  doc.querySelectorAll('script,style,link,meta,noscript,iframe,object,embed,base,form,input,button,textarea,select').forEach((el) => el.remove());
-  doc.querySelectorAll('*').forEach((el) => {
+  const body = doc.body || doc.createElement('body');
+  body.querySelectorAll('script,style,link,meta,noscript,iframe,object,embed,base,form,input,button,textarea,select').forEach((el) => el.remove());
+  body.querySelectorAll('*').forEach((el) => {
     if (!ALLOWED_TAGS.has(el.tagName.toLowerCase())) { el.replaceWith(...el.childNodes); return; }
     [...el.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
@@ -46,7 +47,7 @@ function sanitizeHtml(raw) {
       if (name === 'href') { el.setAttribute('target', '_blank'); el.setAttribute('rel', 'noopener noreferrer'); }
     });
   });
-  return doc.body ? doc.body.innerHTML : '';
+  return body.innerHTML;
 }
 
 /** Ekstrak judul dari <h1>, <title>, atau baris pertama teks. */
