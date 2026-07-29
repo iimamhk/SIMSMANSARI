@@ -10,6 +10,14 @@ const BLOCKS = [
   { type: 'divider', label: 'Divider', hint: 'Pemisah konten', icon: '—' },
   { type: 'button', label: 'Button', hint: 'Tombol tindakan', icon: '→' },
   { type: 'spacer', label: 'Spacer', hint: 'Ruang antar bagian', icon: '·' },
+  { type: 'formula', label: 'Formula', hint: 'Rumus matematika (KaTeX)', icon: '∑' },
+  { type: 'quiz', label: 'Kuis', hint: 'Pilihan ganda', icon: '?' },
+  { type: 'highlight', label: 'Highlight', hint: 'Catatan penting', icon: '★' },
+  { type: 'example', label: 'Contoh', hint: 'Contoh soal & pembahasan', icon: '✎' },
+  { type: 'exercise', label: 'Latihan', hint: 'Soal latihan', icon: '✓' },
+  { type: 'table', label: 'Tabel', hint: 'Tabel data', icon: '▦' },
+  { type: 'code', label: 'Kode', hint: 'Cuplikan kode', icon: '</>' },
+  { type: 'definition', label: 'Definisi', hint: 'Istilah dan definisi', icon: 'D' },
 ];
 
 const THEMES = {
@@ -65,6 +73,14 @@ function createBlock(type) {
     divider: { color: '#e2e8f0', thickness: 1, margin: 18 },
     button: { text: 'Buka Materi', url: '#', color: '#2563eb', textColor: '#ffffff', radius: 12, align: 'left' },
     spacer: { height: 24 },
+    formula: { latex: '', display: true, caption: '' },
+    quiz: { question: '', options: ['', '', '', ''], correct: 0, explanation: '' },
+    highlight: { type: 'penting', text: '' },
+    example: { title: '', question: '', solution: '' },
+    exercise: { question: '', hints: '', answer: '' },
+    table: { headers: ['', ''], rows: [['', '']], caption: '' },
+    code: { language: 'javascript', code: '', caption: '' },
+    definition: { term: '', definition: '' },
   };
   return { id: uid(), type, props: { ...(defaults[type] || defaults.text) } };
 }
@@ -136,7 +152,35 @@ function pageStyles() {
     .mw-canvas { width:100%; min-height:680px; margin:0 auto; padding:20px; background:var(--mw-surface); color:var(--mw-text); border-radius:12px; transition:max-width .2s ease; }
     .mw-canvas[data-viewport="desktop"] { max-width:100%; } .mw-canvas[data-viewport="tablet"] { max-width:768px; } .mw-canvas[data-viewport="mobile"] { max-width:390px; }
     .mw-dropzone { height:10px; margin:3px 0; border-radius:6px; transition:background .15s, height .15s; } .mw-dropzone.active { height:32px; background:#dbeafe; outline:2px dashed #60a5fa; }
-    .mw-block { position:relative; margin:6px 0; padding:14px 18px; border:1px solid transparent; border-radius:12px; cursor:pointer; transition:border-color .15s, box-shadow .15s, background .15s; }
+    .mw-block-definition { padding:14px 18px; border:1px solid #e2e8f0; border-radius:12px; background:#fafafa; margin:6px 0; }
+    .mw-def-term { font-weight:700; font-size:14px; color:#0f172a; margin-bottom:4px; }
+    .mw-def-definition { margin:0; color:#334155; font-size:13px; line-height:1.6; }
+    .mw-block-quiz { padding:14px 18px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; margin:6px 0; }
+    .mw-quiz-option { display:block; padding:8px 12px; margin:4px 0; border:1px solid #e2e8f0; border-radius:8px; font-size:13px; cursor:default; }
+    .mw-quiz-option input { margin-right:8px; }
+    .mw-quiz-explanation { margin-top:10px; padding:10px; background:#f0fdf4; border-radius:8px; font-size:12px; color:#14532d; }
+    .mw-block-highlight { padding:12px 16px; border-radius:12px; margin:6px 0; font-size:13px; display:flex; gap:8px; align-items:flex-start; }
+    .mw-hl-penting { background:#fef9c3; border:1px solid #fde047; }
+    .mw-hl-miskonsepsi { background:#fee2e2; border:1px solid #fecaca; }
+    .mw-hl-perhatian { background:#fef3c7; border:1px solid #fcd34d; }
+    .mw-hl-info { background:#dbeafe; border:1px solid #93c5fd; }
+    .mw-hl-icon { font-size:16px; flex:none; }
+    .mw-block-example { padding:14px 18px; border:1px solid #e2e8f0; border-radius:12px; background:#fcfcfd; margin:6px 0; }
+    .mw-example-title { font-weight:700; font-size:13px; color:#6366f1; margin:0 0 8px; }
+    .mw-example-solution { margin-top:10px; padding:10px; background:#f0fdf4; border-radius:8px; font-size:12px; }
+    .mw-block-exercise { padding:14px 18px; border:1px solid #e2e8f0; border-radius:12px; background:#fff; margin:6px 0; }
+    .mw-exercise-hints { font-size:12px; color:#64748b; margin-top:6px; }
+    .mw-exercise-answer { margin-top:8px; font-size:12px; }
+    .mw-exercise-answer summary { cursor:pointer; color:#2563eb; font-weight:600; }
+    .mw-block-table { overflow-x:auto; margin:6px 0; }
+    .mw-block-table table { width:100%; border-collapse:collapse; font-size:13px; }
+    .mw-block-table th { background:#f1f5f9; padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0; font-weight:700; font-size:12px; }
+    .mw-block-table td { padding:6px 12px; border-bottom:1px solid #e2e8f0; font-size:12px; }
+    .mw-block-code { background:#1e293b; border-radius:12px; padding:14px; margin:6px 0; overflow-x:auto; }
+    .mw-block-code pre { margin:0; }
+    .mw-block-code code { font-family:'Fira Code','Cascadia Code',monospace; font-size:12px; color:#e2e8f0; white-space:pre; }
+    .mw-block-formula { padding:12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; margin:6px 0; overflow-x:auto; }
+    .mw-math-preview { font-size:16px; }
     .mw-block:hover { border-color:#dbeafe; } .mw-block.selected { border-color:#60a5fa; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
     .mw-block-handle { position:absolute; top:10px; left:-1px; display:none; align-items:center; justify-content:center; width:21px; height:26px; border-radius:7px 0 0 7px; background:#dbeafe; color:#2563eb; font-size:13px; cursor:grab; }
     .mw-block.selected .mw-block-handle,.mw-block:hover .mw-block-handle { display:flex; }
@@ -168,6 +212,14 @@ function renderBlock(block, selectedId) {
   else if (block.type === 'image') content = p.src ? `<img class="mw-image" src="${escapeAttr(p.src)}" alt="${escapeAttr(p.alt || '')}" style="width:${escapeAttr(p.width || '100%')};max-width:${Number(p.maxWidth) || 720}px;height:${escapeAttr(p.height || 'auto')};border-radius:${Number(p.radius) || 0}px;opacity:${(Number(p.opacity) || 100) / 100}">` : '<div class="mw-image-placeholder">Masukkan URL gambar di Properties</div>';
   else if (block.type === 'divider') content = `<div style="height:${Number(p.thickness) || 1}px;background:${escapeAttr(p.color || '#e2e8f0')};margin:${Number(p.margin) || 18}px 0"></div>`;
   else if (block.type === 'button') content = `<div style="text-align:${escapeAttr(p.align || 'left')}"><span style="display:inline-block;padding:10px 16px;border-radius:${Number(p.radius) || 12}px;background:${escapeAttr(p.color || '#2563eb')};color:${escapeAttr(p.textColor || '#fff')};font-size:13px;font-weight:700">${escapeHtml(p.text || '')}</span></div>`;
+  else if (block.type === 'formula') content = `<div class="mw-block-formula"><div class="mw-math-preview" data-latex="${escapeAttr(p.latex || '')}" data-display="${p.display !== false}"></div>${p.caption ? `<small style="display:block;margin-top:7px;color:#64748b;text-align:center">${escapeHtml(p.caption)}</small>` : ''}</div>`;
+  else if (block.type === 'quiz') content = `<div class="mw-block-quiz"><p class="mw-content-text" style="${style}">${escapeHtml(p.question || '')}</p>${(p.options || []).map((opt, i) => `<label class="mw-quiz-option"><input type="radio" name="quiz-${block.id}" value="${i}" ${i === (p.correct || 0) ? 'checked' : ''} disabled>${escapeHtml(opt || 'Opsi ' + (i + 1))}</label>`).join('')}${p.explanation ? `<p class="mw-quiz-explanation">${escapeHtml(p.explanation)}</p>` : ''}</div>`;
+  else if (block.type === 'highlight') content = `<div class="mw-block-highlight mw-hl-${escapeAttr(p.type || 'penting')}"><span class="mw-hl-icon">★</span><span class="mw-hl-text">${escapeHtml(p.text || '')}</span></div>`;
+  else if (block.type === 'example') content = `<div class="mw-block-example"><p class="mw-example-title">${escapeHtml(p.title || 'Contoh')}</p><p class="mw-content-text">${escapeHtml(p.question || '')}</p>${p.solution ? `<div class="mw-example-solution"><strong>Pembahasan:</strong> ${escapeHtml(p.solution)}</div>` : ''}</div>`;
+  else if (block.type === 'exercise') content = `<div class="mw-block-exercise"><p class="mw-content-text">${escapeHtml(p.question || '')}</p>${p.hints ? `<p class="mw-exercise-hints"><strong>Petunjuk:</strong> ${escapeHtml(p.hints)}</p>` : ''}${p.answer ? `<details class="mw-exercise-answer"><summary>Lihat jawaban</summary>${escapeHtml(p.answer)}</details>` : ''}</div>`;
+  else if (block.type === 'table') { const headers = (p.headers || []).map((h) => `<th>${escapeHtml(h)}</th>`).join(''); const rows = (p.rows || []).map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell || '')}</td>`).join('')}</tr>`).join(''); content = `<div class="mw-block-table"><table><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>${p.caption ? `<small style="display:block;margin-top:7px;color:#64748b;text-align:center">${escapeHtml(p.caption)}</small>` : ''}</div>`; }
+  else if (block.type === 'code') content = `<div class="mw-block-code"><pre><code class="mw-code-lang-${escapeAttr(p.language || 'javascript')}">${escapeHtml(p.code || '')}</code></pre>${p.caption ? `<small style="display:block;margin-top:7px;color:#64748b;text-align:center">${escapeHtml(p.caption)}</small>` : ''}</div>`;
+  else if (block.type === 'definition') content = `<div class="mw-block-definition"><dt class="mw-def-term">${escapeHtml(p.term || '')}</dt><dd class="mw-def-definition">${escapeHtml(p.definition || '')}</dd></div>`;
   else content = `<div style="height:${Number(p.height) || 24}px"></div>`;
   return `<article class="mw-block${selected}" data-block-id="${escapeAttr(block.id)}" draggable="true"><span class="mw-block-handle" title="Tarik untuk pindah">⋮⋮</span><div class="mw-block-actions"><button class="mw-mini-btn" data-action="duplicate" title="Duplikat">＋</button><button class="mw-mini-btn" data-action="delete" title="Hapus">×</button></div>${content}${block.type === 'image' && p.caption ? `<small style="display:block;margin-top:7px;color:#64748b;text-align:center">${escapeHtml(p.caption)}</small>` : ''}</article>`;
 }
@@ -182,6 +234,14 @@ function propertiesHtml(block) {
   if (block.type === 'image') return `${input('URL Gambar','src',p.src)}${input('Alt Text','alt',p.alt)}<div class="mw-prop-grid">${input('Lebar','width',p.width)}${input('Radius','radius',p.radius,'number')}</div><div class="mw-prop-grid">${input('Max Width','maxWidth',p.maxWidth,'number')}${input('Opacity','opacity',p.opacity,'number')}</div>${input('Caption','caption',p.caption)}`;
   if (block.type === 'divider') return `<div class="mw-prop-grid">${input('Ketebalan','thickness',p.thickness,'number')}${input('Margin','margin',p.margin,'number')}</div>${input('Warna','color',p.color,'color')}`;
   if (block.type === 'button') return `${input('Label','text',p.text)}${input('URL','url',p.url)}<div class="mw-prop-grid">${input('Warna','color',p.color,'color')}${input('Radius','radius',p.radius,'number')}</div>${select('Alignment','align',p.align,[['left','Kiri'],['center','Tengah'],['right','Kanan']])}`;
+  if (block.type === 'formula') return `${input('LaTeX','latex',p.latex,'textarea')}${select('Tampilan','display',p.display,[['true','Tampil'],['false','Sejajar']])}${input('Caption','caption',p.caption)}`;
+  if (block.type === 'quiz') return `${input('Pertanyaan','question',p.question,'textarea')}${input('Opsi A','options',(p.options || [])[0] || '')}${input('Opsi B','options',(p.options || [])[1] || '')}${input('Opsi C','options',(p.options || [])[2] || '')}${input('Opsi D','options',(p.options || [])[3] || '')}${select('Jawaban Benar','correct',p.correct,[['0','A'],['1','B'],['2','C'],['3','D']])}${input('Penjelasan','explanation',p.explanation,'textarea')}`;
+  if (block.type === 'highlight') return `${select('Tipe','type',p.type,[['penting','Penting'],['miskonsepsi','Miskonsepsi'],['perhatian','Perhatian'],['info','Info']])}${input('Teks','text',p.text,'textarea')}`;
+  if (block.type === 'example') return `${input('Judul','title',p.title)}${input('Soal','question',p.question,'textarea')}${input('Pembahasan','solution',p.solution,'textarea')}`;
+  if (block.type === 'exercise') return `${input('Soal','question',p.question,'textarea')}${input('Petunjuk','hints',p.hints,'textarea')}${input('Jawaban','answer',p.answer,'textarea')}`;
+  if (block.type === 'table') return `${input('Header 1','headers',(p.headers || [])[0] || '')}${input('Header 2','headers',(p.headers || [])[1] || '')}${input('Baris 1, Sel 1','rows',((p.rows || [])[0] || [])[0] || '')}${input('Baris 1, Sel 2','rows',((p.rows || [])[0] || [])[1] || '')}${input('Caption','caption',p.caption)}`;
+  if (block.type === 'code') return `${select('Bahasa','language',p.language,[['javascript','JavaScript'],['python','Python'],['html','HTML'],['css','CSS'],['json','JSON'],['bash','Bash']])}${input('Kode','code',p.code,'textarea')}${input('Caption','caption',p.caption)}`;
+  if (block.type === 'definition') return `${input('Istilah','term',p.term)}${input('Definisi','definition',p.definition,'textarea')}`;
   return input('Tinggi','height',p.height,'number');
 }
 
