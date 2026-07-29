@@ -3,6 +3,7 @@ import { getChatDirectory, getManagedUsers } from './auth-service.js';
 
 const MATERIAL_PUBLISHED_KEY = 'simguru_material_html_published';
 const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
+const MATERIAL_WORKSPACE_DRAFTS_COLLECTION = 'materi_workspace_drafts';
 const MATERIAL_READS_KEY = 'simguru_material_reads';
 const MATERIAL_READS_COLLECTION = 'materi_reads';
 const QUERY_CACHE_TTL_MS = 60000;
@@ -1356,6 +1357,55 @@ export async function synchronizeRenamedUserReferences(context, role, oldUsernam
   }
 
   return { updated: 0, deleted: 0 };
+}
+
+export async function getMaterialWorkspaceDrafts(guruId) {
+  const normalizedGuruId = String(guruId || '').trim();
+  if (!normalizedGuruId) return [];
+  try {
+    const docs = await getDocumentsWhere(MATERIAL_WORKSPACE_DRAFTS_COLLECTION, [
+      { field: 'guru_id', value: normalizedGuruId },
+    ], { cacheMs: 15000, limit: 50 });
+    return docs
+      .filter((item) => String(item.guru_id || '').trim() === normalizedGuruId)
+      .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  } catch (error) {
+    console.warn('Gagal mengambil draft workspace materi:', error);
+    return [];
+  }
+}
+
+export async function saveMaterialWorkspaceDraft(draft) {
+  const id = String(draft?.id || '').trim();
+  const guruId = String(draft?.guru_id || '').trim();
+  if (!id || !guruId) throw new Error('Draft materi membutuhkan ID dan guru.');
+  const payload = {
+    id,
+    guru_id: guruId,
+    title: String(draft.title || 'Materi Baru').slice(0, 200),
+    subject: String(draft.subject || '').slice(0, 120),
+    class_name: String(draft.class_name || '').slice(0, 80),
+    duration: String(draft.duration || '2 JP').slice(0, 20),
+    schema_version: Number(draft.schema_version || 1),
+    document_json: draft.document_json,
+    updated_at: String(draft.updated_at || new Date().toISOString()),
+    created_at: String(draft.created_at || new Date().toISOString()),
+  };
+  const saved = await saveDocument(MATERIAL_WORKSPACE_DRAFTS_COLLECTION, payload, id);
+  if (!saved) throw new Error('Firestore belum siap menyimpan draft.');
+  return saved;
+}
+
+export async function deleteMaterialWorkspaceDraft(id, guruId) {
+  const draftId = String(id || '').trim();
+  const ownerId = String(guruId || '').trim();
+  if (!draftId || !ownerId) return false;
+  const docs = await getDocumentsWhere(MATERIAL_WORKSPACE_DRAFTS_COLLECTION, [
+    { field: 'id', value: draftId },
+    { field: 'guru_id', value: ownerId },
+  ], { limit: 1 });
+  if (!docs.length) return false;
+  return deleteDocument(MATERIAL_WORKSPACE_DRAFTS_COLLECTION, draftId);
 }
 
 export async function getPublishedMaterials(options = {}) {

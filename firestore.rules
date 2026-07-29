@@ -69,6 +69,29 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.guru_id == request.auth.token.username;
     }
 
+    match /materi_workspace_drafts/{draftId} {
+      allow read, delete: if request.auth != null
+        && resource.data.guru_id == request.auth.token.username;
+      allow create, update: if request.auth != null
+        && request.auth.token.role == 'guru'
+        && request.resource.data.guru_id == request.auth.token.username
+        && request.resource.data.id == draftId
+        && request.resource.data.keys().hasOnly([
+          'id', 'guru_id', 'title', 'subject', 'class_name', 'duration',
+          'schema_version', 'document_json', 'updated_at', 'created_at'
+        ])
+        && request.resource.data.id is string
+        && request.resource.data.guru_id is string
+        && request.resource.data.title is string
+        && request.resource.data.subject is string
+        && request.resource.data.class_name is string
+        && request.resource.data.duration is string
+        && request.resource.data.schema_version is int
+        && request.resource.data.document_json is map
+        && request.resource.data.updated_at is string
+        && request.resource.data.created_at is string;
+    }
+
     match /materi_reads/{readId} {
       allow read: if request.auth != null;
       allow create, update: if request.resource.data.keys().hasOnly([

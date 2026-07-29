@@ -1,4 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
+import { getMaterialWorkspaceDrafts, saveMaterialWorkspaceDraft } from '../../firebase/data-service.js';
 
 const STORAGE_KEY = 'simguru_material_workspace_draft';
 const HISTORY_LIMIT = 50;
@@ -62,12 +63,24 @@ function loadDocument() {
   try { return normalizeDocument(JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')); } catch { return defaultDocument(); }
 }
 
+function getSessionContext() {
+  try {
+    const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
+    const context = JSON.parse(localStorage.getItem('simguru_context') || '{}');
+    return { guruId: String(session?.user?.username || '').trim(), context };
+  } catch {
+    return { guruId: '', context: {} };
+  }
+}
+
 function pageStyles() {
   return `
     .mw { --mw-primary:#2563eb; --mw-bg:#f1f5f9; --mw-surface:#fff; --mw-text:#0f172a; --mw-muted:#64748b; --mw-line:#e2e8f0; min-height:calc(100vh - 2rem); color:var(--mw-text); }
     .mw * { box-sizing:border-box; }
     .mw-toolbar { position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:8px; min-height:58px; padding:8px 12px; background:rgba(255,255,255,.9); border:1px solid rgba(226,232,240,.9); border-radius:16px; box-shadow:0 10px 28px -20px rgba(15,23,42,.35); backdrop-filter:blur(18px); }
     .mw-toolbar-title { min-width:140px; margin-right:auto; font-size:14px; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .mw-meta { display:grid; grid-template-columns:minmax(180px,2fr) minmax(120px,1fr) minmax(100px,1fr) minmax(90px,.7fr); gap:8px; margin-top:10px; }
+    .mw-meta input,.mw-meta select { width:100%; border:1px solid var(--mw-line); border-radius:10px; padding:9px 10px; background:#fff; color:var(--mw-text); font-size:12px; }
     .mw-workspace-nav { display:flex; gap:4px; margin-top:10px; padding:4px; border:1px solid var(--mw-line); border-radius:12px; background:rgba(255,255,255,.72); overflow:auto; }
     .mw-nav-btn { flex:none; border:0; border-radius:9px; padding:8px 12px; background:transparent; color:#64748b; font-size:12px; font-weight:750; cursor:pointer; }
     .mw-nav-btn.active { background:#fff; color:var(--mw-primary); box-shadow:0 3px 10px rgba(15,23,42,.08); }
@@ -115,7 +128,7 @@ function pageStyles() {
     .mw-prop-grid { display:grid; grid-template-columns:1fr 1fr; gap:7px; } .mw-empty-props { padding:26px 14px; color:#94a3b8; text-align:center; font-size:12px; line-height:1.5; }
     .mw-status { min-height:18px; margin-top:7px; color:#64748b; font-size:11px; } .mw-toast { position:fixed; right:18px; bottom:18px; z-index:50; padding:10px 14px; border-radius:11px; background:#0f172a; color:#fff; font-size:12px; box-shadow:0 14px 30px -12px rgba(15,23,42,.4); }
     @media (max-width:1023px) { .mw-layout { grid-template-columns:160px minmax(0,1fr); } .mw-properties { grid-column:1 / -1; } }
-    @media (max-width:639px) { .mw-toolbar { position:sticky; top:0; flex-wrap:wrap; border-radius:12px; } .mw-toolbar-title { width:100%; min-width:0; margin:0; order:-2; } .mw-viewports { margin-left:auto; } .mw-layout { display:block; } .mw-panel.library-panel,.mw-panel.properties-panel { display:none; } .mw-panel.mobile-open { display:block; position:fixed; left:10px; right:10px; bottom:10px; z-index:40; max-height:72vh; overflow:auto; box-shadow:0 24px 60px -25px rgba(15,23,42,.45); } .mw-canvas-wrap { padding:7px; margin-top:8px; } .mw-canvas { min-height:560px; padding:11px; } .mw-mobile-tools { display:flex !important; } .mw-overview-head { align-items:stretch; flex-direction:column; padding:18px; } .mw-overview-grid { grid-template-columns:1fr; } }
+    @media (max-width:639px) { .mw-toolbar { position:sticky; top:0; flex-wrap:wrap; border-radius:12px; } .mw-toolbar-title { width:100%; min-width:0; margin:0; order:-2; } .mw-viewports { margin-left:auto; } .mw-layout { display:block; } .mw-panel.library-panel,.mw-panel.properties-panel { display:none; } .mw-panel.mobile-open { display:block; position:fixed; left:10px; right:10px; bottom:10px; z-index:40; max-height:72vh; overflow:auto; box-shadow:0 24px 60px -25px rgba(15,23,42,.45); } .mw-canvas-wrap { padding:7px; margin-top:8px; } .mw-canvas { min-height:560px; padding:11px; } .mw-mobile-tools { display:flex !important; } .mw-overview-head { align-items:stretch; flex-direction:column; padding:18px; } .mw-overview-grid { grid-template-columns:1fr; } .mw-meta { grid-template-columns:1fr 1fr; } }
     .mw-mobile-tools { display:none; gap:6px; margin-top:8px; }
   `;
 }
@@ -150,7 +163,18 @@ function propertiesHtml(block) {
 }
 
 export async function renderGuruMateriPage(container) {
-  const doc = loadDocument();
+  const { guruId, context } = getSessionContext();
+  let doc = loadDocument();
+  let remoteDrafts = [];
+  if (guruId) {
+    try {
+      remoteDrafts = await getMaterialWorkspaceDrafts(guruId);
+      const latest = remoteDrafts[0];
+      if (latest?.document_json && typeof latest.document_json === 'object') doc = normalizeDocument(latest.document_json);
+    } catch (error) {
+      console.warn('Draft lokal dipakai karena Firestore tidak tersedia:', error);
+    }
+  }
   let selectedId = doc.blocks[0]?.id || '';
   let viewport = 'desktop';
   let mode = 'home';
@@ -162,6 +186,7 @@ export async function renderGuruMateriPage(container) {
     <div class="mw-toolbar"><span class="mw-toolbar-title" id="mw-title">Materi</span><button class="mw-icon-btn" id="mw-undo" title="Undo" aria-label="Undo">↶</button><button class="mw-icon-btn" id="mw-redo" title="Redo" aria-label="Redo">↷</button><button class="mw-action-btn" id="mw-save">Simpan</button><button class="mw-action-btn" id="mw-preview">Preview</button><button class="mw-action-btn primary" id="mw-publish" title="Fase publish akan datang">Publish</button><div class="mw-viewports"><button class="mw-viewport active" data-viewport="desktop">Desktop</button><button class="mw-viewport" data-viewport="tablet">Tablet</button><button class="mw-viewport" data-viewport="mobile">Mobile</button></div></div>
     <nav class="mw-workspace-nav" aria-label="Workspace materi"><button class="mw-nav-btn active" data-mode="home">Beranda</button><button class="mw-nav-btn" data-mode="drafts">Draft</button><button class="mw-nav-btn" data-mode="published">Terbit &amp; Distribusi</button><button class="mw-nav-btn" data-mode="editor">Buat Materi</button></nav>
     <section id="mw-overview" class="mw-overview"></section>
+    <div id="mw-meta" class="mw-meta" hidden><input data-meta="title" aria-label="Judul materi" placeholder="Judul materi"><input data-meta="subject" aria-label="Mata pelajaran" placeholder="Mata pelajaran"><input data-meta="className" aria-label="Kelas" placeholder="Kelas"><select data-meta="duration" aria-label="Alokasi waktu"><option>2 JP</option><option>3 JP</option><option>4 JP</option><option>5 JP</option><option>6 JP</option><option>8 JP</option></select></div>
     <div class="mw-mobile-tools"><button class="mw-action-btn" id="mw-open-library">Blok</button><button class="mw-action-btn" id="mw-open-properties">Properties</button></div>
     <div id="mw-editor" class="mw-layout"><aside class="mw-panel library-panel"><div class="mw-panel-head">Block Library</div><div class="mw-panel-sub">Dasar</div><div class="mw-library">${BLOCKS.map((b) => `<button class="mw-library-item" draggable="true" data-block-type="${b.type}"><span class="mw-library-icon">${b.icon}</span><span><span class="mw-library-label">${b.label}</span><span class="mw-library-hint">${b.hint}</span></span></button>`).join('')}</div></aside><main class="mw-canvas-wrap"><div id="mw-canvas" class="mw-canvas" data-viewport="desktop"></div><p class="mw-status" id="mw-status" aria-live="polite"></p></main><aside class="mw-panel properties-panel"><div class="mw-panel-head">Properties</div><div id="mw-properties" class="mw-properties"></div></aside></div>
     <div id="mw-toast" class="mw-toast" hidden></div></div>`);
@@ -174,17 +199,29 @@ export async function renderGuruMateriPage(container) {
   const root = container.querySelector('.mw');
   const editor = container.querySelector('#mw-editor');
   const overview = container.querySelector('#mw-overview');
+  const metaPanel = container.querySelector('#mw-meta');
   const navButtons = [...container.querySelectorAll('.mw-nav-btn')];
   const showToast = (message) => { toast.textContent = message; toast.hidden = false; setTimeout(() => { toast.hidden = true; }, 2200); };
   const snapshot = () => JSON.stringify(doc);
-  const commit = () => { const next = snapshot(); if (history[historyIndex] === next) return; history = history.slice(0, historyIndex + 1); history.push(next); if (history.length > HISTORY_LIMIT) history.shift(); historyIndex = history.length - 1; };
+  const commit = () => { const next = snapshot(); if (history[historyIndex] === next) return; history = history.slice(0, historyIndex + 1); history.push(next); if (history.length > HISTORY_LIMIT) history.shift(); historyIndex = history.length - 1; scheduleSave(); };
   const restore = (value) => { const restored = normalizeDocument(JSON.parse(value)); Object.keys(doc).forEach((key) => delete doc[key]); Object.assign(doc, restored); selectedId = doc.blocks.some((b) => b.id === selectedId) ? selectedId : doc.blocks[0]?.id || ''; render(); };
   const selected = () => doc.blocks.find((b) => b.id === selectedId);
   const renderOverview = () => { const saved = Boolean(localStorage.getItem(STORAGE_KEY)); const copy = mode === 'home' ? ['Kelola materi pembelajaran dalam satu workspace.', 'Buat materi baru, lanjutkan draft, lalu siapkan distribusi ke kelas.'] : mode === 'drafts' ? ['Draft materi', saved ? `Draft aktif: ${doc.meta.title}` : 'Belum ada draft tersimpan.'] : ['Terbit & Distribusi', 'Manajemen publish multi-kelas akan aktif setelah penyimpanan JSON fase berikutnya.']; overview.innerHTML = `<div class="mw-overview-head"><div><p class="mw-eyebrow">Material Workspace</p><h1>${copy[0]}</h1><p>${copy[1]}</p></div><button class="mw-action-btn primary" data-open-editor>+ Buat Materi</button></div><div class="mw-overview-grid"><article><span class="mw-stat-label">Status Draft</span><strong>${saved ? 'Tersimpan' : 'Belum dimulai'}</strong><small>${saved ? 'Siap dilanjutkan di editor' : 'Mulai dari canvas kosong'}</small></article><article><span class="mw-stat-label">Block Dasar</span><strong>6</strong><small>Heading, Text, Image, Divider, Button, Spacer</small></article><article><span class="mw-stat-label">Workspace</span><strong>${mode === 'published' ? 'Distribusi' : 'Editor visual'}</strong><small>Fase 1-2 aktif</small></article></div>`; overview.querySelector('[data-open-editor]')?.addEventListener('click', () => setMode('editor')); };
-  const setMode = (nextMode) => { mode = nextMode; const editing = mode === 'editor'; editor.hidden = !editing; root.querySelector('.mw-mobile-tools').hidden = !editing; overview.hidden = editing; navButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode)); container.querySelector('#mw-title').textContent = editing ? doc.meta.title : 'Materi'; renderOverview(); };
+  const syncMeta = () => { metaPanel.querySelectorAll('[data-meta]').forEach((input) => { input.value = doc.meta[input.dataset.meta] || ''; }); };
+  const setMode = (nextMode) => { mode = nextMode; const editing = mode === 'editor'; editor.hidden = !editing; metaPanel.hidden = !editing; root.querySelector('.mw-mobile-tools').hidden = !editing; overview.hidden = editing; navButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode)); container.querySelector('#mw-title').textContent = editing ? doc.meta.title : 'Materi'; if (editing) syncMeta(); renderOverview(); };
   const render = () => { canvas.dataset.viewport = viewport; canvas.innerHTML = doc.blocks.map((block, i) => `${i ? `<div class="mw-dropzone" data-drop-index="${i}"></div>` : ''}${renderBlock(block, selectedId)}`).join('') + `<div class="mw-dropzone" data-drop-index="${doc.blocks.length}"></div>`; props.innerHTML = propertiesHtml(selected()); container.querySelector('#mw-undo').disabled = historyIndex <= 0; container.querySelector('#mw-redo').disabled = historyIndex >= history.length - 1; renderOverview(); };
   const addBlock = (type, index = doc.blocks.length) => { const block = createBlock(type); doc.blocks.splice(index, 0, block); selectedId = block.id; commit(); render(); showToast(`${type} ditambahkan`); };
   const updateProp = (key, value) => { const block = selected(); if (!block) return; block.props[key] = ['fontSize','lineHeight','radius','maxWidth','opacity','thickness','margin','height'].includes(key) ? Number(value) : value; commit(); render(); };
+  let saveTimer = null;
+  const persistDraft = async (notice = true) => {
+    const now = new Date().toISOString();
+    const payload = { id: doc.id, guru_id: guruId, title: doc.meta.title, subject: doc.meta.subject, class_name: doc.meta.className, duration: doc.meta.duration, schema_version: doc.schemaVersion, document_json: doc, updated_at: now, created_at: doc.created_at || now };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    if (!guruId) { if (notice) showToast('Draft lokal tersimpan'); return; }
+    try { await saveMaterialWorkspaceDraft(payload); if (notice) showToast('Draft tersimpan'); }
+    catch (error) { console.warn('Draft tersimpan lokal; Firestore gagal:', error); if (notice) showToast('Tersimpan lokal; sinkronisasi gagal'); }
+  };
+  const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => persistDraft(false), 700); };
 
   const startInlineEdit = (text, blockEl) => { selectedId = blockEl.dataset.blockId; const block = selected(); if (!block || !['heading','text'].includes(block.type)) return; const original = block.props.text; let cancelled = false; text.contentEditable = 'true'; text.focus(); const finish = () => { if (text.contentEditable !== 'true') return; if (!cancelled) block.props.text = text.textContent; text.contentEditable = 'false'; commit(); render(); }; text.addEventListener('blur', finish, { once: true }); text.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); text.blur(); } if (e.key === 'Escape') { cancelled = true; text.textContent = original; text.blur(); } }); };
   canvas.addEventListener('click', (event) => { const blockEl = event.target.closest('[data-block-id]'); if (!blockEl) return; const text = event.target.closest('.mw-content-text'); if (event.detail === 2 && text) { startInlineEdit(text, blockEl); return; } const action = event.target.closest('[data-action]')?.dataset.action; selectedId = blockEl.dataset.blockId; if (action === 'delete') { doc.blocks = doc.blocks.filter((b) => b.id !== selectedId); selectedId = doc.blocks[0]?.id || ''; commit(); } else if (action === 'duplicate') { const source = selected(); const copy = JSON.parse(JSON.stringify(source)); copy.id = uid(); doc.blocks.splice(doc.blocks.findIndex((b) => b.id === source.id) + 1, 0, copy); selectedId = copy.id; commit(); } render(); });
@@ -201,10 +238,11 @@ export async function renderGuruMateriPage(container) {
   navButtons.forEach((button) => button.addEventListener('click', () => { setMode(button.dataset.mode); if (button.dataset.mode === 'editor') render(); }));
   container.querySelector('#mw-undo').addEventListener('click', () => { if (historyIndex > 0) { historyIndex -= 1; restore(history[historyIndex]); } });
   container.querySelector('#mw-redo').addEventListener('click', () => { if (historyIndex < history.length - 1) { historyIndex += 1; restore(history[historyIndex]); } });
-  container.querySelector('#mw-save').addEventListener('click', () => { localStorage.setItem(STORAGE_KEY, snapshot()); showToast('Draft materi tersimpan'); });
+  container.querySelector('#mw-save').addEventListener('click', () => persistDraft(true));
   container.querySelector('#mw-preview').addEventListener('click', () => { const win = window.open('', '_blank'); if (!win) { showToast('Izinkan popup untuk membuka preview'); return; } win.document.write(`<title>${escapeHtml(doc.meta.title)}</title><style>body{margin:0;background:${doc.theme.background};color:${doc.theme.text};font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.preview{max-width:820px;margin:0 auto;padding:32px 20px;background:${doc.theme.surface};min-height:100vh}</style><main class="preview">${doc.blocks.map((b) => renderBlock(b, '')).join('')}</main>`); win.document.close(); });
   container.querySelector('#mw-publish').addEventListener('click', () => showToast('Publish tersedia setelah penyimpanan JSON aktif'));
   container.querySelector('#mw-open-library').addEventListener('click', () => { container.querySelector('.library-panel').classList.toggle('mobile-open'); container.querySelector('.properties-panel').classList.remove('mobile-open'); }); container.querySelector('#mw-open-properties').addEventListener('click', () => { container.querySelector('.properties-panel').classList.toggle('mobile-open'); container.querySelector('.library-panel').classList.remove('mobile-open'); });
+  metaPanel.addEventListener('input', (event) => { const input = event.target.closest('[data-meta]'); if (!input) return; doc.meta[input.dataset.meta] = input.value; container.querySelector('#mw-title').textContent = doc.meta.title || 'Materi'; scheduleSave(); });
   render();
   setMode('home');
 }
