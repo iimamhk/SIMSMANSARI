@@ -582,8 +582,9 @@ export async function renderSiswaMateriPage(container) {
       .map((material, index) => {
         const coverTheme = getStudentThematicBookCover(material);
         const status = getMaterialVisualStatus(material, getCurrentStudentId(), readMap);
-        const chapterTitle = String(material.chapter || material.title || 'Bab Materi').trim();
+        const materialTitle = String(material.title || 'Materi Pembelajaran').trim();
         const mapelTitle = String(material.mapel_nama || 'Mata Pelajaran').trim();
+        const chapterInfo = String(material.chapter || '').trim();
         const publishDate = new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
         const staggerDelay = Math.min(index, 11) * 42;
         return `
@@ -598,10 +599,11 @@ export async function renderSiswaMateriPage(container) {
                   <div class="absolute -right-4 -top-4 h-12 w-12 rounded-full bg-white/15 blur-xl"></div>
                   <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,transparent_38%,transparent_62%,rgba(255,255,255,0.08)_100%)]"></div>
                   <div class="relative z-[1] text-center">
-                    <p class="line-clamp-2 whitespace-normal break-words text-[10px] font-extrabold uppercase leading-tight tracking-[0.12em] text-white/95">${mapelTitle}</p>
+                    <p class="line-clamp-1 whitespace-normal break-words text-[9px] font-bold uppercase leading-tight tracking-[0.12em] text-white/80">${mapelTitle}</p>
+                    ${chapterInfo ? `<p class="mt-0.5 line-clamp-1 whitespace-normal break-words text-[8px] font-medium uppercase tracking-[0.1em] text-white/65">${chapterInfo}</p>` : ''}
                   </div>
                   <div class="relative z-[1] mt-2 flex flex-1 items-center justify-center px-1">
-                    <h3 class="line-clamp-5 max-h-[7.4rem] overflow-hidden whitespace-normal break-words text-center text-[14px] font-black leading-[1.2] text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">${chapterTitle}</h3>
+                    <h3 class="line-clamp-5 max-h-[7.4rem] overflow-hidden whitespace-normal break-words text-center text-[14px] font-black leading-[1.2] text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">${materialTitle}</h3>
                   </div>
                 </div>
                 <div class="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-white/96">

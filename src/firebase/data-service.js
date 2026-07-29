@@ -1539,6 +1539,7 @@ export async function deletePublishedMaterial(id) {
 
   const localReads = readLocalMaterialReads().filter((item) => String(item.material_id || '').trim() !== materialId);
   writeLocalMaterialReads(localReads);
+  invalidateQueryCache(MATERIAL_PUBLISHED_COLLECTION);
   return true;
 }
 

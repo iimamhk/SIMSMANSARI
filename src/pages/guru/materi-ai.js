@@ -10,7 +10,7 @@ import { streamGenerateMaterialJson, MaterialGenerationError } from '../../utils
 import { getApiBase } from '../../utils/ai-client.js';
 import { buildMaterialHtml } from '../../utils/materi-renderer.js';
 import { ensureKaTeXReady } from '../../utils/markdown-export.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterial } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial } from '../../firebase/data-service.js';
 import {
   pageStyles,
   statusBannerHtml,
@@ -354,7 +354,9 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
     runGenerate('');
   });
 
-  // Simpan draft ke localStorage (muncul di menu Materi biasa).
+  // Simpan materi ke koleksi publish dengan status belum diterbitkan (unpublish).
+  // Materi langsung muncul di daftar "Terbit & Distribusi" dan bisa diterbitkan
+  // kembali dari sana atau lewat tombol Publish di halaman ini.
   simpanBtn.addEventListener('click', async () => {
     if (!currentMaterial) return;
     clearError();
@@ -366,6 +368,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
       const meta = buildMeta(input);
       const htmlSource = buildMaterialHtml(currentMaterial, meta);
       const id = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const now = new Date().toISOString();
       const draft = {
         id,
         guru_id: userId,
@@ -384,8 +387,9 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
         source: 'materi_ai',
         tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
         semester_id: context?.semester_aktif || '',
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       };
+      // Simpan ke localStorage draft (kompatibilitas menu Materi lama).
       const drafts = readDrafts();
       const idx = drafts.findIndex((d) => d.id === id);
       if (idx >= 0) drafts[idx] = draft;
@@ -393,9 +397,36 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
       if (!writeDrafts(drafts)) {
         throw new Error('Draft tidak dapat disimpan. Penyimpanan browser penuh atau diblokir.');
       }
+      // Simpan ke koleksi materi_publish dengan status belum diterbitkan agar
+      // muncul di daftar "Terbit & Distribusi" di workspace materi.
+      await savePublishedMaterial({
+        id,
+        source_id: id,
+        guru_id: safeString(userId),
+        guru_nama: safeString(userName || 'Guru'),
+        pengajaran_id: '',
+        kelas_id: safeString(draft.kelas_id),
+        kelas_nama: safeString(draft.kelas_nama),
+        kelas_token: documentIdToken(draft.kelas_id || draft.kelas_nama),
+        mapel_id: safeString(draft.mapel_id),
+        mapel_nama: safeString(draft.mapel_nama),
+        title: safeString(draft.title),
+        note: safeString(draft.note),
+        level: safeString(draft.level),
+        chapter: safeString(draft.chapter),
+        meetings: safeString(draft.meetings),
+        html_source: htmlSource,
+        visible_to_students: false,
+        status: 'unpublished',
+        source: 'materi_ai',
+        tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
+        semester_id: safeString(context?.semester_aktif),
+        published_at: now,
+        created_at: now,
+      });
       currentDraftId = id;
-      setStatus('Tersimpan sebagai draft. Lihat di menu Materi > Daftar.');
-      setTimeout(() => setStatus(''), 4000);
+      setStatus('Tersimpan sebagai draft (belum diterbitkan). Lihat di menu Materi > Terbit & Distribusi.');
+      setTimeout(() => setStatus(''), 5000);
     } catch (error) {
       showError(error?.message || 'Gagal menyimpan draft.');
     } finally {
@@ -465,12 +496,15 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
           created_at: now,
         });
       }));
+      // Hapus placeholder draft unpublished (id tanpa suffix kelas) supaya
+      // daftar "Terbit & Distribusi" hanya menampilkan distribusi per kelas.
+      try { await deletePublishedMaterial(sourceId); } catch { /* placeholder belum ada */ }
       const successes = results.filter((result) => result.status === 'fulfilled').length;
       const failures = targets.filter((_target, index) => results[index].status === 'rejected');
       if (!failures.length) {
         currentDraftId = sourceId;
         closePublishModal();
-        setStatus(`Berhasil dipublikasikan ke ${successes} kelas.`);
+        setStatus(`Berhasil dipublikasikan ke ${successes} kelas. Lihat di menu Materi > Terbit & Distribusi.`);
       } else {
         const failedNames = failures.map((item) => item.kelas_nama || item.kelas_id).join(', ');
         showError(`${successes} kelas berhasil, ${failures.length} gagal (${failedNames}).`);
