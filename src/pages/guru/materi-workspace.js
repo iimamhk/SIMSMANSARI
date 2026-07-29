@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { deleteMaterialWorkspaceDraft, getMaterialWorkspaceDrafts, saveMaterialWorkspaceDraft } from '../../firebase/data-service.js';
+import { deleteMaterialWorkspaceDraft, getMaterialWorkspaceDrafts, saveMaterialWorkspaceDraft, savePublishedMaterial, getActiveTeachingAssignments } from '../../firebase/data-service.js';
 
 const STORAGE_KEY = 'simguru_material_workspace_draft';
 const HISTORY_LIMIT = 50;
@@ -38,6 +38,7 @@ const LAYOUTS = {
 function uid(prefix = 'block') { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`; }
 function escapeHtml(value) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function escapeAttr(value) { return escapeHtml(value).replace(/`/g, '&#96;'); }
+function documentIdToken(value) { return String(value || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '_') || 'target'; }
 
 function defaultDocument() {
   return {
@@ -93,9 +94,9 @@ function getSessionContext() {
   try {
     const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
     const context = JSON.parse(localStorage.getItem('simguru_context') || '{}');
-    return { guruId: String(session?.user?.username || '').trim(), context };
+    return { guruId: String(session?.user?.username || '').trim(), userName: String(session?.user?.nama || session?.user?.name || '').trim(), context };
   } catch {
-    return { guruId: '', context: {} };
+    return { guruId: '', userName: '', context: {} };
   }
 }
 
@@ -197,6 +198,25 @@ function pageStyles() {
     @media (max-width:1023px) { .mw-layout { grid-template-columns:160px minmax(0,1fr); } .mw-properties { grid-column:1 / -1; } }
     @media (max-width:639px) { .mw-toolbar { position:sticky; top:0; flex-wrap:wrap; border-radius:12px; } .mw-toolbar-title { width:100%; min-width:0; margin:0; order:-2; } .mw-viewports { margin-left:auto; } .mw-layout { display:block; } .mw-panel.library-panel,.mw-panel.properties-panel { display:none; } .mw-panel.mobile-open { display:block; position:fixed; left:10px; right:10px; bottom:10px; z-index:40; max-height:72vh; overflow:auto; box-shadow:0 24px 60px -25px rgba(15,23,42,.45); } .mw-canvas-wrap { padding:7px; margin-top:8px; } .mw-canvas { min-height:560px; padding:11px; } .mw-mobile-tools { display:flex !important; } .mw-overview-head { align-items:stretch; flex-direction:column; padding:18px; } .mw-overview-grid { grid-template-columns:1fr; } .mw-meta { grid-template-columns:1fr 1fr; } }
     .mw-mobile-tools { display:none; gap:6px; margin-top:8px; }
+    .mw-modal { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; }
+    .mw-modal-backdrop { position:absolute; inset:0; background:rgba(15,23,42,.5); }
+    .mw-modal-content { position:relative; background:#fff; border-radius:18px; box-shadow:0 24px 60px -25px rgba(15,23,42,.45); max-width:520px; width:90vw; max-height:80vh; overflow:auto; }
+    .mw-modal-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; border-bottom:1px solid #e2e8f0; }
+    .mw-modal-head h3 { margin:0; font-size:16px; font-weight:750; }
+    .mw-modal-body { padding:16px 20px; }
+    .mw-modal-desc { margin:0 0 12px; color:#64748b; font-size:13px; }
+    .mw-publish-targets { display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto; }
+    .mw-publish-target { display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e2e8f0; border-radius:10px; cursor:pointer; transition:background .15s; }
+    .mw-publish-target:hover { background:#f8fafc; }
+    .mw-publish-target input[type=checkbox] { accent-color:#2563eb; width:16px; height:16px; }
+    .mw-publish-target-info { flex:1; }
+    .mw-publish-target-name { font-size:13px; font-weight:700; }
+    .mw-publish-target-meta { font-size:11px; color:#64748b; }
+    .mw-modal-foot { display:flex; gap:8px; justify-content:flex-end; padding:14px 20px; border-top:1px solid #e2e8f0; }
+    .mw-publish-result { margin-top:10px; padding:10px; border-radius:10px; font-size:12px; }
+    .mw-publish-result.success { background:#f0fdf4; color:#14532d; border:1px solid #bbf7d0; }
+    .mw-publish-result.partial { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
+    .mw-publish-result.error { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
   `;
 }
 
@@ -246,7 +266,7 @@ function propertiesHtml(block) {
 }
 
 export async function renderGuruMateriPage(container) {
-  const { guruId, context } = getSessionContext();
+  const { guruId, userName, context } = getSessionContext();
   let doc = loadDocument();
   let remoteDrafts = [];
   if (guruId) {
@@ -273,7 +293,8 @@ export async function renderGuruMateriPage(container) {
     <div id="mw-meta" class="mw-meta" hidden><input data-meta="title" aria-label="Judul materi" placeholder="Judul materi"><input data-meta="subject" aria-label="Mata pelajaran" placeholder="Mata pelajaran"><input data-meta="className" aria-label="Kelas" placeholder="Kelas"><select data-meta="duration" aria-label="Alokasi waktu"><option>2 JP</option><option>3 JP</option><option>4 JP</option><option>5 JP</option><option>6 JP</option><option>8 JP</option></select></div>
     <div class="mw-mobile-tools"><button class="mw-action-btn" id="mw-open-library">Blok</button><button class="mw-action-btn" id="mw-open-properties">Properties</button></div>
     <div id="mw-editor" class="mw-layout"><aside class="mw-panel library-panel"><div class="mw-panel-head">Block Library</div><div class="mw-panel-sub">Dasar</div><div class="mw-library">${BLOCKS.map((b) => `<button class="mw-library-item" draggable="true" data-block-type="${b.type}"><span class="mw-library-icon">${b.icon}</span><span><span class="mw-library-label">${b.label}</span><span class="mw-library-hint">${b.hint}</span></span></button>`).join('')}</div></aside><main class="mw-canvas-wrap"><div id="mw-canvas" class="mw-canvas" data-viewport="desktop"></div><p class="mw-status" id="mw-status" aria-live="polite"></p></main><aside class="mw-panel properties-panel"><div class="mw-panel-head">Properties</div><div id="mw-properties" class="mw-properties"></div></aside></div>
-    <div id="mw-toast" class="mw-toast" hidden></div></div>`);
+    <div id="mw-toast" class="mw-toast" hidden></div>
+    <div id="mw-publish-modal" class="mw-modal" hidden><div class="mw-modal-backdrop"></div><div class="mw-modal-content"><div class="mw-modal-head"><h3>Publikasikan ke Kelas</h3><button class="mw-icon-btn" id="mw-publish-close" aria-label="Tutup">×</button></div><div class="mw-modal-body"><p class="mw-modal-desc">Pilih kelas tujuan untuk mempublikasikan materi ini.</p><div id="mw-publish-targets" class="mw-publish-targets"></div><p id="mw-publish-status" class="mw-status"></p></div><div class="mw-modal-foot"><button class="mw-action-btn" id="mw-publish-cancel">Batal</button><button class="mw-action-btn primary" id="mw-publish-confirm">Publikasikan</button></div></div></div>`);
   container.innerHTML = html;
 
   const canvas = container.querySelector('#mw-canvas');
@@ -311,6 +332,11 @@ export async function renderGuruMateriPage(container) {
   const openDraft = (id) => { const draft = remoteDrafts.find((item) => String(item.id) === String(id)); if (!draft?.document_json) return; doc = normalizeDocument(draft.document_json); selectedId = doc.blocks[0]?.id || ''; history = [JSON.stringify(doc)]; historyIndex = 0; setMode('editor'); render(); showToast('Draft dibuka'); };
   const cloneDraft = async (id) => { const draft = remoteDrafts.find((item) => String(item.id) === String(id)); if (!draft?.document_json) return; doc = normalizeDocument(JSON.parse(JSON.stringify(draft.document_json))); doc.id = uid('materi'); doc.meta.title = `${doc.meta.title || 'Materi'} (Salinan)`; selectedId = doc.blocks[0]?.id || ''; history = [JSON.stringify(doc)]; historyIndex = 0; await persistDraft(true); setMode('editor'); render(); };
   const removeDraft = async (id) => { if (!guruId || !window.confirm('Hapus draft ini?')) return; try { await deleteMaterialWorkspaceDraft(id, guruId); remoteDrafts = remoteDrafts.filter((item) => String(item.id) !== String(id)); renderOverview(); showToast('Draft dihapus'); } catch (error) { showToast('Draft gagal dihapus'); console.warn(error); } };
+  const openPublishModal = () => { const modal = container.querySelector('#mw-publish-modal'); const targetsWrap = container.querySelector('#mw-publish-targets'); const statusEl = container.querySelector('#mw-publish-status'); if (!modal) return; modal.hidden = false; targetsWrap.innerHTML = '<p style="color:#94a3b8;font-size:12px;text-align:center;padding:20px;">Memuat daftar kelas...</p>'; statusEl.textContent = ''; statusEl.className = 'mw-status'; loadPublishTargets(targetsWrap, statusEl); };
+  const closePublishModal = () => { const modal = container.querySelector('#mw-publish-modal'); if (modal) modal.hidden = true; };
+  const loadPublishTargets = async (targetsWrap, statusEl) => { try { const assignments = await getActiveTeachingAssignments(context); const targetList = assignments.filter((item) => String(item.guru_id || '').toLowerCase() === guruId.toLowerCase() && (item.kelas_id || item.kelas_nama)); if (!targetList.length) { targetsWrap.innerHTML = '<p style="color:#94a3b8;font-size:12px;text-align:center;padding:20px;">Tidak ada kelas tersedia. Pastikan relasi mengajar sudah diatur.</p>'; return; } targetsWrap.innerHTML = targetList.map((target) => `<label class="mw-publish-target"><input type="checkbox" value="${escapeAttr(target.id)}"><div class="mw-publish-target-info"><span class="mw-publish-target-name">${escapeHtml(target.kelas_nama || target.kelas_id)}</span><span class="mw-publish-target-meta">${escapeHtml(target.mapel_nama || target.mapel_id || '')}</span></div></label>`).join(''); } catch (error) { targetsWrap.innerHTML = '<p style="color:#94a3b8;font-size:12px;text-align:center;padding:20px;">Gagal memuat daftar kelas.</p>'; console.warn(error); } };
+  const updateTargetCount = () => { const checked = container.querySelectorAll('#mw-publish-targets input:checked').length; const btn = container.querySelector('#mw-publish-confirm'); if (btn) btn.textContent = checked ? `Publish (${checked})` : 'Publikasikan'; };
+  const doPublish = async () => { const targets = [...container.querySelectorAll('#mw-publish-targets input:checked')].map((input) => { const label = input.closest('.mw-publish-target'); const name = label?.querySelector('.mw-publish-target-name')?.textContent || ''; return { id: input.value, kelas_nama: name, kelas_id: input.value }; }); if (!targets.length) return; const confirmBtn = container.querySelector('#mw-publish-confirm'); const statusEl = container.querySelector('#mw-publish-status'); if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Memublikasikan...'; } const now = new Date().toISOString(); const htmlSource = doc.blocks.map((b) => renderBlock(b, '')).join(''); try { const results = await Promise.allSettled(targets.map((target) => savePublishedMaterial({ id: `${doc.id}__${documentIdToken(target.id)}`, source_id: doc.id, guru_id: guruId, guru_nama: userName || 'Guru', pengajaran_id: target.id, kelas_id: target.id, kelas_nama: target.kelas_nama || target.id, mapel_id: doc.meta.subject || '', mapel_nama: doc.meta.subject || 'Mata Pelajaran', title: doc.meta.title || 'Materi', note: 'Materi dari workspace', level: doc.meta.duration || '2 JP', chapter: doc.meta.title || '', meetings: doc.meta.duration || '2 JP', html_source: htmlSource, visible_to_students: true, source: 'materi_workspace', tahun_ajaran_id: context?.tahun_ajaran_aktif || '', semester_id: context?.semester_aktif || '', published_at: now, created_at: now, }))); const successes = results.filter((result) => result.status === 'fulfilled').length; const failures = targets.filter((_target, index) => results[index].status === 'rejected'); if (!failures.length) { showToast(`Berhasil dipublikasikan ke ${successes} kelas`); if (statusEl) { statusEl.textContent = `Berhasil dipublikasikan ke ${successes} kelas.`; statusEl.className = 'mw-status mw-publish-result success'; } setTimeout(closePublishModal, 1500); } else { const failedNames = failures.map((item) => item.kelas_nama || item.kelas_id).join(', '); showToast(`${successes} kelas berhasil, ${failures.length} gagal`); if (statusEl) { statusEl.textContent = `${successes} kelas berhasil, ${failures.length} gagal (${failedNames}).`; statusEl.className = 'mw-status mw-publish-result partial'; } } } catch (error) { showToast('Publish gagal'); if (statusEl) { statusEl.textContent = 'Publish gagal. Periksa koneksi dan izin.'; statusEl.className = 'mw-status mw-publish-result error'; } console.warn(error); } finally { if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Publikasikan'; } updateTargetCount(); } };
   const scheduleSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => persistDraft(false), 700); };
 
   const startInlineEdit = (text, blockEl) => { selectedId = blockEl.dataset.blockId; const block = selected(); if (!block || !['heading','text'].includes(block.type)) return; const original = block.props.text; let cancelled = false; text.contentEditable = 'true'; text.focus(); const finish = () => { if (text.contentEditable !== 'true') return; if (!cancelled) block.props.text = text.textContent; text.contentEditable = 'false'; commit(); render(); }; text.addEventListener('blur', finish, { once: true }); text.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); text.blur(); } if (e.key === 'Escape') { cancelled = true; text.textContent = original; text.blur(); } }); };
@@ -331,7 +357,12 @@ export async function renderGuruMateriPage(container) {
   container.querySelector('#mw-redo').addEventListener('click', () => { if (historyIndex < history.length - 1) { historyIndex += 1; restore(history[historyIndex]); } });
   container.querySelector('#mw-save').addEventListener('click', () => persistDraft(true));
   container.querySelector('#mw-preview').addEventListener('click', () => { const win = window.open('', '_blank'); if (!win) { showToast('Izinkan popup untuk membuka preview'); return; } win.document.write(`<title>${escapeHtml(doc.meta.title)}</title><style>body{margin:0;background:${doc.theme.background};color:${doc.theme.text};font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.preview{max-width:820px;margin:0 auto;padding:32px 20px;background:${doc.theme.surface};min-height:100vh}</style><main class="preview">${doc.blocks.map((b) => renderBlock(b, '')).join('')}</main>`); win.document.close(); });
-  container.querySelector('#mw-publish').addEventListener('click', () => showToast('Publish tersedia setelah penyimpanan JSON aktif'));
+  container.querySelector('#mw-publish').addEventListener('click', () => { if (!guruId) { showToast('Publish memerlukan akun guru'); return; } openPublishModal(); });
+  container.querySelector('#mw-publish-close')?.addEventListener('click', closePublishModal);
+  container.querySelector('#mw-publish-cancel')?.addEventListener('click', closePublishModal);
+  container.querySelector('#mw-publish-confirm')?.addEventListener('click', doPublish);
+  container.querySelector('#mw-publish-targets')?.addEventListener('change', updateTargetCount);
+  container.querySelector('#mw-publish-modal .mw-modal-backdrop')?.addEventListener('click', closePublishModal);
   container.querySelector('#mw-open-library').addEventListener('click', () => { container.querySelector('.library-panel').classList.toggle('mobile-open'); container.querySelector('.properties-panel').classList.remove('mobile-open'); }); container.querySelector('#mw-open-properties').addEventListener('click', () => { container.querySelector('.properties-panel').classList.toggle('mobile-open'); container.querySelector('.library-panel').classList.remove('mobile-open'); });
   metaPanel.addEventListener('input', (event) => { const input = event.target.closest('[data-meta]'); if (!input) return; doc.meta[input.dataset.meta] = input.value; container.querySelector('#mw-title').textContent = doc.meta.title || 'Materi'; scheduleSave(); });
   render();
