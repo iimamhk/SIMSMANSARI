@@ -19,6 +19,14 @@ const THEMES = {
   dark: { name: 'Dark Focus', primary: '#60a5fa', accent: '#fbbf24', background: '#0f172a', surface: '#1e293b', text: '#f8fafc' },
 };
 
+const LAYOUTS = {
+  single: { name: 'Single Column', icon: '▦', columns: 1, hasSidebar: false, hasFeatured: false },
+  twoColumn: { name: 'Two Column', icon: '▧', columns: 2, hasSidebar: false, hasFeatured: false },
+  sidebarLeft: { name: 'Sidebar Kiri', icon: '▨', columns: 1, hasSidebar: true, sidebarPosition: 'left', hasFeatured: false },
+  sidebarRight: { name: 'Sidebar Kanan', icon: '▩', columns: 1, hasSidebar: true, sidebarPosition: 'right', hasFeatured: false },
+  featured: { name: 'Featured', icon: '▥', columns: 2, hasSidebar: false, hasFeatured: true },
+};
+
 function uid(prefix = 'block') { return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`; }
 function escapeHtml(value) { return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 function escapeAttr(value) { return escapeHtml(value).replace(/`/g, '&#96;'); }
@@ -29,6 +37,7 @@ function defaultDocument() {
     id: uid('materi'),
     meta: { title: 'Materi Baru', subject: '', className: '', duration: '2 JP' },
     theme: { ...THEMES.education },
+    layout: 'single',
     blocks: [
       { id: uid(), type: 'heading', props: { text: 'Judul Materi Pembelajaran', level: 'h1', fontSize: 36, color: '#0f172a', align: 'left' } },
       { id: uid(), type: 'text', props: { text: 'Mulai tulis materi di sini. Klik dua kali pada teks untuk mengedit langsung.', fontSize: 16, color: '#334155', lineHeight: 1.6, align: 'left' } },
@@ -43,6 +52,7 @@ function normalizeDocument(value) {
     ...base, ...value,
     meta: { ...base.meta, ...(value.meta || {}) },
     theme: { ...THEMES.education, ...(value.theme || {}) },
+    layout: LAYOUTS[value.layout] ? value.layout : base.layout,
     blocks: Array.isArray(value.blocks) && value.blocks.length ? value.blocks : base.blocks,
   };
 }
@@ -101,6 +111,18 @@ function pageStyles() {
     .mw-viewports { display:flex; gap:4px; padding:3px; background:#f1f5f9; border-radius:10px; }
     .mw-viewport { border:0; background:transparent; color:#64748b; border-radius:7px; padding:6px 8px; font-size:11px; font-weight:700; cursor:pointer; }
     .mw-viewport.active { background:#fff; color:var(--mw-primary); box-shadow:0 2px 6px rgba(15,23,42,.1); }
+    .mw-layout-select { border:1px solid var(--mw-line); border-radius:7px; padding:5px 8px; background:#fff; color:var(--mw-text); font-size:11px; font-weight:700; cursor:pointer; margin-left:6px; }
+    .mw-layout-select:focus-visible { outline:3px solid rgba(37,99,235,.22); outline-offset:2px; }
+    .mw-canvas[data-layout="twoColumn"] { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .mw-canvas[data-layout="sidebarLeft"] { display:grid; grid-template-columns:220px 1fr; gap:16px; }
+    .mw-canvas[data-layout="sidebarRight"] { display:grid; grid-template-columns:1fr 220px; gap:16px; }
+    .mw-canvas[data-layout="featured"] { display:grid; grid-template-columns:1fr; gap:16px; }
+    .mw-canvas[data-layout="featured"] .mw-block.featured { grid-column:1 / -1; }
+    .mw-canvas[data-layout="twoColumn"] .mw-block[data-layout-span="2"] { grid-column:span 2; }
+    .mw-canvas[data-layout="sidebarLeft"] .mw-sidebar { grid-column:1; }
+    .mw-canvas[data-layout="sidebarLeft"] .mw-main { grid-column:2; }
+    .mw-canvas[data-layout="sidebarRight"] .mw-sidebar { grid-column:2; }
+    .mw-canvas[data-layout="sidebarRight"] .mw-main { grid-column:1; }
     .mw-layout { display:grid; grid-template-columns:190px minmax(0,1fr) 240px; gap:12px; align-items:start; margin-top:12px; }
     .mw-panel { background:rgba(255,255,255,.92); border:1px solid var(--mw-line); border-radius:16px; overflow:hidden; }
     .mw-panel-head { display:flex; align-items:center; justify-content:space-between; padding:13px 14px 10px; border-bottom:1px solid #f1f5f9; font-size:12px; font-weight:800; }
@@ -178,13 +200,14 @@ export async function renderGuruMateriPage(container) {
   }
   let selectedId = doc.blocks[0]?.id || '';
   let viewport = 'desktop';
+  let layout = doc.layout || 'single';
   let mode = 'home';
   let history = [JSON.stringify(doc)];
   let historyIndex = 0;
   let draggedId = '';
 
   const html = renderLayout('Materi', `<style>${pageStyles()}</style><div class="mw" style="--mw-primary:${doc.theme.primary};--mw-bg:${doc.theme.background};--mw-surface:${doc.theme.surface};--mw-text:${doc.theme.text}">
-    <div class="mw-toolbar"><span class="mw-toolbar-title" id="mw-title">Materi</span><button class="mw-icon-btn" id="mw-undo" title="Undo" aria-label="Undo">↶</button><button class="mw-icon-btn" id="mw-redo" title="Redo" aria-label="Redo">↷</button><button class="mw-action-btn" id="mw-save">Simpan</button><button class="mw-action-btn" id="mw-preview">Preview</button><button class="mw-action-btn primary" id="mw-publish" title="Fase publish akan datang">Publish</button><div class="mw-viewports"><button class="mw-viewport active" data-viewport="desktop">Desktop</button><button class="mw-viewport" data-viewport="tablet">Tablet</button><button class="mw-viewport" data-viewport="mobile">Mobile</button></div></div>
+    <div class="mw-toolbar"><span class="mw-toolbar-title" id="mw-title">Materi</span><button class="mw-icon-btn" id="mw-undo" title="Undo" aria-label="Undo">↶</button><button class="mw-icon-btn" id="mw-redo" title="Redo" aria-label="Redo">↷</button><button class="mw-action-btn" id="mw-save">Simpan</button><button class="mw-action-btn" id="mw-preview">Preview</button><button class="mw-action-btn primary" id="mw-publish" title="Fase publish akan datang">Publish</button><div class="mw-viewports"><button class="mw-viewport active" data-viewport="desktop">Desktop</button><button class="mw-viewport" data-viewport="tablet">Tablet</button><button class="mw-viewport" data-viewport="mobile">Mobile</button></div><select id="mw-layout" class="mw-layout-select" aria-label="Tata letak" title="Pilih tata letak"><option value="single">▦ Tunggal</option><option value="twoColumn">▧ Dua Kolom</option><option value="sidebarLeft">▨ Sidebar Kiri</option><option value="sidebarRight">▩ Sidebar Kanan</option><option value="featured">▥ Featured</option></select></div>
     <nav class="mw-workspace-nav" aria-label="Workspace materi"><button class="mw-nav-btn active" data-mode="home">Beranda</button><button class="mw-nav-btn" data-mode="drafts">Draft</button><button class="mw-nav-btn" data-mode="published">Terbit &amp; Distribusi</button><button class="mw-nav-btn" data-mode="editor">Buat Materi</button></nav>
     <section id="mw-overview" class="mw-overview"></section>
     <div id="mw-meta" class="mw-meta" hidden><input data-meta="title" aria-label="Judul materi" placeholder="Judul materi"><input data-meta="subject" aria-label="Mata pelajaran" placeholder="Mata pelajaran"><input data-meta="className" aria-label="Kelas" placeholder="Kelas"><select data-meta="duration" aria-label="Alokasi waktu"><option>2 JP</option><option>3 JP</option><option>4 JP</option><option>5 JP</option><option>6 JP</option><option>8 JP</option></select></div>
@@ -209,16 +232,17 @@ export async function renderGuruMateriPage(container) {
   const selected = () => doc.blocks.find((b) => b.id === selectedId);
   const formatDate = (value) => { const date = new Date(value || 0); return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }); };
   const renderDrafts = () => { const local = (() => { try { const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); return value ? [{ id: value.id, title: value.meta?.title, subject: value.meta?.subject, class_name: value.meta?.className, updated_at: value.updated_at, document_json: value, local: true }] : []; } catch { return []; } })(); const drafts = remoteDrafts.length ? remoteDrafts : local; const list = drafts.length ? `<div class="mw-draft-list">${drafts.map((draft) => `<article class="mw-draft-card"><span class="mw-library-icon">D</span><div><strong>${escapeHtml(draft.title || 'Materi Baru')}</strong><small>${escapeHtml([draft.subject, draft.class_name].filter(Boolean).join(' · ') || 'Belum ada metadata')} · ${escapeHtml(formatDate(draft.updated_at))}</small></div><div class="mw-draft-actions"><button class="mw-icon-btn" data-draft-open="${escapeAttr(draft.id)}" title="Buka draft">↗</button><button class="mw-icon-btn" data-draft-clone="${escapeAttr(draft.id)}" title="Clone draft">⧉</button>${draft.local ? '' : `<button class="mw-icon-btn" data-draft-delete="${escapeAttr(draft.id)}" title="Hapus draft">×</button>`}</div></article>`).join('')}</div>` : '<div class="mw-draft-empty">Belum ada draft tersimpan.</div>'; overview.innerHTML = `<div class="mw-overview-head"><div><p class="mw-eyebrow">Material Workspace</p><h1>Draft materi</h1><p>Draft tersimpan di Firestore dan bisa dibuka kembali dari perangkat lain.</p></div><button class="mw-action-btn primary" data-open-editor>+ Buat Materi</button></div>${list}`; overview.querySelector('[data-open-editor]')?.addEventListener('click', () => setMode('editor')); overview.querySelectorAll('[data-draft-open]').forEach((button) => button.addEventListener('click', () => openDraft(button.dataset.draftOpen))); overview.querySelectorAll('[data-draft-clone]').forEach((button) => button.addEventListener('click', () => cloneDraft(button.dataset.draftClone))); overview.querySelectorAll('[data-draft-delete]').forEach((button) => button.addEventListener('click', () => removeDraft(button.dataset.draftDelete))); };
-  const renderOverview = () => { if (mode === 'drafts') { renderDrafts(); return; } const saved = Boolean(localStorage.getItem(STORAGE_KEY)); const copy = mode === 'home' ? ['Kelola materi pembelajaran dalam satu workspace.', 'Buat materi baru, lanjutkan draft, lalu siapkan distribusi ke kelas.'] : ['Terbit & Distribusi', 'Manajemen publish multi-kelas akan aktif setelah penyimpanan JSON fase berikutnya.']; overview.innerHTML = `<div class="mw-overview-head"><div><p class="mw-eyebrow">Material Workspace</p><h1>${copy[0]}</h1><p>${copy[1]}</p></div><button class="mw-action-btn primary" data-open-editor>+ Buat Materi</button></div><div class="mw-overview-grid"><article><span class="mw-stat-label">Status Draft</span><strong>${saved ? 'Tersimpan' : 'Belum dimulai'}</strong><small>${saved ? 'Siap dilanjutkan di editor' : 'Mulai dari canvas kosong'}</small></article><article><span class="mw-stat-label">Block Dasar</span><strong>6</strong><small>Heading, Text, Image, Divider, Button, Spacer</small></article><article><span class="mw-stat-label">Workspace</span><strong>${mode === 'published' ? 'Distribusi' : 'Editor visual'}</strong><small>Fase 1-2 aktif</small></article></div>`; overview.querySelector('[data-open-editor]')?.addEventListener('click', () => setMode('editor')); };
+  const renderOverview = () => { if (mode === 'drafts') { renderDrafts(); return; } const saved = Boolean(localStorage.getItem(STORAGE_KEY)); const layoutName = LAYOUTS[layout]?.name || layout; const copy = mode === 'home' ? ['Kelola materi pembelajaran dalam satu workspace.', 'Buat materi baru, lanjutkan draft, lalu siapkan distribusi ke kelas.'] : ['Terbit & Distribusi', 'Manajemen publish multi-kelas akan aktif setelah penyimpanan JSON fase berikutnya.']; overview.innerHTML = `<div class="mw-overview-head"><div><p class="mw-eyebrow">Material Workspace</p><h1>${copy[0]}</h1><p>${copy[1]}</p></div><button class="mw-action-btn primary" data-open-editor>+ Buat Materi</button></div><div class="mw-overview-grid"><article><span class="mw-stat-label">Status Draft</span><strong>${saved ? 'Tersimpan' : 'Belum dimulai'}</strong><small>${saved ? 'Siap dilanjutkan di editor' : 'Mulai dari canvas kosong'}</small></article><article><span class="mw-stat-label">Tata Letak</span><strong>${layoutName}</strong><small>Grid: ${LAYOUTS[layout]?.columns || 1} kolom</small></article><article><span class="mw-stat-label">Block Dasar</span><strong>6</strong><small>Heading, Text, Image, Divider, Button, Spacer</small></article><article><span class="mw-stat-label">Workspace</span><strong>${mode === 'published' ? 'Distribusi' : 'Editor visual'}</strong><small>Fase 1-2 aktif</small></article></div>`; overview.querySelector('[data-open-editor]')?.addEventListener('click', () => setMode('editor')); };
   const syncMeta = () => { metaPanel.querySelectorAll('[data-meta]').forEach((input) => { input.value = doc.meta[input.dataset.meta] || ''; }); };
   const setMode = (nextMode) => { mode = nextMode; const editing = mode === 'editor'; editor.hidden = !editing; metaPanel.hidden = !editing; root.querySelector('.mw-mobile-tools').hidden = !editing; overview.hidden = editing; navButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode)); container.querySelector('#mw-title').textContent = editing ? doc.meta.title : 'Materi'; if (editing) syncMeta(); renderOverview(); };
-  const render = () => { canvas.dataset.viewport = viewport; canvas.innerHTML = doc.blocks.map((block, i) => `${i ? `<div class="mw-dropzone" data-drop-index="${i}"></div>` : ''}${renderBlock(block, selectedId)}`).join('') + `<div class="mw-dropzone" data-drop-index="${doc.blocks.length}"></div>`; props.innerHTML = propertiesHtml(selected()); container.querySelector('#mw-undo').disabled = historyIndex <= 0; container.querySelector('#mw-redo').disabled = historyIndex >= history.length - 1; renderOverview(); };
+  const applyLayout = (nextLayout) => { layout = nextLayout; doc.layout = nextLayout; scheduleSave(); render(); showToast(`Tata letak: ${LAYOUTS[nextLayout]?.name || nextLayout}`); };
+  const render = () => { canvas.dataset.viewport = viewport; canvas.dataset.layout = layout; canvas.innerHTML = doc.blocks.map((block, i) => `${i ? `<div class="mw-dropzone" data-drop-index="${i}"></div>` : ''}${renderBlock(block, selectedId)}`).join('') + `<div class="mw-dropzone" data-drop-index="${doc.blocks.length}"></div>`; props.innerHTML = propertiesHtml(selected()); container.querySelector('#mw-undo').disabled = historyIndex <= 0; container.querySelector('#mw-redo').disabled = historyIndex >= history.length - 1; renderOverview(); };
   const addBlock = (type, index = doc.blocks.length) => { const block = createBlock(type); doc.blocks.splice(index, 0, block); selectedId = block.id; commit(); render(); showToast(`${type} ditambahkan`); };
   const updateProp = (key, value) => { const block = selected(); if (!block) return; block.props[key] = ['fontSize','lineHeight','radius','maxWidth','opacity','thickness','margin','height'].includes(key) ? Number(value) : value; commit(); render(); };
   let saveTimer = null;
   const persistDraft = async (notice = true) => {
     const now = new Date().toISOString();
-    const payload = { id: doc.id, guru_id: guruId, title: doc.meta.title, subject: doc.meta.subject, class_name: doc.meta.className, duration: doc.meta.duration, schema_version: doc.schemaVersion, document_json: doc, updated_at: now, created_at: doc.created_at || now };
+    const payload = { id: doc.id, guru_id: guruId, title: doc.meta.title, subject: doc.meta.subject, class_name: doc.meta.className, duration: doc.meta.duration, schema_version: doc.schemaVersion, layout: doc.layout, document_json: doc, updated_at: now, created_at: doc.created_at || now };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
     if (!guruId) { if (notice) showToast('Draft lokal tersimpan'); return; }
     try { await saveMaterialWorkspaceDraft(payload); if (notice) showToast('Draft tersimpan'); }
@@ -241,6 +265,7 @@ export async function renderGuruMateriPage(container) {
   props.addEventListener('input', (event) => { const input = event.target.closest('[data-prop="text"]'); if (input) { const block = selected(); if (block) block.props.text = input.value; } });
   container.querySelector('.library-panel').addEventListener('click', (event) => { const item = event.target.closest('[data-block-type]'); if (item) { addBlock(item.dataset.blockType); container.querySelector('.library-panel').classList.remove('mobile-open'); } });
   container.querySelectorAll('[data-viewport]').forEach((button) => button.addEventListener('click', () => { viewport = button.dataset.viewport; container.querySelectorAll('.mw-viewport').forEach((b) => b.classList.toggle('active', b === button)); canvas.dataset.viewport = viewport; }));
+  container.querySelector('#mw-layout')?.addEventListener('change', (event) => { applyLayout(event.target.value); });
   navButtons.forEach((button) => button.addEventListener('click', () => { setMode(button.dataset.mode); if (button.dataset.mode === 'editor') render(); }));
   container.querySelector('#mw-undo').addEventListener('click', () => { if (historyIndex > 0) { historyIndex -= 1; restore(history[historyIndex]); } });
   container.querySelector('#mw-redo').addEventListener('click', () => { if (historyIndex < history.length - 1) { historyIndex += 1; restore(history[historyIndex]); } });
