@@ -62,6 +62,26 @@ export async function renderGuruMateriAiPage(container) {
     'Materi AI',
     `
     <style>${pageStyles()}</style>
+    <style>
+      .mwnav-bar { position:relative; display:flex; gap:3px; margin-bottom:14px; padding:4px; border:1px solid rgba(16,185,129,.25); border-radius:16px; background:linear-gradient(135deg,rgba(240,253,244,.95),rgba(236,253,245,.82)); box-shadow:0 10px 28px -22px rgba(15,23,42,.3), inset 0 1px 0 rgba(255,255,255,.85), 0 0 0 1px rgba(16,185,129,.06); overflow-x:auto; scrollbar-width:none; }
+      .mwnav-bar::-webkit-scrollbar { display:none; }
+      .mwnav-btn { position:relative; flex:1 1 0; min-width:max-content; display:inline-flex; flex-direction:column; align-items:center; gap:2px; border:1px solid transparent; border-radius:12px; padding:7px 11px 6px; background:transparent; color:#64748b; font-size:11px; font-weight:700; cursor:pointer; transition:all .28s cubic-bezier(.22,1,.36,1); white-space:nowrap; text-decoration:none; }
+      .mwnav-ico { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:9px; background:rgba(100,116,139,.08); color:#64748b; font-size:14px; line-height:1; transition:all .28s cubic-bezier(.22,1,.36,1); }
+      .mwnav-label { display:block; line-height:1.15; }
+      .mwnav-btn:hover { color:#334155; background:rgba(255,255,255,.7); transform:translateY(-1px); }
+      .mwnav-btn:hover .mwnav-ico { background:rgba(16,185,129,.14); color:#059669; transform:scale(1.06); }
+      .mwnav-btn.active { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 10px 24px -8px rgba(16,185,129,.5), inset 0 1px 0 rgba(255,255,255,.3); transform:translateY(-1px); }
+      .mwnav-btn.active .mwnav-ico { background:rgba(255,255,255,.22); color:#fff; transform:scale(1.08); }
+      @media (max-width:640px) { .mwnav-btn { flex:none; padding:6px 10px 5px; } .mwnav-ico { width:25px; height:25px; font-size:13px; } .mwnav-label { font-size:10px; } }
+    </style>
+    <nav class="mwnav-bar" aria-label="Workspace materi">
+      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">⌂</span><span class="mwnav-label">Beranda</span></a>
+      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">✎</span><span class="mwnav-label">Draft</span></a>
+      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">▤</span><span class="mwnav-label">Terbit &amp; Distribusi</span></a>
+      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">＋</span><span class="mwnav-label">Buat Materi</span></a>
+      <a class="mwnav-btn active" href="#guru/materi-ai"><span class="mwnav-ico">✦</span><span class="mwnav-label">Materi AI</span></a>
+      <a class="mwnav-btn" href="#guru/materi-import"><span class="mwnav-ico">📥</span><span class="mwnav-label">Import Materi</span></a>
+    </nav>
     <div class="maip">
       ${statusBannerHtml()}
       <form id="maip-form" novalidate>
