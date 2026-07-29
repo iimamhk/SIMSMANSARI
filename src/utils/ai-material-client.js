@@ -70,6 +70,8 @@ async function consumeSse(response, { onDelta, onMaterial, onError }) {
   let buffer = '';
   let currentEvent = 'message';
   let dataLines = [];
+  let receivedMaterial = false;
+  let receivedError = null;
 
   const flush = () => {
     const raw = dataLines.join('\n').trim();
@@ -80,12 +82,22 @@ async function consumeSse(response, { onDelta, onMaterial, onError }) {
       if (currentEvent === 'delta' && typeof payload.content === 'string') {
         onDelta?.(payload.content);
       } else if (currentEvent === 'material') {
+        receivedMaterial = Boolean(payload.material);
         onMaterial?.(payload.material, payload);
       } else if (currentEvent === 'error') {
-        onError?.(new MaterialGenerationError(payload.error || 'Kesalahan generate.', payload.code || 'generation_failed'));
+        receivedError = new MaterialGenerationError(payload.error || 'Kesalahan generate.', payload.code || 'generation_failed');
+        onError?.(receivedError);
       }
     } catch { /* abaikan baris tidak valid */ }
     currentEvent = 'message';
+  };
+
+  const consumeLine = (rawLine) => {
+    const line = rawLine.replace(/\r$/, '');
+    if (line.startsWith(':')) return;
+    if (line === '') { flush(); return; }
+    if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
   };
 
   while (true) {
@@ -94,12 +106,14 @@ async function consumeSse(response, { onDelta, onMaterial, onError }) {
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (line.startsWith(':')) continue;
-      if (line === '') { flush(); continue; }
-      if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
-      else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
-    }
+    lines.forEach(consumeLine);
   }
+  if (buffer) consumeLine(buffer);
   flush();
+  if (receivedError) throw receivedError;
+  if (!receivedMaterial) {
+    const error = new MaterialGenerationError('AI belum mengirim materi yang lengkap. Coba generate ulang.', 'empty_material');
+    onError?.(error);
+    throw error;
+  }
 }

@@ -23,6 +23,7 @@ const {
 } = require('../_lib/ai');
 const {
   buildRevisionPrompt,
+  buildRepairMessages,
   buildSystemPrompt,
   buildUserPrompt,
   validateMaterial,
@@ -123,26 +124,37 @@ module.exports = async (req, res) => {
     let fullText = '';
     let activeModel = profile.model;
     let streamInterrupted = false;
+    let firstStreamError = null;
 
-    try {
-      for await (const delta of streamChatCompletions(messages, {
+    const collectMaterialText = async (promptMessages, onPartial) => {
+      let output = '';
+      for await (const delta of streamChatCompletions(promptMessages, {
         profileId: profile.id,
         resolvedProfile: profile,
         model: profile.model,
         temperature: options.temperature ?? 0.7,
-        maxTokens: options.maxTokens ?? 8000,
+        maxTokens: options.maxTokens ?? 10000,
+        // Reasoning token dari beberapa provider bukan bagian dari JSON materi.
+        includeReasoning: false,
         signal: abortController.signal,
         onModelSelected: (selectedModel) => {
           activeModel = selectedModel;
         },
       })) {
         if (!delta) continue;
-        fullText += delta;
+        output += delta;
+        onPartial?.(output);
         sendSseEvent(res, 'delta', { content: delta });
       }
+      return output;
+    };
+
+    try {
+      fullText = await collectMaterialText(messages, (partial) => { fullText = partial; });
     } catch (streamError) {
-      // Stream terputus di tengah — coba selamatkan konten parsial.
-      if (fullText.length > 200) {
+      // Stream terputus di tengah — respons akan dipulihkan satu kali di bawah.
+      firstStreamError = streamError;
+      if (fullText.length > 80) {
         streamInterrupted = true;
         console.warn('[AI stream interrupted, attempting partial recovery]', streamError?.message);
       } else {
@@ -150,12 +162,28 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Validasi hasil (lengkap atau parsial).
-    const validation = validateMaterial(fullText);
-    if (!validation.material) {
+    let validation = validateMaterial(fullText);
+    const shouldRepair = !validation.material || validation.issues.length > 0 || streamInterrupted;
+    if (shouldRepair && fullText.length > 80) {
+      try {
+        sendSseComment(res, 'memperbaiki struktur JSON');
+        const repairedText = await collectMaterialText(buildRepairMessages(input, fullText));
+        const repairedValidation = validateMaterial(repairedText);
+        if (repairedValidation.material && repairedValidation.issues.length === 0) {
+          validation = repairedValidation;
+          streamInterrupted = false;
+        } else if (firstStreamError && !validation.material) {
+          validation = repairedValidation;
+        }
+      } catch (repairError) {
+        console.warn('[AI JSON repair failed]', repairError?.message || repairError);
+      }
+    }
+
+    if (!validation.material || validation.issues.length > 0) {
       const hint = streamInterrupted
         ? 'Koneksi terputus saat AI sedang menulis. Materi belum lengkap — coba generate ulang, atau gunakan model yang lebih cepat.'
-        : 'AI tidak menghasilkan struktur materi yang valid. Coba generate ulang.';
+        : `AI tidak menghasilkan struktur materi yang valid${validation.issues.length ? ` (${validation.issues[0]})` : ''}. Coba generate ulang.`;
       sendSseEvent(res, 'error', {
         error: hint,
         code: streamInterrupted ? 'stream_interrupted' : 'invalid_structure',

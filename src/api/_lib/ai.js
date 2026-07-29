@@ -3,7 +3,7 @@ const DEFAULT_MODEL = 'gpt-4o-mini';
 const DEFAULT_RATE_LIMIT_MAX = 20;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 900000;
 const DEFAULT_TIMEOUT_MS = 120000;
-const MAX_TOKENS_CAP = 8000;
+const MAX_TOKENS_CAP = 12000;
 
 let aiConfigModule = null;
 function loadAiConfigModule() {
@@ -586,7 +586,7 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
             const delta = choice?.delta?.content;
             const reasoning = choice?.delta?.reasoning_content;
             if (delta) yield delta;
-            else if (reasoning) yield reasoning;
+            else if (reasoning && options.includeReasoning !== false) yield reasoning;
           } catch {
             // Abaikan keep-alive / SSE yang tidak valid.
           }
@@ -607,7 +607,7 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
       const content = msg.content ?? '';
       if (content) {
         yield content;
-      } else if (msg.reasoning_content) {
+      } else if (msg.reasoning_content && options.includeReasoning !== false) {
         yield msg.reasoning_content;
       } else if (parsed.error) {
         const errMsg = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || JSON.stringify(parsed.error));

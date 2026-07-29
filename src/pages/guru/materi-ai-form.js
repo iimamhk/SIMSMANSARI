@@ -51,15 +51,21 @@ export function pageStyles() {
     .maip-step p { margin:1px 0 0; font-size:.72rem; color:var(--mai-muted); }
     .maip-grid { display:grid; gap:10px; }
     @media (min-width:640px){ .maip-grid-2 { grid-template-columns:1fr 1fr; } .maip-grid-3 { grid-template-columns:repeat(3,1fr); } }
+    .maip > #maip-form { display:grid; gap:14px; }
+    .maip > #maip-form .maip-block { margin-top:0; }
+    @media (min-width:900px){
+      .maip > #maip-form { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
+      .maip > #maip-form > .maip-block:first-child { grid-column:1/-1; }
+    }
     .maip-field label { display:block; font-size:.72rem; font-weight:600; color:var(--mai-muted); margin-bottom:4px; }
     .maip-req::after { content:' *'; color:#ff453a; }
     .maip-in { width:100%; border:1px solid var(--mai-line); border-radius:11px; background:#fafafc; padding:9px 12px; font-size:.88rem; color:var(--mai-ink); transition:border-color .15s ease, box-shadow .15s ease, background .15s ease; }
     .maip-in:focus { outline:none; border-color:var(--mai-brand); background:#fff; box-shadow:0 0 0 3px rgba(10,132,255,.15); }
-    .maip-radio-row { display:grid; gap:8px; }
-    @media (min-width:640px){ .maip-radio-row { grid-template-columns:repeat(3,1fr); } }
+    .maip-radio-row { display:grid; grid-template-columns:1fr; gap:10px; }
+    @media (min-width:520px){ .maip-radio-row { grid-template-columns:repeat(3,minmax(0,1fr)); } }
     .maip-radio { position:relative; display:block; cursor:pointer; }
     .maip-radio input { position:absolute; opacity:0; pointer-events:none; }
-    .maip-radio-card { border:1.5px solid var(--mai-line); border-radius:12px; padding:10px 12px; background:#fafafc; transition:.15s ease; }
+    .maip-radio-card { min-height:76px; height:100%; display:flex; flex-direction:column; justify-content:center; border:1.5px solid var(--mai-line); border-radius:12px; padding:12px 13px; background:#fafafc; transition:.15s ease; }
     .maip-radio-card strong { display:block; font-size:.84rem; color:var(--mai-ink); }
     .maip-radio-card span { display:block; font-size:.7rem; color:var(--mai-muted); margin-top:2px; }
     .maip-radio input:checked + .maip-radio-card { border-color:var(--mai-brand); background:rgba(10,132,255,.06); box-shadow:0 0 0 3px rgba(10,132,255,.12); }
@@ -199,7 +205,10 @@ export function resultHtml() {
           <button type="button" id="maip-revisi-btn" class="maip-btn primary">Revisi</button>
         </div>
       </div>
-      <p id="maip-error" hidden style="margin:12px 0 0; font-size:.8rem; color:#d92b20"></p>
+      <div id="maip-error-wrap" hidden style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin:12px 0 0; padding:10px 12px; border:1px solid rgba(255,69,58,.22); border-radius:12px; background:rgba(255,69,58,.06);">
+        <p id="maip-error" style="margin:0; font-size:.8rem; line-height:1.45; color:#d92b20"></p>
+        <button type="button" id="maip-retry" class="maip-btn" style="flex:none; border-color:#ff453a; color:#d92b20;">Generate Ulang</button>
+      </div>
       <p id="maip-status" style="margin:10px 0 0; font-size:.74rem; color:var(--mai-muted)"></p>
     </div>`;
 }

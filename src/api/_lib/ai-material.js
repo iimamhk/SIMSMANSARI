@@ -145,6 +145,22 @@ function buildRevisionPrompt(input, currentJson, instruction) {
   ].join('\n');
 }
 
+function buildRepairMessages(input, partialText) {
+  return [
+    { role: 'system', content: buildSystemPrompt() },
+    { role: 'user', content: buildUserPrompt(input) },
+    { role: 'assistant', content: String(partialText || '').slice(0, 100000) },
+    {
+      role: 'user',
+      content: [
+        'Output sebelumnya terpotong atau tidak valid. Bangun ulang menjadi SATU objek JSON LENGKAP sesuai skema di atas.',
+        'Pertahankan isi yang masih dapat dibaca, lengkapi bagian yang hilang, dan pastikan semua tanda kurung serta string JSON tertutup.',
+        'Jangan keluarkan markdown, code fence, komentar, alasan, atau teks apa pun di luar objek JSON.',
+      ].join(' '),
+    },
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Validasi & perbaikan JSON
 // ---------------------------------------------------------------------------
@@ -264,7 +280,16 @@ function validateMaterial(rawText) {
     return { ok: false, material: null, issues: ['Struktur materi tidak valid.'] };
   }
   const issues = [];
-  if (!material.concepts.length) issues.push('Bagian konsep kosong.');
+  if (material.objectives.length < 1) issues.push('Tujuan pembelajaran kosong.');
+  if (material.concepts.length < 3) issues.push('Materi membutuhkan minimal tiga bagian konsep.');
+  if (material.examples.length < 1) issues.push('Contoh soal kosong.');
+  if (material.exercises.length < 1) issues.push('Latihan soal kosong.');
+  if (material.summary.length < 1) issues.push('Rangkuman kosong.');
+  if (material.reflection.length < 1) issues.push('Refleksi kosong.');
+  material.concepts.forEach((concept, index) => {
+    if (typeof concept.heading !== 'string' || !concept.heading.trim()) issues.push(`Judul konsep ${index + 1} kosong.`);
+    if (typeof concept.content !== 'string' || !concept.content.trim()) issues.push(`Isi konsep ${index + 1} kosong.`);
+  });
   const latexIssues = collectLatexIssues(material);
   issues.push(...latexIssues);
   return { ok: issues.length === 0, material, issues };
@@ -279,6 +304,7 @@ module.exports = {
   KEDALAMAN_GUIDE,
   SECTION_TYPES,
   buildRevisionPrompt,
+  buildRepairMessages,
   buildSystemPrompt,
   buildUserPrompt,
   collectLatexIssues,

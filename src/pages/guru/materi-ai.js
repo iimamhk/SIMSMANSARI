@@ -31,7 +31,12 @@ function readDrafts() {
   try { return JSON.parse(localStorage.getItem(MATERIAL_DRAFTS_KEY) || '[]'); } catch { return []; }
 }
 function writeDrafts(drafts) {
-  try { localStorage.setItem(MATERIAL_DRAFTS_KEY, JSON.stringify(drafts)); } catch { /* quota */ }
+  try {
+    localStorage.setItem(MATERIAL_DRAFTS_KEY, JSON.stringify(drafts));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function renderGuruMateriAiPage(container) {
@@ -89,6 +94,8 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
   const revisiWrap = root.querySelector('#maip-revisi-wrap');
   const revisiInput = root.querySelector('#maip-revisi-input');
   const revisiBtn = root.querySelector('#maip-revisi-btn');
+  const retryBtn = root.querySelector('#maip-retry');
+  const errorWrap = root.querySelector('#maip-error-wrap');
   const errorEl = root.querySelector('#maip-error');
   const statusEl = root.querySelector('#maip-status');
   const resultSub = root.querySelector('#maip-result-sub');
@@ -113,12 +120,23 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
     connEl.className = `maip-status-pill ${state}`;
     connEl.innerHTML = `<span class="maip-dot"></span>${escapeHtml(text)}`;
   }
-  function showError(msg) { errorEl.hidden = false; errorEl.textContent = msg; }
-  function clearError() { errorEl.hidden = true; errorEl.textContent = ''; }
+  function showError(msg) {
+    errorWrap.hidden = false;
+    errorEl.textContent = msg;
+    retryBtn.hidden = isGenerating;
+  }
+  function clearError() {
+    errorWrap.hidden = true;
+    errorEl.textContent = '';
+  }
   function setStatus(msg) { statusEl.textContent = msg || ''; }
 
   function documentIdToken(value) {
     return String(value || '').trim().replace(/[^a-zA-Z0-9_-]+/g, '_') || 'target';
+  }
+
+  function safeString(value) {
+    return String(value ?? '').trim();
   }
 
   function selectedTargets() {
@@ -286,6 +304,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
         renderPreview(previousMaterial, currentMeta);
       }
       setGenerating(false);
+      if (!errorWrap.hidden) retryBtn.hidden = false;
       abortController = null;
     }
   }
@@ -325,42 +344,64 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
     runGenerate(instruction);
   });
 
+  retryBtn.addEventListener('click', () => {
+    if (isGenerating) return;
+    currentMaterial = null;
+    currentDraftId = null;
+    revisiWrap.hidden = true;
+    simpanBtn.disabled = true;
+    publishBtn.disabled = true;
+    runGenerate('');
+  });
+
   // Simpan draft ke localStorage (muncul di menu Materi biasa).
   simpanBtn.addEventListener('click', async () => {
     if (!currentMaterial) return;
-    await ensureKaTeXReady();
-    const input = readForm();
-    const meta = buildMeta(input);
-    const htmlSource = buildMaterialHtml(currentMaterial, meta);
-    const id = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const draft = {
-      id,
-      guru_id: userId,
-      guru_nama: userName,
-      title: currentMaterial.title || 'Materi AI',
-      kelas_id: meta.className || input.kelas,
-      kelas_nama: meta.className || input.kelas,
-      mapel_id: input.mapel,
-      mapel_nama: input.mapel,
-      level: input.fase,
-      chapter: meta.chapter,
-      meetings: input.alokasiWaktu,
-      note: `Materi dari AI - ${input.topik || ''}`,
-      html_source: htmlSource,
-      material_json: currentMaterial,
-      source: 'materi_ai',
-      tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-      semester_id: context?.semester_aktif || '',
-      updated_at: new Date().toISOString(),
-    };
-    const drafts = readDrafts();
-    const idx = drafts.findIndex((d) => d.id === id);
-    if (idx >= 0) drafts[idx] = draft;
-    else drafts.push(draft);
-    writeDrafts(drafts);
-    currentDraftId = id;
-    setStatus('Tersimpan sebagai draft. Lihat di menu Materi > Daftar.');
-    setTimeout(() => setStatus(''), 4000);
+    clearError();
+    simpanBtn.disabled = true;
+    simpanBtn.textContent = 'Menyimpan...';
+    try {
+      await ensureKaTeXReady();
+      const input = readForm();
+      const meta = buildMeta(input);
+      const htmlSource = buildMaterialHtml(currentMaterial, meta);
+      const id = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const draft = {
+        id,
+        guru_id: userId,
+        guru_nama: userName,
+        title: currentMaterial.title || 'Materi AI',
+        kelas_id: meta.className || input.kelas,
+        kelas_nama: meta.className || input.kelas,
+        mapel_id: input.mapel,
+        mapel_nama: input.mapel,
+        level: input.fase,
+        chapter: meta.chapter,
+        meetings: input.alokasiWaktu,
+        note: `Materi dari AI - ${input.topik || ''}`,
+        html_source: htmlSource,
+        material_json: currentMaterial,
+        source: 'materi_ai',
+        tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
+        semester_id: context?.semester_aktif || '',
+        updated_at: new Date().toISOString(),
+      };
+      const drafts = readDrafts();
+      const idx = drafts.findIndex((d) => d.id === id);
+      if (idx >= 0) drafts[idx] = draft;
+      else drafts.push(draft);
+      if (!writeDrafts(drafts)) {
+        throw new Error('Draft tidak dapat disimpan. Penyimpanan browser penuh atau diblokir.');
+      }
+      currentDraftId = id;
+      setStatus('Tersimpan sebagai draft. Lihat di menu Materi > Daftar.');
+      setTimeout(() => setStatus(''), 4000);
+    } catch (error) {
+      showError(error?.message || 'Gagal menyimpan draft.');
+    } finally {
+      simpanBtn.disabled = !currentMaterial;
+      simpanBtn.textContent = 'Simpan';
+    }
   });
 
   publishBtn.addEventListener('click', () => {
@@ -385,49 +426,62 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
   publishConfirmBtn.addEventListener('click', async () => {
     const targets = selectedTargets();
     if (!currentMaterial || !targets.length) return;
+    clearError();
     publishConfirmBtn.disabled = true;
     publishConfirmBtn.textContent = 'Memublikasikan...';
-    const input = readForm();
-    const meta = buildMeta(input);
-    const sourceId = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const now = new Date().toISOString();
-    const htmlSource = buildMaterialHtml(currentMaterial, meta);
-    const results = await Promise.allSettled(targets.map((target) => savePublishedMaterial({
-      id: `${sourceId}__${documentIdToken(target.id)}`,
-      source_id: sourceId,
-      guru_id: userId,
-      guru_nama: userName,
-      pengajaran_id: target.id,
-      kelas_id: target.kelas_id,
-      kelas_nama: target.kelas_nama,
-      mapel_id: target.mapel_id,
-      mapel_nama: target.mapel_nama,
-      title: currentMaterial.title || 'Materi AI',
-      note: `Materi dari AI - ${input.topik || ''}`,
-      level: input.fase,
-      chapter: input.bab || input.topik,
-      meetings: input.alokasiWaktu,
-      html_source: htmlSource,
-      material_json: currentMaterial,
-      visible_to_students: true,
-      source: 'materi_ai',
-      tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-      semester_id: context?.semester_aktif || '',
-      published_at: now,
-      created_at: now,
-    })));
-    const successes = results.filter((result) => result.status === 'fulfilled').length;
-    const failures = targets.filter((_target, index) => results[index].status === 'rejected');
-    currentDraftId = sourceId;
-    closePublishModal();
-    if (!failures.length) {
-      setStatus(`Berhasil dipublikasikan ke ${successes} kelas.`);
-    } else {
-      const failedNames = failures.map((item) => item.kelas_nama || item.kelas_id).join(', ');
-      showError(`${successes} kelas berhasil, ${failures.length} gagal (${failedNames}). Coba publish ulang kelas yang gagal.`);
-      setStatus('Publish selesai sebagian; materi yang berhasil tidak diduplikasi saat dicoba ulang.');
+    try {
+      const input = readForm();
+      const meta = buildMeta(input);
+      const sourceId = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const now = new Date().toISOString();
+      const htmlSource = buildMaterialHtml(currentMaterial, meta);
+      const results = await Promise.allSettled(targets.map((target) => {
+        const kelasId = safeString(target.kelas_id || target.kelas_nama || input.kelas);
+        const kelasNama = safeString(target.kelas_nama || target.kelas_id || input.kelas);
+        const mapelId = safeString(target.mapel_id || input.mapel);
+        const mapelNama = safeString(target.mapel_nama || input.mapel || 'Mata Pelajaran');
+        return savePublishedMaterial({
+          id: `${sourceId}__${documentIdToken(target.id)}`,
+          source_id: sourceId,
+          guru_id: safeString(userId),
+          guru_nama: safeString(userName || 'Guru'),
+          pengajaran_id: safeString(target.id),
+          kelas_id: kelasId,
+          kelas_nama: kelasNama,
+          kelas_token: documentIdToken(kelasId || kelasNama),
+          mapel_id: mapelId,
+          mapel_nama: mapelNama,
+          title: safeString(currentMaterial.title || 'Materi AI'),
+          note: `Materi dari AI - ${input.topik || ''}`,
+          level: safeString(input.fase),
+          chapter: safeString(input.bab || input.topik),
+          meetings: safeString(input.alokasiWaktu),
+          html_source: htmlSource,
+          visible_to_students: true,
+          source: 'materi_ai',
+          tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
+          semester_id: safeString(context?.semester_aktif),
+          published_at: now,
+          created_at: now,
+        });
+      }));
+      const successes = results.filter((result) => result.status === 'fulfilled').length;
+      const failures = targets.filter((_target, index) => results[index].status === 'rejected');
+      if (!failures.length) {
+        currentDraftId = sourceId;
+        closePublishModal();
+        setStatus(`Berhasil dipublikasikan ke ${successes} kelas.`);
+      } else {
+        const failedNames = failures.map((item) => item.kelas_nama || item.kelas_id).join(', ');
+        showError(`${successes} kelas berhasil, ${failures.length} gagal (${failedNames}).`);
+        setStatus(successes ? 'Publish sebagian. Pilih kelas yang gagal lalu coba lagi.' : 'Publish gagal. Periksa koneksi dan izin, lalu coba lagi.');
+      }
+    } catch (error) {
+      showError(error?.message || 'Publish gagal.');
+      setStatus('Publish gagal. Coba lagi.');
+    } finally {
+      publishConfirmBtn.textContent = 'Publish';
+      updateTargetCount();
     }
-    publishConfirmBtn.textContent = 'Publish';
-    updateTargetCount();
   });
 }
