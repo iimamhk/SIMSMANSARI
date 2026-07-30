@@ -439,7 +439,6 @@ export async function renderGuruMateriImportPage(container) {
     const mapel = safeString(mapelInput.value);
     const kelas = safeString(kelasInput.value);
     try {
-    try {
       // Satu dokumen untuk semua kelas — html_source tidak diduplikasi.
       await savePublishedMaterialForClasses({
         id: sourceId,
