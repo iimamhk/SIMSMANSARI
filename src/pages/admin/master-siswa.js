@@ -136,7 +136,17 @@ export async function renderMasterSiswaPage(container) {
             </table>
           </div>
           <div id="siswa-pagination" class="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p id="siswa-page-summary" class="text-xs text-slate-500" aria-live="polite"></p>
+            <div class="flex items-center gap-3">
+              <p id="siswa-page-summary" class="text-xs text-slate-500" aria-live="polite"></p>
+              <label class="flex items-center gap-1.5 text-xs text-slate-500">
+                <span>Tampil</span>
+                <select id="siswa-page-size" class="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700 outline-none transition focus:border-sky-300 focus:bg-white">
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="40">40</option>
+                </select>
+              </label>
+            </div>
             <div class="flex items-center gap-2">
               <button id="siswa-prev-page" type="button" class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Sebelumnya</button>
               <span id="siswa-page-number" class="min-w-20 text-center text-xs font-semibold text-slate-700"></span>
@@ -196,7 +206,8 @@ export async function renderMasterSiswaPage(container) {
   const pageNumber = container.querySelector('#siswa-page-number');
   const prevPageBtn = container.querySelector('#siswa-prev-page');
   const nextPageBtn = container.querySelector('#siswa-next-page');
-  const PAGE_SIZE = 10;
+  const pageSizeSelect = container.querySelector('#siswa-page-size');
+  let PAGE_SIZE = 10;
   let currentPage = 1;
   let lastEditTrigger = null;
 
@@ -503,6 +514,15 @@ export async function renderMasterSiswaPage(container) {
     currentPage += 1;
     renderRows();
   });
+
+  if (pageSizeSelect) {
+    pageSizeSelect.value = String(PAGE_SIZE);
+    pageSizeSelect.addEventListener('change', () => {
+      PAGE_SIZE = Number(pageSizeSelect.value) || 10;
+      currentPage = 1;
+      renderRows();
+    });
+  }
 
   // Filter & pencarian murni di sisi klien (data sudah dimuat sekali, tidak ada read tambahan).
   let searchDebounce = null;
