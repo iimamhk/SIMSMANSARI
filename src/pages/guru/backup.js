@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { showBackupReminder } from '../../utils/backup-reminder.js';
-import { checkDriveStatus, isDriveUploadEnabled, setDriveUploadEnabled, uploadBackupToDrive } from '../../utils/drive-upload.js';
+import { checkDriveStatus, isDriveUploadEnabled, setDriveUploadEnabled } from '../../utils/drive-upload.js';
 import {
   exportGuruBackupExcel,
   exportBackupMultiFormat,
@@ -269,6 +269,38 @@ export async function renderGuruBackupPage(container) {
             </div>
           </section>
 
+          <!-- Destination Selection -->
+          <section class="mb-6">
+            <h3 class="mb-3 text-lg font-bold text-slate-900">Tujuan Backup</h3>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3" id="destination-options">
+              <label class="dest-opt relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 transition">
+                <input type="radio" name="backupDestination" value="local" class="sr-only" checked>
+                <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
+                <div>
+                  <p class="font-bold text-slate-900">Lokal</p>
+                  <p class="mt-0.5 text-xs text-slate-600">Unduh berkas ke perangkat ini.</p>
+                </div>
+              </label>
+              <label class="dest-opt relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
+                <input type="radio" name="backupDestination" value="drive" class="sr-only">
+                <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-sky-100 text-sky-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4M12 4l-4 4M12 4l4 4"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg></div>
+                <div>
+                  <p class="font-bold text-slate-900">Online (Google Drive)</p>
+                  <p class="mt-0.5 text-xs text-slate-600">Unggah ke Drive sekolah, tanpa unduh.</p>
+                </div>
+              </label>
+              <label class="dest-opt relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
+                <input type="radio" name="backupDestination" value="both" class="sr-only">
+                <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-indigo-100 text-indigo-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19h14"/></svg></div>
+                <div>
+                  <p class="font-bold text-slate-900">Keduanya</p>
+                  <p class="mt-0.5 text-xs text-slate-600">Unduh ke perangkat & unggah ke Drive.</p>
+                </div>
+              </label>
+            </div>
+            <p id="destination-hint" class="mt-2 text-xs text-slate-500"></p>
+          </section>
+
           <!-- Format Selection -->
           <section class="mb-6">
             <h3 class="mb-3 text-lg font-bold text-slate-900">Format Ekspor</h3>
@@ -288,20 +320,16 @@ export async function renderGuruBackupPage(container) {
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 class="text-lg font-bold text-slate-900" id="backup-action-title">Mulai Backup Sekarang</h3>
-                  <p class="mt-1 text-sm text-slate-500" id="backup-action-desc">Klik tombol di bawah untuk mengunduh seluruh data Anda dalam format Excel (.xlsx).</p>
+                  <p class="mt-1 text-sm text-slate-500" id="backup-action-desc">Pilih tujuan backup di atas, lalu klik tombol backup.</p>
                 </div>
                 <div class="flex flex-col gap-3 sm:flex-row">
                   <button id="btn-preview-backup" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition">
                     <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                    Preview
+                    Preview (unduh)
                   </button>
                   <button id="btn-start-backup" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95">
                     <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-                    Unduh ke Perangkat
-                  </button>
-                  <button id="btn-backup-drive" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/30 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95">
-                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg>
-                    Backup ke Drive
+                    <span id="btn-start-backup-label">Backup Sekarang</span>
                   </button>
                 </div>
               </div>
@@ -485,6 +513,7 @@ export async function renderGuruBackupPage(container) {
   // Initialize event listeners
   initTabNavigation(container);
   initBackupModeToggle(container);
+  initDestinationToggle(container);
   initBackupActions(container);
   initHistoryActions(container);
   initRestoreActions(container);
@@ -623,11 +652,47 @@ function updateBackupActionText(container, mode) {
 
   if (mode === 'selective') {
     titleEl.textContent = 'Backup Selektif';
-    descEl.textContent = 'Pilih kelas dan tipe data di atas, lalu klik tombol backup untuk mengunduh data terpilih.';
+    descEl.textContent = 'Pilih kelas dan tipe data di atas, lalu tentukan tujuan backup (lokal / Drive / keduanya).';
   } else {
     titleEl.textContent = 'Mulai Backup Sekarang';
-    descEl.textContent = 'Klik tombol di bawah untuk mengunduh seluruh data Anda dalam format Excel (.xlsx).';
+    descEl.textContent = 'Pilih tujuan backup (lokal / Drive / keduanya), lalu klik tombol backup.';
   }
+}
+
+// Pilihan tujuan backup: highlight kartu terpilih + teks bantuan + label tombol.
+function initDestinationToggle(container) {
+  const destOpts = Array.from(container.querySelectorAll('.dest-opt'));
+  const hint = container.querySelector('#destination-hint');
+  const startLabel = container.querySelector('#btn-start-backup-label');
+  const previewBtn = container.querySelector('#btn-preview-backup');
+
+  const HINTS = {
+    local: 'Berkas backup akan diunduh ke perangkat ini saja.',
+    drive: 'Berkas backup akan diunggah langsung ke Google Drive sekolah (tidak diunduh ke perangkat).',
+    both: 'Berkas backup diunduh ke perangkat sekaligus diunggah ke Google Drive.',
+  };
+  const LABELS = { local: 'Unduh ke Perangkat', drive: 'Unggah ke Drive', both: 'Unduh + Unggah' };
+
+  const apply = (value) => {
+    destOpts.forEach((opt) => {
+      const input = opt.querySelector('input');
+      const isActive = input.value === value;
+      input.checked = isActive;
+      opt.classList.toggle('border-emerald-300', isActive);
+      opt.classList.toggle('bg-emerald-50', isActive);
+      opt.classList.toggle('border-slate-200', !isActive);
+      opt.classList.toggle('bg-white', !isActive);
+    });
+    if (hint) hint.textContent = HINTS[value] || '';
+    if (startLabel) startLabel.textContent = LABELS[value] || 'Backup Sekarang';
+    // Preview selalu berupa unduhan lokal; sembunyikan bila tujuan hanya Drive.
+    if (previewBtn) previewBtn.style.display = value === 'drive' ? 'none' : '';
+  };
+
+  destOpts.forEach((opt) => {
+    opt.addEventListener('click', () => apply(opt.querySelector('input').value));
+  });
+  apply('local');
 }
 
 function initBackupActions(container) {
@@ -643,186 +708,100 @@ function initBackupActions(container) {
     if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
   };
 
+  // isPreview memaksa tujuan 'local' (hanya unduh untuk melihat isi berkas).
   const runBackup = async (isPreview = false) => {
-    if (startBtn) {
-      startBtn.disabled = true;
-      startBtn.classList.add('opacity-60', 'cursor-not-allowed');
-    }
-    if (previewBtn) {
-      previewBtn.disabled = true;
-      previewBtn.classList.add('opacity-60', 'cursor-not-allowed');
-    }
+    const buttons = [startBtn, previewBtn].filter(Boolean);
+    buttons.forEach((b) => { b.disabled = true; b.classList.add('opacity-60', 'cursor-not-allowed'); });
 
     try {
       const mode = container.querySelector('input[name="backupMode"]:checked')?.value || 'full';
       const format = container.querySelector('input[name="exportFormat"]:checked')?.value || 'xlsx';
+      const destination = isPreview
+        ? 'local'
+        : (container.querySelector('input[name="backupDestination"]:checked')?.value || 'local');
       const dataTypes = Array.from(container.querySelectorAll('input[name="dataType"]:checked')).map((cb) => cb.value);
       const selectedAssignments = Array.from(container.querySelectorAll('input[name="assignment"]:checked')).map((cb) => cb.value)
         .map((id) => assignmentsCache.find((a) => a.id === id))
         .filter(Boolean);
 
-      updateProgress('Memeriksa data pengajaran...', 10);
-
-      let result;
-      if (mode === 'full') {
-        result = await exportGuruBackupExcel((p) => {
-          const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
-          updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
-        });
-      } else if (mode === 'selective') {
-        if (!selectedAssignments.length) {
-          alert('Pilih minimal satu kelas untuk backup selektif.');
+      // Bila tujuan menyertakan Drive, pastikan Drive siap sebelum memproses.
+      if (destination === 'drive' || destination === 'both') {
+        updateProgress('Memeriksa koneksi Google Drive...', 6);
+        const status = await checkDriveStatus();
+        if (!status.available) {
+          if (progressBox) progressBox.classList.add('hidden');
+          alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}`);
           return;
         }
-        if (!dataTypes.length) {
-          alert('Pilih minimal satu tipe data untuk backup selektif.');
-          return;
-        }
-        const context = (await import('../../utils/helpers.js')).getStoredContext();
-        const session = getSession();
-        const userId = session?.user?.username || context?.user_logged_in || '';
-        const userName = session?.user?.nama || 'Guru';
-        result = await exportSelectiveBackupExcel(context, userId, userName, selectedAssignments, dataTypes, (p) => {
-          const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
-          updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
-        });
       }
 
+      updateProgress('Memeriksa data pengajaran...', 12);
+
+      const context = (await import('../../utils/helpers.js')).getStoredContext();
+      const session = getSession();
+      const userId = session?.user?.username || context?.user_logged_in || '';
+      const userName = session?.user?.nama || 'Guru';
+
+      if (mode === 'selective') {
+        if (!selectedAssignments.length) { alert('Pilih minimal satu kelas untuk backup selektif.'); return; }
+        if (!dataTypes.length) { alert('Pilih minimal satu tipe data untuk backup selektif.'); return; }
+      }
+
+      const progress = (p) => {
+        const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
+        updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
+      };
+
+      let result;
       if (format !== 'xlsx') {
-        const { getStoredContext } = await import('../../utils/helpers.js');
-        const { getSession: getSessionUtil } = await import('../../utils/backup-excel.js');
-        const context = getStoredContext();
-        const session = getSessionUtil();
-        const userId = session?.user?.username || context?.user_logged_in || '';
-        const userName = session?.user?.nama || 'Guru';
-
-        const workbook = mode === 'full'
-          ? await buildGuruBackupWorkbook(context, userId, userName, (p) => {
-              const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
-              updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
-            })
-          : await (await import('../../utils/backup-excel.js')).buildSelectiveBackupWorkbook(context, userId, userName, selectedAssignments, dataTypes, (p) => {
-              const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
-              updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
-            });
-
-        updateProgress('Mengonversi format...', 95);
-        const { exportBackupMultiFormat } = await import('../../utils/backup-excel.js');
-        await exportBackupMultiFormat(workbook, format);
+        // Format non-Excel (CSV/JSON) memakai jalur multi-format.
+        const { exportBackupMultiFormat, EXPORT_FORMATS } = await import('../../utils/backup-excel.js');
+        const fmt = Object.values(EXPORT_FORMATS).find((f) => f.key === format) || EXPORT_FORMATS.XLSX;
+        const assignmentsForFmt = mode === 'selective'
+          ? selectedAssignments
+          : assignmentsCache;
+        const typesForFmt = mode === 'selective'
+          ? dataTypes
+          : Object.values(BACKUP_DATA_TYPES).map((d) => d.key);
+        result = await exportBackupMultiFormat(context, userId, userName, assignmentsForFmt, typesForFmt, fmt, progress, { destination });
+      } else if (mode === 'full') {
+        result = await exportGuruBackupExcel(progress, { destination });
+      } else {
+        result = await exportSelectiveBackupExcel(context, userId, userName, selectedAssignments, dataTypes, progress, { destination });
       }
 
       updateProgress('Selesai!', 100);
 
-      if (!isPreview) {
-        setTimeout(() => {
-          renderGuruBackupPage(container);
-        }, 800);
+      // Pesan hasil sesuai tujuan.
+      const drive = result?.drive || {};
+      let doneMsg = '';
+      if (destination === 'local') doneMsg = 'Backup selesai. Berkas telah diunduh ke perangkat.';
+      else if (destination === 'drive') {
+        doneMsg = drive.uploaded ? 'Backup berhasil diunggah ke Google Drive.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
       } else {
+        doneMsg = drive.uploaded
+          ? 'Backup diunduh ke perangkat dan diunggah ke Google Drive.'
+          : `Backup diunduh ke perangkat. Unggah Drive gagal: ${drive.reason || 'terjadi kesalahan.'}`;
+      }
+
+      if (isPreview) {
         if (progressBox) progressBox.classList.add('hidden');
-        if (startBtn) {
-          startBtn.disabled = false;
-          startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-        }
-        if (previewBtn) {
-          previewBtn.disabled = false;
-          previewBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-        }
-        alert('Preview backup selesai! File telah diunduh.');
+        alert('Preview selesai! Berkas telah diunduh ke perangkat.');
+      } else {
+        alert(doneMsg);
+        setTimeout(() => { renderGuruBackupPage(container); }, 800);
       }
     } catch (err) {
       console.error('Backup error:', err);
       if (progressBox) progressBox.classList.add('hidden');
-      if (startBtn) {
-        startBtn.disabled = false;
-        startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-      }
-      if (previewBtn) {
-        previewBtn.disabled = false;
-        previewBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-      }
       alert(`Backup gagal: ${err?.message || 'Terjadi kesalahan.'}`);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; b.classList.remove('opacity-60', 'cursor-not-allowed'); });
     }
   };
 
   startBtn?.addEventListener('click', () => runBackup(false));
   previewBtn?.addEventListener('click', () => runBackup(true));
-
-  // Backup manual langsung ke Google Drive (tanpa mengunduh ke perangkat).
-  const driveBtn = container.querySelector('#btn-backup-drive');
-  const runDriveBackup = async () => {
-    const buttons = [startBtn, previewBtn, driveBtn].filter(Boolean);
-    buttons.forEach((b) => { b.disabled = true; b.classList.add('opacity-60', 'cursor-not-allowed'); });
-    try {
-      const mode = container.querySelector('input[name="backupMode"]:checked')?.value || 'full';
-      const dataTypes = Array.from(container.querySelectorAll('input[name="dataType"]:checked')).map((cb) => cb.value);
-      const selectedAssignments = Array.from(container.querySelectorAll('input[name="assignment"]:checked')).map((cb) => cb.value)
-        .map((id) => assignmentsCache.find((a) => a.id === id))
-        .filter(Boolean);
-
-      updateProgress('Memeriksa koneksi Google Drive...', 8);
-      const status = await checkDriveStatus();
-      if (!status.available) {
-        if (progressBox) progressBox.classList.add('hidden');
-        alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}`);
-        return;
-      }
-
-      const { getStoredContext } = await import('../../utils/helpers.js');
-      const { getSession: getSessionUtil } = await import('../../utils/backup-excel.js');
-      const context = getStoredContext();
-      const session = getSessionUtil();
-      const userId = session?.user?.username || context?.user_logged_in || '';
-      const userName = session?.user?.nama || 'Guru';
-
-      updateProgress('Menyusun data...', 20);
-      let workbook;
-      if (mode === 'selective') {
-        if (!selectedAssignments.length) { alert('Pilih minimal satu kelas.'); return; }
-        if (!dataTypes.length) { alert('Pilih minimal satu tipe data.'); return; }
-        const { buildSelectiveBackupWorkbook } = await import('../../utils/backup-excel.js');
-        workbook = await buildSelectiveBackupWorkbook(context, userId, userName, selectedAssignments, dataTypes, (p) => {
-          const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 60);
-          updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
-        });
-      } else {
-        workbook = await buildGuruBackupWorkbook(context, userId, userName, (p) => {
-          const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 60);
-          updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
-        });
-      }
-
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const safeName = String(userName).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30);
-      const fileName = `Backup-SIMSMANSARI-${safeName}-${dateStr}.xlsx`;
-      updateProgress('Menyusun file Excel...', 85);
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-      updateProgress('Mengunggah ke Google Drive...', 92);
-      const result = await uploadBackupToDrive(blob, fileName, {
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        force: true,
-        logType: 'guru',
-        onProgress: (text) => updateProgress(text, 96),
-      });
-
-      if (!result.uploaded) {
-        if (progressBox) progressBox.classList.add('hidden');
-        alert(`Gagal mengunggah ke Drive: ${result.reason || 'terjadi kesalahan.'}`);
-        return;
-      }
-
-      updateProgress('Selesai! Tersimpan di Google Drive.', 100);
-      setTimeout(() => { renderGuruBackupPage(container); }, 900);
-    } catch (err) {
-      console.error('Backup ke Drive gagal:', err);
-      if (progressBox) progressBox.classList.add('hidden');
-      alert(`Backup ke Drive gagal: ${err?.message || 'Terjadi kesalahan.'}`);
-    } finally {
-      buttons.forEach((b) => { b.disabled = false; b.classList.remove('opacity-60', 'cursor-not-allowed'); });
-    }
-  };
-  driveBtn?.addEventListener('click', runDriveBackup);
 }
 
 function initHistoryActions(container) {

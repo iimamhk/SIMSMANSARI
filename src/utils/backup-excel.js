@@ -179,35 +179,57 @@ function downloadBlob(blob, fileName) {
 }
 
 /**
- * Simpan backup: unduh ke perangkat lalu unggah ke Google Drive bila tersedia.
+ * Kirim backup sesuai tujuan yang dipilih guru.
  *
- * Unduhan lokal tetap dilakukan lebih dulu supaya guru selalu memegang berkas,
- * bahkan ketika Drive belum dikonfigurasi atau jaringan bermasalah.
- *
- * @returns {Promise<{uploaded:boolean, reason?:string, webViewLink?:string, folderName?:string}>}
+ * @param {Blob} blob
+ * @param {string} fileName
+ * @param {(p:object)=>void} [onProgress]
+ * @param {object} [options]
+ * @param {'local'|'drive'|'both'} [options.destination] Tujuan pengiriman.
+ *   - 'local': hanya unduh ke perangkat.
+ *   - 'drive': hanya unggah ke Google Drive (tidak mengunduh).
+ *   - 'both' : unduh ke perangkat lalu unggah ke Drive (perilaku lama).
+ *   Bila tidak diisi, mengikuti preferensi toggle Drive: 'both' saat aktif,
+ *   'local' saat nonaktif.
+ * @param {string} [options.mimeType] MIME type untuk unggahan Drive.
+ * @param {string} [options.logType] Label tipe untuk riwayat backup.
+ * @returns {Promise<{uploaded:boolean, downloaded:boolean, reason?:string, webViewLink?:string, folderName?:string}>}
  */
-async function deliverBackupBlob(blob, fileName, onProgress = () => {}) {
-  downloadBlob(blob, fileName);
+async function deliverBackupBlob(blob, fileName, onProgress = () => {}, options = {}) {
+  const destination = options.destination || (isDriveUploadEnabled() ? 'both' : 'local');
+  const wantLocal = destination === 'local' || destination === 'both';
+  const wantDrive = destination === 'drive' || destination === 'both';
 
   // Pelaporan progres memakai bentuk { current, total, label } seperti pemanggil lain.
   const report = (label) => {
     try { onProgress({ current: 1, total: 1, label }); } catch { /* abaikan */ }
   };
 
-  if (!isDriveUploadEnabled()) {
-    return { uploaded: false, reason: 'Unggah Google Drive dimatikan pada perangkat ini.' };
+  let downloaded = false;
+  if (wantLocal) {
+    downloadBlob(blob, fileName);
+    downloaded = true;
+    report('Tersimpan ke perangkat.');
+  }
+
+  if (!wantDrive) {
+    return { uploaded: false, downloaded, reason: destination === 'local' ? 'Hanya backup lokal dipilih.' : undefined };
   }
 
   try {
     const result = await uploadBackupToDrive(blob, fileName, {
+      // Tujuan Drive dipilih eksplisit oleh guru, jadi paksa unggah walau toggle mati.
+      force: true,
+      mimeType: options.mimeType,
+      logType: options.logType || 'guru',
       onProgress: (text) => report(text),
     });
     report(result.uploaded ? 'Terunggah ke Google Drive.' : `Drive: ${result.reason}`);
-    return result;
+    return { ...result, downloaded };
   } catch (error) {
-    // Kegagalan Drive tidak boleh membatalkan backup yang sudah terunduh.
+    // Kegagalan Drive tidak boleh membatalkan backup yang mungkin sudah terunduh.
     console.warn('Unggahan Drive gagal:', error);
-    return { uploaded: false, reason: error?.message || 'Unggahan Drive gagal.' };
+    return { uploaded: false, downloaded, reason: error?.message || 'Unggahan Drive gagal.' };
   }
 }
 
@@ -1142,7 +1164,7 @@ export async function buildSystemBackupZip(context, onProgress = () => {}) {
   };
 }
 
-export async function exportGuruBackupExcel(onProgress = () => {}) {
+export async function exportGuruBackupExcel(onProgress = () => {}, options = {}) {
   const context = getStoredContext();
   const session = getSession();
   const userId = session?.user?.username || context?.user_logged_in || '';
@@ -1157,7 +1179,11 @@ export async function exportGuruBackupExcel(onProgress = () => {}) {
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const delivery = await deliverBackupBlob(blob, fileName, onProgress);
+  const delivery = await deliverBackupBlob(blob, fileName, onProgress, {
+    destination: options.destination,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    logType: 'guru',
+  });
 
   setLastBackupTimestamp({
     guru_id: userId,
@@ -1348,7 +1374,8 @@ export async function exportSelectiveBackupExcel(
   userName,
   selectedAssignments,
   selectedDataTypes,
-  onProgress = () => {}
+  onProgress = () => {},
+  options = {}
 ) {
   const workbook = await buildSelectiveBackupWorkbook(context, userId, userName, selectedAssignments, selectedDataTypes, onProgress);
 
@@ -1359,7 +1386,11 @@ export async function exportSelectiveBackupExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const delivery = await deliverBackupBlob(blob, fileName, onProgress);
+  const delivery = await deliverBackupBlob(blob, fileName, onProgress, {
+    destination: options.destination,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    logType: 'guru',
+  });
 
   // Record in history
   const checksum = await computeChecksum(blob);
@@ -1482,7 +1513,8 @@ export async function exportBackupMultiFormat(
   selectedAssignments,
   selectedDataTypes,
   format = EXPORT_FORMATS.XLSX,
-  onProgress = () => {}
+  onProgress = () => {},
+  options = {}
 ) {
   const workbook = await buildSelectiveBackupWorkbook(context, userId, userName, selectedAssignments, selectedDataTypes, onProgress);
 
@@ -1506,7 +1538,11 @@ export async function exportBackupMultiFormat(
       break;
   }
 
-  const delivery = await deliverBackupBlob(blob, fileName, onProgress);
+  const delivery = await deliverBackupBlob(blob, fileName, onProgress, {
+    destination: options.destination,
+    mimeType: format.mime,
+    logType: 'guru',
+  });
 
   const checksum = await computeChecksum(blob);
   addBackupHistory({
