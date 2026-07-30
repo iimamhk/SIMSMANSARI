@@ -11,6 +11,7 @@ import { getStoredContext } from './helpers.js';
 import { isDriveUploadEnabled, uploadBackupToDrive } from './drive-upload.js';
 import {
   getTeachingAssignmentsForUser,
+  getActiveTeachingAssignments,
   getClassMembers,
   getDocumentsWhere,
   batchWrite,
@@ -18,6 +19,7 @@ import {
 import { addBackupHistory, computeChecksum } from './backup-history.js';
 
 const EXCELJS_CDN = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+const JSZIP_CDN = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
 const BACKUP_TS_KEY = 'simguru_backup_last_run';
 const INSTITUTION_NAME = 'SIM SMANSARI';
 
@@ -107,8 +109,39 @@ async function ensureExcelJSLoaded() {
   }
 }
 
+async function ensureJSZipLoaded() {
+  if (window.JSZip) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = JSZIP_CDN;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Gagal memuat JSZip dari CDN. Periksa koneksi internet.'));
+    document.head.appendChild(s);
+  });
+  if (!window.JSZip) {
+    throw new Error('JSZip gagal dimuat.');
+  }
+}
+
 function sanitizeSheetName(name) {
   return String(name || '').replace(/[[\]:?*\/\\]/g, '').slice(0, 28) || 'Sheet';
+}
+
+/**
+ * Nama sheet Excel harus unik dalam satu workbook (ExcelJS melempar error bila
+ * duplikat). Bila nama dasar sudah dipakai, tambahkan sufiks " (2)", " (3)", ...
+ * dengan tetap menjaga batas 31 karakter Excel.
+ */
+function uniqueSheetName(workbook, baseName) {
+  const base = sanitizeSheetName(baseName);
+  const taken = new Set(workbook.worksheets.map((w) => w.name));
+  if (!taken.has(base)) return base;
+  for (let i = 2; i < 1000; i++) {
+    const suffix = ` (${i})`;
+    const candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${base.slice(0, 24)} ${Date.now().toString().slice(-6)}`;
 }
 
 function formatDate(date) {
@@ -441,7 +474,7 @@ function sortMembers(members) {
 
 function buildRekapAbsensiSheet(workbook, assignment, members, absensi, context, userName) {
   const headers = ['No', 'Nama Siswa', 'Hadir', 'Sakit', 'Izin', 'Alpa', 'Keluar', 'Total', '% Kehadiran'];
-  const sheet = workbook.addWorksheet(sanitizeSheetName(`Rekap Absen ${assignment.kelas_nama || assignment.kelas_id}`), {
+  const sheet = workbook.addWorksheet(uniqueSheetName(workbook, `Rekap Absen ${assignment.kelas_nama || assignment.kelas_id}`), {
     views: [{ state: 'frozen' }],
     properties: { defaultRowHeight: 18 },
   });
@@ -519,7 +552,7 @@ function buildAbsensiHarianSheet(workbook, assignment, members, absensi, context
   const dates = [...new Set(absensi.map((a) => a.tanggal))].sort();
   const staticHeaders = ['No', 'Nama Siswa', ...dates.map(formatDate), 'H', 'S', 'I', 'A'];
   const totalCols = staticHeaders.length;
-  const sheet = workbook.addWorksheet(sanitizeSheetName(`Absen Harian ${assignment.kelas_nama || assignment.kelas_id}`), {
+  const sheet = workbook.addWorksheet(uniqueSheetName(workbook, `Absen Harian ${assignment.kelas_nama || assignment.kelas_id}`), {
     views: [{ state: 'frozen' }],
     properties: { defaultRowHeight: 18 },
   });
@@ -609,7 +642,7 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
   const totalTugasCols = tugasCountPerBab.reduce((s, c) => s + c, 0);
   const totalCols = 2 + totalTugasCols + uhSorted.length * 2 + 2 * 2 + 2; // tugas + (UH*2) + (PTS*2) + (PAS*2) + Akhir + Grade
 
-  const sheet = workbook.addWorksheet(sanitizeSheetName(`Nilai ${assignment.kelas_nama || assignment.kelas_id}`), {
+  const sheet = workbook.addWorksheet(uniqueSheetName(workbook, `Nilai ${assignment.kelas_nama || assignment.kelas_id}`), {
     views: [{ state: 'frozen' }],
     properties: { defaultRowHeight: 18 },
   });
@@ -860,6 +893,82 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
 // Public API
 // ---------------------------------------------------------------------------
 
+/**
+ * Ambil data satu pengajaran lalu tambahkan 3 sheet (rekap absensi, absensi
+ * harian, rekap nilai) ke workbook. Dipakai bersama oleh backup guru dan backup
+ * sistem (semua guru) agar formatnya identik.
+ */
+async function appendAssignmentSheets(workbook, assignment, context, userName) {
+  const pid = assignment.id;
+  const members = await getClassMembers(context, assignment.kelas_id);
+  const [absensi, nilaiTugasDocs, nilaiUjianDocs, babDocs, tugasDocs, uhKolomDocs] = await Promise.all([
+    fetchScoped('absensi', context, pid),
+    fetchScoped('nilai_tugas', context, pid),
+    fetchScoped('nilai_ujian', context, pid),
+    fetchScoped('bab', context, pid),
+    fetchScoped('tugas_bab', context, pid),
+    fetchScoped('ulangan_harian_kolom', context, pid),
+  ]);
+
+  // Normalisasi bab & tugas
+  const babs = babDocs.map((doc) => ({
+    ...doc,
+    bab_id: doc.bab_id || doc.id,
+    nama: doc.nama || doc.bab_nama || 'Tanpa Nama',
+    urutan: doc.urutan || 0,
+  })).sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
+
+  const tugasMap = {};
+  tugasDocs.forEach((doc) => {
+    const bid = doc.bab_id || doc.id;
+    if (!tugasMap[bid]) tugasMap[bid] = [];
+    tugasMap[bid].push({
+      ...doc,
+      tugas_id: doc.tugas_id || doc.id,
+      nama: doc.nama || doc.tugas_nama || 'Tanpa Nama',
+      urutan: doc.urutan || 0,
+    });
+  });
+  Object.values(tugasMap).forEach((arr) => arr.sort((a, b) => (a.urutan || 0) - (b.urutan || 0)));
+
+  const uhKolom = uhKolomDocs
+    .map((doc, i) => ({
+      ...doc,
+      uh_id: doc.uh_id || doc.id || `uh${i + 1}`,
+      nama: doc.uh_nama || doc.nama || `UH ${i + 1}`,
+      urutan: Number(doc.urutan || i + 1),
+    }))
+    .filter((col) => !['murni', 'remidi'].includes(String(col.id || '').toLowerCase()))
+    .filter((col) => !['murni', 'remidi'].includes(String(col.nama || '').trim().toLowerCase()));
+
+  const nilaiTugas = {};
+  nilaiTugasDocs.forEach((doc) => {
+    nilaiTugas[`${doc.bab_id}_${doc.tugas_id}_${doc.siswa_id}`] = doc.nilai;
+  });
+
+  const nilaiUH = {};
+  nilaiUjianDocs.filter((d) => d.jenis_nilai === 'ulangan_harian').forEach((doc) => {
+    const tipe = doc.tipe || 'uh1';
+    nilaiUH[`${doc.siswa_id}_${tipe}`] = doc.nilai;
+  });
+
+  const nilaiPTS = {};
+  nilaiUjianDocs.filter((d) => d.jenis_nilai === 'pts').forEach((doc) => {
+    nilaiPTS[`${doc.siswa_id}_${doc.tipe || 'murni'}`] = doc.nilai;
+  });
+
+  const nilaiPAS = {};
+  nilaiUjianDocs.filter((d) => d.jenis_nilai === 'pas').forEach((doc) => {
+    nilaiPAS[`${doc.siswa_id}_${doc.tipe || 'murni'}`] = doc.nilai;
+  });
+
+  const data = { babs, tugasMap, uhKolom, nilaiTugas, nilaiUH, nilaiPTS, nilaiPAS };
+
+  buildRekapAbsensiSheet(workbook, assignment, members, absensi, context, userName);
+  buildAbsensiHarianSheet(workbook, assignment, members, absensi, context, userName);
+  buildRekapNilaiSheet(workbook, assignment, members, data, context, userName);
+}
+
 export async function buildGuruBackupWorkbook(context, userId, userName, onProgress = () => {}) {
   await ensureExcelJSLoaded();
   const ExcelJS = window.ExcelJS;
@@ -880,7 +989,6 @@ export async function buildGuruBackupWorkbook(context, userId, userName, onProgr
   for (const assignment of assignments) {
     const kelasNama = assignment.kelas_nama || assignment.kelas_id || 'Kelas';
     const mapelNama = assignment.mapel_nama || 'Mapel';
-    const pid = assignment.id;
 
     onProgress({
       label: `${kelasNama} • ${mapelNama}`,
@@ -888,78 +996,150 @@ export async function buildGuruBackupWorkbook(context, userId, userName, onProgr
       total: assignments.length,
     });
 
-    const members = await getClassMembers(context, assignment.kelas_id);
-    const [absensi, nilaiTugasDocs, nilaiUjianDocs, babDocs, tugasDocs, uhKolomDocs] = await Promise.all([
-      fetchScoped('absensi', context, pid),
-      fetchScoped('nilai_tugas', context, pid),
-      fetchScoped('nilai_ujian', context, pid),
-      fetchScoped('bab', context, pid),
-      fetchScoped('tugas_bab', context, pid),
-      fetchScoped('ulangan_harian_kolom', context, pid),
-    ]);
-
-    // Normalisasi bab & tugas
-    const babs = babDocs.map((doc) => ({
-      ...doc,
-      bab_id: doc.bab_id || doc.id,
-      nama: doc.nama || doc.bab_nama || 'Tanpa Nama',
-      urutan: doc.urutan || 0,
-    })).sort((a, b) => (a.urutan || 0) - (b.urutan || 0));
-
-    const tugasMap = {};
-    tugasDocs.forEach((doc) => {
-      const bid = doc.bab_id || doc.id;
-      if (!tugasMap[bid]) tugasMap[bid] = [];
-      tugasMap[bid].push({
-        ...doc,
-        tugas_id: doc.tugas_id || doc.id,
-        nama: doc.nama || doc.tugas_nama || 'Tanpa Nama',
-        urutan: doc.urutan || 0,
-      });
-    });
-    Object.values(tugasMap).forEach((arr) => arr.sort((a, b) => (a.urutan || 0) - (b.urutan || 0)));
-
-    const uhKolom = uhKolomDocs
-      .map((doc, i) => ({
-        ...doc,
-        uh_id: doc.uh_id || doc.id || `uh${i + 1}`,
-        nama: doc.uh_nama || doc.nama || `UH ${i + 1}`,
-        urutan: Number(doc.urutan || i + 1),
-      }))
-      .filter((col) => !['murni', 'remidi'].includes(String(col.id || '').toLowerCase()))
-      .filter((col) => !['murni', 'remidi'].includes(String(col.nama || '').trim().toLowerCase()));
-
-    const nilaiTugas = {};
-    nilaiTugasDocs.forEach((doc) => {
-      nilaiTugas[`${doc.bab_id}_${doc.tugas_id}_${doc.siswa_id}`] = doc.nilai;
-    });
-
-    const nilaiUH = {};
-    nilaiUjianDocs.filter((d) => d.jenis_nilai === 'ulangan_harian').forEach((doc) => {
-      const tipe = doc.tipe || 'uh1';
-      nilaiUH[`${doc.siswa_id}_${tipe}`] = doc.nilai;
-    });
-
-    const nilaiPTS = {};
-    nilaiUjianDocs.filter((d) => d.jenis_nilai === 'pts').forEach((doc) => {
-      nilaiPTS[`${doc.siswa_id}_${doc.tipe || 'murni'}`] = doc.nilai;
-    });
-
-    const nilaiPAS = {};
-    nilaiUjianDocs.filter((d) => d.jenis_nilai === 'pas').forEach((doc) => {
-      nilaiPAS[`${doc.siswa_id}_${doc.tipe || 'murni'}`] = doc.nilai;
-    });
-
-    const data = { babs, tugasMap, uhKolom, nilaiTugas, nilaiUH, nilaiPTS, nilaiPAS };
-
-    buildRekapAbsensiSheet(workbook, assignment, members, absensi, context, userName);
-    buildAbsensiHarianSheet(workbook, assignment, members, absensi, context, userName);
-    buildRekapNilaiSheet(workbook, assignment, members, data, context, userName);
-
+    await appendAssignmentSheets(workbook, assignment, context, userName);
     processed++;
   }
 
   return workbook;
+}
+
+/**
+ * Backup sistem tingkat admin: bangun satu workbook berisi 3 sheet per pengajaran
+ * untuk SELURUH guru pada periode aktif (format identik dengan backup guru).
+ *
+ * Catatan: dipertahankan untuk kompatibilitas. Untuk backup sistem yang benar
+ * gunakan buildSystemBackupZip yang memisahkan berkas per guru sehingga tidak
+ * ada bentrok nama sheet antar guru yang mengajar kelas sama.
+ */
+export async function buildSystemBackupWorkbook(context, onProgress = () => {}) {
+  await ensureExcelJSLoaded();
+  const ExcelJS = window.ExcelJS;
+
+  const assignments = await getActiveTeachingAssignments(context);
+  if (!assignments.length) {
+    throw new Error('Tidak ada data pengajaran aktif untuk dibackup pada periode ini.');
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'SIM SMANSARI Backup Sistem';
+  workbook.lastModifiedBy = 'Admin';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  let processed = 0;
+  for (const assignment of assignments) {
+    const guru = assignment.guru_nama || assignment.guru_id || 'Guru';
+    const kelasNama = assignment.kelas_nama || assignment.kelas_id || 'Kelas';
+    const mapelNama = assignment.mapel_nama || 'Mapel';
+
+    onProgress({
+      label: `${guru} • ${kelasNama} • ${mapelNama}`,
+      current: processed + 1,
+      total: assignments.length,
+    });
+
+    try {
+      await appendAssignmentSheets(workbook, assignment, context, guru);
+    } catch (error) {
+      console.warn(`Backup sistem: gagal memproses pengajaran ${assignment.id}:`, error);
+    }
+    processed++;
+  }
+
+  return { workbook, assignmentsCount: assignments.length };
+}
+
+/**
+ * Backup sistem yang benar: satu berkas Excel PER GURU, dikemas dalam satu ZIP.
+ *
+ * Kenapa per guru (bukan satu workbook gabungan): nama sheet Excel harus unik
+ * dalam satu workbook. Bila dua guru mengajar kelas yang sama (mis. "Rekap Absen
+ * XII-1"), penggabungan ke satu workbook menimbulkan bentrok nama sehingga guru
+ * yang diproses belakangan gagal ditambahkan — inilah sebab hanya satu guru yang
+ * datanya masuk. Memisahkan per guru menghilangkan bentrok tersebut sekaligus
+ * membuat berkas lebih mudah dibagikan ke masing-masing guru.
+ *
+ * @returns {Promise<{blob:Blob, fileName:string, guruCount:number, assignmentsCount:number, failures:Array}>}
+ */
+export async function buildSystemBackupZip(context, onProgress = () => {}) {
+  await ensureExcelJSLoaded();
+  await ensureJSZipLoaded();
+  const ExcelJS = window.ExcelJS;
+  const JSZip = window.JSZip;
+
+  const assignments = await getActiveTeachingAssignments(context);
+  if (!assignments.length) {
+    throw new Error('Tidak ada data pengajaran aktif untuk dibackup pada periode ini.');
+  }
+
+  // Kelompokkan pengajaran per guru.
+  const byGuru = new Map();
+  for (const a of assignments) {
+    const key = String(a.guru_id || a.guru_nama || 'tanpa-guru');
+    if (!byGuru.has(key)) {
+      byGuru.set(key, { guruId: key, guruNama: a.guru_nama || a.guru_id || 'Guru', items: [] });
+    }
+    byGuru.get(key).items.push(a);
+  }
+
+  const zip = new JSZip();
+  const guruList = [...byGuru.values()];
+  const usedNames = new Set();
+  const failures = [];
+  let processed = 0;
+
+  for (const guru of guruList) {
+    processed++;
+    onProgress({
+      label: `${guru.guruNama} (${guru.items.length} kelas)`,
+      current: processed,
+      total: guruList.length,
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'SIM SMANSARI Backup Sistem';
+    workbook.lastModifiedBy = guru.guruNama;
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    let sheetsAdded = 0;
+    for (const assignment of guru.items) {
+      try {
+        await appendAssignmentSheets(workbook, assignment, context, guru.guruNama);
+        sheetsAdded++;
+      } catch (error) {
+        console.warn(`Backup sistem: gagal memproses pengajaran ${assignment.id} (${guru.guruNama}):`, error);
+        failures.push({ guru: guru.guruNama, pengajaran: assignment.id, reason: error?.message || 'gagal' });
+      }
+    }
+
+    // Guru tanpa sheet yang berhasil (mis. semua kelas kosong) tetap dilewati.
+    if (sheetsAdded === 0) continue;
+
+    // Nama berkas unik & aman di dalam ZIP.
+    const safeName = String(guru.guruNama).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Guru';
+    let fileName = `${safeName}.xlsx`;
+    let n = 2;
+    while (usedNames.has(fileName)) { fileName = `${safeName}_${n++}.xlsx`; }
+    usedNames.add(fileName);
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    zip.file(fileName, buffer);
+  }
+
+  if (usedNames.size === 0) {
+    throw new Error('Tidak ada data guru yang berhasil dibackup pada periode ini.');
+  }
+
+  onProgress({ label: 'Mengemas ZIP...', current: guruList.length, total: guruList.length });
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+
+  return {
+    blob,
+    guruCount: usedNames.size,
+    assignmentsCount: assignments.length,
+    failures,
+  };
 }
 
 export async function exportGuruBackupExcel(onProgress = () => {}) {
@@ -990,6 +1170,55 @@ export async function exportGuruBackupExcel(onProgress = () => {}) {
 
   const sheetCount = workbook.worksheets.length;
   return { fileName, assignments_count: Math.ceil(sheetCount / 3), drive: delivery };
+}
+
+/**
+ * Auto-upload senyap: bangun workbook guru yang sedang login lalu unggah ke Drive
+ * SAJA (tanpa mengunduh ke perangkat, tanpa popup). Dipakai penjadwal agar data
+ * guru tercadangkan otomatis saat mereka membuka aplikasi.
+ *
+ * @returns {Promise<{uploaded:boolean, fileName?:string, reason?:string}>}
+ */
+export async function uploadGuruBackupSilently() {
+  const context = getStoredContext();
+  const session = getSession();
+  const userId = session?.user?.username || context?.user_logged_in || '';
+  const userName = session?.user?.nama || 'Guru';
+  if (!userId) return { uploaded: false, reason: 'Sesi guru tidak ditemukan.' };
+
+  let workbook;
+  try {
+    workbook = await buildGuruBackupWorkbook(context, userId, userName);
+  } catch (error) {
+    // Tidak ada pengajaran / data — bukan kegagalan yang perlu dicatat.
+    return { uploaded: false, reason: error?.message || 'Tidak ada data untuk dibackup.' };
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const safeName = String(userName).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30);
+  const fileName = `Backup-Auto-SIMSMANSARI-${safeName}-${dateStr}.xlsx`;
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+  const result = await uploadBackupToDrive(blob, fileName, {
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    logType: 'otomatis-guru',
+  });
+
+  if (result.uploaded) {
+    setLastBackupTimestamp({
+      guru_id: userId,
+      guru_nama: userName,
+      tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
+      semester_id: context?.semester_aktif || '',
+      file_name: fileName,
+      drive_uploaded: true,
+      auto: true,
+    });
+  }
+
+  return result;
 }
 
 // ============================================================================

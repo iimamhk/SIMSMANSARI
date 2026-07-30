@@ -15,9 +15,14 @@
 // ============================================================================
 
 import { getDaysSinceLastBackup, getLastBackupTimestamp, isBackupRequiredToday } from './backup-excel.js';
+import { getBackupReminder } from '../firebase/auth-service.js';
 
 const SNOOZE_KEY = 'simguru_backup_snooze';
 const REMINDER_SEEN_KEY = 'simguru_backup_reminder_seen';
+const ADMIN_REMINDER_CACHE_KEY = 'simguru_admin_reminder_cache';
+const ADMIN_REMINDER_FETCH_KEY = 'simguru_admin_reminder_fetch';
+const ADMIN_PUSH_SENT_KEY = 'simguru_admin_reminder_push_day';
+const ADMIN_FETCH_TTL_MS = 6 * 60 * 60 * 1000;
 
 function getSession() {
   try {
@@ -91,6 +96,10 @@ function getFridayState() {
 }
 
 function getReminderLevel() {
+  // Prioritas 1: pengingat terjadwal dari admin (harian/mingguan/custom).
+  if (isAdminReminderDueToday() && !getFridayState()) {
+    return { level: 'admin', title: 'Pengingat Backup Data', tone: 'warning' };
+  }
   if (isFriday() && !getFridayState()) {
     return { level: 'friday', title: 'Wajib Backup Data — Hari Jumat', tone: 'critical' };
   }
@@ -102,6 +111,63 @@ function getReminderLevel() {
   return null;
 }
 
+// --- Pengingat terjadwal admin ---------------------------------------------
+
+function getCachedAdminReminder() {
+  try {
+    const raw = localStorage.getItem(ADMIN_REMINDER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Apakah hari & (opsional) frekuensi pengingat admin jatuh tempo hari ini. */
+function isAdminReminderDueToday() {
+  const reminder = getCachedAdminReminder();
+  if (!reminder || reminder.enabled !== true) return false;
+  const today = new Date().getDay(); // 0=Minggu..6=Sabtu
+  if (reminder.frequency === 'daily') return true;
+  const days = Array.isArray(reminder.days) ? reminder.days.map(Number) : [];
+  return days.includes(today);
+}
+
+/**
+ * Ambil pengaturan pengingat dari server (throttle 6 jam), simpan di cache lokal.
+ * Bila push diizinkan & hari ini jatuh tempo, kirim satu notifikasi browser/hari.
+ */
+async function refreshAdminReminder() {
+  if (!isGuru()) return;
+  let lastFetch = 0;
+  try { lastFetch = Number(localStorage.getItem(ADMIN_REMINDER_FETCH_KEY) || 0); } catch { /* abaikan */ }
+  if (Date.now() - lastFetch < ADMIN_FETCH_TTL_MS) return;
+  try { localStorage.setItem(ADMIN_REMINDER_FETCH_KEY, String(Date.now())); } catch { /* abaikan */ }
+
+  const reminder = await getBackupReminder();
+  if (!reminder) return;
+  try { localStorage.setItem(ADMIN_REMINDER_CACHE_KEY, JSON.stringify(reminder)); } catch { /* abaikan */ }
+
+  maybeSendPushNotification(reminder);
+}
+
+function maybeSendPushNotification(reminder) {
+  if (!reminder?.enabled || !reminder.push) return;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (!isAdminReminderDueToday() || getFridayState()) return;
+  // Satu push per hari.
+  try {
+    const sent = JSON.parse(localStorage.getItem(ADMIN_PUSH_SENT_KEY) || 'null');
+    if (sent?.day === todayKey()) return;
+  } catch { /* abaikan */ }
+  try {
+    new Notification('Pengingat Backup Data — SIM SMANSARI', {
+      body: 'Waktunya backup data absensi & nilai. Unduh ke perangkat dan unggah ke Google Drive dari menu Backup.',
+      tag: 'simguru-backup-reminder',
+    });
+    localStorage.setItem(ADMIN_PUSH_SENT_KEY, JSON.stringify({ day: todayKey() }));
+  } catch { /* abaikan */ }
+}
+
 function shouldShowReminder() {
   if (!isGuru()) return false;
   if (isSnoozed()) return false;
@@ -109,6 +175,8 @@ function shouldShowReminder() {
   if (!level) return false;
   // Jumat: selalu muncul (tidak peduli seen) selama belum backup hari ini
   if (level.level === 'friday') return !getFridayState();
+  // Pengingat terjadwal admin: tampilkan sekali per hari (kecuali sudah backup hari ini)
+  if (level.level === 'admin') return !getFridayState() && !hasSeenReminderToday();
   // Hari lain: tampilkan sekali per hari, atau jika level >= strong (muncul lagi)
   if (level.level === 'critical' || level.level === 'strong') {
     return true;
@@ -151,46 +219,60 @@ function getMessages(level) {
   const days = getDaysSinceLastBackup();
 
   switch (level) {
+    case 'admin':
+      return {
+        badge: 'PENGINGAT TERJADWAL',
+        body: `Sesuai jadwal dari admin, saatnya mencadangkan data absensi & penilaian Anda.<br/><br/>Anda dapat <strong>mengunduh ke perangkat</strong> (lokal) dan/atau <strong>mengunggah ke Google Drive</strong> (online).<br/><br/>Backup terakhir: ${lastText}.`,
+        primaryLabel: 'Unduh ke Perangkat',
+        secondary: 'Ingatkan Nanti',
+        closable: true,
+        showDrive: true,
+      };
     case 'friday':
       return {
         badge: 'WAJIB HARI INI',
-        body: `Hari Jumat adalah jadwal wajib backup data absensi & penilaian Anda. Popup ini <strong>tidak dapat ditutup</strong> sampai Anda menyelesaikan backup.<br/><br/>Backup terakhir: ${lastText}.`,
-        primaryLabel: 'Backup Sekarang (Wajib)',
+        body: `Hari Jumat adalah jadwal wajib backup data absensi & penilaian Anda. Popup ini <strong>tidak dapat ditutup</strong> sampai Anda menyelesaikan backup.<br/><br/>Anda dapat mengunduh ke perangkat (lokal) dan mengunggah ke Google Drive (online).<br/><br/>Backup terakhir: ${lastText}.`,
+        primaryLabel: 'Unduh ke Perangkat (Wajib)',
         secondary: null,
         closable: false,
+        showDrive: true,
       };
     case 'critical':
       return {
         badge: 'KRITIS',
-        body: `Sudah <strong>${days} hari</strong> sejak backup terakhir (${lastText}). Risiko kehilangan data sangat tinggi jika terjadi gangguan Firebase. Segera lakukan backup.`,
-        primaryLabel: 'Backup Sekarang',
+        body: `Sudah <strong>${days} hari</strong> sejak backup terakhir (${lastText}). Risiko kehilangan data sangat tinggi jika terjadi gangguan Firebase. Segera lakukan backup ke perangkat dan/atau Google Drive.`,
+        primaryLabel: 'Unduh ke Perangkat',
         secondary: 'Ingatkan Besok',
         closable: true,
+        showDrive: true,
       };
     case 'strong':
       return {
         badge: 'PENTING',
-        body: `Sudah <strong>${days} hari</strong> tanpa backup. Lindungi data absensi & nilai Anda dari kemungkinan gangguan server.`,
-        primaryLabel: 'Backup Sekarang',
+        body: `Sudah <strong>${days} hari</strong> tanpa backup. Lindungi data absensi & nilai Anda: unduh ke perangkat dan/atau unggah ke Google Drive.`,
+        primaryLabel: 'Unduh ke Perangkat',
         secondary: 'Tutup',
         closable: true,
+        showDrive: true,
       };
     case 'medium':
       return {
         badge: 'PENGINGAT',
-        body: `Sudah <strong>${days} hari</strong> sejak backup terakhir (${lastText}). Disarankan melakukan backup untuk menjaga keamanan data.`,
-        primaryLabel: 'Backup Sekarang',
+        body: `Sudah <strong>${days} hari</strong> sejak backup terakhir (${lastText}). Disarankan backup ke perangkat dan/atau Google Drive.`,
+        primaryLabel: 'Unduh ke Perangkat',
         secondary: 'Ingatkan Nanti',
         closable: true,
+        showDrive: true,
       };
     case 'info':
     default:
       return {
         badge: 'INFO',
-        body: `Backup terakhir: ${lastText}. Rutin mencadangkan data absensi & penilaian ke komputer Anda menjaga data tetap aman.`,
-        primaryLabel: 'Backup Sekarang',
+        body: `Backup terakhir: ${lastText}. Rutin mencadangkan data absensi & penilaian ke perangkat dan Google Drive menjaga data tetap aman.`,
+        primaryLabel: 'Unduh ke Perangkat',
         secondary: 'Ingatkan Nanti',
         closable: true,
+        showDrive: true,
       };
   }
 }
@@ -241,6 +323,10 @@ function buildBackupModalHTML(level, messages, tone) {
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
               ${messages.primaryLabel}
             </button>
+            ${messages.showDrive ? `<button id="backup-remind-drive" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-sky-700 sm:w-auto">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg>
+              Unggah ke Drive
+            </button>` : ''}
             ${secondaryBtn}
           </div>
 
@@ -266,19 +352,25 @@ function updateProgress(text, percent) {
   if (bar) bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
 }
 
-function showSuccess(fileName) {
+function showSuccess(fileName, viaDrive = false) {
   const overlay = document.getElementById('backup-reminder-overlay');
   if (!overlay) return;
   const panel = overlay.querySelector('.relative');
   if (!panel) return;
+  const detail = viaDrive
+    ? `File <strong>${fileName}</strong> telah diunggah ke Google Drive sekolah.`
+    : `File <strong>${fileName}</strong> telah diunduh ke komputer Anda.`;
+  const note = viaDrive
+    ? 'Data Anda kini tersimpan aman di cloud sekolah.'
+    : 'Simpan file ini di tempat yang aman (flashdisk / cloud gratis seperti Google Drive pribadi).';
   panel.innerHTML = `
     <div class="flex flex-col items-center text-center py-2">
       <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
         <svg viewBox="0 0 24 24" class="h-9 w-9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
       </div>
       <h3 class="text-lg font-bold text-slate-900">Backup Berhasil!</h3>
-      <p class="mt-2 text-sm text-slate-600">File <strong>${fileName}</strong> telah diunduh ke komputer Anda.</p>
-      <p class="mt-1 text-xs text-slate-400">Simpan file ini di tempat yang aman (flashdisk / cloud gratis seperti Google Drive pribadi).</p>
+      <p class="mt-2 text-sm text-slate-600">${detail}</p>
+      <p class="mt-1 text-xs text-slate-400">${note}</p>
       <button id="backup-remind-done" type="button" class="mt-5 inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800">Selesai</button>
     </div>
   `;
@@ -309,8 +401,10 @@ function showError(message) {
 async function runBackup(level) {
   const primary = document.getElementById('backup-remind-primary');
   const secondary = document.getElementById('backup-remind-secondary');
+  const driveBtn = document.getElementById('backup-remind-drive');
   if (primary) primary.disabled = true;
   if (secondary) secondary.disabled = true;
+  if (driveBtn) driveBtn.disabled = true;
 
   try {
     updateProgress('Memeriksa data pengajaran...', 10);
@@ -321,7 +415,7 @@ async function runBackup(level) {
       updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
     });
     updateProgress('Menyusun file Excel...', 100);
-    showSuccess(result.fileName);
+    showSuccess(result.fileName, false);
     markReminderSeenToday();
   } catch (err) {
     console.error('Backup error:', err);
@@ -329,6 +423,67 @@ async function runBackup(level) {
   } finally {
     if (primary) primary.disabled = false;
     if (secondary) secondary.disabled = false;
+    if (driveBtn) driveBtn.disabled = false;
+  }
+}
+
+/** Backup langsung ke Google Drive dari popup pengingat (tanpa unduh lokal). */
+async function runDriveBackup() {
+  const primary = document.getElementById('backup-remind-primary');
+  const secondary = document.getElementById('backup-remind-secondary');
+  const driveBtn = document.getElementById('backup-remind-drive');
+  if (primary) primary.disabled = true;
+  if (secondary) secondary.disabled = true;
+  if (driveBtn) driveBtn.disabled = true;
+
+  try {
+    updateProgress('Memeriksa koneksi Google Drive...', 10);
+    const { checkDriveStatus, uploadBackupToDrive } = await import('./drive-upload.js');
+    const status = await checkDriveStatus();
+    if (!status.available) {
+      showError(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}`);
+      return;
+    }
+    const { buildGuruBackupWorkbook, getSession: getSessionUtil } = await import('./backup-excel.js');
+    const { getStoredContext } = await import('./helpers.js');
+    const context = getStoredContext();
+    const session = getSessionUtil();
+    const userId = session?.user?.username || context?.user_logged_in || '';
+    const userName = session?.user?.nama || 'Guru';
+
+    updateProgress('Mengumpulkan data absensi & nilai...', 30);
+    const workbook = await buildGuruBackupWorkbook(context, userId, userName, (p) => {
+      const pct = 30 + Math.floor((p.current / Math.max(p.total, 1)) * 55);
+      updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
+    });
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const safeName = String(userName).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30);
+    const fileName = `Backup-SIMSMANSARI-${safeName}-${dateStr}.xlsx`;
+    updateProgress('Menyusun file Excel...', 88);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    updateProgress('Mengunggah ke Google Drive...', 94);
+    const result = await uploadBackupToDrive(blob, fileName, {
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      force: true,
+      logType: 'guru',
+    });
+    if (!result.uploaded) {
+      showError(`Gagal mengunggah ke Drive: ${result.reason || 'terjadi kesalahan.'}`);
+      return;
+    }
+    updateProgress('Selesai!', 100);
+    showSuccess(result.fileName || fileName, true);
+    markReminderSeenToday();
+  } catch (err) {
+    console.error('Backup Drive error:', err);
+    showError(err?.message || 'Terjadi kesalahan saat unggah ke Drive.');
+  } finally {
+    if (primary) primary.disabled = false;
+    if (secondary) secondary.disabled = false;
+    if (driveBtn) driveBtn.disabled = false;
   }
 }
 
@@ -345,8 +500,10 @@ export function showBackupReminder(force = false) {
   wrapper.innerHTML = buildBackupModalHTML(reminder.level, messages, tone);
   document.body.appendChild(wrapper.firstElementChild);
 
-  // Tombol backup utama
+  // Tombol backup utama (unduh lokal)
   document.getElementById('backup-remind-primary')?.addEventListener('click', () => runBackup(reminder.level));
+  // Tombol unggah ke Drive
+  document.getElementById('backup-remind-drive')?.addEventListener('click', () => runDriveBackup());
 
   // Tombol tutup (hanya jika closable)
   if (messages.closable) {
@@ -376,11 +533,15 @@ export function maybeShowBackupReminder() {
   // Hindari muncul di halaman login
   const hash = window.location.hash || '';
   if (hash === '#login' || hash === '#home' || hash === '') return;
-  setTimeout(() => {
-    try {
-      showBackupReminder(false);
-    } catch (e) {
-      console.warn('Backup reminder gagal ditampilkan:', e);
-    }
-  }, 1200);
+  // Segarkan pengaturan pengingat admin di latar belakang (throttle internal),
+  // lalu tampilkan popup memakai cache terbaru.
+  refreshAdminReminder().finally(() => {
+    setTimeout(() => {
+      try {
+        showBackupReminder(false);
+      } catch (e) {
+        console.warn('Backup reminder gagal ditampilkan:', e);
+      }
+    }, 1200);
+  });
 }

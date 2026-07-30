@@ -1,13 +1,20 @@
 /**
  * Endpoint konfigurasi backup Google Drive (khusus admin).
  *
- * GET  → konfigurasi publik atau callback OAuth Google.
- * POST → simpan konfigurasi, ambil token upload, catat upload, atau disconnect.
+ * GET  → konfigurasi (termasuk jadwal & riwayat) atau callback OAuth Google.
+ * POST → aksi via body.action:
+ *   token         (guru/admin) ambil access token unggah + pastikan folder
+ *   record-upload (guru/admin) catat metadata unggahan + tambah riwayat sukses
+ *   log           (guru/admin) tambah entri riwayat (mis. backup otomatis/gagal)
+ *   schedule      (admin)      simpan jadwal backup otomatis
+ *   disconnect    (admin)      putuskan koneksi Drive
+ *   (default)     (admin)      simpan Client ID/Secret/folder
  */
 
 const { getAuth } = require('../_lib/firebase-admin');
 const { handleOptions, sendJson } = require('../_lib/ai');
 const {
+  appendLog,
   buildConsentUrl,
   buildRedirectUri,
   disconnectDrive,
@@ -15,9 +22,12 @@ const {
   exchangeCodeForRefreshToken,
   getAccessToken,
   getPublicConfig,
-  recordUpload,
+  getReminderConfig,
   readStoredConfig,
+  recordUpload,
   writeCredentials,
+  writeReminder,
+  writeSchedule,
 } = require('../_lib/backup-config');
 
 const ALLOWED_ROLES = ['admin', 'guru'];
@@ -94,21 +104,64 @@ module.exports = async (req, res) => {
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   const action = String(body.action || '').trim();
 
-  if (action === 'token' || action === 'record-upload') {
+  // Pengaturan pengingat untuk guru: GET ringan yang boleh diakses guru+admin.
+  if (req.method === 'GET' && new URL(req.url, 'http://localhost').searchParams.has('reminder')) {
+    const user = await requireUser(req);
+    if (!user) {
+      sendJson(req, res, 401, { error: 'Login diperlukan.', code: 'unauthorized' });
+      return;
+    }
+    try {
+      const reminder = await getReminderConfig({ forceRefresh: true });
+      sendJson(req, res, 200, { ok: true, reminder });
+    } catch (error) {
+      sendJson(req, res, 500, { error: 'Gagal membaca pengingat backup.', code: 'reminder_read_failed' });
+    }
+    return;
+  }
+
+  if (action === 'token' || action === 'record-upload' || action === 'log') {
     const user = await requireUser(req);
     if (!user) {
       sendJson(req, res, 401, { error: 'Login sebagai guru atau admin diperlukan.', code: 'unauthorized' });
       return;
     }
+    const actorName = user.username || user.uid || '';
+    const defaultType = user.role === 'admin' ? 'manual' : 'guru';
+
     if (req.method === 'POST' && action === 'record-upload') {
       try {
-        await recordUpload({ fileName: body.fileName ?? body.file_name, fileId: body.fileId ?? body.file_id, size: body.size, uploadedBy: user.username || user.uid || '' });
+        await recordUpload({
+          fileName: body.fileName ?? body.file_name,
+          fileId: body.fileId ?? body.file_id,
+          size: body.size,
+          uploadedBy: actorName,
+          type: String(body.logType || defaultType),
+        });
         sendJson(req, res, 200, { ok: true });
       } catch (error) {
         sendJson(req, res, 500, { error: 'Gagal mencatat metadata unggahan.', code: 'record_failed' });
       }
       return;
     }
+
+    if (req.method === 'POST' && action === 'log') {
+      try {
+        const result = await appendLog({
+          type: String(body.logType || body.type || defaultType),
+          status: body.status === 'error' ? 'error' : 'success',
+          fileName: body.fileName ?? body.file_name,
+          size: body.size,
+          message: body.message,
+          by: actorName,
+        });
+        sendJson(req, res, 200, { ok: true, entry: result.entry });
+      } catch (error) {
+        sendJson(req, res, 500, { error: 'Gagal mencatat riwayat backup.', code: 'log_failed' });
+      }
+      return;
+    }
+
     if (req.method !== 'POST') {
       sendJson(req, res, 405, { error: 'Method tidak diizinkan.', code: 'method_not_allowed' });
       return;
@@ -116,7 +169,7 @@ module.exports = async (req, res) => {
     try {
       const { accessToken, expiresIn, config } = await getAccessToken();
       const folderId = await ensureBackupFolder({ accessToken, config });
-      sendJson(req, res, 200, { ok: true, accessToken, expiresIn, folderId, folderName: config.folderName, accountEmail: config.accountEmail });
+      sendJson(req, res, 200, { ok: true, accessToken, expiresIn, folderId, folderName: config.folderName, accountEmail: config.accountEmail, schedule: config.schedule, reminder: config.reminder });
     } catch (error) {
       sendJson(req, res, 409, { ok: false, error: error?.message || 'Google Drive tidak tersedia.', code: 'drive_unavailable' });
     }
@@ -133,7 +186,9 @@ module.exports = async (req, res) => {
 
   if (req.method === 'GET') {
     try {
-      const config = await getPublicConfig();
+      // forceRefresh agar riwayat/jadwal terbaru selalu tampil walau container
+      // serverless masih menyimpan cache lama dari invokasi sebelumnya.
+      const config = await getPublicConfig({ forceRefresh: true });
       const consentUrl = config.configured
         ? buildConsentUrl({
           clientId: config.clientId,
@@ -153,6 +208,24 @@ module.exports = async (req, res) => {
       if (action === 'disconnect') {
         await disconnectDrive({ updatedBy: adminUser.username || adminUser.uid || 'admin' });
         sendJson(req, res, 200, { ok: true, disconnected: true });
+        return;
+      }
+
+      if (action === 'schedule') {
+        const result = await writeSchedule({
+          schedule: body.schedule && typeof body.schedule === 'object' ? body.schedule : body,
+          updatedBy: adminUser.username || adminUser.uid || 'admin',
+        });
+        sendJson(req, res, 200, { ok: true, schedule: result.schedule });
+        return;
+      }
+
+      if (action === 'reminder') {
+        const result = await writeReminder({
+          reminder: body.reminder && typeof body.reminder === 'object' ? body.reminder : body,
+          updatedBy: adminUser.username || adminUser.uid || 'admin',
+        });
+        sendJson(req, res, 200, { ok: true, reminder: result.reminder });
         return;
       }
 

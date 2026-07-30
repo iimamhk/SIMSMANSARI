@@ -329,6 +329,62 @@ export async function recordDriveUpload(meta) {
   }
 }
 
+/** Simpan pengaturan jadwal backup otomatis (khusus admin). */
+export async function saveBackupSchedule(schedule) {
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'schedule', schedule }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Jadwal backup tidak dapat disimpan.');
+  return result;
+}
+
+/** Simpan pengaturan pengingat backup untuk guru (khusus admin). */
+export async function saveBackupReminder(reminder) {
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reminder', reminder }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Pengingat backup tidak dapat disimpan.');
+  return result;
+}
+
+/** Baca pengaturan pengingat backup (guru & admin). Best-effort. */
+export async function getBackupReminder() {
+  try {
+    const response = await authenticatedFetch('/api/admin/backup-config?reminder=1');
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok !== true) return null;
+    return result.reminder || null;
+  } catch (error) {
+    console.warn('Pengaturan pengingat backup gagal dimuat:', error);
+    return null;
+  }
+}
+
+/**
+ * Tambahkan entri ke riwayat backup di server (mis. untuk backup otomatis atau
+ * kegagalan yang tidak menghasilkan unggahan). Bersifat best-effort.
+ */
+export async function appendBackupLog(entry) {
+  try {
+    const response = await authenticatedFetch('/api/admin/backup-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...(entry || {}), action: 'log' }),
+    });
+    const result = await response.json().catch(() => ({}));
+    return result;
+  } catch (error) {
+    console.warn('Riwayat backup gagal dicatat:', error);
+    return { ok: false };
+  }
+}
+
 export async function loginUser(username, password) {
   try {
     const response = await fetch(backendUrl('/api/auth/login'), {

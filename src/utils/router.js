@@ -43,6 +43,8 @@ import { renderMasterPembelajaranPage } from '../pages/admin/master-pembelajaran
 import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
 import { waitForAuthReady } from '../firebase/auth-service.js';
 import { maybeShowBackupReminder } from '../utils/backup-reminder.js';
+import { maybeRunScheduledBackup } from '../utils/admin-backup-scheduler.js';
+import { maybeRunGuruAutoBackup } from '../utils/guru-backup-scheduler.js';
 
 function getSession() {
   const raw = localStorage.getItem('simguru_session');
@@ -111,6 +113,8 @@ async function renderRoute() {
     initHeaderClock(container);
     initSidebarToggle(container);
     maybeShowBackupReminder();
+    maybeRunScheduledBackup();
+    maybeRunGuruAutoBackup();
   };
 
   if (!container) {

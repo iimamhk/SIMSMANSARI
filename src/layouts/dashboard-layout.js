@@ -330,7 +330,7 @@ export function renderLayout(title, content, opts = {}) {
         { label: 'Mapping', href: '#admin/plotting-jadwal', routes: ['#admin/plotting-jadwal'], icon: iconLink },
         { label: 'Pembelajaran', href: '#admin/master-pembelajaran', routes: ['#admin/master-pembelajaran'], icon: iconClassroom },
         { label: 'Wali Kelas', href: '#admin/wali-kelas', routes: ['#admin/wali-kelas'], icon: iconClassroom },
-        { label: 'Akun', href: '#admin/pengatur-sistem', routes: ['#admin/pengatur-sistem'], icon: iconSettings },
+        { label: 'Pengaturan', href: '#admin/pengatur-sistem', routes: ['#admin/pengatur-sistem'], icon: iconSettings },
       ]
     : isGuru
       ? [

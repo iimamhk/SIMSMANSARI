@@ -64,12 +64,12 @@ export async function checkDriveStatus() {
  * @returns {Promise<{uploaded:boolean, reason?:string, fileId?:string, fileName?:string, webViewLink?:string, folderName?:string}>}
  */
 export async function uploadBackupToDrive(blob, fileName, options = {}) {
-  const { onProgress = () => {}, mimeType } = options;
+  const { onProgress = () => {}, mimeType, force = false, logType } = options;
 
   if (!(blob instanceof Blob)) {
     return { uploaded: false, reason: 'Berkas backup tidak valid.' };
   }
-  if (!isDriveUploadEnabled()) {
+  if (!force && !isDriveUploadEnabled()) {
     return { uploaded: false, reason: 'Unggah Drive dimatikan pada perangkat ini.' };
   }
 
@@ -128,6 +128,7 @@ export async function uploadBackupToDrive(blob, fileName, options = {}) {
     fileName: result.name || fileName,
     fileId,
     size: Number(result.size || blob.size || 0),
+    logType,
   });
 
   onProgress('Unggahan Google Drive selesai.');

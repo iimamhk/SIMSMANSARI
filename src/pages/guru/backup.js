@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { showBackupReminder } from '../../utils/backup-reminder.js';
-import { checkDriveStatus, isDriveUploadEnabled, setDriveUploadEnabled } from '../../utils/drive-upload.js';
+import { checkDriveStatus, isDriveUploadEnabled, setDriveUploadEnabled, uploadBackupToDrive } from '../../utils/drive-upload.js';
 import {
   exportGuruBackupExcel,
   exportBackupMultiFormat,
@@ -297,7 +297,11 @@ export async function renderGuruBackupPage(container) {
                   </button>
                   <button id="btn-start-backup" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95">
                     <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-                    Backup Data
+                    Unduh ke Perangkat
+                  </button>
+                  <button id="btn-backup-drive" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-sky-500/30 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95">
+                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg>
+                    Backup ke Drive
                   </button>
                 </div>
               </div>
@@ -742,6 +746,83 @@ function initBackupActions(container) {
 
   startBtn?.addEventListener('click', () => runBackup(false));
   previewBtn?.addEventListener('click', () => runBackup(true));
+
+  // Backup manual langsung ke Google Drive (tanpa mengunduh ke perangkat).
+  const driveBtn = container.querySelector('#btn-backup-drive');
+  const runDriveBackup = async () => {
+    const buttons = [startBtn, previewBtn, driveBtn].filter(Boolean);
+    buttons.forEach((b) => { b.disabled = true; b.classList.add('opacity-60', 'cursor-not-allowed'); });
+    try {
+      const mode = container.querySelector('input[name="backupMode"]:checked')?.value || 'full';
+      const dataTypes = Array.from(container.querySelectorAll('input[name="dataType"]:checked')).map((cb) => cb.value);
+      const selectedAssignments = Array.from(container.querySelectorAll('input[name="assignment"]:checked')).map((cb) => cb.value)
+        .map((id) => assignmentsCache.find((a) => a.id === id))
+        .filter(Boolean);
+
+      updateProgress('Memeriksa koneksi Google Drive...', 8);
+      const status = await checkDriveStatus();
+      if (!status.available) {
+        if (progressBox) progressBox.classList.add('hidden');
+        alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}`);
+        return;
+      }
+
+      const { getStoredContext } = await import('../../utils/helpers.js');
+      const { getSession: getSessionUtil } = await import('../../utils/backup-excel.js');
+      const context = getStoredContext();
+      const session = getSessionUtil();
+      const userId = session?.user?.username || context?.user_logged_in || '';
+      const userName = session?.user?.nama || 'Guru';
+
+      updateProgress('Menyusun data...', 20);
+      let workbook;
+      if (mode === 'selective') {
+        if (!selectedAssignments.length) { alert('Pilih minimal satu kelas.'); return; }
+        if (!dataTypes.length) { alert('Pilih minimal satu tipe data.'); return; }
+        const { buildSelectiveBackupWorkbook } = await import('../../utils/backup-excel.js');
+        workbook = await buildSelectiveBackupWorkbook(context, userId, userName, selectedAssignments, dataTypes, (p) => {
+          const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 60);
+          updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
+        });
+      } else {
+        workbook = await buildGuruBackupWorkbook(context, userId, userName, (p) => {
+          const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 60);
+          updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
+        });
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const safeName = String(userName).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30);
+      const fileName = `Backup-SIMSMANSARI-${safeName}-${dateStr}.xlsx`;
+      updateProgress('Menyusun file Excel...', 85);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+      updateProgress('Mengunggah ke Google Drive...', 92);
+      const result = await uploadBackupToDrive(blob, fileName, {
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        force: true,
+        logType: 'guru',
+        onProgress: (text) => updateProgress(text, 96),
+      });
+
+      if (!result.uploaded) {
+        if (progressBox) progressBox.classList.add('hidden');
+        alert(`Gagal mengunggah ke Drive: ${result.reason || 'terjadi kesalahan.'}`);
+        return;
+      }
+
+      updateProgress('Selesai! Tersimpan di Google Drive.', 100);
+      setTimeout(() => { renderGuruBackupPage(container); }, 900);
+    } catch (err) {
+      console.error('Backup ke Drive gagal:', err);
+      if (progressBox) progressBox.classList.add('hidden');
+      alert(`Backup ke Drive gagal: ${err?.message || 'Terjadi kesalahan.'}`);
+    } finally {
+      buttons.forEach((b) => { b.disabled = false; b.classList.remove('opacity-60', 'cursor-not-allowed'); });
+    }
+  };
+  driveBtn?.addEventListener('click', runDriveBackup);
 }
 
 function initHistoryActions(container) {

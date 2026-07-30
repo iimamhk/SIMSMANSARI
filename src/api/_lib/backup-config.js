@@ -29,7 +29,56 @@ const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const DEFAULT_FOLDER_NAME = 'SIMSMANSARI Backup';
 
+const LOG_LIMIT = 50;
+const VALID_FREQUENCIES = ['daily', 'weekly', 'monthly'];
+const DEFAULT_SCHEDULE = {
+  enabled: false,
+  frequency: 'weekly',
+  time: '02:00',
+  dayOfWeek: 5, // 0=Minggu ... 6=Sabtu (default Jumat)
+  dayOfMonth: 1,
+};
+
+// Pengingat backup untuk guru (popup + opsional push notification browser).
+const VALID_REMINDER_FREQUENCIES = ['daily', 'weekly', 'custom'];
+const DEFAULT_REMINDER = {
+  enabled: false,
+  frequency: 'weekly', // daily | weekly | custom
+  days: [5],           // 0=Minggu..6=Sabtu; weekly pakai 1 hari, custom banyak hari
+  time: '07:00',
+  push: false,         // gunakan Notification API browser bila diizinkan
+};
+
 let cache = { at: 0, config: null };
+
+/** Bersihkan & validasi objek jadwal dari sumber tak tepercaya. */
+function normalizeSchedule(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const frequency = VALID_FREQUENCIES.includes(source.frequency) ? source.frequency : DEFAULT_SCHEDULE.frequency;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(source.time || '')) ? source.time : DEFAULT_SCHEDULE.time;
+  let dayOfWeek = Number.isInteger(source.dayOfWeek) ? source.dayOfWeek : DEFAULT_SCHEDULE.dayOfWeek;
+  if (dayOfWeek < 0 || dayOfWeek > 6) dayOfWeek = DEFAULT_SCHEDULE.dayOfWeek;
+  let dayOfMonth = Number.isInteger(source.dayOfMonth) ? source.dayOfMonth : DEFAULT_SCHEDULE.dayOfMonth;
+  if (dayOfMonth < 1 || dayOfMonth > 28) dayOfMonth = DEFAULT_SCHEDULE.dayOfMonth;
+  return { enabled: source.enabled === true, frequency, time, dayOfWeek, dayOfMonth };
+}
+
+/** Bersihkan & validasi objek pengingat backup dari sumber tak tepercaya. */
+function normalizeReminder(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const frequency = VALID_REMINDER_FREQUENCIES.includes(source.frequency) ? source.frequency : DEFAULT_REMINDER.frequency;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(source.time || '')) ? source.time : DEFAULT_REMINDER.time;
+  let days = Array.isArray(source.days) ? source.days : [];
+  days = [...new Set(days.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b);
+  if (frequency === 'weekly') {
+    days = days.length ? [days[0]] : [DEFAULT_REMINDER.days[0]];
+  } else if (frequency === 'custom') {
+    if (!days.length) days = [...DEFAULT_REMINDER.days];
+  } else {
+    days = []; // daily: setiap hari, tidak butuh daftar hari
+  }
+  return { enabled: source.enabled === true, frequency, days, time, push: source.push === true };
+}
 
 function docRef() {
   return getFirestore().collection(CONFIG_COLLECTION).doc(CONFIG_DOC_ID);
@@ -69,6 +118,10 @@ async function readStoredConfig({ forceRefresh = false } = {}) {
         updatedBy: String(data.updated_by || ''),
         lastUploadAt: String(data.last_upload_at || ''),
         lastUploadName: String(data.last_upload_name || ''),
+        schedule: normalizeSchedule(data.schedule),
+        reminder: normalizeReminder(data.reminder),
+        lastAutoBackupAt: String(data.last_auto_backup_at || ''),
+        logs: Array.isArray(data.logs) ? data.logs : [],
       };
     }
   } catch (error) {
@@ -128,11 +181,32 @@ async function disconnectDrive({ updatedBy } = {}) {
   return { ok: true };
 }
 
+/** Simpan pengaturan pengingat backup untuk guru (khusus admin). */
+async function writeReminder({ reminder, updatedBy } = {}) {
+  const normalized = normalizeReminder(reminder);
+  await docRef().set({
+    reminder: normalized,
+    updated_at: new Date().toISOString(),
+    updated_by: String(updatedBy || '').trim(),
+  }, { merge: true });
+  invalidateCache();
+  return { ok: true, reminder: normalized };
+}
+
 /** Konfigurasi publik untuk ditampilkan di panel admin (tanpa nilai rahasia). */
-async function getPublicConfig() {
-  const config = await readStoredConfig();
+async function getPublicConfig({ forceRefresh = false } = {}) {
+  const config = await readStoredConfig({ forceRefresh });
   if (!config || !config.clientId) {
-    return { configured: false, connected: false, folderName: DEFAULT_FOLDER_NAME, scope: DRIVE_SCOPE };
+    return {
+      configured: false,
+      connected: false,
+      folderName: DEFAULT_FOLDER_NAME,
+      scope: DRIVE_SCOPE,
+      schedule: DEFAULT_SCHEDULE,
+      reminder: DEFAULT_REMINDER,
+      lastAutoBackupAt: '',
+      logs: [],
+    };
   }
   return {
     configured: true,
@@ -148,7 +222,17 @@ async function getPublicConfig() {
     lastUploadAt: config.lastUploadAt,
     lastUploadName: config.lastUploadName,
     scope: DRIVE_SCOPE,
+    schedule: config.schedule || DEFAULT_SCHEDULE,
+    reminder: config.reminder || DEFAULT_REMINDER,
+    lastAutoBackupAt: config.lastAutoBackupAt || '',
+    logs: Array.isArray(config.logs) ? config.logs : [],
   };
+}
+
+/** Pengaturan pengingat untuk guru (tanpa data sensitif). */
+async function getReminderConfig({ forceRefresh = false } = {}) {
+  const config = await readStoredConfig({ forceRefresh });
+  return config?.reminder ? config.reminder : DEFAULT_REMINDER;
 }
 
 /** Bentuk redirect URI dari host permintaan agar tidak perlu env tambahan. */
@@ -301,8 +385,47 @@ async function ensureBackupFolder({ accessToken, config }) {
   return folderId;
 }
 
+/** Simpan pengaturan jadwal backup otomatis (khusus admin). */
+async function writeSchedule({ schedule, updatedBy } = {}) {
+  const normalized = normalizeSchedule(schedule);
+  await docRef().set({
+    schedule: normalized,
+    updated_at: new Date().toISOString(),
+    updated_by: String(updatedBy || '').trim(),
+  }, { merge: true });
+  invalidateCache();
+  return { ok: true, schedule: normalized };
+}
+
+/**
+ * Tambahkan satu entri ke riwayat backup (disimpan sebagai array di dokumen
+ * settings/backup_drive, dibatasi LOG_LIMIT entri terbaru). Entri bertipe
+ * "otomatis" yang sukses juga memperbarui penanda waktu backup otomatis terakhir.
+ */
+async function appendLog(entry = {}) {
+  const stored = await readStoredConfig({ forceRefresh: true });
+  const existing = Array.isArray(stored?.logs) ? stored.logs : [];
+  const record = {
+    at: new Date().toISOString(),
+    type: String(entry.type || 'manual').slice(0, 20),
+    status: entry.status === 'error' ? 'error' : 'success',
+    file_name: String(entry.fileName || entry.file_name || '').slice(0, 200),
+    size: Number(entry.size || 0),
+    by: String(entry.by || '').slice(0, 60),
+    message: String(entry.message || '').slice(0, 300),
+  };
+  const logs = [record, ...existing].slice(0, LOG_LIMIT);
+  const payload = { logs };
+  if (record.type === 'otomatis' && record.status === 'success') {
+    payload.last_auto_backup_at = record.at;
+  }
+  await docRef().set(payload, { merge: true });
+  invalidateCache();
+  return { ok: true, entry: record };
+}
+
 /** Catat metadata unggahan terakhir untuk ditampilkan di panel admin. */
-async function recordUpload({ fileName, fileId, size, uploadedBy }) {
+async function recordUpload({ fileName, fileId, size, uploadedBy, type }) {
   await docRef().set({
     last_upload_at: new Date().toISOString(),
     last_upload_name: String(fileName || '').slice(0, 200),
@@ -311,12 +434,23 @@ async function recordUpload({ fileName, fileId, size, uploadedBy }) {
     last_upload_by: String(uploadedBy || '').slice(0, 60),
   }, { merge: true });
   invalidateCache();
+  // Setiap unggahan sukses juga tercatat di riwayat agar terlihat di panel admin.
+  await appendLog({
+    type: type || 'manual',
+    status: 'success',
+    fileName,
+    size,
+    by: uploadedBy,
+  });
   return { ok: true };
 }
 
 module.exports = {
   DEFAULT_FOLDER_NAME,
+  DEFAULT_SCHEDULE,
+  DEFAULT_REMINDER,
   DRIVE_SCOPE,
+  appendLog,
   buildConsentUrl,
   buildRedirectUri,
   disconnectDrive,
@@ -324,7 +458,10 @@ module.exports = {
   exchangeCodeForRefreshToken,
   getAccessToken,
   getPublicConfig,
+  getReminderConfig,
   readStoredConfig,
   recordUpload,
   writeCredentials,
+  writeReminder,
+  writeSchedule,
 };
