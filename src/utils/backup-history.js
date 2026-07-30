@@ -33,6 +33,11 @@ export async function addBackupHistory(metadata) {
     selectedDataTypes = [], // ['absensi', 'nilai']
     format = 'xlsx',
     durationMs,
+    // Info tujuan & Google Drive (opsional)
+    destination = 'local', // 'local' | 'drive' | 'both'
+    driveUploaded = false,
+    driveWebViewLink = '',
+    driveFolderLink = '',
   } = metadata;
 
   const session = getSession();
@@ -58,6 +63,10 @@ export async function addBackupHistory(metadata) {
     selectedDataTypes,
     format,
     durationMs,
+    destination,
+    driveUploaded,
+    driveWebViewLink,
+    driveFolderLink,
     status: 'completed',
   };
 
@@ -170,6 +179,22 @@ export function getBackupTypeBadgeClass(type) {
     selective: 'bg-amber-100 text-amber-700',
   };
   return classes[type] || 'bg-slate-100 text-slate-700';
+}
+
+export function getDestinationMeta(destination, driveUploaded = false) {
+  // Kembalikan label, kelas badge, dan ikon SVG untuk tujuan backup.
+  const cloud = `<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg>`;
+  const device = `<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>`;
+  const both = `<svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>`;
+  switch (destination) {
+    case 'drive':
+      return { label: 'Drive', badge: 'bg-sky-100 text-sky-700', icon: cloud };
+    case 'both':
+      return { label: 'Lokal + Drive', badge: 'bg-indigo-100 text-indigo-700', icon: both };
+    case 'local':
+    default:
+      return { label: 'Lokal', badge: 'bg-slate-100 text-slate-600', icon: device };
+  }
 }
 
 export function getFormatLabel(format) {

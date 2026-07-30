@@ -37,20 +37,28 @@ export function setDriveUploadEnabled(enabled) {
 
 /**
  * Periksa kesiapan Drive tanpa mengunggah apa pun.
- * @returns {Promise<{available:boolean, reason?:string, folderName?:string, accountEmail?:string}>}
+ * @returns {Promise<{available:boolean, reason?:string, folderName?:string, folderId?:string, accountEmail?:string, folderLink?:string}>}
  */
 export async function checkDriveStatus() {
   try {
     const token = await getDriveUploadToken();
     if (!token.available) return { available: false, reason: token.reason };
+    const folderId = token.folderId || '';
     return {
       available: true,
       folderName: token.folderName || '',
+      folderId,
+      folderLink: folderId ? `https://drive.google.com/drive/folders/${folderId}` : '',
       accountEmail: token.accountEmail || '',
     };
   } catch (error) {
     return { available: false, reason: error?.message || 'Status Drive tidak dapat diperiksa.' };
   }
+}
+
+/** Bentuk tautan folder Google Drive dari ID folder. */
+export function driveFolderLink(folderId) {
+  return folderId ? `https://drive.google.com/drive/folders/${folderId}` : '';
 }
 
 /**
@@ -136,7 +144,9 @@ export async function uploadBackupToDrive(blob, fileName, options = {}) {
     uploaded: true,
     fileId,
     fileName: result.name || fileName,
-    webViewLink: result.webViewLink || '',
+    webViewLink: result.webViewLink || (fileId ? `https://drive.google.com/file/d/${fileId}/view` : ''),
+    folderId: token.folderId || '',
     folderName: token.folderName || '',
+    folderLink: token.folderId ? `https://drive.google.com/drive/folders/${token.folderId}` : '',
   };
 }

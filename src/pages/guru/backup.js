@@ -20,10 +20,13 @@ import {
   getBackupHistory,
   getBackupStats,
   deleteBackupHistory,
+  clearBackupHistory,
+  getBackupHistoryById,
   formatFileSize,
   formatDuration,
   getBackupTypeLabel,
   getBackupTypeBadgeClass,
+  getDestinationMeta,
   getFormatLabel,
   getFormatIcon,
   validateBackupFile,
@@ -51,6 +54,63 @@ function formatDateShort(date) {
   } catch {
     return String(date);
   }
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Kartu riwayat backup (desain premium, jelas di mobile & desktop).
+function renderHistoryCard(h) {
+  const dest = getDestinationMeta(h.destination || 'local', h.driveUploaded);
+  const typeLabel = getBackupTypeLabel(h.backupType);
+  const typeBadge = getBackupTypeBadgeClass(h.backupType);
+  const meta = [];
+  if (h.assignmentsCount) meta.push(`${h.assignmentsCount} kelas`);
+  if (h.totalStudents) meta.push(`${h.totalStudents} siswa`);
+  meta.push(formatFileSize(h.fileSize));
+  if (h.durationMs) meta.push(formatDuration(h.durationMs));
+
+  const driveBtn = h.driveUploaded && (h.driveWebViewLink || h.driveFolderLink)
+    ? `<a href="${escapeHtml(h.driveWebViewLink || h.driveFolderLink)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100" title="Buka di Google Drive">
+        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+        Drive
+      </a>`
+    : '';
+
+  return `
+    <div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md" data-id="${h.id}">
+      <div class="flex items-start gap-3">
+        <div class="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-600">
+          ${getFormatIcon(h.format)}
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-bold text-slate-900" title="${escapeHtml(h.fileName)}">${escapeHtml(h.fileName)}</p>
+          <p class="mt-0.5 text-xs text-slate-500">${formatDateShort(h.timestamp)}</p>
+        </div>
+        <button class="btn-delete flex-none rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100" title="Hapus riwayat" data-id="${h.id}">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadge}">${typeLabel}</span>
+        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${dest.badge}">${dest.icon}${dest.label}</span>
+        ${h.driveUploaded ? '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Tersimpan di Drive</span>' : ''}
+      </div>
+
+      <div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+        <p class="text-xs text-slate-500">${meta.join(' • ')}</p>
+        <div class="flex items-center gap-1.5">
+          ${driveBtn}
+          <button class="btn-preview inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50" title="Detail" data-id="${h.id}">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+            Detail
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 let currentTab = 'backup';
@@ -120,56 +180,35 @@ export async function renderGuruBackupPage(container) {
   }
 
   const statsCards = `
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total Backup</p>
-        <p class="mt-1 text-2xl font-bold text-slate-900">${stats.totalBackups}</p>
+    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 7l8-4 8 4M4 7l8 4 8-4"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Total Backup</p></div>
+        <p class="mt-2 text-2xl font-bold text-slate-900">${stats.totalBackups}</p>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total Ukuran</p>
-        <p class="mt-1 text-2xl font-bold text-slate-900">${formatFileSize(stats.totalSize)}</p>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Total Ukuran</p></div>
+        <p class="mt-2 text-2xl font-bold text-slate-900">${formatFileSize(stats.totalSize)}</p>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Rata-rata Ukuran</p>
-        <p class="mt-1 text-2xl font-bold text-slate-900">${formatFileSize(stats.avgSize)}</p>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m6 10V11M3 21h18"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Rata-rata</p></div>
+        <p class="mt-2 text-2xl font-bold text-slate-900">${formatFileSize(stats.avgSize)}</p>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Backup Terakhir</p>
-        <p class="mt-1 text-sm font-semibold text-slate-900">${stats.lastBackup ? formatDateShort(stats.lastBackup) : 'Belum ada'}</p>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 2"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Terakhir</p></div>
+        <p class="mt-2 text-sm font-semibold text-slate-900">${stats.lastBackup ? formatDateShort(stats.lastBackup) : 'Belum ada'}</p>
       </div>
     </div>`;
 
-  const historyRows = history.length > 0 ? history.slice(0, 20).map((h) => `
-    <tr class="hover:bg-slate-50 transition-colors" data-id="${h.id}">
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${formatDateShort(h.timestamp)}</td>
-      <td class="px-4 py-3">
-        <div class="flex items-center gap-2">
-          ${getFormatIcon(h.format)}
-          <span class="text-sm font-medium text-slate-900 truncate max-w-[200px]">${h.fileName}</span>
-        </div>
-      </td>
-      <td class="px-4 py-3 whitespace-nowrap">
-        <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getBackupTypeBadgeClass(h.backupType)}">${getBackupTypeLabel(h.backupType)}</span>
-      </td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${h.assignmentsCount || 0} kelas</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${h.totalStudents || 0} siswa</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${formatFileSize(h.fileSize)}</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${formatDuration(h.durationMs)}</td>
-      <td class="px-4 py-3">
-        <div class="flex items-center gap-1">
-          <button class="btn-preview text-slate-500 hover:text-emerald-600 p-1.5 rounded" title="Preview" data-id="${h.id}"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>
-          <button class="btn-download text-slate-500 hover:text-sky-600 p-1.5 rounded" title="Unduh" data-id="${h.id}"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></button>
-          <button class="btn-delete text-slate-500 hover:text-rose-600 p-1.5 rounded" title="Hapus riwayat" data-id="${h.id}"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
-        </div>
-      </td>
-    </tr>
-  `).join('') : `
-    <tr>
-      <td colspan="8" class="px-4 py-12 text-center text-slate-400">
-        <svg class="mx-auto h-12 w-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-        <p class="mt-2 text-sm">Belum ada riwayat backup</p>
-      </td>
-    </tr>
+  const historyCards = history.length > 0 ? history.slice(0, 20).map((h) => renderHistoryCard(h)).join('') : `
+    <div class="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-14 text-center">
+      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+        <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </div>
+      <div>
+        <p class="text-sm font-bold text-slate-700">Belum ada riwayat backup</p>
+        <p class="mt-1 text-xs text-slate-500">Riwayat backup Anda akan muncul di sini setelah backup pertama.</p>
+      </div>
+    </div>
   `;
 
   const restoreTypesHtml = Object.values(RESTORE_TYPES).map((rt) => `
@@ -203,12 +242,20 @@ export async function renderGuruBackupPage(container) {
       ${statsCards}
 
       <!-- Tab Navigation -->
-      <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-        <nav class="flex border-b border-slate-200" id="backup-tabs">
-          <button data-tab="backup" class="tab-btn flex-1 px-4 py-3 text-sm font-semibold text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50">Backup</button>
-          <button data-tab="history" class="tab-btn flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700">Riwayat</button>
-          <button data-tab="restore" class="tab-btn flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700">Restore</button>
-          <button data-tab="settings" class="tab-btn flex-1 px-4 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700">Pengaturan</button>
+      <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <nav class="flex gap-1 border-b border-slate-100 bg-slate-50/60 p-1.5" id="backup-tabs">
+          <button data-tab="backup" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 shadow-sm transition">
+            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Backup</span>
+          </button>
+          <button data-tab="history" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
+            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Riwayat</span>
+          </button>
+          <button data-tab="restore" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
+            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 006.3 5.3L4 8M4 15a8 8 0 0013.7 2.7L20 16"/></svg>Restore</span>
+          </button>
+          <button data-tab="settings" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
+            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H22a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Pengaturan</span>
+          </button>
         </nav>
 
         <!-- TAB: BACKUP -->
@@ -271,9 +318,13 @@ export async function renderGuruBackupPage(container) {
 
           <!-- Destination Selection -->
           <section class="mb-6">
-            <h3 class="mb-3 text-lg font-bold text-slate-900">Tujuan Backup</h3>
+            <div class="mb-3 flex items-center gap-2">
+              <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">1</span>
+              <h3 class="text-base font-bold text-slate-900">Pilih Tujuan Backup</h3>
+            </div>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-3" id="destination-options">
-              <label class="dest-opt relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 transition">
+              <label class="dest-opt group relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 transition">
+                <span class="dest-check absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white opacity-100 transition"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="local" class="sr-only" checked>
                 <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
                 <div>
@@ -281,29 +332,35 @@ export async function renderGuruBackupPage(container) {
                   <p class="mt-0.5 text-xs text-slate-600">Unduh berkas ke perangkat ini.</p>
                 </div>
               </label>
-              <label class="dest-opt relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
+              <label class="dest-opt group relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
+                <span class="dest-check absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="drive" class="sr-only">
                 <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-sky-100 text-sky-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4M12 4l-4 4M12 4l4 4"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg></div>
                 <div>
-                  <p class="font-bold text-slate-900">Online (Google Drive)</p>
+                  <p class="font-bold text-slate-900">Online (Drive)</p>
                   <p class="mt-0.5 text-xs text-slate-600">Unggah ke Drive sekolah, tanpa unduh.</p>
                 </div>
               </label>
-              <label class="dest-opt relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
+              <label class="dest-opt group relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
+                <span class="dest-check absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="both" class="sr-only">
                 <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-indigo-100 text-indigo-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19h14"/></svg></div>
                 <div>
                   <p class="font-bold text-slate-900">Keduanya</p>
-                  <p class="mt-0.5 text-xs text-slate-600">Unduh ke perangkat & unggah ke Drive.</p>
+                  <p class="mt-0.5 text-xs text-slate-600">Unduh & unggah sekaligus.</p>
                 </div>
               </label>
             </div>
+            <div id="drive-inline-status" class="mt-3 hidden items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs text-sky-800"></div>
             <p id="destination-hint" class="mt-2 text-xs text-slate-500"></p>
           </section>
 
           <!-- Format Selection -->
           <section class="mb-6">
-            <h3 class="mb-3 text-lg font-bold text-slate-900">Format Ekspor</h3>
+            <div class="mb-3 flex items-center gap-2">
+              <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">2</span>
+              <h3 class="text-base font-bold text-slate-900">Format Ekspor</h3>
+            </div>
             <div class="flex flex-wrap gap-3" id="format-options">
               ${Object.values(EXPORT_FORMATS).map((f) => `
                 <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition">
@@ -316,7 +373,7 @@ export async function renderGuruBackupPage(container) {
 
           <!-- Action Buttons -->
           <section>
-            <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div class="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm sm:p-6">
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 class="text-lg font-bold text-slate-900" id="backup-action-title">Mulai Backup Sekarang</h3>
@@ -334,7 +391,7 @@ export async function renderGuruBackupPage(container) {
                 </div>
               </div>
 
-              <div id="backup-progress-box" class="hidden mt-5 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+              <div id="backup-progress-box" class="hidden mt-5 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
                 <div class="flex items-center gap-3">
                   <svg class="h-5 w-5 animate-spin text-emerald-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
                   <p id="backup-progress-text" class="text-sm font-medium text-slate-600">Memulai backup...</p>
@@ -343,48 +400,56 @@ export async function renderGuruBackupPage(container) {
                   <div id="backup-progress-bar" class="h-full w-0 bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"></div>
                 </div>
               </div>
+
+              <!-- Panel sukses dengan tombol ke folder Drive -->
+              <div id="backup-success-box" class="hidden mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div class="flex items-start gap-3">
+                  <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-bold text-emerald-900">Backup Berhasil</p>
+                    <p id="backup-success-text" class="mt-0.5 text-xs text-emerald-700"></p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <a id="backup-success-drive" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-700">
+                        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
+                        Buka Folder Google Drive
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         </div>
 
         <!-- TAB: HISTORY -->
         <div id="tab-history" class="tab-panel hidden p-5 sm:p-6">
-          <section class="mb-6">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <h3 class="text-lg font-bold text-slate-900">Riwayat Backup</h3>
+          <section class="mb-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 class="text-lg font-bold text-slate-900">Riwayat Backup</h3>
+                <p class="mt-1 text-sm text-slate-500">${history.length} riwayat tersimpan (maksimal 50). Berkas yang diunggah punya tautan langsung ke Google Drive.</p>
+              </div>
               <div class="flex items-center gap-2">
-                <button id="btn-clear-history" class="text-sm font-medium text-rose-600 hover:text-rose-700">Hapus Semua Riwayat</button>
+                <button id="btn-open-drive-folder" type="button" class="hidden inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100" title="Buka folder Google Drive">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                  Buka Folder Drive
+                </button>
+                <button id="btn-clear-history" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
+                  Hapus Semua
+                </button>
               </div>
             </div>
-            <p class="mt-1 text-sm text-slate-500">Menampilkan ${history.length} riwayat backup terakhir (maksimal 50).</p>
           </section>
           <section>
-            <div class="rounded-xl border border-slate-200 bg-white overflow-hidden">
-              <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                  <thead class="bg-slate-50">
-                    <tr>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Tanggal</th>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">File</th>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Tipe</th>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Kelas</th>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Siswa</th>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Ukuran</th>
-                      <th class="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Durasi</th>
-                      <th class="px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody id="history-tbody">
-                    ${historyRows}
-                  </tbody>
-                </table>
-              </div>
-              ${history.length > 20 ? `
-                <div class="border-t border-slate-200 px-4 py-3 text-center">
-                  <button id="btn-load-more-history" class="text-sm font-medium text-emerald-600 hover:text-emerald-700">Tampilkan ${history.length - 20} lebih...</button>
-                </div>
-              ` : ''}
+            <div id="history-grid" class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              ${historyCards}
             </div>
+            ${history.length > 20 ? `
+              <div class="mt-4 text-center">
+                <button id="btn-load-more-history" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50">Tampilkan ${history.length - 20} lebih...</button>
+              </div>
+            ` : ''}
           </section>
         </div>
 
@@ -449,11 +514,15 @@ export async function renderGuruBackupPage(container) {
               <label class="flex items-center justify-between gap-4">
                 <div>
                   <p class="font-medium text-slate-900">Unggah Backup ke Google Drive</p>
-                  <p class="text-sm text-slate-500">Setiap backup diunduh ke perangkat ini lalu diunggah ke folder Drive sekolah.</p>
+                  <p class="text-sm text-slate-500">Jadikan Google Drive sebagai tujuan default (opsi "Keduanya") saat backup.</p>
                 </div>
                 <input type="checkbox" id="drive-upload-toggle" class="h-5 w-5 flex-none rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
               </label>
               <p id="drive-state-detail" class="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">Memeriksa koneksi Google Drive...</p>
+              <a id="drive-open-folder" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                Buka Folder Google Drive
+              </a>
             </div>
           </section>
           <section>
@@ -591,10 +660,10 @@ function initTabNavigation(container) {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
       tabs.forEach((t) => {
-        t.classList.remove('text-emerald-600', 'border-emerald-500', 'bg-emerald-50');
+        t.classList.remove('bg-slate-900', 'text-white', 'shadow-sm');
         t.classList.add('text-slate-500');
       });
-      tab.classList.add('text-emerald-600', 'border-emerald-500', 'bg-emerald-50');
+      tab.classList.add('bg-slate-900', 'text-white', 'shadow-sm');
       tab.classList.remove('text-slate-500');
 
       panels.forEach((p) => {
@@ -607,7 +676,7 @@ function initTabNavigation(container) {
 
       currentTab = tabName;
 
-      if (tabName === 'history') {
+      if (tabName === 'backup') {
         renderClassCheckboxes(container);
       }
     });
@@ -672,6 +741,7 @@ function initDestinationToggle(container) {
     both: 'Berkas backup diunduh ke perangkat sekaligus diunggah ke Google Drive.',
   };
   const LABELS = { local: 'Unduh ke Perangkat', drive: 'Unggah ke Drive', both: 'Unduh + Unggah' };
+  const inlineStatus = container.querySelector('#drive-inline-status');
 
   const apply = (value) => {
     destOpts.forEach((opt) => {
@@ -682,11 +752,36 @@ function initDestinationToggle(container) {
       opt.classList.toggle('bg-emerald-50', isActive);
       opt.classList.toggle('border-slate-200', !isActive);
       opt.classList.toggle('bg-white', !isActive);
+      const check = opt.querySelector('.dest-check');
+      if (check) check.classList.toggle('opacity-0', !isActive);
     });
     if (hint) hint.textContent = HINTS[value] || '';
     if (startLabel) startLabel.textContent = LABELS[value] || 'Backup Sekarang';
     // Preview selalu berupa unduhan lokal; sembunyikan bila tujuan hanya Drive.
     if (previewBtn) previewBtn.style.display = value === 'drive' ? 'none' : '';
+
+    // Tampilkan status koneksi Drive saat tujuan menyertakan Drive.
+    if (inlineStatus) {
+      if (value === 'drive' || value === 'both') {
+        inlineStatus.classList.remove('hidden');
+        inlineStatus.classList.add('flex');
+        inlineStatus.innerHTML = `<svg class="h-3.5 w-3.5 animate-spin text-sky-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span>Memeriksa koneksi Google Drive...</span>`;
+        checkDriveStatus().then((status) => {
+          if (status.available) {
+            const akun = status.accountEmail ? ` • ${status.accountEmail}` : '';
+            const folderBtn = status.folderLink
+              ? ` <a href="${status.folderLink}" target="_blank" rel="noopener" class="ml-1 inline-flex items-center gap-1 font-bold text-sky-700 underline decoration-sky-300 underline-offset-2">Buka folder</a>`
+              : '';
+            inlineStatus.innerHTML = `<svg class="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Terhubung ke folder <strong>${status.folderName || 'backup'}</strong>${akun}.${folderBtn}</span>`;
+          } else {
+            inlineStatus.innerHTML = `<svg class="h-3.5 w-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg><span>${status.reason || 'Google Drive belum siap.'} Admin dapat mengaturnya di Pengaturan → Google Drive.</span>`;
+          }
+        });
+      } else {
+        inlineStatus.classList.add('hidden');
+        inlineStatus.classList.remove('flex');
+      }
+    }
   };
 
   destOpts.forEach((opt) => {
@@ -701,11 +796,30 @@ function initBackupActions(container) {
   const progressBox = container.querySelector('#backup-progress-box');
   const progressText = container.querySelector('#backup-progress-text');
   const progressBar = container.querySelector('#backup-progress-bar');
+  const successBox = container.querySelector('#backup-success-box');
+  const successText = container.querySelector('#backup-success-text');
+  const successDrive = container.querySelector('#backup-success-drive');
 
   const updateProgress = (text, percent) => {
+    if (successBox) successBox.classList.add('hidden');
     if (progressBox) progressBox.classList.remove('hidden');
     if (progressText) progressText.textContent = text;
     if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  };
+
+  const showSuccess = (message, driveLink) => {
+    if (progressBox) progressBox.classList.add('hidden');
+    if (!successBox) return;
+    successBox.classList.remove('hidden');
+    if (successText) successText.textContent = message;
+    if (successDrive) {
+      if (driveLink) {
+        successDrive.href = driveLink;
+        successDrive.classList.remove('hidden');
+      } else {
+        successDrive.classList.add('hidden');
+      }
+    }
   };
 
   // isPreview memaksa tujuan 'local' (hanya unduh untuk melihat isi berkas).
@@ -774,22 +888,25 @@ function initBackupActions(container) {
 
       // Pesan hasil sesuai tujuan.
       const drive = result?.drive || {};
+      const driveFolderLink = drive.folderLink || drive.webViewLink || '';
       let doneMsg = '';
-      if (destination === 'local') doneMsg = 'Backup selesai. Berkas telah diunduh ke perangkat.';
+      if (destination === 'local') doneMsg = 'Berkas telah diunduh ke perangkat Anda.';
       else if (destination === 'drive') {
-        doneMsg = drive.uploaded ? 'Backup berhasil diunggah ke Google Drive.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
+        doneMsg = drive.uploaded ? 'Berkas berhasil diunggah ke Google Drive sekolah.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
       } else {
         doneMsg = drive.uploaded
-          ? 'Backup diunduh ke perangkat dan diunggah ke Google Drive.'
-          : `Backup diunduh ke perangkat. Unggah Drive gagal: ${drive.reason || 'terjadi kesalahan.'}`;
+          ? 'Berkas diunduh ke perangkat dan diunggah ke Google Drive.'
+          : `Berkas diunduh ke perangkat. Unggah Drive gagal: ${drive.reason || 'terjadi kesalahan.'}`;
       }
 
       if (isPreview) {
         if (progressBox) progressBox.classList.add('hidden');
-        alert('Preview selesai! Berkas telah diunduh ke perangkat.');
+        showSuccess('Preview berhasil diunduh ke perangkat Anda.', '');
       } else {
-        alert(doneMsg);
-        setTimeout(() => { renderGuruBackupPage(container); }, 800);
+        showSuccess(doneMsg, drive.uploaded ? driveFolderLink : '');
+        // Muat ulang halaman agar riwayat & statistik ikut ter-update,
+        // beri jeda agar guru sempat melihat tombol folder Drive.
+        setTimeout(() => { renderGuruBackupPage(container); }, drive.uploaded && driveFolderLink ? 3500 : 1500);
       }
     } catch (err) {
       console.error('Backup error:', err);
@@ -805,65 +922,74 @@ function initBackupActions(container) {
 }
 
 function initHistoryActions(container) {
-  const tbody = container.querySelector('#history-tbody');
+  const grid = container.querySelector('#history-grid');
   const loadMoreBtn = container.querySelector('#btn-load-more-history');
   const clearBtn = container.querySelector('#btn-clear-history');
+  const openFolderBtn = container.querySelector('#btn-open-drive-folder');
 
-  tbody?.addEventListener('click', async (e) => {
+  // Tombol "Buka Folder Drive": tampil bila ada riwayat dengan tautan Drive,
+  // atau bila koneksi Drive aktif (folder link dari status).
+  (async () => {
+    if (!openFolderBtn) return;
+    const history = getBackupHistory();
+    let folderLink = history.find((h) => h.driveFolderLink)?.driveFolderLink || '';
+    if (!folderLink) {
+      try {
+        const status = await checkDriveStatus();
+        if (status.available && status.folderLink) folderLink = status.folderLink;
+      } catch { /* abaikan */ }
+    }
+    if (folderLink) {
+      openFolderBtn.classList.remove('hidden');
+      openFolderBtn.addEventListener('click', () => window.open(folderLink, '_blank', 'noopener'));
+    }
+  })();
+
+  grid?.addEventListener('click', async (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
-
     const id = btn.dataset.id;
     if (!id) return;
 
     if (btn.classList.contains('btn-preview')) {
       const entry = getBackupHistoryById(id);
-      if (entry) alert(`Preview: ${entry.fileName}\nTipe: ${getBackupTypeLabel(entry.backupType)}\nKelas: ${entry.assignmentsCount}\nSiswa: ${entry.totalStudents}\nUkuran: ${formatFileSize(entry.fileSize)}`);
-    } else if (btn.classList.contains('btn-download')) {
-      // Note: Cannot re-download from localStorage, would need to re-generate
-      alert('Fitur unduh ulang memerlukan regenerasi backup. Silakan buat backup baru.');
+      if (entry) {
+        const dest = getDestinationMeta(entry.destination || 'local', entry.driveUploaded).label;
+        alert(`Detail Backup\n\nBerkas: ${entry.fileName}\nTipe: ${getBackupTypeLabel(entry.backupType)}\nTujuan: ${dest}\nKelas: ${entry.assignmentsCount || 0}\nUkuran: ${formatFileSize(entry.fileSize)}\nWaktu: ${formatDateShort(entry.timestamp)}${entry.driveUploaded ? '\nStatus Drive: Tersimpan' : ''}`);
+      }
     } else if (btn.classList.contains('btn-delete')) {
       if (confirm('Hapus riwayat ini?')) {
         deleteBackupHistory(id);
-        btn.closest('tr')?.remove();
+        btn.closest('[data-id]')?.remove();
+        if (grid && !grid.querySelector('[data-id]')) {
+          grid.innerHTML = `
+            <div class="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-14 text-center">
+              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
+              <div><p class="text-sm font-bold text-slate-700">Belum ada riwayat backup</p><p class="mt-1 text-xs text-slate-500">Riwayat backup Anda akan muncul di sini setelah backup pertama.</p></div>
+            </div>`;
+        }
       }
     }
   });
 
   loadMoreBtn?.addEventListener('click', () => {
     const history = getBackupHistory();
-    const rows = history.slice(20).map((h) => `
-      <tr class="hover:bg-slate-50 transition-colors" data-id="${h.id}">
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${formatDateShort(h.timestamp)}</td>
-        <td class="px-4 py-3">
-          <div class="flex items-center gap-2">
-            ${getFormatIcon(h.format)}
-            <span class="text-sm font-medium text-slate-900 truncate max-w-[200px]">${h.fileName}</span>
-          </div>
-        </td>
-        <td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getBackupTypeBadgeClass(h.backupType)}">${getBackupTypeLabel(h.backupType)}</span></td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${h.assignmentsCount || 0} kelas</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${h.totalStudents || 0} siswa</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${formatFileSize(h.fileSize)}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-slate-600">${formatDuration(h.durationMs)}</td>
-        <td class="px-4 py-3"><div class="flex items-center justify-end gap-1"><button class="btn-preview text-slate-500 hover:text-emerald-600 p-1.5 rounded" title="Preview" data-id="${h.id}"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button><button class="btn-delete text-slate-500 hover:text-rose-600 p-1.5 rounded" title="Hapus riwayat" data-id="${h.id}"><svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></div></td>
-      </tr>
-    `).join('');
-    tbody.insertAdjacentHTML('beforeend', rows);
+    const cards = history.slice(20).map((h) => renderHistoryCard(h)).join('');
+    grid.insertAdjacentHTML('beforeend', cards);
     loadMoreBtn.remove();
   });
 
   clearBtn?.addEventListener('click', () => {
     if (confirm('Hapus SEMUA riwayat backup? Tindakan ini tidak bisa dibatalkan.')) {
       clearBackupHistory();
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="8" class="px-4 py-12 text-center text-slate-400">
-            <svg class="mx-auto h-12 w-12 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-            <p class="mt-2 text-sm">Belum ada riwayat backup</p>
-          </td>
-        </tr>
-      `;
+      if (grid) {
+        grid.innerHTML = `
+          <div class="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-14 text-center">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
+            <div><p class="text-sm font-bold text-slate-700">Belum ada riwayat backup</p><p class="mt-1 text-xs text-slate-500">Riwayat backup Anda akan muncul di sini setelah backup pertama.</p></div>
+          </div>`;
+      }
+      loadMoreBtn?.remove();
     }
   });
 }
@@ -1003,9 +1129,11 @@ function initSettingsActions(container) {
   };
 
   async function refreshDriveState() {
+    const openFolder = container.querySelector('#drive-open-folder');
+    if (openFolder) openFolder.classList.add('hidden');
     if (!driveToggle?.checked) {
       setBadge('Nonaktif', 'off');
-      if (driveDetail) driveDetail.textContent = 'Unggah Google Drive dimatikan. Backup hanya tersimpan di perangkat ini.';
+      if (driveDetail) driveDetail.textContent = 'Google Drive tidak dijadikan tujuan default. Anda tetap bisa memilih tujuan "Online" atau "Keduanya" saat backup.';
       return;
     }
     setBadge('Memeriksa...', 'off');
@@ -1015,6 +1143,10 @@ function initSettingsActions(container) {
       setBadge('Terhubung', 'ok');
       const akun = status.accountEmail ? ` (${status.accountEmail})` : '';
       if (driveDetail) driveDetail.textContent = `Aktif. Backup akan diunggah ke folder "${status.folderName || 'backup'}"${akun}.`;
+      if (openFolder && status.folderLink) {
+        openFolder.href = status.folderLink;
+        openFolder.classList.remove('hidden');
+      }
     } else {
       setBadge('Belum siap', 'warn');
       if (driveDetail) driveDetail.textContent = `${status.reason || 'Google Drive belum dikonfigurasi.'} Admin dapat mengatur di Pengaturan → Google Drive.`;
@@ -1073,9 +1205,4 @@ function initSettingsActions(container) {
       renderGuruBackupPage(container);
     }
   });
-}
-
-function getBackupHistoryById(id) {
-  const history = getBackupHistory();
-  return history.find((h) => h.id === id) || null;
 }

@@ -1179,11 +1179,37 @@ export async function exportGuruBackupExcel(onProgress = () => {}, options = {})
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const startedAt = Date.now();
   const delivery = await deliverBackupBlob(blob, fileName, onProgress, {
     destination: options.destination,
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     logType: 'guru',
   });
+
+  const sheetCount = workbook.worksheets.length;
+  const assignmentsCount = Math.ceil(sheetCount / 3);
+
+  // Catat ke riwayat lokal agar tab Riwayat selalu terisi (dulu hanya selektif).
+  try {
+    const checksum = await computeChecksum(blob);
+    await addBackupHistory({
+      fileName,
+      fileSize: blob.size,
+      checksum,
+      assignmentsCount,
+      tahunAjaranId: context?.tahun_ajaran_aktif || '',
+      semesterId: context?.semester_aktif || '',
+      backupType: 'full',
+      format: 'xlsx',
+      durationMs: Date.now() - startedAt,
+      destination: options.destination || 'local',
+      driveUploaded: delivery.uploaded === true,
+      driveWebViewLink: delivery.webViewLink || '',
+      driveFolderLink: delivery.folderLink || '',
+    });
+  } catch (e) {
+    console.warn('Gagal mencatat riwayat backup penuh:', e);
+  }
 
   setLastBackupTimestamp({
     guru_id: userId,
@@ -1194,8 +1220,7 @@ export async function exportGuruBackupExcel(onProgress = () => {}, options = {})
     drive_uploaded: delivery.uploaded === true,
   });
 
-  const sheetCount = workbook.worksheets.length;
-  return { fileName, assignments_count: Math.ceil(sheetCount / 3), drive: delivery };
+  return { fileName, assignments_count: assignmentsCount, drive: delivery };
 }
 
 /**
@@ -1386,25 +1411,30 @@ export async function exportSelectiveBackupExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const startedAt = Date.now();
   const delivery = await deliverBackupBlob(blob, fileName, onProgress, {
     destination: options.destination,
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     logType: 'guru',
   });
 
-  // Record in history
+  // Record in history (nama field disamakan dengan addBackupHistory).
   const checksum = await computeChecksum(blob);
-  addBackupHistory({
-    guru_id: userId,
-    guru_nama: userName,
-    tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-    semester_id: context?.semester_aktif || '',
-    file_name: fileName,
-    data_types: selectedDataTypes,
-    assignment_count: selectedAssignments.length,
+  await addBackupHistory({
+    fileName,
+    fileSize: blob.size,
     checksum,
-    backup_type: 'selective',
-    drive_uploaded: delivery.uploaded === true,
+    assignmentsCount: selectedAssignments.length,
+    tahunAjaranId: context?.tahun_ajaran_aktif || '',
+    semesterId: context?.semester_aktif || '',
+    backupType: 'selective',
+    selectedDataTypes,
+    format: 'xlsx',
+    durationMs: Date.now() - startedAt,
+    destination: options.destination || 'local',
+    driveUploaded: delivery.uploaded === true,
+    driveWebViewLink: delivery.webViewLink || '',
+    driveFolderLink: delivery.folderLink || '',
   });
 
   setLastBackupTimestamp({
@@ -1545,18 +1575,20 @@ export async function exportBackupMultiFormat(
   });
 
   const checksum = await computeChecksum(blob);
-  addBackupHistory({
-    guru_id: userId,
-    guru_nama: userName,
-    tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-    semester_id: context?.semester_aktif || '',
-    file_name: fileName,
-    data_types: selectedDataTypes,
-    assignment_count: selectedAssignments.length,
-    format: format.key,
+  await addBackupHistory({
+    fileName,
+    fileSize: blob.size,
     checksum,
-    backup_type: 'selective',
-    drive_uploaded: delivery.uploaded === true,
+    assignmentsCount: selectedAssignments.length,
+    tahunAjaranId: context?.tahun_ajaran_aktif || '',
+    semesterId: context?.semester_aktif || '',
+    selectedDataTypes,
+    format: format.key,
+    backupType: 'selective',
+    destination: options.destination || 'local',
+    driveUploaded: delivery.uploaded === true,
+    driveWebViewLink: delivery.webViewLink || '',
+    driveFolderLink: delivery.folderLink || '',
   });
 
   setLastBackupTimestamp({
