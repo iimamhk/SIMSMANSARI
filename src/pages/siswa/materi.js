@@ -210,6 +210,94 @@ function getStudentThematicBookCover(material) {
   return { gradient: 'from-blue-600 via-indigo-600 to-violet-700', chip: 'border-indigo-200 bg-indigo-50 text-indigo-700' };
 }
 
+// Tema sampul buku bergaya iOS (identik dengan beranda materi guru).
+function getBookCoverTheme(material, index = 0) {
+  const subject = String(material?.mapel_nama || material?.subject || material?.mapel_id || '').toLowerCase();
+  const themes = [
+    { from: '#0a84ff', to: '#5e5ce6', ink: '#dbeafe', symbol: 'Aa' },
+    { from: '#ff375f', to: '#ff9f0a', ink: '#fff1f2', symbol: '✦' },
+    { from: '#30b0c7', to: '#34c759', ink: '#ecfeff', symbol: '○' },
+    { from: '#af52de', to: '#5856d6', ink: '#f5f3ff', symbol: '◇' },
+    { from: '#ff9f0a', to: '#ff453a', ink: '#fff7ed', symbol: '⌁' },
+  ];
+  let theme = themes[index % themes.length];
+  if (/matematika/.test(subject)) theme = { from: '#0879e8', to: '#34aadc', ink: '#e0f2fe', symbol: '∑' };
+  else if (/bahasa indonesia/.test(subject)) theme = { from: '#ff375f', to: '#ff9f0a', ink: '#fff1f2', symbol: 'Aa' };
+  else if (/bahasa inggris/.test(subject)) theme = { from: '#5856d6', to: '#af52de', ink: '#f5f3ff', symbol: 'EN' };
+  else if (/fisika/.test(subject)) theme = { from: '#1c1c1e', to: '#48484a', ink: '#f1f5f9', symbol: 'Fx' };
+  else if (/kimia/.test(subject)) theme = { from: '#00a896', to: '#30b0c7', ink: '#ecfeff', symbol: 'H₂O' };
+  else if (/biologi/.test(subject)) theme = { from: '#248a3d', to: '#30d158', ink: '#f0fdf4', symbol: 'DNA' };
+  else if (/sejarah/.test(subject)) theme = { from: '#ac6a18', to: '#ff9f0a', ink: '#fffbeb', symbol: '⌛' };
+  return theme;
+}
+
+function escapeAttr(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function siswaLibraryStyles() {
+  return `
+    .sml { --ios-blue:#0a84ff; --ios-label:#1c1c1e; --ios-secondary:#6e6e73; padding:2px 0 20px; color:var(--ios-label); }
+    .sml * { box-sizing:border-box; }
+    .sml [hidden] { display:none !important; }
+    .sml-hero { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; min-height:150px; padding:24px; border-radius:26px; color:#fff; background:linear-gradient(125deg,#1c1c1e 0%,#2c2c2e 42%,#0a84ff 120%); box-shadow:0 25px 60px -36px rgba(15,23,42,.7); }
+    .sml-hero::before,.sml-hero::after { content:''; position:absolute; border-radius:999px; filter:blur(2px); pointer-events:none; }
+    .sml-hero::before { width:240px; height:240px; right:-60px; top:-95px; background:rgba(94,92,230,.42); }
+    .sml-hero::after { width:180px; height:180px; right:110px; bottom:-120px; background:rgba(48,176,199,.28); }
+    .sml-hero-copy,.sml-hero-art { position:relative; z-index:1; }
+    .sml-kicker { display:flex; align-items:center; gap:8px; margin:0 0 10px; color:rgba(255,255,255,.68); font-size:10px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+    .sml-kicker span { width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,.2); border-radius:8px; background:rgba(255,255,255,.1); font-size:13px; }
+    .sml-hero h1 { max-width:520px; margin:0; font-size:clamp(1.3rem,3vw,1.9rem); line-height:1.06; letter-spacing:-.04em; }
+    .sml-hero-stats { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+    .sml-stat { display:inline-flex; align-items:center; gap:6px; padding:6px 11px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(255,255,255,.1); color:rgba(255,255,255,.9); font-size:10px; font-weight:750; backdrop-filter:blur(12px); }
+    .sml-hero-art { display:flex; align-items:center; justify-content:center; width:140px; }
+    .sml-stack { position:relative; width:98px; height:132px; transform:rotate(5deg); }
+    .sml-stack span { position:absolute; inset:0; border-radius:9px 15px 15px 9px; border:1px solid rgba(255,255,255,.28); box-shadow:0 22px 34px -18px rgba(0,0,0,.7); }
+    .sml-stack span:nth-child(1) { transform:translate(-28px,13px) rotate(-13deg); background:linear-gradient(145deg,#ff375f,#ff9f0a); }
+    .sml-stack span:nth-child(2) { transform:translate(-12px,5px) rotate(-5deg); background:linear-gradient(145deg,#30b0c7,#34c759); }
+    .sml-stack span:nth-child(3) { display:flex; align-items:center; justify-content:center; background:linear-gradient(145deg,#0a84ff,#5e5ce6); font-size:32px; font-weight:800; color:#fff; }
+    .sml-library { margin-top:16px; padding:18px; border:1px solid rgba(209,209,214,.72); border-radius:26px; background:rgba(255,255,255,.86); box-shadow:0 22px 50px -38px rgba(0,0,0,.32); backdrop-filter:blur(22px) saturate(1.25); }
+    .sml-library-head { display:flex; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
+    .sml-eyebrow { margin:0; color:var(--ios-blue); font-size:10px; font-weight:850; letter-spacing:.14em; text-transform:uppercase; }
+    .sml-library-head h2 { margin:3px 0 0; color:var(--ios-label); font-size:20px; letter-spacing:-.03em; }
+    .sml-library-head p.sml-sub { margin:3px 0 0; color:var(--ios-secondary); font-size:11px; }
+    .sml-tools { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .sml-search { position:relative; min-width:180px; }
+    .sml-search svg { position:absolute; left:11px; top:50%; width:14px; height:14px; color:#8e8e93; transform:translateY(-50%); }
+    .sml-search input { width:100%; min-height:38px; padding:9px 12px 9px 32px; border:0; border-radius:11px; background:#e9e9eb; color:#1c1c1e; font-size:12px; outline:none; }
+    .sml-search input:focus { box-shadow:0 0 0 3px rgba(10,132,255,.2); }
+    .sml-select { min-height:38px; padding:9px 12px; border:0; border-radius:11px; background:#e9e9eb; color:#1c1c1e; font-size:12px; font-weight:600; outline:none; cursor:pointer; }
+    .sml-select:focus { box-shadow:0 0 0 3px rgba(10,132,255,.2); }
+    .sml-badges { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+    .sml-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 10px; border:1px solid rgba(10,132,255,.18); border-radius:999px; background:rgba(10,132,255,.06); color:#0a6cd6; font-size:11px; font-weight:700; }
+    .sml-badge b { background:#fff; border-radius:999px; padding:1px 7px; font-size:10px; color:#1c1c1e; }
+    .sml-books { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:22px 16px; }
+    @media (max-width:520px) { .sml-books { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px 12px; } .sml-hero-art { display:none; } .sml-hero { grid-template-columns:1fr; padding:20px; } }
+    .sml-book { min-width:0; animation:smlBookIn .42s cubic-bezier(.2,.75,.2,1) both; }
+    @keyframes smlBookIn { from { opacity:0; transform:translateY(12px) scale(.97); } to { opacity:1; transform:none; } }
+    .sml-book-button { display:block; width:100%; padding:0; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+    .sml-cover { position:relative; overflow:hidden; width:100%; aspect-ratio:3/4.15; padding:15px 13px 13px 18px; border-radius:8px 15px 15px 8px; color:#fff; background:linear-gradient(145deg,var(--book-from),var(--book-to)); box-shadow:-2px 2px 0 rgba(0,0,0,.14),0 18px 28px -17px color-mix(in srgb,var(--book-to) 72%,#000); transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s; }
+    .sml-book-button:hover .sml-cover { transform:translateY(-7px) rotate(-1deg); box-shadow:-3px 3px 0 rgba(0,0,0,.15),0 25px 34px -16px color-mix(in srgb,var(--book-to) 72%,#000); }
+    .sml-cover::before { content:''; position:absolute; inset:0 auto 0 8px; width:2px; border-left:1px solid rgba(255,255,255,.22); border-right:1px solid rgba(0,0,0,.14); }
+    .sml-cover::after { content:''; position:absolute; inset:0; background:linear-gradient(120deg,rgba(255,255,255,.22),transparent 28%,transparent 70%,rgba(0,0,0,.08)); pointer-events:none; }
+    .sml-cover-top,.sml-cover-copy { position:relative; z-index:1; }
+    .sml-cover-top { display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
+    .sml-cover-symbol { display:inline-flex; min-width:32px; height:32px; align-items:center; justify-content:center; padding:0 5px; border:1px solid rgba(255,255,255,.25); border-radius:9px; background:rgba(255,255,255,.16); font-size:11px; font-weight:800; backdrop-filter:blur(8px); }
+    .sml-cover-badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; font-size:8px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; backdrop-filter:blur(4px); }
+    .sml-cover-badge.read { border:1px solid rgba(48,209,88,.5); background:rgba(48,209,88,.28); color:#f0fff4; }
+    .sml-cover-badge.unread { border:1px solid rgba(255,214,10,.5); background:rgba(255,159,10,.26); color:#fffbeb; }
+    .sml-cover-copy { position:absolute; left:18px; right:13px; bottom:14px; }
+    .sml-cover-copy small { display:block; margin-bottom:7px; color:rgba(255,255,255,.72); font-size:8px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+    .sml-cover-copy strong { display:-webkit-box; overflow:hidden; color:#fff; font-size:13.5px; line-height:1.24; letter-spacing:-.015em; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+    .sml-book-info { padding:10px 3px 0; }
+    .sml-book-info strong { display:block; overflow:hidden; color:#1c1c1e; font-size:12px; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
+    .sml-book-info span { display:block; overflow:hidden; margin-top:3px; color:#8e8e93; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+    .sml-empty { grid-column:1/-1; padding:46px 20px; border:1px dashed #c7c7cc; border-radius:18px; background:rgba(242,242,247,.72); text-align:center; }
+    .sml-empty-icon { display:inline-flex; width:56px; height:56px; align-items:center; justify-content:center; border-radius:16px; background:#fff; color:#0a84ff; font-size:25px; box-shadow:0 10px 24px -16px rgba(0,0,0,.3); }
+    .sml-empty h3 { margin:12px 0 4px; font-size:15px; } .sml-empty p { margin:0; color:#8e8e93; font-size:11px; }
+  `;
+}
+
 function readLocalMaterialReads() {
   try {
     return JSON.parse(localStorage.getItem(MATERIAL_READS_KEY) || '[]');
@@ -302,126 +390,51 @@ export async function renderSiswaMateriPage(container) {
   const mapelOptions = getMapelOptions(materials);
   const mapelCounts = getMapelCounts(materials);
   const classLabel = student?.kelas_nama || student?.kelas_id || '-';
-  const hour = new Date().getHours();
-  const libraryHeroTheme = hour < 12
-    ? {
-        panel: 'from-sky-500 via-cyan-500 to-emerald-400',
-        eyebrow: 'text-cyan-100/90',
-        chip: 'border-white/18 bg-white/12 text-white/90',
-        glowA: 'bg-white/18',
-        glowB: 'bg-cyan-200/20',
-        badge: 'Pagi Cerah',
-        icon: '☀',
-        art: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"/>'
-      }
-    : hour < 15
-      ? {
-          panel: 'from-amber-400 via-orange-400 to-rose-400',
-          eyebrow: 'text-amber-100/90',
-          chip: 'border-white/18 bg-white/12 text-white/90',
-          glowA: 'bg-white/16',
-          glowB: 'bg-amber-200/20',
-          badge: 'Siang Aktif',
-          icon: '✦',
-          art: '<circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>'
-        }
-      : hour < 18
-        ? {
-            panel: 'from-violet-500 via-fuchsia-500 to-orange-400',
-            eyebrow: 'text-orange-100/90',
-            chip: 'border-white/18 bg-white/12 text-white/90',
-            glowA: 'bg-white/14',
-            glowB: 'bg-orange-200/20',
-            badge: 'Sore Hangat',
-            icon: '◔',
-            art: '<path d="M4 15c2.5-4.8 5.8-7.2 10-7.2 2.4 0 4.3.6 6 1.8-1.4 5-5.2 8.4-10 8.4-2.1 0-4.1-1-6-3z"/><path d="M13 5.5c1.3.5 2.3 1.6 2.7 3"/>'
-          }
-        : {
-            panel: 'from-slate-900 via-indigo-900 to-blue-950',
-            eyebrow: 'text-indigo-100/90',
-            chip: 'border-white/14 bg-white/10 text-white/88',
-            glowA: 'bg-white/10',
-            glowB: 'bg-indigo-300/16',
-            badge: 'Malam Tenang',
-            icon: '☾',
-            art: '<path d="M18.5 14.5A6.5 6.5 0 0 1 9.5 5.5 7.5 7.5 0 1 0 18.5 14.5Z"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/><circle cx="14.5" cy="4.5" r="0.8" fill="currentColor" stroke="none"/>'
-          };
+  const firstName = String(userName || 'Siswa').split(/\s+/)[0];
 
   const html = renderLayout('Materi Siswa', `
-    <div class="space-y-5">
-      <section class="relative overflow-hidden rounded-[28px] border border-white/20 bg-gradient-to-br ${libraryHeroTheme.panel} p-4 text-white shadow-[0_24px_70px_-42px_rgba(37,99,235,0.32)] sm:p-5">
-        <div class="absolute -right-6 -top-6 h-20 w-20 rounded-full ${libraryHeroTheme.glowA} blur-2xl"></div>
-        <div class="absolute bottom-0 left-1/3 h-16 w-16 rounded-full ${libraryHeroTheme.glowB} blur-2xl"></div>
-        <div class="absolute right-4 top-4 hidden h-20 w-20 items-center justify-center rounded-[22px] border border-white/18 bg-white/10 backdrop-blur-sm sm:flex">
-          <svg viewBox="0 0 24 24" class="h-10 w-10 stroke-current text-white/90" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${libraryHeroTheme.art}</svg>
-        </div>
-        <div class="relative">
-          <div class="min-w-0 sm:pr-28">
-            <p class="text-[11px] font-semibold uppercase tracking-[0.24em] ${libraryHeroTheme.eyebrow}">Perpustakaan Digital</p>
-            <h1 class="mt-1 text-xl font-semibold leading-tight text-white sm:text-2xl">Perpustakaan ${userName}</h1>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${libraryHeroTheme.chip}">${classLabel}</span>
-              <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${libraryHeroTheme.chip}">${materials.length} materi</span>
-              <span class="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] backdrop-blur-sm ${libraryHeroTheme.chip}">${libraryHeroTheme.icon} ${libraryHeroTheme.badge}</span>
-            </div>
+    <style>${siswaLibraryStyles()}</style>
+    <div class="sml">
+      <section class="sml-hero">
+        <div class="sml-hero-copy">
+          <p class="sml-kicker"><span>▤</span> Perpustakaan Digital</p>
+          <h1>Halo, ${escapeAttr(firstName)}.</h1>
+          <div class="sml-hero-stats">
+            <span class="sml-stat">${escapeAttr(classLabel)}</span>
+            <span class="sml-stat">${materials.length} materi</span>
+            <span class="sml-stat" id="sml-read-stat">0 dibaca</span>
           </div>
         </div>
+        <div class="sml-hero-art" aria-hidden="true"><div class="sml-stack"><span></span><span></span><span>▤</span></div></div>
       </section>
 
-      <section class="rounded-[28px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_24px_70px_-38px_rgba(15,23,42,0.18)] sm:p-5">
-        <div class="mb-4 space-y-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Koleksi</p>
-              <h2 class="mt-1 text-lg font-semibold text-slate-900">Daftar Materi</h2>
-            </div>
-            <span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-600">Ringkas</span>
+      <section class="sml-library">
+        <div class="sml-library-head">
+          <div>
+            <p class="sml-eyebrow">Koleksi Saya</p>
+            <h2>Semua Materi</h2>
+            <p class="sml-sub" id="sml-count">${materials.length} materi tersedia.</p>
           </div>
-
-          <div id="student-material-mapel-badges" class="flex flex-wrap gap-2">
-            ${mapelCounts.length
-    ? mapelCounts.map((item) => `
-                  <span class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700">
-                    <span>${item.mapel}</span>
-                    <span class="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-700">${item.total}</span>
-                  </span>
-                `).join('')
-    : '<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500">Belum ada materi per mapel</span>'}
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-[0.85fr_1.15fr]">
-            <div>
-              <label class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Filter Mapel</label>
-              <select id="student-material-mapel-filter" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
-                <option value="">Semua mapel</option>
-                ${mapelOptions.map((mapel) => `<option value="${mapel}">${mapel}</option>`).join('')}
-              </select>
-            </div>
-            <div>
-              <label class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Cari Judul</label>
-              <input id="student-material-title-filter" class="mt-1.5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" placeholder="Ketik judul materi..." />
-            </div>
+          <div class="sml-tools">
+            <label class="sml-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+              <input id="student-material-title-filter" type="search" placeholder="Cari judul materi" aria-label="Cari materi" />
+            </label>
+            <select id="student-material-mapel-filter" class="sml-select" aria-label="Filter mapel">
+              <option value="">Semua mapel</option>
+              ${mapelOptions.map((mapel) => `<option value="${escapeAttr(mapel)}">${escapeAttr(mapel)}</option>`).join('')}
+            </select>
           </div>
         </div>
 
-        <style>
-          @keyframes studentShelfItemIn {
-            from { opacity: 0; transform: translateY(10px) scale(0.985); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-          }
-        </style>
-        <div class="relative mx-auto w-full max-w-[1280px] overflow-hidden rounded-[22px] border border-slate-200/80 bg-gradient-to-b from-slate-50 via-white to-slate-100 px-2 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] sm:px-3 sm:py-4">
-          <div class="pointer-events-none absolute inset-x-0 top-0 h-full opacity-60">
-            <div class="absolute inset-0 bg-[repeating-linear-gradient(90deg,rgba(120,53,15,0.04)_0px,rgba(120,53,15,0.04)_1px,transparent_1px,transparent_12px)]"></div>
-            <div class="absolute inset-0 bg-[radial-gradient(circle_at_12%_22%,rgba(146,64,14,0.08),transparent_28%),radial-gradient(circle_at_84%_68%,rgba(120,53,15,0.08),transparent_28%)]"></div>
-            <div class="absolute left-0 right-0 top-[28%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
-            <div class="absolute left-0 right-0 top-[58%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
-            <div class="absolute left-0 right-0 bottom-[10%] h-[10px] bg-gradient-to-r from-amber-800/15 via-amber-700/25 to-amber-800/15"></div>
-          </div>
-          <div id="student-material-list" class="relative z-[1] mx-auto grid w-full grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-2.5 xl:grid-cols-6"></div>
+        <div id="student-material-mapel-badges" class="sml-badges">
+          ${mapelCounts.length
+    ? mapelCounts.map((item) => `<span class="sml-badge"><span>${escapeAttr(item.mapel)}</span><b>${item.total}</b></span>`).join('')
+    : '<span class="sml-badge" style="border-color:#e2e8f0;background:#f8fafc;color:#94a3b8">Belum ada materi per mapel</span>'}
         </div>
+
+        <div id="student-material-list" class="sml-books"></div>
       </section>
-
     </div>
   `);
 
@@ -547,13 +560,8 @@ export async function renderSiswaMateriPage(container) {
   function renderMapelBadges(activeMaterials) {
     const activeCounts = getMapelCounts(activeMaterials);
     badgeEl.innerHTML = activeCounts.length
-      ? activeCounts.map((item) => `
-          <span class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700">
-            <span>${item.mapel}</span>
-            <span class="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-700">${item.total}</span>
-          </span>
-        `).join('')
-      : '<span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500">Tidak ada materi pada filter aktif</span>';
+      ? activeCounts.map((item) => `<span class="sml-badge"><span>${item.mapel}</span><b>${item.total}</b></span>`).join('')
+      : '<span class="sml-badge" style="border-color:#e2e8f0;background:#f8fafc;color:#94a3b8">Tidak ada materi pada filter aktif</span>';
   }
 
   function getFilteredMaterials() {
@@ -571,51 +579,47 @@ export async function renderSiswaMateriPage(container) {
     refreshReadMap();
     filteredMaterials = getFilteredMaterials();
     renderMapelBadges(filteredMaterials);
+    updateReadStat();
+
+    const countEl = container.querySelector('#sml-count');
+    if (countEl) countEl.textContent = `${filteredMaterials.length} dari ${materials.length} materi.`;
 
     if (!filteredMaterials.length) {
-      listEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Tidak ada materi yang cocok dengan filter mapel dan judul saat ini.</div>';
+      listEl.innerHTML = '<div class="sml-empty"><span class="sml-empty-icon">⌕</span><h3>Materi tidak ditemukan</h3><p>Coba kata kunci judul atau mapel lain.</p></div>';
       closeReaderOverlay();
       return;
     }
 
     listEl.innerHTML = filteredMaterials
       .map((material, index) => {
-        const coverTheme = getStudentThematicBookCover(material);
+        const theme = getBookCoverTheme(material, index);
         const status = getMaterialVisualStatus(material, getCurrentStudentId(), readMap);
+        const isRead = status.label === 'Sudah Dibaca';
         const materialTitle = String(material.title || 'Materi Pembelajaran').trim();
         const mapelTitle = String(material.mapel_nama || 'Mata Pelajaran').trim();
-        const chapterInfo = String(material.chapter || '').trim();
-        const publishDate = new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-        const staggerDelay = Math.min(index, 11) * 42;
+        const classes = String(material.kelas_nama || material.kelas_id || '').trim();
+        const publishDate = new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        const staggerDelay = Math.min(index, 16) * 32;
         return `
-          <button type="button" data-material-id="${material.id}" class="student-material-item group block h-full w-full text-left transition hover:-translate-y-0.5" style="animation: studentShelfItemIn 420ms cubic-bezier(.2,.7,.2,1) both; animation-delay: ${staggerDelay}ms;">
-            <article class="relative flex min-h-[214px] flex-col overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-br ${coverTheme.gradient} text-white shadow-[0_18px_32px_-20px_rgba(15,23,42,0.6)] transition duration-300 group-hover:shadow-[0_26px_42px_-20px_rgba(15,23,42,0.62)]" style="aspect-ratio: 3/5.1;">
-              <div class="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_14%_10%,rgba(255,255,255,0.28),transparent_42%)]"></div>
-              <span class="absolute right-2 top-2 z-[2] inline-flex items-center rounded-full border px-2.5 py-1 text-[8px] font-bold uppercase tracking-wider backdrop-blur-[2px] ${status.badgeClass}">${status.label}</span>
-              <div class="relative flex flex-1 flex-col p-3">
-                <div class="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/18 bg-black/18 px-3 pb-2.5 pt-9 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
-                  <div class="absolute left-0 top-0 h-full w-2 bg-black/26"></div>
-                  <div class="absolute left-1.5 top-0 h-full w-[1px] bg-white/20"></div>
-                  <div class="absolute -right-4 -top-4 h-12 w-12 rounded-full bg-white/15 blur-xl"></div>
-                  <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.14)_0%,transparent_38%,transparent_62%,rgba(255,255,255,0.08)_100%)]"></div>
-                  <div class="relative z-[1] text-center">
-                    <p class="line-clamp-1 whitespace-normal break-words text-[9px] font-bold uppercase leading-tight tracking-[0.12em] text-white/80">${mapelTitle}</p>
-                    ${chapterInfo ? `<p class="mt-0.5 line-clamp-1 whitespace-normal break-words text-[8px] font-medium uppercase tracking-[0.1em] text-white/65">${chapterInfo}</p>` : ''}
-                  </div>
-                  <div class="relative z-[1] mt-2 flex flex-1 items-center justify-center px-1">
-                    <h3 class="line-clamp-5 max-h-[7.4rem] overflow-hidden whitespace-normal break-words text-center text-[14px] font-black leading-[1.2] text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.25)]">${materialTitle}</h3>
-                  </div>
+          <article class="sml-book" style="animation-delay:${staggerDelay}ms">
+            <button type="button" data-material-id="${escapeAttr(material.id)}" class="student-material-item sml-book-button" aria-label="Buka ${escapeAttr(materialTitle)}">
+              <div class="sml-cover" style="--book-from:${theme.from};--book-to:${theme.to};--book-ink:${theme.ink}">
+                <div class="sml-cover-top">
+                  <span class="sml-cover-symbol">${escapeAttr(theme.symbol)}</span>
+                  <span class="sml-cover-badge ${isRead ? 'read' : 'unread'}">${isRead ? 'Dibaca' : 'Baru'}</span>
                 </div>
-                <div class="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.14em] text-white/96">
-                  <span class="inline-flex items-center gap-1">Buka <svg class="h-3 w-3 transition-transform duration-300 group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
-                  <span class="flex flex-col items-end gap-1">
-                    <span class="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/35 bg-black/20 text-[10px] font-black">${getMaterialMonogram(material)}</span>
-                    <span class="text-[9px] font-medium normal-case tracking-normal text-right text-white/80">${publishDate}</span>
-                  </span>
+                <div class="sml-cover-copy">
+                  <small>${escapeAttr(mapelTitle)}</small>
+                  <strong>${escapeAttr(materialTitle)}</strong>
                 </div>
               </div>
-            </article>
-          </button>
+              <div class="sml-book-info">
+                <strong>${escapeAttr(materialTitle)}</strong>
+                <span>${escapeAttr(classes || 'Materi Pilihan')}</span>
+                <span>${escapeAttr(publishDate)}</span>
+              </div>
+            </button>
+          </article>
         `;
       })
       .join('');
@@ -630,8 +634,15 @@ export async function renderSiswaMateriPage(container) {
     });
   }
 
+  function updateReadStat() {
+    const statEl = container.querySelector('#sml-read-stat');
+    if (!statEl) return;
+    const readCount = materials.filter((material) => getMaterialVisualStatus(material, getCurrentStudentId(), readMap).label === 'Sudah Dibaca').length;
+    statEl.textContent = `${readCount} dibaca`;
+  }
+
   if (!materials.length) {
-    listEl.innerHTML = '<div class="col-span-full rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">Belum ada materi yang dipublikasikan untuk kelas Anda.</div>';
+    listEl.innerHTML = '<div class="sml-empty"><span class="sml-empty-icon">▤</span><h3>Belum ada materi</h3><p>Materi yang dipublikasikan untuk kelas Anda akan tampil di rak ini.</p></div>';
     closeReaderOverlay();
     return;
   }
