@@ -10,7 +10,7 @@ import { streamGenerateMaterialJson, MaterialGenerationError } from '../../utils
 import { getApiBase } from '../../utils/ai-client.js';
 import { buildMaterialHtml } from '../../utils/materi-renderer.js';
 import { ensureKaTeXReady } from '../../utils/markdown-export.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterialForClasses, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
 import {
   pageStyles,
   statusBannerHtml,
@@ -453,50 +453,38 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
       const sourceId = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
       const htmlSource = buildMaterialHtml(currentMaterial, meta);
-      const results = await Promise.allSettled(targets.map((target) => {
-        const kelasId = safeString(target.kelas_id || target.kelas_nama || input.kelas);
-        const kelasNama = safeString(target.kelas_nama || target.kelas_id || input.kelas);
-        const mapelId = safeString(target.mapel_id || input.mapel);
-        const mapelNama = safeString(target.mapel_nama || input.mapel || 'Mata Pelajaran');
-        return savePublishedMaterial({
-          id: `${sourceId}__${documentIdToken(target.id)}`,
-          source_id: sourceId,
-          guru_id: safeString(userId),
-          guru_nama: safeString(userName || 'Guru'),
-          pengajaran_id: safeString(target.id),
-          kelas_id: kelasId,
-          kelas_nama: kelasNama,
-          kelas_token: documentIdToken(kelasId || kelasNama),
-          mapel_id: mapelId,
-          mapel_nama: mapelNama,
-          title: safeString(currentMaterial.title || 'Materi AI'),
-          note: `Materi dari AI - ${input.topik || ''}`,
-          level: safeString(input.fase),
-          chapter: safeString(input.bab || input.topik),
-          meetings: safeString(input.alokasiWaktu),
-          html_source: htmlSource,
-          visible_to_students: true,
-          source: 'materi_ai',
-          tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
-          semester_id: safeString(context?.semester_aktif),
-          published_at: now,
-          created_at: now,
-        });
-      }));
-      // Materi sudah terbit per kelas — bersihkan placeholder & draft agar tidak ganda.
-      try { await deletePublishedMaterial(sourceId); } catch { /* placeholder belum ada */ }
+      // Satu dokumen untuk semua kelas — html_source tidak diduplikasi.
+      await savePublishedMaterialForClasses({
+        id: sourceId,
+        source_id: sourceId,
+        guru_id: safeString(userId),
+        guru_nama: safeString(userName || 'Guru'),
+        mapel_id: safeString(input.mapel),
+        mapel_nama: safeString(input.mapel || 'Mata Pelajaran'),
+        title: safeString(currentMaterial.title || 'Materi AI'),
+        note: `Materi dari AI - ${input.topik || ''}`,
+        level: safeString(input.fase),
+        chapter: safeString(input.bab || input.topik),
+        meetings: safeString(input.alokasiWaktu),
+        html_source: htmlSource,
+        visible_to_students: true,
+        source: 'materi_ai',
+        tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
+        semester_id: safeString(context?.semester_aktif),
+        published_at: now,
+        created_at: now,
+      }, targets.map((target) => ({
+        id: safeString(target.id),
+        kelas_id: safeString(target.kelas_id || target.kelas_nama || input.kelas),
+        kelas_nama: safeString(target.kelas_nama || target.kelas_id || input.kelas),
+        mapel_id: safeString(target.mapel_id || input.mapel),
+        mapel_nama: safeString(target.mapel_nama || input.mapel || 'Mata Pelajaran'),
+      })));
+      // Draft sudah menjadi materi terbit — hapus agar tidak muncul dua kali.
       try { await deleteMaterialWorkspaceDraft(sourceId, userId); } catch { /* draft belum ada */ }
-      const successes = results.filter((result) => result.status === 'fulfilled').length;
-      const failures = targets.filter((_target, index) => results[index].status === 'rejected');
-      if (!failures.length) {
-        currentDraftId = sourceId;
-        closePublishModal();
-        setStatus(`Berhasil diterbitkan ke ${successes} kelas. Lihat di menu Materi > Materi Saya.`);
-      } else {
-        const failedNames = failures.map((item) => item.kelas_nama || item.kelas_id).join(', ');
-        showError(`${successes} kelas berhasil, ${failures.length} gagal (${failedNames}).`);
-        setStatus(successes ? 'Publish sebagian. Pilih kelas yang gagal lalu coba lagi.' : 'Publish gagal. Periksa koneksi dan izin, lalu coba lagi.');
-      }
+      currentDraftId = sourceId;
+      closePublishModal();
+      setStatus(`Berhasil diterbitkan ke ${targets.length} kelas. Lihat di menu Materi > Materi Saya.`);
     } catch (error) {
       showError(error?.message || 'Publish gagal.');
       setStatus('Publish gagal. Coba lagi.');

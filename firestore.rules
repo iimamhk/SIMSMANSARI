@@ -15,6 +15,9 @@ service cloud.firestore {
         'kelas_id',
         'kelas_nama',
         'kelas_token',
+        'kelas_ids',
+        'kelas_nama_csv',
+        'pengajaran_ids',
         'mapel_id',
         'mapel_nama',
         'guru_id',
@@ -39,10 +42,13 @@ service cloud.firestore {
       && request.resource.data.id == materialId
       && request.resource.data.id.size() > 0
       && request.resource.data.pengajaran_id is string
-      && request.resource.data.pengajaran_id.size() > 0
       && request.resource.data.kelas_id is string
       && request.resource.data.kelas_nama is string
       && request.resource.data.kelas_token is string
+      // Struktur baru: satu dokumen materi untuk banyak kelas.
+      && (!('kelas_ids' in request.resource.data) || (request.resource.data.kelas_ids is list && request.resource.data.kelas_ids.size() <= 60))
+      && (!('pengajaran_ids' in request.resource.data) || (request.resource.data.pengajaran_ids is list && request.resource.data.pengajaran_ids.size() <= 60))
+      && (!('kelas_nama_csv' in request.resource.data) || request.resource.data.kelas_nama_csv is string)
       && request.resource.data.mapel_id is string
       && request.resource.data.mapel_nama is string
       && request.resource.data.guru_id is string
@@ -53,7 +59,7 @@ service cloud.firestore {
       && request.resource.data.meetings is string
       && request.resource.data.note is string
       && request.resource.data.html_source is string
-      && request.resource.data.html_source.size() <= 200000
+      && request.resource.data.html_source.size() <= 700000
       && request.resource.data.tahun_ajaran_id is string
       && request.resource.data.semester_id is string
       && request.resource.data.status is string

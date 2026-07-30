@@ -6,7 +6,7 @@
 
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterialForClasses, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
 
 const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
 
@@ -439,39 +439,44 @@ export async function renderGuruMateriImportPage(container) {
     const mapel = safeString(mapelInput.value);
     const kelas = safeString(kelasInput.value);
     try {
-      const results = await Promise.allSettled(targets.map((target) => savePublishedMaterial({
-        id: `${sourceId}__${documentIdToken(target.id)}`, source_id: sourceId,
-        guru_id: safeString(userId), guru_nama: safeString(userName || 'Guru'),
-        pengajaran_id: safeString(target.id),
-        kelas_id: safeString(target.kelas_id), kelas_nama: safeString(target.kelas_nama || target.kelas_id),
-        kelas_token: documentIdToken(target.kelas_id || target.kelas_nama),
-        mapel_id: safeString(mapel), mapel_nama: safeString(mapel || target.mapel_nama || 'Mata Pelajaran'),
-        title, note: 'Materi dari Import HTML',
-        level: '', chapter: '', meetings: '',
-        html_source: sanitizedHtml, visible_to_students: true, source: 'materi_import',
+    try {
+      // Satu dokumen untuk semua kelas — html_source tidak diduplikasi.
+      await savePublishedMaterialForClasses({
+        id: sourceId,
+        source_id: sourceId,
+        guru_id: safeString(userId),
+        guru_nama: safeString(userName || 'Guru'),
+        mapel_id: safeString(mapel),
+        mapel_nama: safeString(mapel || 'Mata Pelajaran'),
+        title,
+        note: 'Materi dari Import HTML',
+        level: '',
+        chapter: '',
+        meetings: '',
+        html_source: sanitizedHtml,
+        visible_to_students: true,
+        source: 'materi_import',
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
-        published_at: now, created_at: now,
+        published_at: now,
+        created_at: now,
+      }, targets.map((target) => ({
+        id: safeString(target.id),
+        kelas_id: safeString(target.kelas_id || target.kelas_nama || kelas),
+        kelas_nama: safeString(target.kelas_nama || target.kelas_id || kelas),
+        mapel_id: safeString(mapel),
+        mapel_nama: safeString(mapel || target.mapel_nama || 'Mata Pelajaran'),
       })));
-      try { await deletePublishedMaterial(sourceId); } catch { /* placeholder belum ada */ }
+      // Draft sudah menjadi materi terbit — hapus agar tidak muncul dua kali.
       try { await deleteMaterialWorkspaceDraft(sourceId, userId); } catch { /* draft belum ada */ }
-      const successes = results.filter((r) => r.status === 'fulfilled').length;
-      const failures = targets.filter((_t, i) => results[i].status === 'rejected');
-      if (!failures.length) {
-        currentDraftId = sourceId;
-        closePublishModal();
-        showToast(`Dipublikasikan ke ${successes} kelas`);
-        setStatus(`Berhasil dipublikasikan ke ${successes} kelas. Siswa dapat melihat materi sekarang.`);
-      } else {
-        const names = failures.map((t) => t.kelas_nama || t.kelas_id).join(', ');
-        publishStatusEl.textContent = `${successes} berhasil, ${failures.length} gagal (${names}).`;
-        publishStatusEl.className = 'mi-result partial';
-        showToast(`${successes} kelas berhasil, ${failures.length} gagal`);
-      }
+      currentDraftId = sourceId;
+      closePublishModal();
+      showToast(`Diterbitkan ke ${targets.length} kelas`);
+      setStatus(`Berhasil diterbitkan ke ${targets.length} kelas. Siswa dapat melihat materi sekarang.`);
     } catch (error) {
-      publishStatusEl.textContent = 'Publish gagal. Periksa koneksi dan izin.';
+      publishStatusEl.textContent = error?.message || 'Publish gagal. Periksa koneksi dan izin.';
       publishStatusEl.className = 'mi-result error';
-      showToast('Publish gagal');
+      showToast(error?.message || 'Publish gagal');
     } finally {
       publishConfirmBtn.disabled = false;
       updateTargetCount();

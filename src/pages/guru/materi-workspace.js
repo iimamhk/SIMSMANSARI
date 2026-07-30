@@ -1,5 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { deleteMaterialWorkspaceDraft, getMaterialWorkspaceDrafts, saveMaterialWorkspaceDraft, savePublishedMaterial, deletePublishedMaterial, getActiveTeachingAssignments, getPublishedMaterialsForTeacher, getMaterialReadStatsForTeacher } from '../../firebase/data-service.js';
+import { deleteMaterialWorkspaceDraft, getMaterialWorkspaceDrafts, saveMaterialWorkspaceDraft, savePublishedMaterial, savePublishedMaterialForClasses, migratePublishedMaterialsToMultiClass, deletePublishedMaterial, getActiveTeachingAssignments, getPublishedMaterialsForTeacher, getMaterialReadStatsForTeacher } from '../../firebase/data-service.js';
 
 const STORAGE_KEY = 'simguru_material_workspace_draft';
 const HISTORY_LIMIT = 50;
@@ -114,7 +114,16 @@ function groupPublishedMaterials(items = []) {
     if (!baseId) return;
     const existing = groups.get(baseId) || { id: baseId, items: [], representative: item, classNames: new Set(), latestAt: '' };
     existing.items.push(item);
-    if (item?.kelas_nama || item?.kelas_id) existing.classNames.add(String(item.kelas_nama || item.kelas_id));
+    // Struktur baru menyimpan semua kelas pada satu dokumen; struktur lama satu kelas per dokumen.
+    if (Array.isArray(item?.kelas_ids) && item.kelas_ids.length) {
+      String(item.kelas_nama_csv || item.kelas_nama || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .forEach((name) => existing.classNames.add(name));
+    } else if (item?.kelas_nama || item?.kelas_id) {
+      existing.classNames.add(String(item.kelas_nama || item.kelas_id));
+    }
     const itemDate = String(item?.published_at || item?.updated_at || item?.created_at || '');
     if (itemDate >= existing.latestAt) {
       existing.latestAt = itemDate;
@@ -123,7 +132,18 @@ function groupPublishedMaterials(items = []) {
     groups.set(baseId, existing);
   });
   return [...groups.values()]
-    .map((group) => ({ ...group, classNames: [...group.classNames], isVisible: group.items.some((item) => item?.visible_to_students !== false) }))
+    .map((group) => {
+      const classNames = [...group.classNames];
+      const multi = group.items.find((item) => Array.isArray(item?.kelas_ids) && item.kelas_ids.length);
+      return {
+        ...group,
+        classNames,
+        // Jumlah kelas: dari array pada struktur baru, atau jumlah dokumen pada struktur lama.
+        classCount: multi ? (multi.pengajaran_ids?.length || classNames.length || 1) : group.items.length,
+        isLegacy: !multi,
+        isVisible: group.items.some((item) => item?.visible_to_students !== false),
+      };
+    })
     .sort((a, b) => String(b.latestAt).localeCompare(String(a.latestAt)));
 }
 
@@ -244,6 +264,9 @@ function pageStyles() {
     .mw-chip.src { border:1px solid #e4e7ec; background:#f8fafc; color:#667085; }
     .mw-card-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; margin-top:8px; }
     .mw-card-actions .mw-pub-btn { min-height:28px; padding:0 6px; font-size:8.5px; }
+    .mw-migrate-note { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:14px; padding:13px 16px; border:1px solid #fde047; border-radius:14px; background:linear-gradient(135deg,#fefce8,#fef9c3); }
+    .mw-migrate-note strong { display:block; color:#854d0e; font-size:12.5px; }
+    .mw-migrate-note span { display:block; margin-top:3px; color:#a16207; font-size:11px; line-height:1.5; }
     .mw-pub-page { padding:4px 0 24px; }
     .mw-pub-hero { position:relative; overflow:hidden; display:flex; align-items:flex-end; justify-content:space-between; gap:24px; min-height:176px; padding:26px; border-radius:26px; color:#fff; background:linear-gradient(125deg,#101828,#1d2939 55%,#344054); box-shadow:0 25px 60px -36px rgba(15,23,42,.7); }
     .mw-pub-hero::after { content:''; position:absolute; width:270px; height:270px; right:-80px; top:-130px; border-radius:50%; background:linear-gradient(135deg,rgba(10,132,255,.58),rgba(94,92,230,.42)); }
@@ -514,7 +537,14 @@ export async function renderGuruMateriPage(container) {
     } else if (action === 'publish') {
       let assignments = [];
       try { assignments = await getDistributionAssignments(); } catch (error) { body.innerHTML = '<p class="mw-modal-desc">Gagal memuat daftar kelas. Periksa koneksi dan izin.</p>'; console.warn(error); }
-      const selectedIds = new Set(group.items.map((value) => String(value.pengajaran_id || value.kelas_id || '').trim()));
+      // Kelas yang sudah menerima materi: dari array pengajaran_ids (struktur baru)
+      // atau dari dokumen per kelas (struktur lama).
+      const selectedIds = new Set();
+      group.items.forEach((value) => {
+        if (Array.isArray(value?.pengajaran_ids)) value.pengajaran_ids.forEach((entry) => selectedIds.add(String(entry).trim()));
+        const single = String(value?.pengajaran_id || value?.kelas_id || '').trim();
+        if (single) selectedIds.add(single);
+      });
       body.innerHTML = `<p class="mw-modal-desc">Centang satu atau beberapa kelas. Kelas yang sudah terdistribusi tetap tercentang.</p><div class="mw-distribution-list">${assignments.length ? assignments.map((target) => { const targetId = String(target.id || target.pengajaran_id || target.kelas_id || '').trim(); return `<label class="mw-distribution-item"><input type="checkbox" value="${escapeAttr(targetId)}" ${selectedIds.has(targetId) ? 'checked' : ''}><div><strong>${escapeHtml(target.kelas_nama || target.kelas_id || targetId)}</strong><small>${escapeHtml(target.mapel_nama || target.mapel_id || 'Mata pelajaran')}</small></div></label>`; }).join('') : '<p class="mw-modal-desc">Belum ada relasi mengajar aktif.</p>'}</div>`;
     } else if (action === 'delete') {
       body.innerHTML = `<div class="mw-ios-empty" style="padding:24px 12px"><span class="mw-ios-empty-icon" style="color:#b42318">×</span><h3>Hapus “${escapeHtml(item.title || 'Tanpa judul')}”?</h3><p>Semua ${group.items.length} distribusi kelas dan jejak bacanya akan dihapus permanen.</p></div>`;
@@ -535,12 +565,31 @@ export async function renderGuruMateriPage(container) {
           if (!selected.length) throw new Error('Pilih minimal satu kelas.');
           const assignments = await getDistributionAssignments();
           const byId = new Map(assignments.map((target) => [String(target.id || target.pengajaran_id || target.kelas_id || '').trim(), target]));
-          const sourceBase = group.id;
-          const now = new Date().toISOString();
-          await Promise.all(selected.map((targetId) => { const target = byId.get(targetId) || {}; const existing = group.items.find((value) => String(value.pengajaran_id || value.kelas_id || '').trim() === targetId); return savePublishedMaterial({ ...item, ...existing, id: existing?.id || `${sourceBase}__${documentIdToken(targetId)}`, source_id: sourceBase, pengajaran_id: target.id || targetId, kelas_id: target.kelas_id || targetId, kelas_nama: target.kelas_nama || targetId, mapel_id: target.mapel_id || item.mapel_id || '', mapel_nama: target.mapel_nama || item.mapel_nama || '', published_at: now, visible_to_students: true, status: 'published' }); }));
-          const removed = group.items.filter((value) => !selected.includes(String(value.pengajaran_id || value.kelas_id || '').trim()));
-          if (removed.length) await Promise.all(removed.map((value) => deletePublishedMaterial(value.id)));
-          showToast(`Materi diterbitkan ke ${selected.length} kelas`);
+          const targets = selected.map((targetId) => {
+            const target = byId.get(targetId) || {};
+            return {
+              id: target.id || targetId,
+              kelas_id: target.kelas_id || targetId,
+              kelas_nama: target.kelas_nama || targetId,
+              mapel_id: target.mapel_id || item.mapel_id || '',
+              mapel_nama: target.mapel_nama || item.mapel_nama || '',
+            };
+          });
+          // Tulis ulang sebagai satu dokumen multi-kelas.
+          await savePublishedMaterialForClasses({
+            ...item,
+            id: group.id,
+            source_id: group.id,
+            published_at: new Date().toISOString(),
+            visible_to_students: true,
+          }, targets);
+          // Bersihkan dokumen lama per kelas bila materi ini masih berstruktur lama.
+          if (group.isLegacy) {
+            await Promise.all(group.items
+              .filter((value) => String(value.id) !== group.id)
+              .map((value) => deletePublishedMaterial(value.id).catch(() => null)));
+          }
+          showToast(`Materi diterbitkan ke ${targets.length} kelas`);
         } else if (action === 'delete') {
           await Promise.all(group.items.map((value) => deletePublishedMaterial(value.id)));
           showToast('Materi dan distribusinya dihapus');
@@ -598,7 +647,7 @@ export async function renderGuruMateriPage(container) {
         classNames: group.classNames,
         updatedAt: group.latestAt || '',
         isVisible: group.isVisible,
-        distributionCount: group.items.length,
+        distributionCount: group.classCount,
         readers: (reads.get(String(group.id)) || new Set()).size,
         group,
         raw: item,
@@ -688,6 +737,11 @@ export async function renderGuruMateriPage(container) {
 
     const firstName = escapeHtml((userName || 'Guru').split(/\s+/)[0]);
     const tab = (value, label, count) => `<button type="button" class="mw-seg${listStatus === value ? ' active' : ''}" data-status="${value}">${label}${count ? ` <b>${count}</b>` : ''}</button>`;
+    // Tawarkan penggabungan hanya bila masih ada materi berstruktur lama.
+    const legacyCount = publishedGroups().filter((group) => group.isLegacy && group.items.length > 1).length;
+    const migrateBanner = legacyCount
+      ? `<div class="mw-migrate-note"><div><strong>${legacyCount} materi masih tersimpan terpisah per kelas.</strong><span>Gabungkan menjadi satu dokumen agar hemat penyimpanan dan sekali edit berlaku untuk semua kelas.</span></div><button class="mw-action-btn primary" id="mw-migrate-btn">Gabungkan Sekarang</button></div>`
+      : '';
 
     overview.innerHTML = `<div class="mw-ios-home">
       <section class="mw-ios-hero">
@@ -712,11 +766,13 @@ export async function renderGuruMateriPage(container) {
           </div>
         </div>
         <div class="mw-segments">${tab('all', 'Semua', counts.all)}${tab('draft', 'Draft', counts.draft)}${tab('published', 'Terbit', counts.published)}${tab('hidden', 'Ditarik', counts.hidden)}</div>
+        ${migrateBanner}
         ${body}
       </section>
     </div>`;
 
     overview.querySelector('[data-open-editor]')?.addEventListener('click', () => { resetEditorForNewMaterial(); setMode('editor'); });
+    overview.querySelector('#mw-migrate-btn')?.addEventListener('click', runMigration);
     overview.querySelectorAll('[data-status]').forEach((button) => button.addEventListener('click', () => { listStatus = button.dataset.status; renderLibrary(); }));
     overview.querySelectorAll('[data-list-view]').forEach((button) => button.addEventListener('click', () => { listView = button.dataset.listView; renderLibrary(); }));
     const searchInput = overview.querySelector('#mw-book-search');
@@ -737,6 +793,28 @@ export async function renderGuruMateriPage(container) {
     overview.querySelectorAll('[data-draft-publish]').forEach((button) => button.addEventListener('click', () => openDraftPublishModal(button.dataset.draftPublish)));
   };
   const renderOverview = () => { renderLibrary(); };
+
+  /**
+   * Gabungkan materi lama (satu dokumen per kelas) menjadi satu dokumen multi-kelas.
+   * Dijalankan atas permintaan guru, aman diulang karena hanya menyentuh dokumen
+   * yang masih berpola `base__kelas` dan belum punya `kelas_ids`.
+   */
+  const runMigration = async () => {
+    const button = container.querySelector('#mw-migrate-btn');
+    if (!guruId) { showToast('Migrasi memerlukan akun guru'); return; }
+    if (!window.confirm('Gabungkan materi lama menjadi satu dokumen per materi? Distribusi kelas tetap sama.')) return;
+    if (button) { button.disabled = true; button.textContent = 'Menggabungkan...'; }
+    try {
+      const result = await migratePublishedMaterialsToMultiClass(guruId);
+      publishedMaterials = await getPublishedMaterialsForTeacher(guruId);
+      showToast(result.merged ? `${result.merged} materi digabung, ${result.removed} dokumen lama dihapus` : 'Tidak ada materi lama yang perlu digabung');
+      renderOverview();
+    } catch (error) {
+      showToast(error?.message || 'Penggabungan gagal');
+      console.warn(error);
+      if (button) { button.disabled = false; button.textContent = 'Gabungkan Sekarang'; }
+    }
+  };
   const syncMeta = () => { metaPanel.querySelectorAll('[data-meta]').forEach((input) => { input.value = doc.meta[input.dataset.meta] || ''; }); };
   const setMode = (nextMode) => { mode = nextMode; const editing = mode === 'editor'; editor.hidden = !editing; metaPanel.hidden = !editing; root.querySelector('.mw-mobile-tools').hidden = !editing; root.querySelector('.mw-toolbar').hidden = !editing; overview.hidden = editing; navButtons.forEach((button) => button.classList.toggle('active', button.dataset.mode === mode)); container.querySelector('#mw-title').textContent = editing ? doc.meta.title : 'Materi'; if (editing) syncMeta(); renderOverview(); };
   const applyLayout = (nextLayout) => { layout = nextLayout; doc.layout = nextLayout; scheduleSave(); render(); showToast(`Tata letak: ${LAYOUTS[nextLayout]?.name || nextLayout}`); };
@@ -880,17 +958,14 @@ export async function renderGuruMateriPage(container) {
     const now = new Date().toISOString();
     try {
       if (!String(src.html || '').trim()) throw new Error('Materi masih kosong.');
-      const results = await Promise.allSettled(targets.map((target) => savePublishedMaterial({
-        id: `${src.id}__${documentIdToken(target.id)}`,
+      // Satu dokumen untuk semua kelas — tidak ada duplikasi html_source.
+      await savePublishedMaterialForClasses({
+        id: src.id,
         source_id: src.id,
         guru_id: guruId,
         guru_nama: userName || 'Guru',
-        pengajaran_id: target.id,
-        kelas_id: target.id,
-        kelas_nama: target.kelas_nama || target.id,
-        kelas_token: documentIdToken(target.kelas_nama || target.id),
         mapel_id: src.subject || '',
-        mapel_nama: src.subject || target.mapel_nama || 'Mata Pelajaran',
+        mapel_nama: src.subject || 'Mata Pelajaran',
         title: src.title,
         note: src.note,
         level: src.duration,
@@ -898,29 +973,20 @@ export async function renderGuruMateriPage(container) {
         meetings: src.duration,
         html_source: src.html,
         visible_to_students: true,
-        status: 'published',
         source: src.source === 'ai' ? 'materi_ai' : src.source === 'import' ? 'materi_import' : 'materi_workspace',
         tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
         semester_id: context?.semester_aktif || '',
         published_at: now,
         created_at: now,
-      })));
-      const successes = results.filter((result) => result.status === 'fulfilled').length;
-      const failures = targets.filter((_target, index) => results[index].status === 'rejected');
+      }, targets);
       publishedMaterials = await getPublishedMaterialsForTeacher(guruId);
-      if (!failures.length) {
-        // Draft sudah menjadi materi terbit — hapus agar tidak muncul dua kali.
-        if (pendingPublishDraftId) {
-          try { await deleteMaterialWorkspaceDraft(pendingPublishDraftId, guruId); remoteDrafts = remoteDrafts.filter((item) => String(item.id) !== pendingPublishDraftId); updateDraftBadge(); } catch (error) { console.warn('Draft gagal dibersihkan setelah publish:', error); }
-        }
-        showToast(`Diterbitkan ke ${successes} kelas`);
-        if (statusEl) { statusEl.textContent = `Berhasil diterbitkan ke ${successes} kelas.`; statusEl.className = 'mw-status mw-publish-result success'; }
-        setTimeout(closePublishModal, 1200);
-      } else {
-        const names = failures.map((item) => item.kelas_nama || item.id).join(', ');
-        showToast(`${successes} berhasil, ${failures.length} gagal`);
-        if (statusEl) { statusEl.textContent = `${successes} berhasil, ${failures.length} gagal (${names}).`; statusEl.className = 'mw-status mw-publish-result partial'; }
+      // Draft sudah menjadi materi terbit — hapus agar tidak muncul dua kali.
+      if (pendingPublishDraftId) {
+        try { await deleteMaterialWorkspaceDraft(pendingPublishDraftId, guruId); remoteDrafts = remoteDrafts.filter((item) => String(item.id) !== pendingPublishDraftId); updateDraftBadge(); } catch (error) { console.warn('Draft gagal dibersihkan setelah publish:', error); }
       }
+      showToast(`Diterbitkan ke ${targets.length} kelas`);
+      if (statusEl) { statusEl.textContent = `Berhasil diterbitkan ke ${targets.length} kelas.`; statusEl.className = 'mw-status mw-publish-result success'; }
+      setTimeout(closePublishModal, 1200);
       renderOverview();
     } catch (error) {
       showToast(error?.message || 'Publish gagal');

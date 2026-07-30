@@ -57,6 +57,7 @@ async function getStudentMaterials(session, context) {
   const [publishedMaterials, activeAssignments] = await Promise.all([
     getPublishedMaterials({
       kelasId: studentClassId,
+      kelasNama: studentClassName,
       tahunAjaranId: context?.tahun_ajaran_aktif,
       semesterId: context?.semester_aktif,
     }),
@@ -88,26 +89,28 @@ async function getStudentMaterials(session, context) {
     .filter((item) => !context.tahun_ajaran_aktif || item.tahun_ajaran_id === context.tahun_ajaran_aktif)
     .filter((item) => !context.semester_aktif || item.semester_id === context.semester_aktif)
     .filter((item) => {
-      const itemClassMatched = [
-        normalizeClassToken(item.kelas_id),
-        normalizeClassToken(item.kelas_nama),
-        normalizeClassToken(item.kelas_token),
-      ].some((token) => token && studentClassTokens.has(token));
-
-      if (!itemClassMatched) {
+      // Struktur baru: kelas_ids berisi token semua kelas tujuan.
+      // Struktur lama: satu dokumen per kelas (kelas_id/kelas_nama/kelas_token).
+      const itemClassTokens = Array.isArray(item.kelas_ids) && item.kelas_ids.length
+        ? item.kelas_ids.map((value) => normalizeClassToken(value))
+        : [
+          normalizeClassToken(item.kelas_id),
+          normalizeClassToken(item.kelas_nama),
+          normalizeClassToken(item.kelas_token),
+        ];
+      if (!itemClassTokens.some((token) => token && studentClassTokens.has(token))) {
         return false;
       }
 
-      const assignmentId = String(item.pengajaran_id || '').trim();
-      if (!assignmentId) {
+      // Relasi mengajar wajib aktif untuk kelas siswa ini.
+      const assignmentIds = Array.isArray(item.pengajaran_ids) && item.pengajaran_ids.length
+        ? item.pengajaran_ids.map((value) => String(value).trim()).filter(Boolean)
+        : [String(item.pengajaran_id || '').trim()].filter(Boolean);
+      if (!assignmentIds.length || !allowedAssignmentIds.size) {
         return false;
       }
 
-      if (!allowedAssignmentIds.size) {
-        return false;
-      }
-
-      return allowedAssignmentIds.has(assignmentId);
+      return assignmentIds.some((assignmentId) => allowedAssignmentIds.has(assignmentId));
     })
     .sort((a, b) => String(b.published_at || b.updated_at || '').localeCompare(String(a.published_at || a.updated_at || '')));
 

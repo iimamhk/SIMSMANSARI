@@ -329,6 +329,18 @@ function mergeMaterialsById(primaryMaterials = [], secondaryMaterials = []) {
   return Array.from(mergedMap.values());
 }
 
+/**
+ * Token kelas untuk array `kelas_ids` pada koleksi materi publish.
+ * Sama bentuknya dengan normalisasi kelas di modul lain: huruf kecil, non-alfanumerik → "_".
+ */
+export function normalizeMaterialClassToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
 function getFallbackClassMembersFor(kelasId) {
   const normalizedKelas = normalizeClassKey(kelasId);
   const fallbackMap = {
@@ -1431,25 +1443,40 @@ export async function getPublishedMaterials(options = {}) {
   }
 
   const kelasId = String(options.kelasId || '').trim();
+  const kelasNama = String(options.kelasNama || '').trim();
   const year = String(options.tahunAjaranId || '').trim();
   const semester = String(options.semesterId || '').trim();
-  const cacheKey = `materi_publish:${kelasId || 'all'}:${year || '-'}:${semester || '-'}`;
+  const cacheKey = `materi_publish:${kelasId || 'all'}:${kelasNama || '-'}:${year || '-'}:${semester || '-'}`;
 
   try {
     return withQueryCache(cacheKey, async () => {
-      let docs = [];
-      const materialFilters = [];
-const queryOptions = {
-        cacheMs: QUERY_CACHE_TTL_MS,
-      };
-      if (kelasId) materialFilters.push({ field: 'kelas_id', value: kelasId });
-      if (year) materialFilters.push({ field: 'tahun_ajaran_id', value: year });
-      if (semester) materialFilters.push({ field: 'semester_id', value: semester });
-      if (materialFilters.length) {
-        docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, materialFilters, queryOptions);
+      const queryOptions = { cacheMs: QUERY_CACHE_TTL_MS };
+      // Token kelas yang mungkin dipakai pada array kelas_ids.
+      const tokens = [...new Set([
+        normalizeMaterialClassToken(kelasId),
+        normalizeMaterialClassToken(kelasNama),
+      ].filter(Boolean))];
+
+      const requests = [];
+      // 1) Struktur baru: satu dokumen per materi, banyak kelas di kelas_ids.
+      tokens.forEach((token) => {
+        requests.push(getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
+          { field: 'kelas_ids', operator: 'array-contains', value: token },
+        ], queryOptions));
+      });
+      // 2) Struktur lama: satu dokumen per kelas (kelas_id tunggal).
+      if (kelasId) {
+        requests.push(getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
+          { field: 'kelas_id', value: kelasId },
+        ], queryOptions));
       }
-      // Sort client-side to avoid composite index requirement.
-      const materials = mergeMaterialsById(docs, [])
+      if (!requests.length) return [];
+
+      const results = await Promise.all(requests.map((request) => request.catch(() => [])));
+      const docs = mergeMaterialsById(results.flat(), []);
+      const materials = docs
+        .filter((item) => !year || !item.tahun_ajaran_id || item.tahun_ajaran_id === year)
+        .filter((item) => !semester || !item.semester_id || item.semester_id === semester)
         .sort((a, b) => String(b.updated_at || b.published_at || '').localeCompare(String(a.updated_at || a.published_at || '')))
         .slice(0, 300);
       writeLocalPublishedMaterials(materials);
@@ -1522,6 +1549,128 @@ export async function savePublishedMaterial(material) {
   }
   writeLocalPublishedMaterials(localMaterials);
   return payload;
+}
+
+/**
+ * Simpan SATU dokumen materi untuk banyak kelas sekaligus.
+ *
+ * Struktur baru: `kelas_ids` berisi token semua kelas tujuan sehingga tidak perlu
+ * menduplikasi `html_source` per kelas. Field tunggal (`kelas_id`, `kelas_nama`,
+ * `pengajaran_id`) tetap diisi dengan kelas pertama agar pembaca versi lama
+ * masih dapat menampilkan materi selama masa transisi.
+ *
+ * @param {object} material Data materi tanpa informasi kelas.
+ * @param {Array<{id?:string,kelas_id?:string,kelas_nama?:string,mapel_id?:string,mapel_nama?:string}>} targets Kelas tujuan.
+ */
+export async function savePublishedMaterialForClasses(material, targets = []) {
+  const list = (Array.isArray(targets) ? targets : []).filter(Boolean);
+  if (!list.length) throw new Error('Pilih minimal satu kelas tujuan.');
+
+  const classNames = [];
+  const classTokens = [];
+  const assignmentIds = [];
+  list.forEach((target) => {
+    const name = String(target.kelas_nama || target.kelas_id || target.id || '').trim();
+    const rawId = String(target.kelas_id || target.id || '').trim();
+    const assignmentId = String(target.id || target.pengajaran_id || rawId).trim();
+    if (name && !classNames.includes(name)) classNames.push(name);
+    if (assignmentId && !assignmentIds.includes(assignmentId)) assignmentIds.push(assignmentId);
+    // Simpan beberapa varian token agar kelas tetap cocok baik dicari lewat
+    // kelas_id maupun kelas_nama pada sisi siswa.
+    [rawId, name].forEach((value) => {
+      const token = normalizeMaterialClassToken(value);
+      if (token && !classTokens.includes(token)) classTokens.push(token);
+    });
+  });
+  if (!classTokens.length) throw new Error('Kelas tujuan tidak memiliki identitas yang valid.');
+
+  const first = list[0] || {};
+  const baseId = String(material?.source_id || material?.id || '').trim();
+  if (!baseId) throw new Error('Materi membutuhkan ID.');
+
+  return savePublishedMaterial({
+    ...material,
+    id: baseId,
+    source_id: baseId,
+    kelas_ids: classTokens,
+    kelas_nama_csv: classNames.join(', '),
+    pengajaran_ids: assignmentIds,
+    // Kompatibilitas pembaca lama.
+    kelas_id: String(first.kelas_id || first.id || '').trim(),
+    kelas_nama: classNames[0] || '',
+    kelas_token: classTokens[0] || '',
+    pengajaran_id: assignmentIds[0] || '',
+    mapel_id: String(material?.mapel_id || first.mapel_id || '').trim(),
+    mapel_nama: String(material?.mapel_nama || first.mapel_nama || 'Mata Pelajaran').trim(),
+  });
+}
+
+/**
+ * Gabungkan dokumen materi lama (satu dokumen per kelas, id berpola `base__kelas`)
+ * menjadi satu dokumen per materi dengan array `kelas_ids`.
+ *
+ * Dijalankan atas permintaan guru, sekali saja per akun. Mengembalikan ringkasan
+ * jumlah materi yang digabung dan dokumen lama yang dihapus.
+ */
+export async function migratePublishedMaterialsToMultiClass(guruId) {
+  const normalizedGuruId = String(guruId || '').trim();
+  if (!normalizedGuruId) throw new Error('Migrasi membutuhkan ID guru.');
+  if (!db) throw new Error('Firestore tidak tersedia.');
+
+  const docs = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
+    { field: 'guru_id', value: normalizedGuruId },
+  ]);
+
+  // Hanya dokumen lama: punya suffix "__" pada id dan belum punya kelas_ids.
+  const legacy = docs.filter((item) => {
+    const id = String(item?.id || '');
+    return id.includes('__') && !Array.isArray(item?.kelas_ids);
+  });
+  if (!legacy.length) return { merged: 0, removed: 0, skipped: docs.length };
+
+  const groups = new Map();
+  legacy.forEach((item) => {
+    const baseId = String(item.source_id || String(item.id).split('__')[0] || '').trim();
+    if (!baseId) return;
+    const group = groups.get(baseId) || { baseId, items: [] };
+    group.items.push(item);
+    groups.set(baseId, group);
+  });
+
+  let merged = 0;
+  let removed = 0;
+  for (const group of groups.values()) {
+    // Ambil dokumen terbaru sebagai sumber isi materi.
+    const sorted = [...group.items].sort((a, b) => String(b.published_at || b.updated_at || '').localeCompare(String(a.published_at || a.updated_at || '')));
+    const representative = sorted[0];
+    const targets = group.items.map((item) => ({
+      id: item.pengajaran_id || item.kelas_id || '',
+      kelas_id: item.kelas_id || '',
+      kelas_nama: item.kelas_nama || item.kelas_id || '',
+      mapel_id: item.mapel_id || '',
+      mapel_nama: item.mapel_nama || '',
+    }));
+    try {
+      await savePublishedMaterialForClasses({
+        ...representative,
+        id: group.baseId,
+        source_id: group.baseId,
+        // Materi dianggap terbit bila ada satu saja kelas yang masih terbit.
+        visible_to_students: group.items.some((item) => item.visible_to_students !== false),
+      }, targets);
+      merged += 1;
+      for (const item of group.items) {
+        if (String(item.id) === group.baseId) continue;
+        try { await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(String(item.id)).delete(); removed += 1; }
+        catch (error) { console.warn('Dokumen materi lama gagal dihapus:', item.id, error); }
+      }
+    } catch (error) {
+      console.warn('Materi gagal digabung:', group.baseId, error);
+    }
+  }
+
+  invalidateQueryCache('materi_publish');
+  return { merged, removed, skipped: docs.length - legacy.length };
 }
 
 export async function deletePublishedMaterial(id) {
