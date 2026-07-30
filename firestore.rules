@@ -77,8 +77,9 @@ service cloud.firestore {
         && request.resource.data.guru_id == request.auth.token.username
         && request.resource.data.id == draftId
         && request.resource.data.keys().hasOnly([
-          'id', 'guru_id', 'title', 'subject', 'class_name', 'duration',
-          'schema_version', 'document_json', 'updated_at', 'created_at'
+          'id', 'guru_id', 'guru_nama', 'title', 'subject', 'class_name', 'duration',
+          'chapter', 'note', 'source', 'schema_version', 'document_json', 'html_source',
+          'tahun_ajaran_id', 'semester_id', 'updated_at', 'created_at'
         ])
         && request.resource.data.id is string
         && request.resource.data.guru_id is string
@@ -87,7 +88,16 @@ service cloud.firestore {
         && request.resource.data.class_name is string
         && request.resource.data.duration is string
         && request.resource.data.schema_version is int
-        && request.resource.data.document_json is map
+        // Draft manual menyimpan struktur blok (map); draft AI/Import menyimpan HTML
+        // sehingga document_json bernilai null.
+        && (request.resource.data.document_json == null || request.resource.data.document_json is map)
+        && (!('html_source' in request.resource.data) || request.resource.data.html_source is string)
+        && (!('source' in request.resource.data) || request.resource.data.source in ['manual', 'ai', 'import'])
+        && (!('guru_nama' in request.resource.data) || request.resource.data.guru_nama is string)
+        && (!('chapter' in request.resource.data) || request.resource.data.chapter is string)
+        && (!('note' in request.resource.data) || request.resource.data.note is string)
+        && (!('tahun_ajaran_id' in request.resource.data) || request.resource.data.tahun_ajaran_id is string)
+        && (!('semester_id' in request.resource.data) || request.resource.data.semester_id is string)
         && request.resource.data.updated_at is string
         && request.resource.data.created_at is string;
     }

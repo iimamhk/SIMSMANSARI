@@ -394,7 +394,7 @@ export async function renderGuruMateriImportPage(container) {
       setStatus('Tersimpan sebagai draft. Buka menu Materi > Materi Saya > Draft untuk menerbitkan.');
       showToast('Draft tersimpan');
     } catch (error) {
-      showToast('Gagal menyimpan draft');
+      showToast(error?.message || 'Gagal menyimpan draft');
       setStatus(error?.message || 'Gagal menyimpan.');
     } finally {
       saveBtn.disabled = !sanitizedHtml;

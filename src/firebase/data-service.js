@@ -1382,6 +1382,11 @@ export async function saveMaterialWorkspaceDraft(draft) {
   const source = ['manual', 'ai', 'import'].includes(String(draft.source || '').trim())
     ? String(draft.source).trim()
     : 'manual';
+  const htmlSource = String(draft.html_source || '');
+  // Firestore membatasi satu dokumen ~1 MB. Beri pesan jelas sebelum ditolak server.
+  if (htmlSource.length > 900000) {
+    throw new Error('HTML materi terlalu besar untuk disimpan (maksimal ±900 KB). Kurangi isi atau publikasikan langsung.');
+  }
   const payload = {
     id,
     guru_id: guruId,
@@ -1397,7 +1402,7 @@ export async function saveMaterialWorkspaceDraft(draft) {
     schema_version: Number(draft.schema_version || 1),
     // Draft manual menyimpan struktur blok; draft AI/import menyimpan HTML jadi.
     document_json: draft.document_json ?? null,
-    html_source: String(draft.html_source || ''),
+    html_source: htmlSource,
     tahun_ajaran_id: String(draft.tahun_ajaran_id || ''),
     semester_id: String(draft.semester_id || ''),
     updated_at: String(draft.updated_at || new Date().toISOString()),
