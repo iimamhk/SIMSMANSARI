@@ -303,7 +303,11 @@ export async function disconnectDriveBackup() {
  * pemanggil dapat melanjutkan backup lokal tanpa memunculkan error keras.
  */
 export async function getDriveUploadToken() {
-  const response = await authenticatedFetch('/api/admin/drive-token');
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'token' }),
+  });
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result.ok !== true) {
     return { available: false, reason: result.error || 'Google Drive belum siap.' };
@@ -314,10 +318,10 @@ export async function getDriveUploadToken() {
 /** Catat metadata unggahan Drive yang sudah selesai. */
 export async function recordDriveUpload(meta) {
   try {
-    await authenticatedFetch('/api/admin/drive-token', {
+    await authenticatedFetch('/api/admin/backup-config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(meta || {}),
+      body: JSON.stringify({ ...(meta || {}), action: 'record-upload' }),
     });
   } catch (error) {
     // Pencatatan bersifat opsional; kegagalan tidak membatalkan unggahan.

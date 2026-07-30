@@ -156,7 +156,7 @@ function buildRedirectUri(req) {
   const forwardedHost = String(req.headers['x-forwarded-host'] || req.headers.host || '').trim();
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').trim()
     || (forwardedHost.startsWith('localhost') || forwardedHost.startsWith('127.0.0.1') ? 'http' : 'https');
-  return `${forwardedProto}://${forwardedHost}/api/admin/drive-oauth`;
+  return `${forwardedProto}://${forwardedHost}/api/admin/backup-config`;
 }
 
 /** URL persetujuan Google. `state` dipakai untuk mengembalikan admin ke UI. */

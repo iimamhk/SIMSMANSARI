@@ -2,7 +2,7 @@
  * Unggah berkas backup langsung dari browser ke Google Drive.
  *
  * Alur:
- * 1. Minta access token berumur pendek ke `/api/admin/drive-token`.
+ * 1. Minta access token berumur pendek ke `/api/admin/backup-config` (action: 'token').
  *    Server menukar refresh token terenkripsi menjadi access token dan
  *    memastikan folder tujuan sudah ada.
  * 2. Unggah blob ke Google Drive memakai `uploadType=multipart` langsung dari
