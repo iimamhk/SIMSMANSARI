@@ -1,4 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
+import { getCoverDesign, renderCoverHtml, coverStyles } from '../../utils/materi-cover.js';
 import { deleteMaterialWorkspaceDraft, getMaterialWorkspaceDrafts, saveMaterialWorkspaceDraft, savePublishedMaterial, savePublishedMaterialForClasses, migratePublishedMaterialsToMultiClass, deletePublishedMaterial, getActiveTeachingAssignments, getPublishedMaterialsForTeacher, getMaterialReadStatsForTeacher } from '../../firebase/data-service.js';
 
 const STORAGE_KEY = 'simguru_material_workspace_draft';
@@ -147,28 +148,10 @@ function groupPublishedMaterials(items = []) {
     .sort((a, b) => String(b.latestAt).localeCompare(String(a.latestAt)));
 }
 
-function getBookCoverTheme(material, index = 0) {
-  const subject = String(material?.mapel_nama || material?.subject || material?.mapel_id || '').toLowerCase();
-  const themes = [
-    { from: '#0a84ff', to: '#5e5ce6', ink: '#dbeafe', symbol: 'Aa' },
-    { from: '#ff375f', to: '#ff9f0a', ink: '#fff1f2', symbol: '✦' },
-    { from: '#30b0c7', to: '#34c759', ink: '#ecfeff', symbol: '○' },
-    { from: '#af52de', to: '#5856d6', ink: '#f5f3ff', symbol: '◇' },
-    { from: '#ff9f0a', to: '#ff453a', ink: '#fff7ed', symbol: '⌁' },
-  ];
-  let theme = themes[index % themes.length];
-  if (/matematika/.test(subject)) theme = { from: '#0879e8', to: '#34aadc', ink: '#e0f2fe', symbol: '∑' };
-  else if (/bahasa indonesia/.test(subject)) theme = { from: '#ff375f', to: '#ff9f0a', ink: '#fff1f2', symbol: 'Aa' };
-  else if (/bahasa inggris/.test(subject)) theme = { from: '#5856d6', to: '#af52de', ink: '#f5f3ff', symbol: 'EN' };
-  else if (/fisika/.test(subject)) theme = { from: '#1c1c1e', to: '#48484a', ink: '#f1f5f9', symbol: 'Fx' };
-  else if (/kimia/.test(subject)) theme = { from: '#00a896', to: '#30b0c7', ink: '#ecfeff', symbol: 'H₂O' };
-  else if (/biologi/.test(subject)) theme = { from: '#248a3d', to: '#30d158', ink: '#f0fdf4', symbol: 'DNA' };
-  else if (/sejarah/.test(subject)) theme = { from: '#ac6a18', to: '#ff9f0a', ink: '#fffbeb', symbol: '⌛' };
-  return theme;
-}
 
 function pageStyles() {
   return `
+    ${coverStyles()}
     .mw { --mw-primary:#2563eb; --mw-bg:#f1f5f9; --mw-surface:#fff; --mw-text:#0f172a; --mw-muted:#64748b; --mw-line:#e2e8f0; min-height:calc(100vh - 2rem); color:var(--mw-text); }
     .mw [hidden] { display:none !important; }
     .mw * { box-sizing:border-box; }
@@ -229,18 +212,11 @@ function pageStyles() {
     .mw-ios-book { min-width:0; animation:mwBookIn .42s cubic-bezier(.2,.75,.2,1) both; }
     @keyframes mwBookIn { from { opacity:0; transform:translateY(12px) scale(.97); } to { opacity:1; transform:none; } }
     .mw-ios-book-button { display:block; width:100%; padding:0; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
-    .mw-ios-cover { position:relative; overflow:hidden; width:100%; aspect-ratio:3/4.15; padding:15px 13px 13px 18px; border-radius:8px 15px 15px 8px; color:#fff; background:linear-gradient(145deg,var(--book-from),var(--book-to)); box-shadow:-2px 2px 0 rgba(0,0,0,.14),0 18px 28px -17px color-mix(in srgb,var(--book-to) 72%,#000); transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s; }
-    .mw-ios-book-button:hover .mw-ios-cover { transform:translateY(-7px) rotate(-1deg); box-shadow:-3px 3px 0 rgba(0,0,0,.15),0 25px 34px -16px color-mix(in srgb,var(--book-to) 72%,#000); }
-    .mw-ios-cover::before { content:''; position:absolute; inset:0 auto 0 8px; width:2px; border-left:1px solid rgba(255,255,255,.22); border-right:1px solid rgba(0,0,0,.14); }
-    .mw-ios-cover::after { content:''; position:absolute; inset:0; background:linear-gradient(120deg,rgba(255,255,255,.22),transparent 28%,transparent 70%,rgba(0,0,0,.08)); pointer-events:none; }
-    .mw-ios-cover-top,.mw-ios-cover-copy { position:relative; z-index:1; }
-    .mw-ios-cover-top { display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
-    .mw-ios-cover-symbol { display:inline-flex; min-width:32px; height:32px; align-items:center; justify-content:center; padding:0 5px; border:1px solid rgba(255,255,255,.25); border-radius:9px; background:rgba(255,255,255,.16); font-size:11px; font-weight:800; backdrop-filter:blur(8px); }
-    .mw-ios-cover-status { display:inline-flex; width:8px; height:8px; margin-top:4px; border:2px solid rgba(255,255,255,.65); border-radius:50%; background:#30d158; box-shadow:0 0 0 3px rgba(48,209,88,.18); }
-    .mw-ios-cover-status.off { background:#ff9f0a; box-shadow:0 0 0 3px rgba(255,159,10,.18); }
-    .mw-ios-cover-copy { position:absolute; left:18px; right:13px; bottom:14px; }
-    .mw-ios-cover-copy small { display:block; margin-bottom:7px; color:rgba(255,255,255,.72); font-size:8px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
-    .mw-ios-cover-copy strong { display:-webkit-box; overflow:hidden; color:#fff; font-size:14px; line-height:1.24; letter-spacing:-.015em; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+    .mw-ios-book-button:hover .mc-cover { transform:translateY(-8px) rotate(-1.2deg); box-shadow:-4px 4px 0 rgba(0,0,0,.17), 0 26px 38px -18px rgba(15,23,42,.8); }
+    .mw-ios-book-button:focus-visible { outline:3px solid rgba(37,99,235,.3); outline-offset:4px; border-radius:12px; }
+    .mw-pub-cover-btn { display:block; width:62px; flex:none; padding:0; border:0; background:transparent; cursor:pointer; }
+    .mw-pub-cover-btn:hover .mc-cover { transform:translateY(-3px); }
+    .mw-pub-cover-btn:focus-visible { outline:3px solid rgba(37,99,235,.3); outline-offset:3px; border-radius:8px; }
     .mw-ios-book-info { padding:10px 3px 0; }
     .mw-ios-book-info strong { display:block; overflow:hidden; color:#1c1c1e; font-size:12px; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
     .mw-ios-book-info span { display:block; overflow:hidden; margin-top:3px; color:#8e8e93; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
@@ -275,7 +251,6 @@ function pageStyles() {
     .mw-pub-panel { margin-top:14px; padding:18px; border:1px solid #e4e7ec; border-radius:24px; background:rgba(255,255,255,.86); box-shadow:0 22px 50px -40px rgba(15,23,42,.45); backdrop-filter:blur(22px); }
     .mw-pub-panel-head { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:14px; }.mw-pub-panel-head h2 { margin:0; font-size:18px; letter-spacing:-.025em; }.mw-pub-panel-head p { margin:4px 0 0; color:#667085; font-size:11px; }
     .mw-pub-list { display:grid; gap:10px; }.mw-pub-row { display:grid; grid-template-columns:72px minmax(0,1fr) auto; gap:15px; align-items:center; padding:13px; border:1px solid #e4e7ec; border-radius:19px; background:#fff; transition:transform .2s,border-color .2s,box-shadow .2s; }.mw-pub-row:hover { transform:translateY(-2px); border-color:#b2ddff; box-shadow:0 18px 34px -27px rgba(15,23,42,.5); }
-    .mw-pub-cover { position:relative; overflow:hidden; width:62px; aspect-ratio:3/4; padding:9px 7px 8px 12px; border-radius:5px 10px 10px 5px; color:#fff; background:linear-gradient(145deg,var(--book-from),var(--book-to)); box-shadow:-2px 2px 0 rgba(0,0,0,.13),0 15px 22px -15px rgba(15,23,42,.7); }.mw-pub-cover::before { content:''; position:absolute; inset:0 auto 0 6px; width:2px; border-inline:1px solid rgba(255,255,255,.18); }.mw-pub-cover span { position:relative; z-index:1; display:inline-flex; min-width:22px; height:22px; align-items:center; justify-content:center; padding:0 3px; border-radius:6px; background:rgba(255,255,255,.18); font-size:8px; font-weight:850; }.mw-pub-cover strong { position:absolute; z-index:1; left:12px; right:7px; bottom:9px; display:-webkit-box; overflow:hidden; color:#fff; font-size:8px; line-height:1.22; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
     .mw-pub-main { min-width:0; }.mw-pub-title-line { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }.mw-pub-title-line h3 { min-width:0; margin:0; color:#101828; font-size:14px; letter-spacing:-.015em; }.mw-pub-status { display:inline-flex; align-items:center; gap:5px; padding:4px 7px; border-radius:999px; font-size:8px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }.mw-pub-status::before { content:''; width:6px; height:6px; border-radius:50%; background:currentColor; }.mw-pub-status.on { background:#ecfdf3;color:#027a48; }.mw-pub-status.off { background:#fffaeb;color:#b54708; }.mw-pub-status.partial { background:#eff8ff;color:#175cd3; }
     .mw-pub-note { margin:5px 0 0; overflow:hidden; color:#667085; font-size:10px; line-height:1.45; text-overflow:ellipsis; white-space:nowrap; }.mw-pub-meta { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; }.mw-pub-meta span { display:inline-flex; align-items:center; gap:5px; color:#667085; font-size:9px; }.mw-pub-meta b { color:#344054;font-weight:750; }
     .mw-pub-actions { display:grid; grid-template-columns:repeat(2,minmax(86px,1fr)); gap:6px; width:190px; }.mw-pub-btn { min-height:32px; padding:0 9px; border:1px solid #d0d5dd; border-radius:9px; background:#fff; color:#344054; font-size:9px; font-weight:800; cursor:pointer; transition:background .15s,border-color .15s,color .15s; }.mw-pub-btn:hover { border-color:#84caff;background:#eff8ff;color:#175cd3; }.mw-pub-btn.primary { border-color:#0a84ff;background:#0a84ff;color:#fff; }.mw-pub-btn.warning { border-color:#fedf89;color:#b54708; }.mw-pub-btn.danger { border-color:#fecdca;color:#b42318; }
@@ -357,7 +332,7 @@ function pageStyles() {
     .mw-status { min-height:18px; margin-top:7px; color:#64748b; font-size:11px; } .mw-toast { position:fixed; right:18px; bottom:18px; z-index:50; padding:10px 14px; border-radius:11px; background:#0f172a; color:#fff; font-size:12px; box-shadow:0 14px 30px -12px rgba(15,23,42,.4); }
     .mw-draft-list { display:grid; gap:10px; margin-top:12px; } .mw-draft-card { display:flex; align-items:center; gap:12px; padding:14px; border:1px solid var(--mw-line); border-radius:14px; background:#fff; } .mw-draft-card strong { display:block; font-size:13px; } .mw-draft-card small { display:block; margin-top:3px; color:var(--mw-muted); font-size:11px; } .mw-draft-actions { display:flex; gap:5px; margin-left:auto; } .mw-draft-empty { padding:28px 16px; border:1px dashed #cbd5e1; border-radius:14px; color:var(--mw-muted); text-align:center; font-size:12px; }
     @media (max-width:1023px) { .mw-layout { grid-template-columns:160px minmax(0,1fr); } .mw-properties { grid-column:1 / -1; } }
-    @media (max-width:639px) { .mw-toolbar { position:sticky; top:0; flex-wrap:wrap; border-radius:12px; } .mw-toolbar-title { width:100%; min-width:0; margin:0; order:-2; } .mw-viewports { margin-left:auto; } .mw-layout { display:block; } .mw-panel.library-panel,.mw-panel.properties-panel { display:none; } .mw-panel.mobile-open { display:block; position:fixed; left:10px; right:10px; bottom:10px; z-index:40; max-height:72vh; overflow:auto; box-shadow:0 24px 60px -25px rgba(15,23,42,.45); } .mw-canvas-wrap { padding:7px; margin-top:8px; } .mw-canvas { min-height:560px; padding:11px; } .mw-mobile-tools { display:flex !important; } .mw-overview-head { align-items:stretch; flex-direction:column; padding:18px; } .mw-overview-grid { grid-template-columns:1fr; } .mw-meta { grid-template-columns:1fr 1fr; } .mw-ios-hero { display:block; min-height:auto; padding:22px; border-radius:22px; } .mw-ios-hero-art { display:none; } .mw-ios-library { padding:15px; border-radius:21px; } .mw-ios-library-head { align-items:stretch; flex-direction:column; } .mw-ios-tools,.mw-ios-search { width:100%; min-width:0; } .mw-ios-search { flex:1; } .mw-ios-books { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 12px; } .mw-reader-content { width:96vw; height:90vh; } .mw-pub-hero { align-items:flex-start; flex-direction:column; padding:21px; }.mw-pub-summary { flex-wrap:wrap; }.mw-pub-panel { padding:11px; }.mw-pub-row { grid-template-columns:58px minmax(0,1fr); gap:11px; padding:11px; }.mw-pub-cover { width:52px; }.mw-pub-actions { grid-column:1/-1; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); }.mw-pub-meta { display:grid;grid-template-columns:1fr;gap:5px; } }
+    @media (max-width:639px) { .mw-toolbar { position:sticky; top:0; flex-wrap:wrap; border-radius:12px; } .mw-toolbar-title { width:100%; min-width:0; margin:0; order:-2; } .mw-viewports { margin-left:auto; } .mw-layout { display:block; } .mw-panel.library-panel,.mw-panel.properties-panel { display:none; } .mw-panel.mobile-open { display:block; position:fixed; left:10px; right:10px; bottom:10px; z-index:40; max-height:72vh; overflow:auto; box-shadow:0 24px 60px -25px rgba(15,23,42,.45); } .mw-canvas-wrap { padding:7px; margin-top:8px; } .mw-canvas { min-height:560px; padding:11px; } .mw-mobile-tools { display:flex !important; } .mw-overview-head { align-items:stretch; flex-direction:column; padding:18px; } .mw-overview-grid { grid-template-columns:1fr; } .mw-meta { grid-template-columns:1fr 1fr; } .mw-ios-hero { display:block; min-height:auto; padding:22px; border-radius:22px; } .mw-ios-hero-art { display:none; } .mw-ios-library { padding:15px; border-radius:21px; } .mw-ios-library-head { align-items:stretch; flex-direction:column; } .mw-ios-tools,.mw-ios-search { width:100%; min-width:0; } .mw-ios-search { flex:1; } .mw-ios-books { grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px 12px; } .mw-reader-content { width:96vw; height:90vh; } .mw-pub-hero { align-items:flex-start; flex-direction:column; padding:21px; }.mw-pub-summary { flex-wrap:wrap; }.mw-pub-panel { padding:11px; }.mw-pub-row { grid-template-columns:58px minmax(0,1fr); gap:11px; padding:11px; }.mw-pub-cover-btn { width:52px; }.mw-pub-actions { grid-column:1/-1; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); }.mw-pub-meta { display:grid;grid-template-columns:1fr;gap:5px; } }
     .mw-mobile-tools { display:none; gap:6px; margin-top:8px; }
     .mw-modal { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; }
     .mw-modal[hidden] { display:none; }
@@ -720,18 +695,26 @@ export async function renderGuruMateriPage(container) {
     const body = entries.length
       ? (listView === 'grid'
         ? `<div class="mw-ios-books">${entries.map((entry, index) => {
-            const theme = getBookCoverTheme(entry.raw, index);
+            const design = getCoverDesign(entry.raw, index);
             const openAttr = entry.kind === 'draft'
               ? (entry.source === 'manual' ? `data-draft-open="${escapeAttr(entry.id)}"` : `data-draft-preview="${escapeAttr(entry.id)}"`)
               : `data-pub-preview="${escapeAttr(entry.id)}"`;
-            return `<article class="mw-ios-book" style="animation-delay:${Math.min(index, 16) * 32}ms"><button type="button" class="mw-ios-book-button" ${openAttr} aria-label="Buka ${escapeAttr(entry.title)}"><div class="mw-ios-cover" style="--book-from:${theme.from};--book-to:${theme.to}"><div class="mw-ios-cover-top"><span class="mw-ios-cover-symbol">${escapeHtml(theme.symbol)}</span>${statusChip(entry)}</div><div class="mw-ios-cover-copy"><small>${escapeHtml(entry.subject || SOURCE_LABEL[entry.source] || 'Materi')}</small><strong>${escapeHtml(entry.title)}</strong></div></div><div class="mw-ios-book-info"><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(entry.classNames.join(', ') || 'Belum ada kelas')}</span><span>${escapeHtml(readLine(entry))}</span></div></button><div class="mw-card-actions">${entryActions(entry)}</div></article>`;
+            const cover = renderCoverHtml({
+              design,
+              title: entry.title,
+              subject: entry.subject || SOURCE_LABEL[entry.source] || 'Materi',
+              footer: entry.classNames.join(', ') || 'Belum ada kelas',
+              badgeHtml: statusChip(entry),
+            });
+            return `<article class="mw-ios-book" style="animation-delay:${Math.min(index, 16) * 32}ms"><button type="button" class="mw-ios-book-button" ${openAttr} aria-label="Buka ${escapeAttr(entry.title)}">${cover}<div class="mw-ios-book-info"><strong>${escapeHtml(entry.title)}</strong><span>${escapeHtml(entry.classNames.join(', ') || 'Belum ada kelas')}</span><span>${escapeHtml(readLine(entry))}</span></div></button><div class="mw-card-actions">${entryActions(entry)}</div></article>`;
           }).join('')}</div>`
         : `<div class="mw-pub-list">${entries.map((entry, index) => {
-            const theme = getBookCoverTheme(entry.raw, index);
+            const design = getCoverDesign(entry.raw, index);
             const openAttr = entry.kind === 'draft'
               ? (entry.source === 'manual' ? `data-draft-open="${escapeAttr(entry.id)}"` : `data-draft-preview="${escapeAttr(entry.id)}"`)
               : `data-pub-preview="${escapeAttr(entry.id)}"`;
-            return `<article class="mw-pub-row" style="animation:mwBookIn .35s both;animation-delay:${Math.min(index, 15) * 30}ms"><button type="button" class="mw-pub-cover" style="--book-from:${theme.from};--book-to:${theme.to}" ${openAttr} aria-label="Buka ${escapeAttr(entry.title)}"><span>${escapeHtml(theme.symbol)}</span><strong>${escapeHtml(entry.title)}</strong></button><div class="mw-pub-main"><div class="mw-pub-title-line"><h3>${escapeHtml(entry.title)}</h3>${statusChip(entry)}<span class="mw-chip src">${escapeHtml(SOURCE_LABEL[entry.source] || 'Manual')}</span></div><p class="mw-pub-note">${entryMetaLine(entry)}</p><div class="mw-pub-meta"><span>◉ ${escapeHtml(readLine(entry))}</span>${entry.kind === 'published' ? `<span>⌁ <b>Distribusi:</b> ${entry.distributionCount} kelas</span>` : ''}</div></div><div class="mw-pub-actions">${entryActions(entry)}</div></article>`;
+            const cover = renderCoverHtml({ design, title: entry.title, subject: entry.subject, compact: true });
+            return `<article class="mw-pub-row" style="animation:mwBookIn .35s both;animation-delay:${Math.min(index, 15) * 30}ms"><button type="button" class="mw-pub-cover-btn" ${openAttr} aria-label="Buka ${escapeAttr(entry.title)}">${cover}</button><div class="mw-pub-main"><div class="mw-pub-title-line"><h3>${escapeHtml(entry.title)}</h3>${statusChip(entry)}<span class="mw-chip src">${escapeHtml(SOURCE_LABEL[entry.source] || 'Manual')}</span></div><p class="mw-pub-note">${entryMetaLine(entry)}</p><div class="mw-pub-meta"><span>◉ ${escapeHtml(readLine(entry))}</span>${entry.kind === 'published' ? `<span>⌁ <b>Distribusi:</b> ${entry.distributionCount} kelas</span>` : ''}</div></div><div class="mw-pub-actions">${entryActions(entry)}</div></article>`;
           }).join('')}</div>`)
       : `<div class="mw-ios-empty"><span class="mw-ios-empty-icon">${listQuery ? '⌕' : '▤'}</span><h3>${listQuery ? 'Materi tidak ditemukan' : 'Belum ada materi'}</h3><p>${listQuery ? 'Coba kata kunci judul, mapel, atau kelas yang lain.' : 'Mulai dari Buat Materi, Materi AI, atau Import Materi.'}</p></div>`;
 

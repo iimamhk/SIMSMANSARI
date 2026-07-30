@@ -1,4 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
+import { getCoverDesign, renderCoverHtml, coverStyles } from '../../utils/materi-cover.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
 import { getPublishedMaterials, recordMaterialRead, getActiveTeachingAssignments } from '../../firebase/data-service.js';
 
@@ -132,107 +133,7 @@ function getMapelCounts(materials) {
     .map(([mapel, total]) => ({ mapel, total }));
 }
 
-function getMaterialSeed(material) {
-  const source = `${material?.id || ''}__${material?.title || ''}__${material?.mapel_nama || ''}`;
-  return source.split('').reduce((total, char) => total + char.charCodeAt(0), 0);
-}
 
-function getMaterialCardTheme(material, index = 0) {
-  const palette = [
-    { cover: 'from-sky-500 via-cyan-500 to-blue-600', chip: 'border-sky-200 bg-sky-50 text-sky-700', glow: 'bg-sky-200/50' },
-    { cover: 'from-fuchsia-500 via-pink-500 to-rose-500', chip: 'border-pink-200 bg-pink-50 text-pink-700', glow: 'bg-pink-200/50' },
-    { cover: 'from-emerald-500 via-teal-500 to-cyan-500', chip: 'border-emerald-200 bg-emerald-50 text-emerald-700', glow: 'bg-emerald-200/50' },
-    { cover: 'from-amber-400 via-orange-400 to-rose-500', chip: 'border-amber-200 bg-amber-50 text-amber-700', glow: 'bg-amber-200/50' },
-    { cover: 'from-violet-500 via-indigo-500 to-blue-600', chip: 'border-violet-200 bg-violet-50 text-violet-700', glow: 'bg-violet-200/50' },
-    { cover: 'from-slate-700 via-slate-800 to-slate-900', chip: 'border-slate-300 bg-slate-100 text-slate-700', glow: 'bg-slate-300/40' },
-  ];
-
-  const seed = getMaterialSeed(material) + index;
-  return palette[seed % palette.length];
-}
-
-function getSubjectCoverMeta(material) {
-  const mapel = String(material?.mapel_nama || '').toLowerCase();
-
-  if (mapel.includes('matematika')) {
-    return { icon: '∑', motif: 'Rumus & Logika' };
-  }
-  if (mapel.includes('bahasa indonesia')) {
-    return { icon: 'Aa', motif: 'Literasi & Teks' };
-  }
-  if (mapel.includes('bahasa inggris')) {
-    return { icon: 'En', motif: 'Words & Talk' };
-  }
-  if (mapel.includes('biologi')) {
-    return { icon: 'DNA', motif: 'Makhluk Hidup' };
-  }
-  if (mapel.includes('kimia')) {
-    return { icon: 'H2O', motif: 'Zat & Reaksi' };
-  }
-  if (mapel.includes('fisika')) {
-    return { icon: 'Fx', motif: 'Gerak & Energi' };
-  }
-  if (mapel.includes('sejarah')) {
-    return { icon: '⌛', motif: 'Kronologi' };
-  }
-  if (mapel.includes('geografi')) {
-    return { icon: '◔', motif: 'Ruang & Peta' };
-  }
-  if (mapel.includes('informatika')) {
-    return { icon: '</>', motif: 'Logika Digital' };
-  }
-
-  return { icon: getMaterialMonogram(material), motif: 'Materi Pilihan' };
-}
-
-function getStudentThematicBookCover(material) {
-  const mapel = String(material?.mapel_nama || '').toLowerCase();
-
-  if (mapel.includes('matematika')) {
-    return { gradient: 'from-sky-600 via-cyan-600 to-blue-700', chip: 'border-sky-200 bg-sky-50 text-sky-700' };
-  }
-  if (mapel.includes('bahasa indonesia')) {
-    return { gradient: 'from-rose-500 via-orange-500 to-amber-500', chip: 'border-orange-200 bg-orange-50 text-orange-700' };
-  }
-  if (mapel.includes('bahasa inggris')) {
-    return { gradient: 'from-indigo-600 via-violet-600 to-fuchsia-600', chip: 'border-violet-200 bg-violet-50 text-violet-700' };
-  }
-  if (mapel.includes('fisika')) {
-    return { gradient: 'from-slate-700 via-slate-800 to-slate-900', chip: 'border-slate-300 bg-slate-100 text-slate-700' };
-  }
-  if (mapel.includes('kimia')) {
-    return { gradient: 'from-emerald-600 via-teal-600 to-cyan-600', chip: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
-  }
-  if (mapel.includes('biologi')) {
-    return { gradient: 'from-lime-500 via-emerald-500 to-teal-600', chip: 'border-lime-200 bg-lime-50 text-lime-700' };
-  }
-  if (mapel.includes('sejarah')) {
-    return { gradient: 'from-amber-600 via-orange-600 to-rose-700', chip: 'border-amber-200 bg-amber-50 text-amber-700' };
-  }
-
-  return { gradient: 'from-blue-600 via-indigo-600 to-violet-700', chip: 'border-indigo-200 bg-indigo-50 text-indigo-700' };
-}
-
-// Tema sampul buku bergaya iOS (identik dengan beranda materi guru).
-function getBookCoverTheme(material, index = 0) {
-  const subject = String(material?.mapel_nama || material?.subject || material?.mapel_id || '').toLowerCase();
-  const themes = [
-    { from: '#0a84ff', to: '#5e5ce6', ink: '#dbeafe', symbol: 'Aa' },
-    { from: '#ff375f', to: '#ff9f0a', ink: '#fff1f2', symbol: '✦' },
-    { from: '#30b0c7', to: '#34c759', ink: '#ecfeff', symbol: '○' },
-    { from: '#af52de', to: '#5856d6', ink: '#f5f3ff', symbol: '◇' },
-    { from: '#ff9f0a', to: '#ff453a', ink: '#fff7ed', symbol: '⌁' },
-  ];
-  let theme = themes[index % themes.length];
-  if (/matematika/.test(subject)) theme = { from: '#0879e8', to: '#34aadc', ink: '#e0f2fe', symbol: '∑' };
-  else if (/bahasa indonesia/.test(subject)) theme = { from: '#ff375f', to: '#ff9f0a', ink: '#fff1f2', symbol: 'Aa' };
-  else if (/bahasa inggris/.test(subject)) theme = { from: '#5856d6', to: '#af52de', ink: '#f5f3ff', symbol: 'EN' };
-  else if (/fisika/.test(subject)) theme = { from: '#1c1c1e', to: '#48484a', ink: '#f1f5f9', symbol: 'Fx' };
-  else if (/kimia/.test(subject)) theme = { from: '#00a896', to: '#30b0c7', ink: '#ecfeff', symbol: 'H₂O' };
-  else if (/biologi/.test(subject)) theme = { from: '#248a3d', to: '#30d158', ink: '#f0fdf4', symbol: 'DNA' };
-  else if (/sejarah/.test(subject)) theme = { from: '#ac6a18', to: '#ff9f0a', ink: '#fffbeb', symbol: '⌛' };
-  return theme;
-}
 
 function escapeAttr(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -240,6 +141,7 @@ function escapeAttr(value) {
 
 function siswaLibraryStyles() {
   return `
+    ${coverStyles()}
     .sml { --ios-blue:#0a84ff; --ios-label:#1c1c1e; --ios-secondary:#6e6e73; padding:2px 0 20px; color:var(--ios-label); }
     .sml * { box-sizing:border-box; }
     .sml [hidden] { display:none !important; }
@@ -279,19 +181,8 @@ function siswaLibraryStyles() {
     .sml-book { min-width:0; animation:smlBookIn .42s cubic-bezier(.2,.75,.2,1) both; }
     @keyframes smlBookIn { from { opacity:0; transform:translateY(12px) scale(.97); } to { opacity:1; transform:none; } }
     .sml-book-button { display:block; width:100%; padding:0; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
-    .sml-cover { position:relative; overflow:hidden; width:100%; aspect-ratio:3/4.15; padding:15px 13px 13px 18px; border-radius:8px 15px 15px 8px; color:#fff; background:linear-gradient(145deg,var(--book-from),var(--book-to)); box-shadow:-2px 2px 0 rgba(0,0,0,.14),0 18px 28px -17px color-mix(in srgb,var(--book-to) 72%,#000); transition:transform .3s cubic-bezier(.2,.8,.2,1),box-shadow .3s; }
-    .sml-book-button:hover .sml-cover { transform:translateY(-7px) rotate(-1deg); box-shadow:-3px 3px 0 rgba(0,0,0,.15),0 25px 34px -16px color-mix(in srgb,var(--book-to) 72%,#000); }
-    .sml-cover::before { content:''; position:absolute; inset:0 auto 0 8px; width:2px; border-left:1px solid rgba(255,255,255,.22); border-right:1px solid rgba(0,0,0,.14); }
-    .sml-cover::after { content:''; position:absolute; inset:0; background:linear-gradient(120deg,rgba(255,255,255,.22),transparent 28%,transparent 70%,rgba(0,0,0,.08)); pointer-events:none; }
-    .sml-cover-top,.sml-cover-copy { position:relative; z-index:1; }
-    .sml-cover-top { display:flex; align-items:flex-start; justify-content:space-between; gap:6px; }
-    .sml-cover-symbol { display:inline-flex; min-width:32px; height:32px; align-items:center; justify-content:center; padding:0 5px; border:1px solid rgba(255,255,255,.25); border-radius:9px; background:rgba(255,255,255,.16); font-size:11px; font-weight:800; backdrop-filter:blur(8px); }
-    .sml-cover-badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; font-size:8px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; backdrop-filter:blur(4px); }
-    .sml-cover-badge.read { border:1px solid rgba(48,209,88,.5); background:rgba(48,209,88,.28); color:#f0fff4; }
-    .sml-cover-badge.unread { border:1px solid rgba(255,214,10,.5); background:rgba(255,159,10,.26); color:#fffbeb; }
-    .sml-cover-copy { position:absolute; left:18px; right:13px; bottom:14px; }
-    .sml-cover-copy small { display:block; margin-bottom:7px; color:rgba(255,255,255,.72); font-size:8px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
-    .sml-cover-copy strong { display:-webkit-box; overflow:hidden; color:#fff; font-size:13.5px; line-height:1.24; letter-spacing:-.015em; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+    .sml-book-button:hover .mc-cover { transform:translateY(-8px) rotate(-1.2deg); box-shadow:-4px 4px 0 rgba(0,0,0,.17), 0 26px 38px -18px rgba(15,23,42,.8); }
+    .sml-book-button:focus-visible { outline:3px solid rgba(10,132,255,.35); outline-offset:4px; border-radius:12px; }
     .sml-book-info { padding:10px 3px 0; }
     .sml-book-info strong { display:block; overflow:hidden; color:#1c1c1e; font-size:12px; line-height:1.35; text-overflow:ellipsis; white-space:nowrap; }
     .sml-book-info span { display:block; overflow:hidden; margin-top:3px; color:#8e8e93; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
@@ -332,27 +223,7 @@ function getMaterialVisualStatus(material, studentId, readMap) {
   };
 }
 
-function getMaterialMonogram(material) {
-  const source = String(material?.mapel_nama || material?.title || 'MT').trim();
-  return source
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase() || 'MT';
-}
 
-function buildBookIcon() {
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6 stroke-current" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z" />
-      <path d="M8 19h10" />
-      <path d="M8.5 8h6" />
-      <path d="M8.5 11h4.5" />
-    </svg>
-  `;
-}
 
 function getReaderOverlayMarkup() {
   return `
@@ -595,30 +466,28 @@ export async function renderSiswaMateriPage(container) {
 
     listEl.innerHTML = filteredMaterials
       .map((material, index) => {
-        const theme = getBookCoverTheme(material, index);
+        const design = getCoverDesign(material, index);
         const status = getMaterialVisualStatus(material, getCurrentStudentId(), readMap);
         const isRead = status.label === 'Sudah Dibaca';
         const materialTitle = String(material.title || 'Materi Pembelajaran').trim();
         const mapelTitle = String(material.mapel_nama || 'Mata Pelajaran').trim();
-        const classes = String(material.kelas_nama || material.kelas_id || '').trim();
+        const guruNama = String(material.guru_nama || '').trim();
         const publishDate = new Date(material.published_at || material.updated_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
         const staggerDelay = Math.min(index, 16) * 32;
+        const cover = renderCoverHtml({
+          design,
+          title: materialTitle,
+          subject: mapelTitle,
+          footer: guruNama || publishDate,
+          badgeHtml: `<span class="mc-badge ${isRead ? 'read' : 'unread'}">${isRead ? 'Dibaca' : 'Baru'}</span>`,
+        });
         return `
           <article class="sml-book" style="animation-delay:${staggerDelay}ms">
             <button type="button" data-material-id="${escapeAttr(material.id)}" class="student-material-item sml-book-button" aria-label="Buka ${escapeAttr(materialTitle)}">
-              <div class="sml-cover" style="--book-from:${theme.from};--book-to:${theme.to};--book-ink:${theme.ink}">
-                <div class="sml-cover-top">
-                  <span class="sml-cover-symbol">${escapeAttr(theme.symbol)}</span>
-                  <span class="sml-cover-badge ${isRead ? 'read' : 'unread'}">${isRead ? 'Dibaca' : 'Baru'}</span>
-                </div>
-                <div class="sml-cover-copy">
-                  <small>${escapeAttr(mapelTitle)}</small>
-                  <strong>${escapeAttr(materialTitle)}</strong>
-                </div>
-              </div>
+              ${cover}
               <div class="sml-book-info">
                 <strong>${escapeAttr(materialTitle)}</strong>
-                <span>${escapeAttr(classes || 'Materi Pilihan')}</span>
+                <span>${escapeAttr(mapelTitle)}</span>
                 <span>${escapeAttr(publishDate)}</span>
               </div>
             </button>
