@@ -119,8 +119,10 @@ const CHAT_DIRECTORY_TTL_MS = 300000;
 export async function getManagedUsers(role = '', kelasId = '') {
   const cacheKey = `${role || 'all'}|${kelasId || ''}`;
   const cached = managedUsersCache.get(cacheKey);
-  if (cached && Date.now() - cached.at < MANAGED_USERS_TTL_MS) return cached.data;
+  // Panggilan yang sedang berjalan: kembalikan promise bersama (hindari race yang
+  // sebelumnya mengembalikan cached.data === undefined saat cache hanya berisi promise).
   if (cached?.promise) return cached.promise;
+  if (cached && Array.isArray(cached.data) && Date.now() - cached.at < MANAGED_USERS_TTL_MS) return cached.data;
 
   const promise = (async () => {
     const users = [];
@@ -143,9 +145,10 @@ export async function getManagedUsers(role = '', kelasId = '') {
     } while (after);
     managedUsersCache.set(cacheKey, { at: Date.now(), data: users });
     return users;
-  })().finally(() => {
-    const current = managedUsersCache.get(cacheKey);
-    if (current?.promise) managedUsersCache.set(cacheKey, { at: current.at || Date.now(), data: current.data || [] });
+  })().catch((error) => {
+    // Jangan simpan promise yang gagal agar percobaan berikutnya memuat ulang.
+    managedUsersCache.delete(cacheKey);
+    throw error;
   });
   managedUsersCache.set(cacheKey, { at: Date.now(), promise });
   return promise;
