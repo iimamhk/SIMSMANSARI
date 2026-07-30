@@ -1379,15 +1379,27 @@ export async function saveMaterialWorkspaceDraft(draft) {
   const id = String(draft?.id || '').trim();
   const guruId = String(draft?.guru_id || '').trim();
   if (!id || !guruId) throw new Error('Draft materi membutuhkan ID dan guru.');
+  const source = ['manual', 'ai', 'import'].includes(String(draft.source || '').trim())
+    ? String(draft.source).trim()
+    : 'manual';
   const payload = {
     id,
     guru_id: guruId,
+    guru_nama: String(draft.guru_nama || '').slice(0, 120),
     title: String(draft.title || 'Materi Baru').slice(0, 200),
     subject: String(draft.subject || '').slice(0, 120),
     class_name: String(draft.class_name || '').slice(0, 80),
     duration: String(draft.duration || '2 JP').slice(0, 20),
+    chapter: String(draft.chapter || '').slice(0, 200),
+    note: String(draft.note || '').slice(0, 500),
+    // Penanda asal draft: manual (editor blok), ai (generate), import (paste HTML).
+    source,
     schema_version: Number(draft.schema_version || 1),
-    document_json: draft.document_json,
+    // Draft manual menyimpan struktur blok; draft AI/import menyimpan HTML jadi.
+    document_json: draft.document_json ?? null,
+    html_source: String(draft.html_source || ''),
+    tahun_ajaran_id: String(draft.tahun_ajaran_id || ''),
+    semester_id: String(draft.semester_id || ''),
     updated_at: String(draft.updated_at || new Date().toISOString()),
     created_at: String(draft.created_at || new Date().toISOString()),
   };

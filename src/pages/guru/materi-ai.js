@@ -10,7 +10,7 @@ import { streamGenerateMaterialJson, MaterialGenerationError } from '../../utils
 import { getApiBase } from '../../utils/ai-client.js';
 import { buildMaterialHtml } from '../../utils/materi-renderer.js';
 import { ensureKaTeXReady } from '../../utils/markdown-export.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
 import {
   pageStyles,
   statusBannerHtml,
@@ -75,9 +75,7 @@ export async function renderGuruMateriAiPage(container) {
       @media (max-width:640px) { .mwnav-btn { flex:none; padding:6px 10px 5px; } .mwnav-ico { width:25px; height:25px; font-size:13px; } .mwnav-label { font-size:10px; } }
     </style>
     <nav class="mwnav-bar" aria-label="Workspace materi">
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">⌂</span><span class="mwnav-label">Beranda</span></a>
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">✎</span><span class="mwnav-label">Draft</span></a>
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">▤</span><span class="mwnav-label">Terbit &amp; Distribusi</span></a>
+      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">▤</span><span class="mwnav-label">Materi Saya</span></a>
       <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">＋</span><span class="mwnav-label">Buat Materi</span></a>
       <a class="mwnav-btn active" href="#guru/materi-ai"><span class="mwnav-ico">✦</span><span class="mwnav-label">Materi AI</span></a>
       <a class="mwnav-btn" href="#guru/materi-import"><span class="mwnav-ico">📥</span><span class="mwnav-label">Import Materi</span></a>
@@ -375,8 +373,8 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
   });
 
   // Simpan materi ke koleksi publish dengan status belum diterbitkan (unpublish).
-  // Materi langsung muncul di daftar "Terbit & Distribusi" dan bisa diterbitkan
-  // kembali dari sana atau lewat tombol Publish di halaman ini.
+  // Simpan sebagai DRAFT di koleksi draft workspace (satu sumber draft untuk
+  // semua metode pembuatan). Materi belum terlihat siswa sampai diterbitkan.
   simpanBtn.addEventListener('click', async () => {
     if (!currentMaterial) return;
     clearError();
@@ -391,62 +389,31 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
       const now = new Date().toISOString();
       const draft = {
         id,
-        guru_id: userId,
-        guru_nama: userName,
-        title: currentMaterial.title || 'Materi AI',
-        kelas_id: meta.className || input.kelas,
-        kelas_nama: meta.className || input.kelas,
-        mapel_id: input.mapel,
-        mapel_nama: input.mapel,
-        level: input.fase,
-        chapter: meta.chapter,
-        meetings: input.alokasiWaktu,
-        note: `Materi dari AI - ${input.topik || ''}`,
-        html_source: htmlSource,
-        material_json: currentMaterial,
-        source: 'materi_ai',
-        tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-        semester_id: context?.semester_aktif || '',
-        updated_at: now,
-      };
-      // Simpan ke localStorage draft (kompatibilitas menu Materi lama).
-      const drafts = readDrafts();
-      const idx = drafts.findIndex((d) => d.id === id);
-      if (idx >= 0) drafts[idx] = draft;
-      else drafts.push(draft);
-      if (!writeDrafts(drafts)) {
-        throw new Error('Draft tidak dapat disimpan. Penyimpanan browser penuh atau diblokir.');
-      }
-      // Simpan ke koleksi materi_publish dengan status belum diterbitkan agar
-      // muncul di daftar "Terbit & Distribusi" di workspace materi.
-      await savePublishedMaterial({
-        id,
-        source_id: id,
         guru_id: safeString(userId),
         guru_nama: safeString(userName || 'Guru'),
-        pengajaran_id: '',
-        kelas_id: safeString(draft.kelas_id),
-        kelas_nama: safeString(draft.kelas_nama),
-        kelas_token: documentIdToken(draft.kelas_id || draft.kelas_nama),
-        mapel_id: safeString(draft.mapel_id),
-        mapel_nama: safeString(draft.mapel_nama),
-        title: safeString(draft.title),
-        note: safeString(draft.note),
-        level: safeString(draft.level),
-        chapter: safeString(draft.chapter),
-        meetings: safeString(draft.meetings),
+        title: safeString(currentMaterial.title || 'Materi AI'),
+        subject: safeString(input.mapel),
+        class_name: safeString(meta.className || input.kelas),
+        duration: safeString(input.alokasiWaktu || '2 JP'),
+        chapter: safeString(meta.chapter),
+        note: `Materi dari AI - ${input.topik || ''}`,
+        source: 'ai',
         html_source: htmlSource,
-        visible_to_students: false,
-        status: 'unpublished',
-        source: 'materi_ai',
+        document_json: null,
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
-        published_at: now,
+        updated_at: now,
         created_at: now,
-      });
+      };
+      // Cadangan lokal (offline) — bukan sumber utama.
+      const drafts = readDrafts();
+      const idx = drafts.findIndex((d) => d.id === id);
+      if (idx >= 0) drafts[idx] = draft; else drafts.push(draft);
+      writeDrafts(drafts);
+      await saveMaterialWorkspaceDraft(draft);
       currentDraftId = id;
-      setStatus('Tersimpan sebagai draft (belum diterbitkan). Lihat di menu Materi > Terbit & Distribusi.');
-      setTimeout(() => setStatus(''), 5000);
+      setStatus('Tersimpan sebagai draft. Buka menu Materi > Materi Saya > Draft untuk menerbitkan.');
+      setTimeout(() => setStatus(''), 6000);
     } catch (error) {
       showError(error?.message || 'Gagal menyimpan draft.');
     } finally {
@@ -516,15 +483,15 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
           created_at: now,
         });
       }));
-      // Hapus placeholder draft unpublished (id tanpa suffix kelas) supaya
-      // daftar "Terbit & Distribusi" hanya menampilkan distribusi per kelas.
+      // Materi sudah terbit per kelas — bersihkan placeholder & draft agar tidak ganda.
       try { await deletePublishedMaterial(sourceId); } catch { /* placeholder belum ada */ }
+      try { await deleteMaterialWorkspaceDraft(sourceId, userId); } catch { /* draft belum ada */ }
       const successes = results.filter((result) => result.status === 'fulfilled').length;
       const failures = targets.filter((_target, index) => results[index].status === 'rejected');
       if (!failures.length) {
         currentDraftId = sourceId;
         closePublishModal();
-        setStatus(`Berhasil dipublikasikan ke ${successes} kelas. Lihat di menu Materi > Terbit & Distribusi.`);
+        setStatus(`Berhasil diterbitkan ke ${successes} kelas. Lihat di menu Materi > Materi Saya.`);
       } else {
         const failedNames = failures.map((item) => item.kelas_nama || item.kelas_id).join(', ');
         showError(`${successes} kelas berhasil, ${failures.length} gagal (${failedNames}).`);

@@ -6,7 +6,7 @@
 
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterial, deletePublishedMaterial, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
 
 const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
 
@@ -185,9 +185,7 @@ export async function renderGuruMateriImportPage(container) {
       @media (max-width:640px) { .mwnav-btn { flex:none; padding:6px 10px 5px; } .mwnav-ico { width:25px; height:25px; font-size:13px; } .mwnav-label { font-size:10px; } }
     </style>
     <nav class="mwnav-bar" aria-label="Workspace materi">
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">⌂</span><span class="mwnav-label">Beranda</span></a>
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">✎</span><span class="mwnav-label">Draft</span></a>
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">▤</span><span class="mwnav-label">Terbit &amp; Distribusi</span></a>
+      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">▤</span><span class="mwnav-label">Materi Saya</span></a>
       <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">＋</span><span class="mwnav-label">Buat Materi</span></a>
       <a class="mwnav-btn" href="#guru/materi-ai"><span class="mwnav-ico">✦</span><span class="mwnav-label">Materi AI</span></a>
       <a class="mwnav-btn active" href="#guru/materi-import"><span class="mwnav-ico">📥</span><span class="mwnav-label">Import Materi</span></a>
@@ -369,39 +367,31 @@ export async function renderGuruMateriImportPage(container) {
       const id = currentDraftId || `mimp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
       const draft = {
-        id, guru_id: safeString(userId), guru_nama: safeString(userName),
+        id,
+        guru_id: safeString(userId),
+        guru_nama: safeString(userName || 'Guru'),
         title: safeString(titleInput.value || autoTitle || 'Materi Import'),
-        kelas_id: safeString(kelasInput.value), kelas_nama: safeString(kelasInput.value),
-        mapel_id: safeString(mapelInput.value), mapel_nama: safeString(mapelInput.value),
-        level: '', chapter: '', meetings: '',
+        subject: safeString(mapelInput.value),
+        class_name: safeString(kelasInput.value),
+        duration: '2 JP',
+        chapter: '',
         note: 'Materi dari Import HTML',
+        source: 'import',
         html_source: sanitizedHtml,
-        source: 'materi_import',
+        document_json: null,
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
         updated_at: now,
+        created_at: now,
       };
+      // Cadangan lokal (offline) — bukan sumber utama.
       const drafts = readDrafts();
       const idx = drafts.findIndex((d) => d.id === id);
       if (idx >= 0) drafts[idx] = draft; else drafts.push(draft);
-      if (!writeDrafts(drafts)) throw new Error('Penyimpanan browser penuh atau diblokir.');
-
-      await savePublishedMaterial({
-        id, source_id: id,
-        guru_id: safeString(userId), guru_nama: safeString(userName || 'Guru'),
-        pengajaran_id: '', kelas_id: safeString(draft.kelas_id), kelas_nama: safeString(draft.kelas_nama),
-        kelas_token: documentIdToken(draft.kelas_id || draft.kelas_nama),
-        mapel_id: safeString(draft.mapel_id), mapel_nama: safeString(draft.mapel_nama),
-        title: safeString(draft.title), note: safeString(draft.note),
-        level: '', chapter: '', meetings: '',
-        html_source: sanitizedHtml,
-        visible_to_students: false, status: 'unpublished', source: 'materi_import',
-        tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
-        semester_id: safeString(context?.semester_aktif),
-        published_at: now, created_at: now,
-      });
+      writeDrafts(drafts);
+      await saveMaterialWorkspaceDraft(draft);
       currentDraftId = id;
-      setStatus('Tersimpan sebagai draft (belum diterbitkan). Lihat di menu Materi > Terbit & Distribusi.');
+      setStatus('Tersimpan sebagai draft. Buka menu Materi > Materi Saya > Draft untuk menerbitkan.');
       showToast('Draft tersimpan');
     } catch (error) {
       showToast('Gagal menyimpan draft');
@@ -464,6 +454,7 @@ export async function renderGuruMateriImportPage(container) {
         published_at: now, created_at: now,
       })));
       try { await deletePublishedMaterial(sourceId); } catch { /* placeholder belum ada */ }
+      try { await deleteMaterialWorkspaceDraft(sourceId, userId); } catch { /* draft belum ada */ }
       const successes = results.filter((r) => r.status === 'fulfilled').length;
       const failures = targets.filter((_t, i) => results[i].status === 'rejected');
       if (!failures.length) {
