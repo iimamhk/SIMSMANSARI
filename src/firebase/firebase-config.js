@@ -23,9 +23,11 @@ if (window.firebase) {
     auth = window.firebase.auth(app);
     db = window.firebase.firestore(app);
 
-// Persist query/doc snapshots across reloads. Failure is non-fatal in
-    // private browsing or browsers that do not support IndexedDB.
-    db.enablePersistence().catch((error) => {
+    // Persist query/doc snapshots across reloads. `synchronizeTabs` membuat beberapa
+    // tab berbagi satu cache IndexedDB; tanpa ini tab kedua gagal mengambil lock dan
+    // Firestore mencatat error "Failed to obtain exclusive access".
+    // Kegagalan tetap non-fatal: Firestore otomatis memakai memory cache.
+    db.enablePersistence({ synchronizeTabs: true }).catch((error) => {
       const code = String(error?.code || '');
       if (code !== 'failed-precondition' && code !== 'unimplemented') {
         console.warn('Firestore offline persistence failed:', error);

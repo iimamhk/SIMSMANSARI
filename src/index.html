@@ -892,9 +892,22 @@
     <script>
       (function installBootstrapErrorHandler() {
         const escapeHtml = (value) => String(value || '').replace(/[<>&]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character]));
+        // Pesan yang tidak boleh mematikan aplikasi: kegagalan cache/persistence
+        // Firestore bersifat non-fatal karena otomatis jatuh ke memory cache.
+        const isNonFatal = (error) => {
+          const text = String(error?.message || error || '');
+          const code = String(error?.code || '');
+          return code === 'failed-precondition'
+            || code === 'unimplemented'
+            || /persistence layer|indexeddb|multi-tab|Failed to obtain exclusive access/i.test(text);
+        };
         const showError = (error) => {
+          console.error('SIM SMANSARI:', error);
+          // Setelah aplikasi berhasil dimuat, error lanjutan hanya dicatat di Console.
+          // Layar penuh "gagal dimuat" hanya untuk kegagalan saat bootstrap.
+          if (window.__SIM_APP_READY__ === true) return;
+          if (isNonFatal(error)) return;
           const message = error instanceof Error ? error.message : String(error || 'Kesalahan tidak diketahui.');
-          console.error('SIM SMANSARI gagal memuat aplikasi:', error);
           const app = document.getElementById('app');
           if (!app || app.dataset.bootstrapError === 'true') return;
           app.dataset.bootstrapError = 'true';

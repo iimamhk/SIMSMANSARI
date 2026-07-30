@@ -338,10 +338,28 @@ async function renderRoute() {
   await renderAndFinalize(renderLoginPage, container);
 }
 
+/**
+ * Kegagalan non-fatal yang tidak boleh mengosongkan aplikasi.
+ * Cache IndexedDB Firestore gagal saat beberapa tab terbuka, tetapi Firestore
+ * otomatis memakai memory cache sehingga aplikasi tetap berfungsi normal.
+ */
+function isNonFatalError(error) {
+  const text = String(error?.message || error || '');
+  const code = String(error?.code || '');
+  return code === 'failed-precondition'
+    || code === 'unimplemented'
+    || /persistence layer|indexeddb|multi-tab|Failed to obtain exclusive access/i.test(text);
+}
+
 function showBootstrapError(error) {
+  console.error('SIM SMANSARI:', error);
+  if (isNonFatalError(error)) return;
+  // Setelah halaman pertama berhasil dirender, error lanjutan hanya dicatat di
+  // Console. Mengganti seluruh UI karena satu rejection membuat aplikasi
+  // terasa "gagal dimuat" padahal masih bisa dipakai.
+  if (window.__SIM_APP_READY__ === true) return;
   const container = document.getElementById('app');
   const message = error instanceof Error ? error.message : String(error || 'Kesalahan tidak diketahui.');
-  console.error('SIM SMANSARI gagal memuat halaman:', error);
   if (container) {
     container.innerHTML = `
       <main class="flex min-h-screen items-center justify-center bg-slate-100 p-6">
@@ -355,9 +373,13 @@ function showBootstrapError(error) {
   }
 }
 
+const bootRoute = () => renderRoute()
+  .then(() => { window.__SIM_APP_READY__ = true; })
+  .catch(showBootstrapError);
+
 window.addEventListener('error', (event) => {
   if (event.error) showBootstrapError(event.error);
 });
 window.addEventListener('unhandledrejection', (event) => showBootstrapError(event.reason));
-window.addEventListener('hashchange', () => renderRoute().catch(showBootstrapError));
-window.addEventListener('DOMContentLoaded', () => renderRoute().catch(showBootstrapError));
+window.addEventListener('hashchange', bootRoute);
+window.addEventListener('DOMContentLoaded', bootRoute);
