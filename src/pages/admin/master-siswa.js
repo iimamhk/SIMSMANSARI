@@ -1,34 +1,25 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { generateUsername, getStoredContext } from '../../utils/helpers.js';
 import { saveDocument, getCollectionDocs, synchronizeCurrentClassMemberships, synchronizeRenamedUserReferences } from '../../firebase/data-service.js';
-import { getManagedUsers, getManagedUsersPage, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
+import { getManagedUsers, saveManagedUser, deleteManagedUser } from '../../firebase/auth-service.js';
 
-export async function renderMasterSiswaPage(container, pageState = {}) {
+export async function renderMasterSiswaPage(container) {
   const context = getStoredContext();
-  const hasFilters = Boolean(pageState.search || pageState.kelas || pageState.status);
-  let serverPage, allUsers, totalUsers;
 
-  if (hasFilters) {
-    const allStudents = await getManagedUsers('siswa');
-    allUsers = allStudents.filter((item) => item.role === 'siswa');
-    totalUsers = allUsers.length;
-    serverPage = { users: allUsers, nextCursor: null, total: totalUsers };
-  } else {
-    serverPage = await getManagedUsersPage('siswa', '', {
-      limit: 10,
-      after: pageState.after || '',
-      includeTotal: !pageState.after,
-    });
-    allUsers = Array.isArray(serverPage.users) ? serverPage.users : [];
-    totalUsers = Number(serverPage.total ?? pageState.total ?? 0);
-  }
-  const kelasList = await getCollectionDocs('kelas');
+  // Muat seluruh siswa SATU KALI (hasilnya di-cache oleh getManagedUsers dengan TTL,
+  // sehingga filter/pencarian/paginasi berikutnya tidak memicu read tambahan).
+  const [allStudents, kelasList] = await Promise.all([
+    getManagedUsers('siswa'),
+    getCollectionDocs('kelas'),
+  ]);
   let kelasCatalog = kelasList;
-  const siswaList = allUsers
+  const siswaList = (Array.isArray(allStudents) ? allStudents : [])
     .filter((item) => item.role === 'siswa')
     .sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
-  const kelasFilterOptions = [...new Set([...(kelasCatalog || []).map((item) => item.nama || item.id).filter(Boolean), ...(siswaList || []).map((item) => item.kelas_nama || item.kelas_id).filter(Boolean)])];
-  const totalSiswa = totalUsers || siswaList.length;
+  const totalUsers = siswaList.length;
+  const kelasFilterOptions = [...new Set([...(kelasCatalog || []).map((item) => item.nama || item.id).filter(Boolean), ...(siswaList || []).map((item) => item.kelas_nama || item.kelas_id).filter(Boolean)])]
+    .sort((a, b) => String(a).localeCompare(String(b), 'id', { sensitivity: 'base' }));
+  const totalSiswa = totalUsers;
   const activeSiswa = siswaList.filter((item) => (item.status || 'active') === 'active').length;
   const kelasTerpakai = new Set(siswaList.map((item) => item.kelas_nama || item.kelas_id).filter(Boolean)).size;
 
@@ -47,11 +38,11 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
               <p class="mt-1 text-xl font-semibold">${totalSiswa}</p>
             </div>
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Aktif Halaman</p>
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Siswa Aktif</p>
               <p class="mt-1 text-xl font-semibold">${activeSiswa}</p>
             </div>
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
-              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Kelas Halaman</p>
+              <p class="text-xs uppercase tracking-[0.2em] text-white/75">Kelas Terpakai</p>
               <p class="mt-1 text-xl font-semibold">${kelasTerpakai}</p>
             </div>
           </div>
@@ -206,7 +197,7 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
   const prevPageBtn = container.querySelector('#siswa-prev-page');
   const nextPageBtn = container.querySelector('#siswa-next-page');
   const PAGE_SIZE = 10;
-  let currentPage = Number(pageState.page || 1);
+  let currentPage = 1;
   let lastEditTrigger = null;
 
   const filterState = {
@@ -227,23 +218,20 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
     requestAnimationFrame(() => container.querySelector('#siswa-nama')?.focus());
   };
 
-  const sortSiswaByNama = (items) => {
-    return [...items].sort((a, b) => String(a.nama || '').trim().localeCompare(String(b.nama || '').trim(), 'id', { sensitivity: 'base' }));
-  };
-
   const getVisibleSiswa = () => {
-    const filtered = siswaList.filter((item) => {
+    const q = filterState.search.trim().toLowerCase();
+    const kelasSel = filterState.kelas.toLowerCase();
+    const statusSel = filterState.status.toLowerCase();
+    return siswaList.filter((item) => {
       const nama = String(item.nama || '').toLowerCase();
       const username = String(item.username || '').toLowerCase();
       const kelas = String(item.kelas_nama || item.kelas_id || '').toLowerCase();
       const status = String(item.status || 'active').toLowerCase();
-      const searchMatch = !filterState.search || `${nama} ${username}`.includes(filterState.search.toLowerCase());
-      const kelasMatch = filterState.kelas === 'all' || kelas === filterState.kelas.toLowerCase();
-      const statusMatch = filterState.status === 'all' || status === filterState.status.toLowerCase();
+      const searchMatch = !q || nama.includes(q) || username.includes(q);
+      const kelasMatch = filterState.kelas === 'all' || kelas === kelasSel;
+      const statusMatch = filterState.status === 'all' || status === statusSel;
       return searchMatch && kelasMatch && statusMatch;
     });
-
-    return sortSiswaByNama(filtered);
   };
 
   const bindRowActions = (visibleItems) => {
@@ -283,13 +271,16 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
 
   const renderRows = () => {
     const visibleItems = getVisibleSiswa();
-    resultsCount.textContent = visibleItems.length;
-    const totalPages = Math.max(1, Math.ceil((totalUsers || visibleItems.length) / PAGE_SIZE));
+    const totalFiltered = visibleItems.length;
+    resultsCount.textContent = totalFiltered;
+    const totalPages = Math.max(1, Math.ceil(totalFiltered / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
     const startIndex = (currentPage - 1) * PAGE_SIZE;
-    const pageItems = visibleItems;
-    const rangeStart = visibleItems.length ? startIndex + 1 : 0;
-    const rangeEnd = startIndex + visibleItems.length;
-    pageSummary.textContent = `${rangeStart}-${rangeEnd} dari ${totalUsers || visibleItems.length} siswa`;
+    const pageItems = visibleItems.slice(startIndex, startIndex + PAGE_SIZE);
+    const rangeStart = totalFiltered ? startIndex + 1 : 0;
+    const rangeEnd = startIndex + pageItems.length;
+    pageSummary.textContent = `${rangeStart}-${rangeEnd} dari ${totalFiltered} siswa`;
     pageNumber.textContent = `Halaman ${currentPage}/${totalPages}`;
     prevPageBtn.disabled = currentPage <= 1;
     nextPageBtn.disabled = currentPage >= totalPages;
@@ -505,62 +496,38 @@ export async function renderMasterSiswaPage(container, pageState = {}) {
 
   prevPageBtn?.addEventListener('click', () => {
     if (currentPage <= 1) return;
-    const previousAfter = pageState.previousCursors?.[currentPage - 2] || '';
-    renderMasterSiswaPage(container, {
-      page: currentPage - 1,
-      after: previousAfter,
-      total: totalUsers,
-      search: pageState.search,
-      kelas: pageState.kelas,
-      status: pageState.status,
-      previousCursors: (pageState.previousCursors || []).slice(0, Math.max(0, currentPage - 2)),
-    });
+    currentPage -= 1;
+    renderRows();
   });
   nextPageBtn?.addEventListener('click', () => {
-    if (!serverPage.nextCursor) return;
-    const cursors = [...(pageState.previousCursors || []), pageState.after || ''];
-    renderMasterSiswaPage(container, {
-      page: currentPage + 1,
-      after: serverPage.nextCursor,
-      total: totalUsers,
-      search: pageState.search,
-      kelas: pageState.kelas,
-      status: pageState.status,
-      previousCursors: cursors,
-    });
+    currentPage += 1;
+    renderRows();
   });
 
-  const currentSearchVal = pageState.search || '';
-  const currentKelasVal = pageState.kelas || 'all';
-  const currentStatusVal = pageState.status || 'all';
+  // Filter & pencarian murni di sisi klien (data sudah dimuat sekali, tidak ada read tambahan).
+  let searchDebounce = null;
   if (searchInput) {
-    searchInput.value = currentSearchVal;
     searchInput.addEventListener('input', () => {
-      renderMasterSiswaPage(container, {
-        search: searchInput.value.trim(),
-        kelas: (kelasFilter?.value || 'all'),
-        status: (statusFilter?.value || 'all'),
-      });
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        filterState.search = searchInput.value.trim();
+        currentPage = 1;
+        renderRows();
+      }, 200);
     });
   }
   if (kelasFilter) {
-    kelasFilter.value = currentKelasVal;
     kelasFilter.addEventListener('change', () => {
-      renderMasterSiswaPage(container, {
-        search: (searchInput?.value.trim() || ''),
-        kelas: kelasFilter.value,
-        status: (statusFilter?.value || 'all'),
-      });
+      filterState.kelas = kelasFilter.value || 'all';
+      currentPage = 1;
+      renderRows();
     });
   }
   if (statusFilter) {
-    statusFilter.value = currentStatusVal;
     statusFilter.addEventListener('change', () => {
-      renderMasterSiswaPage(container, {
-        search: (searchInput?.value.trim() || ''),
-        kelas: (kelasFilter?.value || 'all'),
-        status: statusFilter.value,
-      });
+      filterState.status = statusFilter.value || 'all';
+      currentPage = 1;
+      renderRows();
     });
   }
 
