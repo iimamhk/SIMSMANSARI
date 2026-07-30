@@ -261,6 +261,70 @@ export async function testAiAdminConfig(config) {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Backup Google Drive
+// ---------------------------------------------------------------------------
+
+/** Baca konfigurasi Drive + URL persetujuan Google (khusus admin). */
+export async function getDriveBackupConfig() {
+  const response = await authenticatedFetch('/api/admin/backup-config');
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Konfigurasi Google Drive tidak dapat dimuat.');
+  return result;
+}
+
+/** Simpan Client ID/Secret/nama folder Drive (khusus admin). */
+export async function saveDriveBackupConfig(config) {
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Konfigurasi Google Drive tidak dapat disimpan.');
+  return result;
+}
+
+/** Putuskan koneksi Drive tanpa menghapus Client ID/Secret. */
+export async function disconnectDriveBackup() {
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'disconnect' }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'Koneksi Google Drive tidak dapat diputus.');
+  return result;
+}
+
+/**
+ * Ambil access token Drive berumur pendek untuk unggahan langsung dari browser.
+ * Mengembalikan `{ available:false, reason }` bila Drive belum siap, agar
+ * pemanggil dapat melanjutkan backup lokal tanpa memunculkan error keras.
+ */
+export async function getDriveUploadToken() {
+  const response = await authenticatedFetch('/api/admin/drive-token');
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok !== true) {
+    return { available: false, reason: result.error || 'Google Drive belum siap.' };
+  }
+  return { available: true, ...result };
+}
+
+/** Catat metadata unggahan Drive yang sudah selesai. */
+export async function recordDriveUpload(meta) {
+  try {
+    await authenticatedFetch('/api/admin/drive-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(meta || {}),
+    });
+  } catch (error) {
+    // Pencatatan bersifat opsional; kegagalan tidak membatalkan unggahan.
+    console.warn('Metadata unggahan Drive gagal dicatat:', error);
+  }
+}
+
 export async function loginUser(username, password) {
   try {
     const response = await fetch(backendUrl('/api/auth/login'), {

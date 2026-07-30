@@ -8,6 +8,7 @@
 // ============================================================================
 
 import { getStoredContext } from './helpers.js';
+import { isDriveUploadEnabled, uploadBackupToDrive } from './drive-upload.js';
 import {
   getTeachingAssignmentsForUser,
   getClassMembers,
@@ -142,6 +143,39 @@ function downloadBlob(blob, fileName) {
   link.click();
   document.body.removeChild(link);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+/**
+ * Simpan backup: unduh ke perangkat lalu unggah ke Google Drive bila tersedia.
+ *
+ * Unduhan lokal tetap dilakukan lebih dulu supaya guru selalu memegang berkas,
+ * bahkan ketika Drive belum dikonfigurasi atau jaringan bermasalah.
+ *
+ * @returns {Promise<{uploaded:boolean, reason?:string, webViewLink?:string, folderName?:string}>}
+ */
+async function deliverBackupBlob(blob, fileName, onProgress = () => {}) {
+  downloadBlob(blob, fileName);
+
+  // Pelaporan progres memakai bentuk { current, total, label } seperti pemanggil lain.
+  const report = (label) => {
+    try { onProgress({ current: 1, total: 1, label }); } catch { /* abaikan */ }
+  };
+
+  if (!isDriveUploadEnabled()) {
+    return { uploaded: false, reason: 'Unggah Google Drive dimatikan pada perangkat ini.' };
+  }
+
+  try {
+    const result = await uploadBackupToDrive(blob, fileName, {
+      onProgress: (text) => report(text),
+    });
+    report(result.uploaded ? 'Terunggah ke Google Drive.' : `Drive: ${result.reason}`);
+    return result;
+  } catch (error) {
+    // Kegagalan Drive tidak boleh membatalkan backup yang sudah terunduh.
+    console.warn('Unggahan Drive gagal:', error);
+    return { uploaded: false, reason: error?.message || 'Unggahan Drive gagal.' };
+  }
 }
 
 // Ambil dokumen dengan filter pengajaran_id + periode, fallback filter client-side
@@ -943,7 +977,7 @@ export async function exportGuruBackupExcel(onProgress = () => {}) {
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  downloadBlob(blob, fileName);
+  const delivery = await deliverBackupBlob(blob, fileName, onProgress);
 
   setLastBackupTimestamp({
     guru_id: userId,
@@ -951,10 +985,11 @@ export async function exportGuruBackupExcel(onProgress = () => {}) {
     tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
     semester_id: context?.semester_aktif || '',
     file_name: fileName,
+    drive_uploaded: delivery.uploaded === true,
   });
 
   const sheetCount = workbook.worksheets.length;
-  return { fileName, assignments_count: Math.ceil(sheetCount / 3) };
+  return { fileName, assignments_count: Math.ceil(sheetCount / 3), drive: delivery };
 }
 
 // ============================================================================
@@ -1095,7 +1130,7 @@ export async function exportSelectiveBackupExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  downloadBlob(blob, fileName);
+  const delivery = await deliverBackupBlob(blob, fileName, onProgress);
 
   // Record in history
   const checksum = await computeChecksum(blob);
@@ -1109,6 +1144,7 @@ export async function exportSelectiveBackupExcel(
     assignment_count: selectedAssignments.length,
     checksum,
     backup_type: 'selective',
+    drive_uploaded: delivery.uploaded === true,
   });
 
   setLastBackupTimestamp({
@@ -1117,10 +1153,11 @@ export async function exportSelectiveBackupExcel(
     tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
     semester_id: context?.semester_aktif || '',
     file_name: fileName,
+    drive_uploaded: delivery.uploaded === true,
   });
 
   const sheetCount = workbook.worksheets.length;
-  return { fileName, assignments_count: selectedAssignments.length, sheets: sheetCount };
+  return { fileName, assignments_count: selectedAssignments.length, sheets: sheetCount, drive: delivery };
 }
 
 // ============================================================================
@@ -1240,7 +1277,7 @@ export async function exportBackupMultiFormat(
       break;
   }
 
-  downloadBlob(blob, fileName);
+  const delivery = await deliverBackupBlob(blob, fileName, onProgress);
 
   const checksum = await computeChecksum(blob);
   addBackupHistory({
@@ -1254,6 +1291,7 @@ export async function exportBackupMultiFormat(
     format: format.key,
     checksum,
     backup_type: 'selective',
+    drive_uploaded: delivery.uploaded === true,
   });
 
   setLastBackupTimestamp({
@@ -1262,9 +1300,10 @@ export async function exportBackupMultiFormat(
     tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
     semester_id: context?.semester_aktif || '',
     file_name: fileName,
+    drive_uploaded: delivery.uploaded === true,
   });
 
-  return { fileName, format: format.key, assignments_count: selectedAssignments.length };
+  return { fileName, format: format.key, assignments_count: selectedAssignments.length, drive: delivery };
 }
 
 // ============================================================================

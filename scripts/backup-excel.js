@@ -2,6 +2,8 @@ const ExcelJS = require('exceljs');
 const admin = require('firebase-admin');
 const path = require('path');
 
+const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink';
+
 const COLOR_HEADER_BG = { argb: 'FF1F4E79' };
 const COLOR_HEADER_FONT = { argb: 'FFFFFFFF' };
 const COLOR_TOTAL_BG = { argb: 'FFE6E6E6' };
@@ -37,6 +39,48 @@ function isFirestoreIndexError(error) {
   const code = String(error?.code || '').toLowerCase();
   const message = String(error?.message || '').toLowerCase();
   return (code === 'failed-precondition' && message.includes('index')) || message.includes('the query requires an index');
+}
+
+async function uploadFileToDrive(fileName, buffer) {
+  // Muat setelah Firebase Admin aktif agar helper memakai app yang sama.
+  const {
+    ensureBackupFolder,
+    getAccessToken,
+    recordUpload,
+  } = require('../src/api/_lib/backup-config');
+
+  const { accessToken, config } = await getAccessToken();
+  const folderId = await ensureBackupFolder({ accessToken, config });
+  const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const metadata = { name: fileName, mimeType, parents: [folderId] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([buffer], { type: mimeType }), fileName);
+
+  const response = await fetch(DRIVE_UPLOAD_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form,
+  });
+  const text = await response.text();
+  let result = {};
+  try { result = text ? JSON.parse(text) : {}; } catch { result = {}; }
+  if (!response.ok) {
+    const detail = result?.error?.message || text || `HTTP ${response.status}`;
+    throw new Error(`Upload Google Drive gagal: ${String(detail).slice(0, 300)}`);
+  }
+  if (!result.id) throw new Error('Google Drive tidak mengembalikan ID file backup.');
+
+  await recordUpload({
+    fileName: result.name || fileName,
+    fileId: result.id,
+    size: Number(result.size || buffer.length || 0),
+    uploadedBy: 'backup-mingguan',
+  });
+  return {
+    ...result,
+    folderName: config.folderName,
+  };
 }
 
 async function getFirestoreData(db, collectionName, filters = [], orderBy = null, limit = null) {
@@ -552,16 +596,22 @@ async function main() {
 
     const workbook = await generateWorkbook(assignmentsByGuru, siswaDataMap, dataMap, period);
 
-    const buffer = await workbook.xlsx.writeBuffer();
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     const fs = require('fs');
     const fileName = `Laporan-SIMSMANSARI-${dateStr}.xlsx`;
     const outputPath = path.join(process.cwd(), fileName);
-    fs.writeFileSync(outputPath, Buffer.from(buffer));
+    fs.writeFileSync(outputPath, buffer);
+
+    console.log('Uploading backup to Google Drive...');
+    const driveResult = await uploadFileToDrive(fileName, buffer);
 
     console.log(`\n=== Backup process completed successfully ===`);
     console.log(`Backup file: ${outputPath}`);
     console.log(`Size: ${(fs.statSync(outputPath).size / 1024).toFixed(1)} KB`);
+    console.log(`Google Drive folder: ${driveResult.folderName || '-'}`);
+    console.log(`Google Drive file ID: ${driveResult.id}`);
+    if (driveResult.webViewLink) console.log(`Google Drive link: ${driveResult.webViewLink}`);
   } catch (error) {
     console.error('\n=== Backup FAILED ===');
     console.error(`Error: ${error.message}`);

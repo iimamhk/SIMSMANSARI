@@ -17,6 +17,15 @@
     "api/ai/config.js": {
       "maxDuration": 30
     },
+    "api/admin/backup-config.js": {
+      "maxDuration": 30
+    },
+    "api/admin/drive-oauth.js": {
+      "maxDuration": 30
+    },
+    "api/admin/drive-token.js": {
+      "maxDuration": 30
+    },
     "api/ai/test-connection.js": {
       "maxDuration": 30
     },
@@ -52,6 +61,18 @@
     {
       "source": "/api/ai/config",
       "destination": "/api/ai/config.js"
+    },
+    {
+      "source": "/api/admin/backup-config",
+      "destination": "/api/admin/backup-config.js"
+    },
+    {
+      "source": "/api/admin/drive-oauth",
+      "destination": "/api/admin/drive-oauth.js"
+    },
+    {
+      "source": "/api/admin/drive-token",
+      "destination": "/api/admin/drive-token.js"
     },
     {
       "source": "/api/ai/model-options",

@@ -2,11 +2,15 @@ import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { auth } from '../../firebase/firebase-config.js';
 import {
   changePassword,
+  disconnectDriveBackup,
   getAiAdminConfig,
+  getDriveBackupConfig,
   normalizePassword,
   saveAiAdminConfig,
+  saveDriveBackupConfig,
   testAiAdminConfig,
 } from '../../firebase/auth-service.js';
+import { uploadBackupToDrive } from '../../utils/drive-upload.js';
 
 export async function renderSystemSettingsPage(container) {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -34,6 +38,42 @@ export async function renderSystemSettingsPage(container) {
           <p id="ai-key-hint" class="text-xs text-slate-500 sm:col-span-2">API key belum disimpan.</p>
           <div class="flex flex-wrap items-center gap-2 sm:col-span-2"><button type="button" id="ai-test-btn" class="rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-50">Tes Koneksi</button><button type="submit" id="ai-save-btn" class="rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105">Simpan AI</button><span id="ai-config-message" class="text-xs text-slate-500" role="status"></span></div>
         </form>
+      </section>
+
+      <section class="rounded-[24px] border border-emerald-100 bg-white p-4 shadow-[0_16px_40px_-30px_rgba(5,150,105,.5)] sm:p-5">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600">Backup</p>
+            <h3 class="mt-1 text-lg font-bold text-slate-900">Google Drive</h3>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Backup guru otomatis diunggah ke Drive sekolah. Client Secret dan refresh token dienkripsi di server.</p>
+          </div>
+          <span id="drive-status" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Memuat...</span>
+        </div>
+
+        <div id="drive-redirect-box" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <p class="text-xs font-bold text-amber-900">Authorized redirect URI</p>
+          <p class="mt-1 text-[11px] leading-5 text-amber-800">Daftarkan URI berikut di Google Cloud Console → Credentials → OAuth client Anda, tepat seperti tertulis.</p>
+          <div class="mt-2 flex items-center gap-2">
+            <code id="drive-redirect-uri" class="flex-1 overflow-x-auto rounded-lg bg-white px-2.5 py-2 text-[11px] text-slate-700">Memuat...</code>
+            <button type="button" id="drive-copy-redirect" class="flex-none rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-[11px] font-bold text-amber-800 transition hover:bg-amber-100">Salin</button>
+          </div>
+        </div>
+
+        <form id="drive-config-form" class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="sm:col-span-2"><span class="mb-1 block text-xs font-semibold text-slate-600">Client ID</span><input id="drive-client-id" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="1234567890-abc.apps.googleusercontent.com"></label>
+          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Client Secret</span><input id="drive-client-secret" type="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Isi untuk mengganti secret"></label>
+          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Nama Folder Drive</span><input id="drive-folder-name" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="SIMSMANSARI Backup"></label>
+          <p id="drive-secret-hint" class="text-xs text-slate-500 sm:col-span-2">Client Secret belum disimpan.</p>
+          <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
+            <button type="submit" id="drive-save-btn" class="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105">Simpan Kredensial</button>
+            <a id="drive-connect-btn" href="#" class="pointer-events-none rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 opacity-50 transition hover:bg-emerald-50">Hubungkan Google Drive</a>
+            <button type="button" id="drive-test-btn" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Tes Unggah</button>
+            <button type="button" id="drive-disconnect-btn" class="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Putuskan</button>
+          </div>
+          <p id="drive-message" class="text-xs text-slate-500 sm:col-span-2" role="status"></p>
+        </form>
+
+        <dl id="drive-meta" class="mt-3 grid gap-2 text-xs sm:grid-cols-3"></dl>
       </section>
 
       <form id="settings-form" class="space-y-4">
@@ -158,6 +198,166 @@ export async function renderSystemSettingsPage(container) {
     } finally {
       aiSaveBtn.disabled = false;
       aiSaveBtn.textContent = 'Simpan AI';
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Backup Google Drive
+  // -------------------------------------------------------------------------
+  const driveForm = container.querySelector('#drive-config-form');
+  const driveClientId = container.querySelector('#drive-client-id');
+  const driveClientSecret = container.querySelector('#drive-client-secret');
+  const driveFolderName = container.querySelector('#drive-folder-name');
+  const driveSecretHint = container.querySelector('#drive-secret-hint');
+  const driveStatus = container.querySelector('#drive-status');
+  const driveMessage = container.querySelector('#drive-message');
+  const driveMeta = container.querySelector('#drive-meta');
+  const driveRedirectUri = container.querySelector('#drive-redirect-uri');
+  const driveCopyRedirect = container.querySelector('#drive-copy-redirect');
+  const driveSaveBtn = container.querySelector('#drive-save-btn');
+  const driveConnectBtn = container.querySelector('#drive-connect-btn');
+  const driveTestBtn = container.querySelector('#drive-test-btn');
+  const driveDisconnectBtn = container.querySelector('#drive-disconnect-btn');
+  let hasStoredDriveSecret = false;
+
+  function setDriveMessage(text, isError = false) {
+    if (!driveMessage) return;
+    driveMessage.textContent = text || '';
+    driveMessage.className = isError ? 'text-xs text-rose-600 sm:col-span-2' : 'text-xs text-slate-500 sm:col-span-2';
+  }
+
+  function formatDriveDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function applyDriveConfig(config) {
+    hasStoredDriveSecret = Boolean(config.secretTail);
+    if (config.clientId) driveClientId.value = config.clientId;
+    driveFolderName.value = config.folderName || '';
+    driveSecretHint.textContent = config.secretTail
+      ? `Client Secret tersimpan: ${config.secretTail}. Kosongkan kolom bila tidak diganti.`
+      : 'Client Secret belum disimpan.';
+    if (driveRedirectUri) driveRedirectUri.textContent = config.redirectUri || '-';
+
+    if (config.consentUrl && driveConnectBtn) {
+      driveConnectBtn.href = config.consentUrl;
+      driveConnectBtn.classList.remove('pointer-events-none', 'opacity-50');
+    } else if (driveConnectBtn) {
+      driveConnectBtn.href = '#';
+      driveConnectBtn.classList.add('pointer-events-none', 'opacity-50');
+    }
+
+    if (!config.configured) {
+      driveStatus.textContent = 'Belum diatur';
+      driveStatus.className = 'rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500';
+    } else if (config.connected) {
+      driveStatus.textContent = 'Terhubung';
+      driveStatus.className = 'rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700';
+    } else {
+      driveStatus.textContent = 'Perlu dihubungkan';
+      driveStatus.className = 'rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700';
+    }
+
+    const rows = [
+      ['Akun Drive', config.accountEmail || '-'],
+      ['Folder', config.folderName || '-'],
+      ['Dihubungkan', formatDriveDate(config.connectedAt)],
+      ['Unggahan terakhir', config.lastUploadName || '-'],
+      ['Waktu unggahan', formatDriveDate(config.lastUploadAt)],
+      ['Cakupan izin', 'drive.file (hanya berkas aplikasi)'],
+    ];
+    driveMeta.innerHTML = rows.map(([label, value]) => `
+      <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+        <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${label}</dt>
+        <dd class="mt-0.5 break-words text-[11px] font-semibold text-slate-700">${value}</dd>
+      </div>`).join('');
+  }
+
+  async function reloadDriveConfig() {
+    try {
+      const config = await getDriveBackupConfig();
+      applyDriveConfig(config);
+    } catch (error) {
+      driveStatus.textContent = 'Gagal memuat';
+      driveStatus.className = 'rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700';
+      setDriveMessage(error.message, true);
+    }
+  }
+
+  await reloadDriveConfig();
+
+  driveCopyRedirect?.addEventListener('click', async () => {
+    const value = driveRedirectUri?.textContent || '';
+    try {
+      await navigator.clipboard.writeText(value);
+      driveCopyRedirect.textContent = 'Tersalin';
+      setTimeout(() => { driveCopyRedirect.textContent = 'Salin'; }, 1800);
+    } catch {
+      setDriveMessage('Clipboard diblokir. Salin URI secara manual.', true);
+    }
+  });
+
+  driveForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const clientId = String(driveClientId?.value || '').trim();
+    const clientSecret = String(driveClientSecret?.value || '').trim();
+    if (!clientId || (!clientSecret && !hasStoredDriveSecret)) {
+      setDriveMessage('Lengkapi Client ID dan Client Secret.', true);
+      return;
+    }
+    driveSaveBtn.disabled = true;
+    driveSaveBtn.textContent = 'Menyimpan...';
+    try {
+      await saveDriveBackupConfig({
+        clientId,
+        clientSecret,
+        folderName: String(driveFolderName?.value || '').trim(),
+      });
+      driveClientSecret.value = '';
+      await reloadDriveConfig();
+      setDriveMessage('Kredensial tersimpan. Lanjutkan dengan "Hubungkan Google Drive".');
+    } catch (error) {
+      setDriveMessage(error.message, true);
+    } finally {
+      driveSaveBtn.disabled = false;
+      driveSaveBtn.textContent = 'Simpan Kredensial';
+    }
+  });
+
+  driveTestBtn?.addEventListener('click', async () => {
+    driveTestBtn.disabled = true;
+    driveTestBtn.textContent = 'Menguji...';
+    setDriveMessage('Mengunggah berkas uji ke Google Drive...');
+    try {
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const content = `Tes koneksi backup SIM SMANSARI\nWaktu: ${new Date().toISOString()}\n`;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const result = await uploadBackupToDrive(blob, `tes-koneksi-${stamp}.txt`, { mimeType: 'text/plain' });
+      if (!result.uploaded) throw new Error(result.reason || 'Unggahan uji gagal.');
+      await reloadDriveConfig();
+      setDriveMessage(`Berhasil. Berkas uji tersimpan di folder "${result.folderName || 'backup'}".`);
+    } catch (error) {
+      setDriveMessage(error.message, true);
+    } finally {
+      driveTestBtn.disabled = false;
+      driveTestBtn.textContent = 'Tes Unggah';
+    }
+  });
+
+  driveDisconnectBtn?.addEventListener('click', async () => {
+    if (!window.confirm('Putuskan koneksi Google Drive? Backup tidak akan terunggah sampai dihubungkan lagi.')) return;
+    driveDisconnectBtn.disabled = true;
+    try {
+      await disconnectDriveBackup();
+      await reloadDriveConfig();
+      setDriveMessage('Koneksi Google Drive diputus.');
+    } catch (error) {
+      setDriveMessage(error.message, true);
+    } finally {
+      driveDisconnectBtn.disabled = false;
     }
   });
 

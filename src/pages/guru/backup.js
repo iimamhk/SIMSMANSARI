@@ -1,5 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { showBackupReminder } from '../../utils/backup-reminder.js';
+import { checkDriveStatus, isDriveUploadEnabled, setDriveUploadEnabled } from '../../utils/drive-upload.js';
 import {
   exportGuruBackupExcel,
   exportBackupMultiFormat,
@@ -407,6 +408,22 @@ export async function renderGuruBackupPage(container) {
 
         <!-- TAB: SETTINGS -->
         <div id="tab-settings" class="tab-panel hidden p-5 sm:p-6 space-y-6">
+          <section>
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-lg font-bold text-slate-900">Google Drive</h3>
+              <span id="drive-state-badge" class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Memeriksa...</span>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+              <label class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="font-medium text-slate-900">Unggah Backup ke Google Drive</p>
+                  <p class="text-sm text-slate-500">Setiap backup diunduh ke perangkat ini lalu diunggah ke folder Drive sekolah.</p>
+                </div>
+                <input type="checkbox" id="drive-upload-toggle" class="h-5 w-5 flex-none rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+              </label>
+              <p id="drive-state-detail" class="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">Memeriksa koneksi Google Drive...</p>
+            </div>
+          </section>
           <section>
             <h3 class="mb-4 text-lg font-bold text-slate-900">Pengaturan Backup Otomatis</h3>
             <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
@@ -903,6 +920,48 @@ function initSettingsActions(container) {
   autoBackupFriday?.addEventListener('change', () => {
     localStorage.setItem('auto_backup_friday', autoBackupFriday.checked);
   });
+
+  // --- Google Drive ---
+  const driveToggle = container.querySelector('#drive-upload-toggle');
+  const driveBadge = container.querySelector('#drive-state-badge');
+  const driveDetail = container.querySelector('#drive-state-detail');
+  if (driveToggle) driveToggle.checked = isDriveUploadEnabled();
+  driveToggle?.addEventListener('change', () => {
+    setDriveUploadEnabled(driveToggle.checked);
+    refreshDriveState();
+  });
+
+  const setBadge = (text, tone) => {
+    if (!driveBadge) return;
+    const tones = {
+      ok: 'rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700',
+      warn: 'rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700',
+      off: 'rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500',
+    };
+    driveBadge.textContent = text;
+    driveBadge.className = tones[tone] || tones.off;
+  };
+
+  async function refreshDriveState() {
+    if (!driveToggle?.checked) {
+      setBadge('Nonaktif', 'off');
+      if (driveDetail) driveDetail.textContent = 'Unggah Google Drive dimatikan. Backup hanya tersimpan di perangkat ini.';
+      return;
+    }
+    setBadge('Memeriksa...', 'off');
+    if (driveDetail) driveDetail.textContent = 'Memeriksa koneksi Google Drive...';
+    const status = await checkDriveStatus();
+    if (status.available) {
+      setBadge('Terhubung', 'ok');
+      const akun = status.accountEmail ? ` (${status.accountEmail})` : '';
+      if (driveDetail) driveDetail.textContent = `Aktif. Backup akan diunggah ke folder "${status.folderName || 'backup'}"${akun}.`;
+    } else {
+      setBadge('Belum siap', 'warn');
+      if (driveDetail) driveDetail.textContent = `${status.reason || 'Google Drive belum dikonfigurasi.'} Admin dapat mengatur di Pengaturan → Google Drive.`;
+    }
+  }
+
+  refreshDriveState();
 
   container.querySelector('#btn-export-history')?.addEventListener('click', () => {
     const history = getBackupHistory();

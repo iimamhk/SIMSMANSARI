@@ -251,14 +251,17 @@ function getPublicAiProfiles() {
 
 function setCorsHeaders(req, res) {
   const { allowedOrigins } = getConfig();
-  const requestOrigin = req.headers.origin || '';
-  const allowOrigin = !allowedOrigins.length
-    ? requestOrigin || '*'
-    : allowedOrigins.includes(requestOrigin)
-      ? requestOrigin
-      : allowedOrigins[0];
+  const requestOrigin = String(req.headers.origin || '').trim();
+  const isLocalDevelopmentOrigin = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(requestOrigin);
+  const isAllowed = requestOrigin && (
+    !allowedOrigins.length
+    || allowedOrigins.includes(requestOrigin)
+    || isLocalDevelopmentOrigin
+  );
 
-  res.setHeader('Access-Control-Allow-Origin', allowOrigin);
+  // Jangan mengirim origin lain sebagai fallback: browser akan menolak respons
+  // dan konfigurasi CORS dapat tanpa sengaja mengizinkan origin yang salah.
+  if (isAllowed) res.setHeader('Access-Control-Allow-Origin', requestOrigin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');

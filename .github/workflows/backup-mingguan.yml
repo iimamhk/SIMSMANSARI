@@ -54,6 +54,7 @@ jobs:
       run: node scripts/backup-excel.js
       env:
         FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        AI_CONFIG_SECRET: ${{ secrets.AI_CONFIG_SECRET }}
         TAHUN_AJARAN_AKTIF: ${{ secrets.TAHUN_AJARAN_AKTIF || env.TAHUN_AJARAN_AKTIF }}
         SEMESTER_AKTIF: ${{ secrets.SEMESTER_AKTIF || env.SEMESTER_AKTIF }}
 
