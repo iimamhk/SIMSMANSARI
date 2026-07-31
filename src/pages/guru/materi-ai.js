@@ -10,7 +10,7 @@ import { streamGenerateMaterialJson, MaterialGenerationError } from '../../utils
 import { getApiBase } from '../../utils/ai-client.js';
 import { buildMaterialHtml } from '../../utils/materi-renderer.js';
 import { ensureKaTeXReady } from '../../utils/markdown-export.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterialForClasses, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterialForClasses, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft, getMaterialWorkspaceDrafts, getPublishedMaterialsForTeacher } from '../../firebase/data-service.js';
 import {
   pageStyles,
   statusBannerHtml,
@@ -39,7 +39,7 @@ function writeDrafts(drafts) {
   }
 }
 
-export async function renderGuruMateriAiPage(container) {
+export async function renderGuruMateriAiPage(container, params = {}) {
   const storedContext = getStoredContext();
   const context = {
     ...storedContext,
@@ -56,6 +56,18 @@ export async function renderGuruMateriAiPage(container) {
     teachingAssignments = userId ? await getTeachingAssignmentsForUser(context, userId) : [];
   } catch (error) {
     console.warn('Gagal memuat relasi mengajar untuk publish:', error);
+  }
+
+  // Tahap 5: bila diminta membuka materi/draft tersimpan, muat lebih dulu.
+  const draftId = String(params?.draftId || '').trim();
+  const publishedId = String(params?.publishedId || '').trim();
+  let preload = null;
+  if (draftId || publishedId) {
+    try {
+      preload = await loadSavedMaterial({ userId, draftId, publishedId });
+    } catch (error) {
+      console.warn('Gagal memuat materi tersimpan untuk disunting:', error);
+    }
   }
 
   const html = renderLayout(
@@ -95,10 +107,69 @@ export async function renderGuruMateriAiPage(container) {
   );
 
   container.innerHTML = html;
-  initMateriAi(container, { userId, userName, context, teachingAssignments });
+  initMateriAi(container, { userId, userName, context, teachingAssignments, preload });
 }
 
-function initMateriAi(root, { userId, userName, context, teachingAssignments }) {
+/**
+ * Muat materi tersimpan (draft atau materi terbit) milik guru untuk disunting.
+ * Mengembalikan { material, meta, draftId, source, title } atau null bila tidak
+ * ada JSON terstruktur (materi lama hanya-HTML tidak dapat disunting per-bagian).
+ */
+async function loadSavedMaterial({ userId, draftId, publishedId }) {
+  if (draftId) {
+    const drafts = await getMaterialWorkspaceDrafts(userId);
+    const draft = (drafts || []).find((d) => String(d.id) === draftId);
+    if (!draft) return null;
+    if (!draft.document_json || typeof draft.document_json !== 'object') {
+      return { unsupported: true, title: draft.title || 'Materi' };
+    }
+    return {
+      material: draft.document_json,
+      draftId: draft.id,
+      source: 'draft',
+      title: draft.title || draft.document_json.title || 'Materi',
+      meta: {
+        subject: draft.subject || '',
+        className: draft.class_name || '',
+        chapter: draft.chapter || '',
+        meetings: draft.duration || '',
+      },
+      form: {
+        mapel: draft.subject || '',
+        bab: draft.chapter || '',
+        alokasiWaktu: draft.duration || '',
+      },
+    };
+  }
+  if (publishedId) {
+    const list = await getPublishedMaterialsForTeacher(userId);
+    const doc = (list || []).find((m) => String(m.source_id || m.id) === publishedId || String(m.id) === publishedId);
+    if (!doc) return null;
+    if (!doc.document_json || typeof doc.document_json !== 'object') {
+      return { unsupported: true, title: doc.title || 'Materi' };
+    }
+    return {
+      material: doc.document_json,
+      draftId: String(doc.source_id || doc.id),
+      source: 'published',
+      title: doc.title || doc.document_json.title || 'Materi',
+      meta: {
+        subject: doc.mapel_nama || doc.mapel_id || '',
+        className: doc.kelas_nama || '',
+        chapter: doc.chapter || '',
+        meetings: doc.meetings || '',
+      },
+      form: {
+        mapel: doc.mapel_nama || doc.mapel_id || '',
+        bab: doc.chapter || '',
+        alokasiWaktu: doc.meetings || '',
+      },
+    };
+  }
+  return null;
+}
+
+function initMateriAi(root, { userId, userName, context, teachingAssignments, preload }) {
   const form = root.querySelector('#maip-form');
   const generateBtn = root.querySelector('#maip-generate');
   const stopBtn = root.querySelector('#maip-stop');
@@ -605,7 +676,8 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
         note: `Materi dari AI - ${input.topik || ''}`,
         source: 'ai',
         html_source: htmlSource,
-        document_json: null,
+        // Simpan JSON terstruktur agar materi bisa disunting ulang di Studio (Tahap 5).
+        document_json: cloneMaterial(currentMaterial),
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
         updated_at: now,
@@ -675,6 +747,8 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
         html_source: htmlSource,
         visible_to_students: true,
         source: 'materi_ai',
+        // Simpan JSON agar materi terbit bisa disunting ulang di Studio.
+        document_json: cloneMaterial(currentMaterial),
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
         published_at: now,
@@ -699,4 +773,44 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments }) 
       updateTargetCount();
     }
   });
+
+  // --- Tahap 5: hidrasi materi tersimpan untuk disunting ---
+  function setFormField(name, value) {
+    if (value == null || value === '') return;
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) el.value = value;
+  }
+  function loadPreloadMaterial(data) {
+    if (!data) return;
+    if (data.unsupported) {
+      // Materi lama tanpa JSON terstruktur — beri tahu, jangan paksa.
+      revisiWrap.hidden = true;
+      emptyEl.hidden = false;
+      previewEl.hidden = true;
+      showError(`Materi "${data.title || ''}" dibuat sebelum editor terstruktur, jadi belum bisa disunting per-bagian di sini. Buat materi baru atau gunakan editor manual.`);
+      return;
+    }
+    if (!data.material || typeof data.material !== 'object') return;
+    // Isi field form dari metadata agar konteks revisi tetap akurat.
+    if (data.form) {
+      setFormField('mapel', data.form.mapel);
+      setFormField('bab', data.form.bab);
+      setFormField('alokasiWaktu', data.form.alokasiWaktu);
+    }
+    currentMaterial = data.material;
+    currentDraftId = data.draftId || null;
+    currentMeta = data.meta || buildMeta(readForm());
+    resetChatLog();
+    resetHistory();
+    pushHistory(currentMaterial);
+    renderPreview(currentMaterial, currentMeta);
+    revisiWrap.hidden = false;
+    simpanBtn.disabled = false;
+    publishBtn.disabled = false;
+    resultSub.textContent = currentMaterial.title || data.title || 'Materi siap disunting';
+    addChatMessage('ai', `Materi "${currentMaterial.title || data.title || ''}" dimuat untuk disunting. Ketik perubahan yang diinginkan, atau klik "Edit bagian ini" pada pratinjau.`);
+    setStatus('Materi tersimpan dimuat. Perubahan dapat disimpan sebagai draft atau diterbitkan.');
+  }
+
+  if (preload) loadPreloadMaterial(preload);
 }

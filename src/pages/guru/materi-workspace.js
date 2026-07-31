@@ -659,9 +659,17 @@ export async function renderGuruMateriPage(container) {
       const openBtn = entry.source === 'manual'
         ? `<button class="mw-pub-btn" data-draft-open="${id}">Buka</button>`
         : `<button class="mw-pub-btn" data-draft-preview="${id}">Pratinjau</button>`;
-      return `${openBtn}<button class="mw-pub-btn primary" data-draft-publish="${id}">Terbitkan</button><button class="mw-pub-btn" data-draft-clone="${id}">Duplikat</button><button class="mw-pub-btn danger" data-draft-delete="${id}">Hapus</button>`;
+      // Draft dari AI: tombol "Sunting AI" membuka Studio Materi AI.
+      const aiEditBtn = entry.source === 'ai'
+        ? `<button class="mw-pub-btn" data-ai-edit-draft="${id}">Sunting AI</button>`
+        : '';
+      return `${openBtn}${aiEditBtn}<button class="mw-pub-btn primary" data-draft-publish="${id}">Terbitkan</button><button class="mw-pub-btn" data-draft-clone="${id}">Duplikat</button><button class="mw-pub-btn danger" data-draft-delete="${id}">Hapus</button>`;
     }
-    return `<button class="mw-pub-btn" data-pub-preview="${id}">Pratinjau</button><button class="mw-pub-btn" data-pub-edit="${id}">Edit</button><button class="mw-pub-btn primary" data-pub-distribute="${id}">Kelas</button><button class="mw-pub-btn ${entry.isVisible ? 'warning' : 'primary'}" data-pub-toggle="${id}">${entry.isVisible ? 'Tarik' : 'Terbitkan'}</button><button class="mw-pub-btn danger" data-pub-delete="${id}">Hapus</button>`;
+    // Materi terbit dari AI: sediakan "Sunting AI" (membuka Studio dengan JSON).
+    const aiEditBtn = entry.source === 'ai'
+      ? `<button class="mw-pub-btn" data-ai-edit-pub="${id}">Sunting AI</button>`
+      : '';
+    return `<button class="mw-pub-btn" data-pub-preview="${id}">Pratinjau</button><button class="mw-pub-btn" data-pub-edit="${id}">Edit</button>${aiEditBtn}<button class="mw-pub-btn primary" data-pub-distribute="${id}">Kelas</button><button class="mw-pub-btn ${entry.isVisible ? 'warning' : 'primary'}" data-pub-toggle="${id}">${entry.isVisible ? 'Tarik' : 'Terbitkan'}</button><button class="mw-pub-btn danger" data-pub-delete="${id}">Hapus</button>`;
   };
 
   const entryMetaLine = (entry) => {
@@ -774,6 +782,9 @@ export async function renderGuruMateriPage(container) {
     overview.querySelectorAll('[data-draft-clone]').forEach((button) => button.addEventListener('click', () => cloneDraft(button.dataset.draftClone)));
     overview.querySelectorAll('[data-draft-delete]').forEach((button) => button.addEventListener('click', () => removeDraft(button.dataset.draftDelete)));
     overview.querySelectorAll('[data-draft-publish]').forEach((button) => button.addEventListener('click', () => openDraftPublishModal(button.dataset.draftPublish)));
+    // Sunting dengan Studio Materi AI (membuka halaman Materi AI dengan JSON tersimpan).
+    overview.querySelectorAll('[data-ai-edit-draft]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); window.location.hash = `#guru/materi-ai?draft=${encodeURIComponent(button.dataset.aiEditDraft)}`; }));
+    overview.querySelectorAll('[data-ai-edit-pub]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); window.location.hash = `#guru/materi-ai?published=${encodeURIComponent(button.dataset.aiEditPub)}`; }));
   };
   const renderOverview = () => { renderLibrary(); };
 

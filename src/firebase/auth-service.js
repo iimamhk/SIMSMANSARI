@@ -97,6 +97,22 @@ function clearExpiredSession() {
   localStorage.removeItem('simguru_wali');
 }
 
+/**
+ * Keluar dari akun aktif secara konsisten dari halaman mana pun.
+ * Sesi lokal dibersihkan lebih dulu agar router tidak sempat merender ulang
+ * halaman terlindungi ketika Firebase sedang menyelesaikan sign-out.
+ */
+export async function logoutCurrentUser() {
+  clearExpiredSession();
+  try {
+    if (auth?.currentUser) await auth.signOut();
+  } catch (error) {
+    // Sesi lokal sudah dibersihkan, jadi kegagalan jaringan tidak boleh
+    // menahan pengguna di halaman yang memerlukan autentikasi.
+    console.warn('Firebase sign-out gagal; sesi lokal tetap dihapus:', error);
+  }
+}
+
 async function authenticatedFetch(path, options = {}) {
   const headers = { ...(options.headers || {}), ...(await getAuthHeaders()) };
   let response = await fetch(backendUrl(path), { ...options, headers });

@@ -41,7 +41,7 @@ import { renderMasterTahunAjaranPage } from '../pages/admin/master-tahun-ajaran.
 import { renderPlottingJadwalPage } from '../pages/admin/plotting-jadwal.js';
 import { renderMasterPembelajaranPage } from '../pages/admin/master-pembelajaran.js';
 import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
-import { waitForAuthReady } from '../firebase/auth-service.js';
+import { logoutCurrentUser, waitForAuthReady } from '../firebase/auth-service.js';
 import { maybeShowBackupReminder } from '../utils/backup-reminder.js';
 import { maybeRunScheduledBackup } from '../utils/admin-backup-scheduler.js';
 import { maybeRunGuruAutoBackup } from '../utils/guru-backup-scheduler.js';
@@ -70,23 +70,63 @@ function resolveRoute(hash) {
   const session = getSession();
   const role = session?.user?.role || 'guest';
 
-  if ((normalized.startsWith('#admin') || normalized.startsWith('#guru')) && !session) {
+  // Cocokkan otorisasi berdasarkan path saja (abaikan query string ?a=b).
+  const pathOnly = normalized.split('?')[0];
+
+  if ((pathOnly.startsWith('#admin') || pathOnly.startsWith('#guru')) && !session) {
     return '#login';
   }
 
-  if (normalized.startsWith('#admin') && role !== 'admin') {
+  if (pathOnly.startsWith('#admin') && role !== 'admin') {
     return getDefaultRouteByRole(role);
   }
 
-  if (normalized.startsWith('#guru') && role !== 'guru') {
+  if (pathOnly.startsWith('#guru') && role !== 'guru') {
     return getDefaultRouteByRole(role);
   }
 
-  if (normalized.startsWith('#siswa') && role !== 'siswa') {
+  if (pathOnly.startsWith('#siswa') && role !== 'siswa') {
     return getDefaultRouteByRole(role);
   }
 
   return normalized;
+}
+
+/** Ambil query string dari hash rute (mis. "#guru/materi-ai?draft=x") sebagai URLSearchParams. */
+function parseRouteQuery(route) {
+  const idx = String(route || '').indexOf('?');
+  if (idx === -1) return new URLSearchParams();
+  try {
+    return new URLSearchParams(String(route).slice(idx + 1));
+  } catch {
+    return new URLSearchParams();
+  }
+}
+
+/**
+ * Pasang satu handler logout terpusat pada container aplikasi. Layout setiap
+ * halaman mengganti isi container, tetapi event delegation ini tetap aktif dan
+ * menangkap tombol #logout-btn baru tanpa setup khusus per halaman.
+ */
+function initGlobalLogout(container) {
+  if (!container || container.dataset.globalLogoutReady === 'true') return;
+  container.dataset.globalLogoutReady = 'true';
+  let loggingOut = false;
+
+  container.addEventListener('click', async (event) => {
+    const button = event.target.closest?.('#logout-btn');
+    if (!button || loggingOut) return;
+
+    event.preventDefault();
+    // Cegah handler logout lama milik halaman berjalan bersamaan.
+    event.stopImmediatePropagation();
+    loggingOut = true;
+    button.disabled = true;
+
+    await logoutCurrentUser();
+    window.location.hash = '#login';
+    loggingOut = false;
+  }, true);
 }
 
 async function renderRoute() {
@@ -107,6 +147,8 @@ async function renderRoute() {
 
   const route = resolveRoute(window.location.hash);
   const container = document.getElementById('app');
+
+  if (container) initGlobalLogout(container);
 
   const renderAndFinalize = async (renderer, ...args) => {
     await renderer(...args);
@@ -224,8 +266,12 @@ async function renderRoute() {
     return;
   }
 
-  if (route === '#guru/materi-ai') {
-    await renderAndFinalize(renderGuruMateriAiPage, container);
+  if (route === '#guru/materi-ai' || route.startsWith('#guru/materi-ai?')) {
+    const params = parseRouteQuery(route);
+    await renderAndFinalize(renderGuruMateriAiPage, container, {
+      draftId: params.get('draft') || '',
+      publishedId: params.get('published') || '',
+    });
     return;
   }
 
