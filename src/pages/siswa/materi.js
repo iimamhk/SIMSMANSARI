@@ -43,7 +43,7 @@ function isStudentIncludedInAssignment(assignment, student) {
   });
 }
 
-async function getStudentMaterials(session, context) {
+async function getStudentMaterials(session, context, options = {}) {
   const student = getCurrentStudent(session, context);
   if (!student) {
     return [];
@@ -55,14 +55,16 @@ async function getStudentMaterials(session, context) {
     return [];
   }
 
+  const forceRefresh = Boolean(options.forceRefresh);
   const [publishedMaterials, activeAssignments] = await Promise.all([
     getPublishedMaterials({
       kelasId: studentClassId,
       kelasNama: studentClassName,
       tahunAjaranId: context?.tahun_ajaran_aktif,
       semesterId: context?.semester_aktif,
+      forceRefresh,
     }),
-    getActiveTeachingAssignments(context),
+    getActiveTeachingAssignments(context, { forceRefresh }),
   ]);
 
   const studentClassTokens = new Set([
@@ -255,12 +257,12 @@ function getReaderOverlayMarkup() {
   `;
 }
 
-export async function renderSiswaMateriPage(container) {
+export async function renderSiswaMateriPage(container, options = {}) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
   const userName = session?.user?.nama || 'Siswa';
   const student = getCurrentStudent(session, context);
-  const materials = await getStudentMaterials(session, context);
+  const materials = await getStudentMaterials(session, context, { forceRefresh: Boolean(options.forceRefresh) });
   const mapelOptions = getMapelOptions(materials);
   const mapelCounts = getMapelCounts(materials);
   const classLabel = student?.kelas_nama || student?.kelas_id || '-';
@@ -298,6 +300,10 @@ export async function renderSiswaMateriPage(container) {
               <option value="">Semua mapel</option>
               ${mapelOptions.map((mapel) => `<option value="${escapeAttr(mapel)}">${escapeAttr(mapel)}</option>`).join('')}
             </select>
+            <button id="student-material-refresh" type="button" class="sml-select" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;" aria-label="Muat ulang materi terbaru" title="Muat ulang materi terbaru">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+              <span>Muat ulang</span>
+            </button>
           </div>
         </div>
 
@@ -329,6 +335,28 @@ export async function renderSiswaMateriPage(container) {
   const mapelFilterEl = container.querySelector('#student-material-mapel-filter');
   const titleFilterEl = container.querySelector('#student-material-title-filter');
   const badgeEl = container.querySelector('#student-material-mapel-badges');
+  const refreshBtn = container.querySelector('#student-material-refresh');
+
+  // Muat ulang paksa: ambil materi terbaru dari server (lewati cache) lalu render
+  // ulang halaman. Ini cara siswa melihat materi yang baru diunggah secara instan.
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      if (refreshBtn.dataset.loading === 'true') return;
+      refreshBtn.dataset.loading = 'true';
+      refreshBtn.disabled = true;
+      const label = refreshBtn.querySelector('span');
+      const originalText = label ? label.textContent : '';
+      if (label) label.textContent = 'Memuat...';
+      try {
+        await renderSiswaMateriPage(container, { forceRefresh: true });
+      } catch (error) {
+        console.warn('Gagal memuat ulang materi:', error);
+        refreshBtn.dataset.loading = 'false';
+        refreshBtn.disabled = false;
+        if (label) label.textContent = originalText || 'Muat ulang';
+      }
+    });
+  }
 
   let filteredMaterials = [...materials];
   let activeReadSession = null;

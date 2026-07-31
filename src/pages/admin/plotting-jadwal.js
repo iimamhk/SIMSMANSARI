@@ -9,8 +9,8 @@ export async function renderPlottingJadwalPage(container) {
   const mapelList = await getCollectionDocs('mata_pelajaran');
   const kelasList = await getCollectionDocs('kelas');
   const assignments = await getActiveTeachingAssignments(context);
-  const appConfig = await getAppConfig();
-  const guruBolehIsi = appConfig.guru_boleh_isi_relasi !== false;
+  let appConfig = await getAppConfig();
+  let guruBolehIsi = appConfig.guru_boleh_isi_relasi !== false;
 
   const guruOptions = guruList
     .map((item) => `<option value="${item.username}">${item.nama}</option>`)
@@ -213,9 +213,17 @@ export async function renderPlottingJadwalPage(container) {
     toggleButton.addEventListener('click', async () => {
       const next = !guruBolehIsi;
       updateToggleVisual(next);
-      await saveAppConfig({ ...(await getAppConfig()), guru_boleh_isi_relasi: next });
-      alert(next ? 'Guru sekarang diperbolehkan mengisi relasi sendiri.' : 'Guru tidak lagi diperbolehkan mengisi relasi sendiri.');
-      renderPlottingJadwalPage(container);
+      // Pakai konfigurasi yang sudah dimuat (hindari read tambahan) dan jangan
+      // render ulang seluruh halaman — cukup perbarui state & visual toggle.
+      try {
+        await saveAppConfig({ ...appConfig, guru_boleh_isi_relasi: next });
+        appConfig = { ...appConfig, guru_boleh_isi_relasi: next };
+        guruBolehIsi = next;
+        alert(next ? 'Guru sekarang diperbolehkan mengisi relasi sendiri.' : 'Guru tidak lagi diperbolehkan mengisi relasi sendiri.');
+      } catch (error) {
+        updateToggleVisual(guruBolehIsi);
+        alert(error?.message || 'Gagal menyimpan pengaturan.');
+      }
     });
   }
 

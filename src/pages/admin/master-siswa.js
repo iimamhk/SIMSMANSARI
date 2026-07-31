@@ -13,7 +13,7 @@ export async function renderMasterSiswaPage(container) {
     getCollectionDocs('kelas'),
   ]);
   let kelasCatalog = kelasList;
-  const siswaList = (Array.isArray(allStudents) ? allStudents : [])
+  let siswaList = (Array.isArray(allStudents) ? allStudents : [])
     .filter((item) => item.role === 'siswa')
     .sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
   const totalUsers = siswaList.length;
@@ -35,15 +35,15 @@ export async function renderMasterSiswaPage(container) {
           <div class="grid gap-3 sm:grid-cols-3">
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
               <p class="text-xs uppercase tracking-[0.2em] text-white/75">Total Siswa</p>
-              <p class="mt-1 text-xl font-semibold">${totalSiswa}</p>
+              <p id="stat-total-siswa" class="mt-1 text-xl font-semibold">${totalSiswa}</p>
             </div>
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
               <p class="text-xs uppercase tracking-[0.2em] text-white/75">Siswa Aktif</p>
-              <p class="mt-1 text-xl font-semibold">${activeSiswa}</p>
+              <p id="stat-active-siswa" class="mt-1 text-xl font-semibold">${activeSiswa}</p>
             </div>
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
               <p class="text-xs uppercase tracking-[0.2em] text-white/75">Kelas Terpakai</p>
-              <p class="mt-1 text-xl font-semibold">${kelasTerpakai}</p>
+              <p id="stat-kelas-terpakai" class="mt-1 text-xl font-semibold">${kelasTerpakai}</p>
             </div>
           </div>
         </div>
@@ -275,7 +275,10 @@ export async function renderMasterSiswaPage(container) {
           return;
         }
         alert('Siswa berhasil dihapus.');
-        renderMasterSiswaPage(container);
+        // Hapus dari daftar lokal & render ulang tanpa memuat ulang seluruh siswa dari server.
+        siswaList = siswaList.filter((entry) => entry.id !== accountId);
+        refreshStats();
+        renderRows();
       });
     });
   };
@@ -326,6 +329,16 @@ export async function renderMasterSiswaPage(container) {
     `).join('');
 
     bindRowActions(pageItems);
+  };
+
+  // Perbarui angka ringkasan (header) dari data lokal — tanpa membaca ulang Firestore.
+  const refreshStats = () => {
+    const totalEl = container.querySelector('#stat-total-siswa');
+    const activeEl = container.querySelector('#stat-active-siswa');
+    const kelasEl = container.querySelector('#stat-kelas-terpakai');
+    if (totalEl) totalEl.textContent = siswaList.length;
+    if (activeEl) activeEl.textContent = siswaList.filter((item) => (item.status || 'active') === 'active').length;
+    if (kelasEl) kelasEl.textContent = new Set(siswaList.map((item) => item.kelas_nama || item.kelas_id).filter(Boolean)).size;
   };
 
   const setProgressState = (step, state) => {
@@ -397,6 +410,7 @@ export async function renderMasterSiswaPage(container) {
       setProgressState(2, 'done');
       setProgressState(3, 'active');
       let saved = 0;
+      const importedUsers = [];
       for (const row of rows) {
         const nama = String(row.nama || '').trim();
         const username = String(row.username || generateUsername(nama)).trim();
@@ -406,12 +420,21 @@ export async function renderMasterSiswaPage(container) {
         const payload = { username, password, nama, role: 'siswa', status: 'active', created_at: new Date().toISOString(), tahun_ajaran_id: context.tahun_ajaran_aktif, semester_id: context.semester_aktif, kelas_id: kelasInfo?.id || '', kelas_nama: kelasInfo?.nama || '', username_lower: username.toLowerCase().replace(/\s+/g, '') };
          const savedUser = await saveManagedUser(payload);
          await synchronizeCurrentClassMemberships(context, [savedUser]);
+        importedUsers.push(savedUser);
         saved += 1;
       }
       setProgressState(3, 'done');
       messageBox.innerHTML = `<span class="font-semibold text-emerald-700">✓ Impor selesai.</span> ${saved} siswa berhasil disimpan.`;
       event.target.value = '';
-      renderMasterSiswaPage(container);
+      // Gabungkan hasil impor ke daftar lokal & render ulang tanpa membaca ulang seluruh siswa.
+      importedUsers.forEach((u) => {
+        const idx = siswaList.findIndex((entry) => entry.id === u.id);
+        if (idx >= 0) siswaList[idx] = { ...siswaList[idx], ...u };
+        else siswaList.push(u);
+      });
+      siswaList.sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
+      refreshStats();
+      renderRows();
     } catch (error) {
       setProgressState(3, 'idle');
       messageBox.innerHTML = `<span class="font-semibold text-rose-600">Import gagal.</span> ${error.message}`;
@@ -472,6 +495,14 @@ export async function renderMasterSiswaPage(container) {
       for (const oldUsername of oldUsernames) {
         await synchronizeRenamedUserReferences(context, 'siswa', oldUsername, savedUser);
       }
+      // Perbarui daftar lokal (tambah/edit) agar tidak perlu membaca ulang seluruh siswa.
+      const existingIndex = siswaList.findIndex((entry) => entry.id === savedUser.id);
+      if (existingIndex >= 0) {
+        siswaList[existingIndex] = { ...siswaList[existingIndex], ...savedUser };
+      } else {
+        siswaList.push(savedUser);
+      }
+      siswaList.sort((a, b) => String(a.nama || '').localeCompare(String(b.nama || ''), 'id', { sensitivity: 'base' }));
     } catch (error) {
       alert(error.message || 'Gagal menyimpan siswa.');
       submitBtn.disabled = false;
@@ -482,7 +513,8 @@ export async function renderMasterSiswaPage(container) {
     setEditMode(false);
     closeDialog();
     alert(wasEditing ? `Siswa berhasil diperbarui.` : `Siswa berhasil disimpan dengan username ${username}`);
-    renderMasterSiswaPage(container);
+    refreshStats();
+    renderRows();
   });
 
   cancelBtn.addEventListener('click', () => {

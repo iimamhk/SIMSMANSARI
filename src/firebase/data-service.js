@@ -8,7 +8,11 @@ const MATERIAL_READS_KEY = 'simguru_material_reads';
 const MATERIAL_READS_COLLECTION = 'materi_reads';
 const QUERY_CACHE_TTL_MS = 60000;
 const COLLECTION_CACHE_TTL_MS = 300000;
-const STATIC_COLLECTION_CACHE_TTL_MS = 1800000;
+// Optimasi #2: koleksi statis (settings, mata_pelajaran, kelas, tahun_ajaran,
+// pengajaran, pembelajaran, wali_kelas) nyaris tak berubah harian dan setiap
+// penulisan sudah meng-invalidasi cache-nya, jadi TTL dinaikkan dari 30 menit
+// menjadi 12 jam untuk memangkas read berulang antar sesi/cold start.
+const STATIC_COLLECTION_CACHE_TTL_MS = 43200000;
 function getFirestoreReadStatusKey() {
   try {
     const raw = typeof window !== 'undefined' ? window.localStorage?.getItem('simguru_session') : null;
@@ -20,6 +24,12 @@ function getFirestoreReadStatusKey() {
 const queryCache = new Map();
 const PERSISTENT_CACHE_PREFIX = 'simguru_pcache_';
 const PERSISTENT_CACHE_TTL_MS = 7200000;
+// Optimasi #1: TTL default cache localStorage untuk HASIL QUERY (getDocumentsWhere
+// dengan opsi persist). Bertahan melintasi cold start sehingga membuka ulang
+// aplikasi tidak selalu membaca ulang dari server. Penulisan pada koleksi terkait
+// akan meng-invalidasi entri ini (lihat invalidatePersistentQueryCache).
+const PERSISTENT_QUERY_CACHE_TTL_MS = 21600000; // 6 jam
+const MATERIAL_QUERY_PERSIST_TTL_MS = 1800000; // 30 menit (materi bisa terbit kapan saja)
 const FIRESTORE_QUOTA_COOLDOWN_MS = 120000;
 
 const STATIC_COLLECTIONS = new Set([
@@ -187,6 +197,24 @@ function clearPersistentCache(key) {
       .filter((k) => k.startsWith(PERSISTENT_CACHE_PREFIX))
       .forEach((k) => localStorage.removeItem(k));
   } catch { /* ignore */ }
+}
+
+// Optimasi #1: hapus cache localStorage hasil query (kunci `query:<koleksi>:...`)
+// untuk satu koleksi. Dipanggil setiap kali ada penulisan agar data yang
+// dipersist tidak basi setelah create/update/delete pada koleksi tersebut.
+function invalidatePersistentQueryCache(collectionName = '') {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const target = String(collectionName || '');
+    const prefix = target
+      ? `${PERSISTENT_CACHE_PREFIX}query:${target}:`
+      : `${PERSISTENT_CACHE_PREFIX}query:`;
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(prefix))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Abaikan kegagalan localStorage.
+  }
 }
 
 function normalizeClassKey(value) {
@@ -466,6 +494,7 @@ export async function deleteDocumentsBatch(collectionName, ids = []) {
     deleted += chunk.length;
   }
   invalidateQueryCache(collectionName);
+  invalidatePersistentQueryCache(collectionName);
   if (STATIC_COLLECTIONS.has(collectionName)) {
     const cached = getPersistentCache(collectionName);
     if (Array.isArray(cached)) {
@@ -495,6 +524,15 @@ export async function batchWrite(operations = []) {
     await batch.commit();
     written += chunk.length;
   }
+  // Optimasi #1: batch bisa menyentuh banyak koleksi sekaligus. Invalidasi cache
+  // (in-memory + localStorage query) tiap koleksi agar pembacaan berikutnya segar.
+  const touchedCollections = new Set(
+    operations.map((op) => op && op.collection).filter(Boolean)
+  );
+  touchedCollections.forEach((coll) => {
+    invalidateQueryCache(coll);
+    invalidatePersistentQueryCache(coll);
+  });
   return written;
 }
 
@@ -532,9 +570,23 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
         orderDirection: options.orderDirection || 'desc',
         limit: Number(options.limit || 0),
       };
-      return withQueryCache(`query:${collectionName}:${JSON.stringify(filters)}:${JSON.stringify(queryOptions)}`, async () => {
+      const queryKey = `query:${collectionName}:${JSON.stringify(filters)}:${JSON.stringify(queryOptions)}`;
+      // Optimasi #1: bila persist aktif, layani dari cache localStorage lebih dulu
+      // (0 read) dan simpan hasil server agar bertahan melintasi cold start.
+      const persist = Boolean(options.persist);
+      const persistTtlMs = Number(options.persistTtlMs || PERSISTENT_QUERY_CACHE_TTL_MS);
+      return withQueryCache(queryKey, async () => {
+        if (persist) {
+          const cachedPersistent = getPersistentCache(queryKey);
+          if (Array.isArray(cachedPersistent)) {
+            return cachedPersistent;
+          }
+        }
         const data = await load();
         clearFirestoreReadQuotaStatus();
+        if (persist) {
+          setPersistentCache(queryKey, data, persistTtlMs);
+        }
         return data;
       }, cacheMs);
     }
@@ -617,6 +669,7 @@ export async function saveDocument(collectionName, payload, id = null) {
   const ref = id ? db.collection(collectionName).doc(id) : db.collection(collectionName).doc();
   await ref.set(safePayload, { merge: true });
   invalidateQueryCache(collectionName);
+  invalidatePersistentQueryCache(collectionName);
   if (STATIC_COLLECTIONS.has(collectionName)) {
     updatePersistentCache(collectionName, { id: ref.id, ...safePayload });
   } else {
@@ -769,6 +822,7 @@ export async function deleteDocument(collectionName, id) {
 
   await db.collection(collectionName).doc(id).delete();
   invalidateQueryCache(collectionName);
+  invalidatePersistentQueryCache(collectionName);
   if (STATIC_COLLECTIONS.has(collectionName)) {
     const cached = getPersistentCache(collectionName);
     if (Array.isArray(cached)) {
@@ -1065,7 +1119,7 @@ export function subscribeCollection(collectionName, filters = [], callback, opti
   }
 }
 
-export async function getActiveTeachingAssignments(context) {
+export async function getActiveTeachingAssignments(context, options = {}) {
   const { year, semester } = getActivePeriod(context);
   if (!year || !semester) {
     return [];
@@ -1075,16 +1129,34 @@ export async function getActiveTeachingAssignments(context) {
     return getDemoTeachingAssignments(context);
   }
 
+  // Muat ulang paksa: buang cache pengajaran/pembelajaran agar relasi mengajar
+  // yang baru dibuat guru langsung dikenali (memengaruhi materi yang tampil).
+  if (options.forceRefresh) {
+    invalidateQueryCache('assignments');
+    invalidateQueryCache('pengajaran');
+    invalidateQueryCache('pembelajaran');
+    invalidatePersistentQueryCache('pengajaran');
+    invalidatePersistentQueryCache('pembelajaran');
+  }
+
   try {
     return withQueryCache(`assignments:${year}:${semester}`, async () => {
       const filters = [
         { field: 'tahun_ajaran_id', value: year },
         { field: 'semester_id', value: semester },
       ];
-      const pengajaranData = await getDocumentsWhere('pengajaran', filters);
+      const pengajaranData = await getDocumentsWhere('pengajaran', filters, {
+        cacheMs: STATIC_COLLECTION_CACHE_TTL_MS,
+        persist: true,
+        persistTtlMs: STATIC_COLLECTION_CACHE_TTL_MS,
+      });
 
       if (!pengajaranData.length) {
-        const pembelajaranData = await getDocumentsWhere('pembelajaran', filters);
+        const pembelajaranData = await getDocumentsWhere('pembelajaran', filters, {
+          cacheMs: STATIC_COLLECTION_CACHE_TTL_MS,
+          persist: true,
+          persistTtlMs: STATIC_COLLECTION_CACHE_TTL_MS,
+        });
         const combined = [...pengajaranData, ...pembelajaranData]
           .map((item) => ({ id: item.id, ...item }))
           .filter((item, index, arr) => arr.findIndex((entry) => entry.id === item.id) === index);
@@ -1442,6 +1514,13 @@ export async function getPublishedMaterials(options = {}) {
     return readLocalPublishedMaterials();
   }
 
+  // Muat ulang paksa: buang cache (in-memory + localStorage) agar materi yang baru
+  // diunggah guru langsung terbaca dari server pada permintaan berikutnya.
+  if (options.forceRefresh) {
+    invalidateQueryCache(MATERIAL_PUBLISHED_COLLECTION);
+    invalidatePersistentQueryCache(MATERIAL_PUBLISHED_COLLECTION);
+  }
+
   const kelasId = String(options.kelasId || '').trim();
   const kelasNama = String(options.kelasNama || '').trim();
   const year = String(options.tahunAjaranId || '').trim();
@@ -1450,7 +1529,14 @@ export async function getPublishedMaterials(options = {}) {
 
   try {
     return withQueryCache(cacheKey, async () => {
-      const queryOptions = { cacheMs: QUERY_CACHE_TTL_MS };
+      // Optimasi #1: materi terbit adalah data read-mostly. Persist hasil query ke
+      // localStorage (30 menit) agar membuka ulang aplikasi tidak selalu membaca
+      // ulang. Guru yang menerbitkan materi meng-invalidasi cache di perangkatnya.
+      const queryOptions = {
+        cacheMs: QUERY_CACHE_TTL_MS,
+        persist: true,
+        persistTtlMs: MATERIAL_QUERY_PERSIST_TTL_MS,
+      };
       // Token kelas yang mungkin dipakai pada array kelas_ids.
       const tokens = [...new Set([
         normalizeMaterialClassToken(kelasId),
@@ -1706,6 +1792,7 @@ export async function deletePublishedMaterial(id) {
   const localReads = readLocalMaterialReads().filter((item) => String(item.material_id || '').trim() !== materialId);
   writeLocalMaterialReads(localReads);
   invalidateQueryCache(MATERIAL_PUBLISHED_COLLECTION);
+  invalidatePersistentQueryCache(MATERIAL_PUBLISHED_COLLECTION);
   return true;
 }
 
