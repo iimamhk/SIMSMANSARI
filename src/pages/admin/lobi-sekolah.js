@@ -1,4 +1,5 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
+import { fileToLogoDataUrl } from '../../utils/image-local.js';
 import {
   getLobbyPayload,
   getLobbySectionLinks,
@@ -52,6 +53,35 @@ export async function renderAdminLobbySchoolPage(container) {
           </div>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
+              <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Nama Sekolah</label>
+              <input id="setting-school-name" value="${settings.school_name || ''}" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+            </div>
+            <div>
+              <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Logo Sekolah</label>
+              <div class="flex items-center gap-3">
+                <span id="logo-preview" class="grid h-12 w-12 flex-none place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-300">
+                  ${settings.logo_url ? `<img src="${settings.logo_url}" alt="Logo" class="h-full w-full object-cover" />` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="h-5 w-5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-6 6"/></svg>'}
+                </span>
+                <div class="flex-1">
+                  <input id="setting-logo-url" value="${settings.logo_url || ''}" placeholder="Pilih berkas dari perangkat atau tempel URL" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+                  <div class="mt-2 flex items-center gap-2">
+                    <button type="button" id="logo-upload-btn" class="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 20h16"/></svg>
+                      Pilih dari Perangkat
+                    </button>
+                    <span id="logo-upload-status" class="text-xs text-slate-400"></span>
+                  </div>
+                  <input type="file" id="logo-upload-input" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" class="hidden" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Slogan</label>
+            <input id="setting-slogan" value="${settings.slogan || ''}" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+          </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
               <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Badge</label>
               <input id="setting-hero-badge" value="${settings.hero_badge || ''}" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
             </div>
@@ -71,6 +101,40 @@ export async function renderAdminLobbySchoolPage(container) {
           <div>
             <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Subjudul</label>
             <textarea id="setting-hero-subheading" rows="2" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">${settings.hero_subheading || ''}</textarea>
+          </div>
+
+          <div class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+            <p class="text-sm font-semibold uppercase tracking-[0.16em] text-sky-600">Halaman Login</p>
+            <p class="mt-1 text-xs text-slate-500">Atur tampilan halaman masuk. Kosongkan logo login untuk memakai logo sekolah di atas.</p>
+            <div class="mt-3 grid gap-3">
+              <div>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Logo Login</label>
+                <div class="flex items-center gap-3">
+                  <span id="login-logo-preview" class="grid h-12 w-12 flex-none place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white text-slate-300">
+                    ${settings.login_logo_url ? `<img src="${settings.login_logo_url}" alt="Logo login" class="h-full w-full object-cover" />` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="h-5 w-5"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-6 6"/></svg>'}
+                  </span>
+                  <div class="flex-1">
+                    <input id="setting-login-logo-url" value="${settings.login_logo_url || ''}" placeholder="Kosong = pakai logo sekolah" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                    <div class="mt-2 flex items-center gap-2">
+                      <button type="button" id="login-logo-upload-btn" class="inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 20h16"/></svg>
+                        Pilih dari Perangkat
+                      </button>
+                      <span id="login-logo-upload-status" class="text-xs text-slate-400"></span>
+                    </div>
+                    <input type="file" id="login-logo-upload-input" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" class="hidden" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Judul Login</label>
+                <input id="setting-login-title" value="${settings.login_title || ''}" placeholder="Selamat datang kembali" class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Subjudul Login</label>
+                <input id="setting-login-subtitle" value="${settings.login_subtitle || ''}" placeholder="Masuk dengan akun admin, guru, atau siswa Anda." class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+              </div>
+            </div>
           </div>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
@@ -316,14 +380,53 @@ export async function renderAdminLobbySchoolPage(container) {
     container.querySelector('#link-active').checked = true;
   };
 
+  // Ambil logo dari perangkat (lokal): perkecil di browser → data URL, tanpa
+  // memerlukan server/Storage. Hasilnya langsung mengisi field & pratinjau.
+  function wireLogoUpload({ btnId, inputId, urlId, statusId, previewId }) {
+    const btn = container.querySelector(`#${btnId}`);
+    const input = container.querySelector(`#${inputId}`);
+    const urlField = container.querySelector(`#${urlId}`);
+    const statusEl = container.querySelector(`#${statusId}`);
+    const preview = container.querySelector(`#${previewId}`);
+    if (!btn || !input) return;
+
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Memproses gambar...'; statusEl.className = 'text-xs text-sky-600'; }
+      try {
+        const { dataUrl, bytes } = await fileToLogoDataUrl(file, { maxSize: 256 });
+        if (urlField) urlField.value = dataUrl;
+        if (preview) preview.innerHTML = `<img src="${dataUrl}" alt="Logo" class="h-full w-full object-cover" />`;
+        const kb = Math.max(1, Math.round(bytes / 1024));
+        if (statusEl) { statusEl.textContent = `Siap (${kb} KB). Klik Simpan Beranda untuk menerapkan.`; statusEl.className = 'text-xs text-emerald-600'; }
+      } catch (error) {
+        if (statusEl) { statusEl.textContent = error?.message || 'Gagal memproses gambar.'; statusEl.className = 'text-xs text-rose-600'; }
+      } finally {
+        btn.disabled = false;
+        input.value = '';
+      }
+    });
+  }
+  wireLogoUpload({ btnId: 'logo-upload-btn', inputId: 'logo-upload-input', urlId: 'setting-logo-url', statusId: 'logo-upload-status', previewId: 'logo-preview' });
+  wireLogoUpload({ btnId: 'login-logo-upload-btn', inputId: 'login-logo-upload-input', urlId: 'setting-login-logo-url', statusId: 'login-logo-upload-status', previewId: 'login-logo-preview' });
+
   settingsForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const payload = {
+      logo_url: container.querySelector('#setting-logo-url').value,
+      school_name: container.querySelector('#setting-school-name').value,
+      slogan: container.querySelector('#setting-slogan').value,
       hero_badge: container.querySelector('#setting-hero-badge').value,
       hero_title: container.querySelector('#setting-hero-title').value,
       hero_description: container.querySelector('#setting-hero-description').value,
       hero_heading: container.querySelector('#setting-hero-heading').value,
       hero_subheading: container.querySelector('#setting-hero-subheading').value,
+      login_logo_url: container.querySelector('#setting-login-logo-url').value,
+      login_title: container.querySelector('#setting-login-title').value,
+      login_subtitle: container.querySelector('#setting-login-subtitle').value,
       access_badge: container.querySelector('#setting-access-badge').value,
       access_title: container.querySelector('#setting-access-title').value,
       access_description: container.querySelector('#setting-access-description').value,

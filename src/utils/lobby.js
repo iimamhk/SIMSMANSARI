@@ -6,11 +6,15 @@ const LOBBY_LINKS_KEY = 'simguru_lobby_links';
 
 const defaultLobbySettings = {
   id: 'public_home',
+  // Identitas & konten lobi (dapat diganti admin tanpa mengubah source code).
+  logo_url: '',
+  school_name: 'SMA Negeri 1 Wanasari',
+  slogan: 'Ekosistem pendidikan digital untuk sekolah modern.',
   hero_badge: 'Portal Publik',
   hero_title: 'SIM SMANSARI',
   hero_description: 'Halaman awal untuk informasi publik sekolah.',
-  hero_heading: 'Lobi informasi digital sekolah SMA Negeri 1 Wanasari ringkas dan mudah diakses.',
-  hero_subheading: 'Halaman ini menampilkan informasi umum sebelum pengguna masuk ke sistem.',
+  hero_heading: 'Satu platform untuk absensi, nilai, materi, dan kolaborasi sekolah.',
+  hero_subheading: 'SIMSMANSARI menyatukan administrasi akademik, pembelajaran, dan AI dalam satu pengalaman yang cepat, rapi, dan mudah digunakan.',
   info_pills: ['Informasi Publik', 'Akses Terarah', 'Tampilan Ringkas'],
   access_badge: 'Akses Sistem',
   access_title: 'Login Pengguna',
@@ -18,6 +22,10 @@ const defaultLobbySettings = {
   access_button_text: 'Buka Halaman Login',
   footer_label: 'Informasi Tambahan',
   footer_title: 'Tambahkan informasi sekolah di sini.',
+  // Konten khusus halaman Login (kosong = memakai identitas lobi sebagai fallback).
+  login_logo_url: '',
+  login_title: 'Selamat datang kembali',
+  login_subtitle: 'Masuk dengan akun admin, guru, atau siswa Anda.',
   updated_at: '',
 };
 
