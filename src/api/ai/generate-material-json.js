@@ -26,6 +26,12 @@ const {
   buildRepairMessages,
   buildSystemPrompt,
   buildUserPrompt,
+  buildPatchSystemPrompt,
+  buildPatchPrompt,
+  applyPatchOperations,
+  extractPatch,
+  extractJson,
+  normalizeMaterial,
   validateMaterial,
 } = require('../_lib/ai-material');
 
@@ -76,6 +82,148 @@ function buildMessages(input, currentJson, revisionInstruction) {
   ];
 }
 
+/**
+ * Mode PATCH: minta AI mengeluarkan daftar operasi edit bertarget, terapkan ke
+ * materi saat ini, validasi ulang, lalu kirim event "patch" (ringkasan operasi)
+ * dan "material" (materi final). Jika patch gagal/invalid, fallback ke revisi
+ * penuh agar guru tetap mendapat hasil.
+ */
+async function handlePatchMode(req, res, { currentJson, editInstruction, options }) {
+  writeSseHeaders(req, res);
+  sendSseComment(res, 'mulai-edit');
+
+  const abortController = new AbortController();
+  req.on('close', () => {
+    if (!res.writableEnded) abortController.abort(new Error('client closed'));
+  });
+
+  // Materi sumber harus valid untuk dapat di-patch.
+  const baseMaterial = normalizeMaterial(extractJson(currentJson));
+  if (!baseMaterial) {
+    sendSseEvent(res, 'error', { error: 'Materi saat ini tidak dapat dibaca untuk disunting.', code: 'invalid_current' });
+    res.end();
+    return;
+  }
+
+  try {
+    const profile = await resolveEffectiveProfile('');
+    let activeModel = profile.model;
+
+    const messages = [
+      { role: 'system', content: buildPatchSystemPrompt() },
+      { role: 'user', content: buildPatchPrompt(baseMaterial, editInstruction) },
+    ];
+
+    let output = '';
+    for await (const delta of streamChatCompletions(messages, {
+      profileId: profile.id,
+      resolvedProfile: profile,
+      model: profile.model,
+      temperature: options.temperature ?? 0.4, // lebih rendah agar patуh presisi
+      maxTokens: options.maxTokens ?? 4000,
+      includeReasoning: false,
+      signal: abortController.signal,
+      onModelSelected: (m) => { activeModel = m; },
+    })) {
+      if (!delta) continue;
+      output += delta;
+      sendSseEvent(res, 'delta', { content: delta });
+    }
+
+    const patch = extractPatch(output);
+    if (!patch || !Array.isArray(patch.ops)) {
+      // Fallback: perlakukan sebagai revisi penuh.
+      await runFullRevisionFallback(res, { baseMaterial, editInstruction, profile, options, abortController, activeModel });
+      return;
+    }
+
+    if (patch.ops.length === 0) {
+      // AI menilai tak ada perubahan yang bisa dilakukan.
+      sendSseEvent(res, 'patch', { summary: patch.summary || 'Tidak ada perubahan diterapkan.', applied: 0, skipped: [], ops: [] });
+      sendSseEvent(res, 'material', { material: baseMaterial, issues: [], model: activeModel, profileId: profile.id, patched: true, applied: 0 });
+      sendSseEvent(res, 'done', { model: activeModel, profileId: profile.id });
+      res.end();
+      return;
+    }
+
+    const { material: patched, applied, skipped } = applyPatchOperations(baseMaterial, patch.ops);
+    const validation = validateMaterial(JSON.stringify(patched));
+
+    // Jika hasil patch merusak struktur, jangan diterapkan — fallback revisi penuh.
+    if (!validation.material || validation.issues.length > 0) {
+      await runFullRevisionFallback(res, { baseMaterial, editInstruction, profile, options, abortController, activeModel });
+      return;
+    }
+
+    sendSseEvent(res, 'patch', {
+      summary: patch.summary || `${applied} perubahan diterapkan.`,
+      applied,
+      skipped,
+      ops: patch.ops,
+    });
+    sendSseEvent(res, 'material', {
+      material: validation.material,
+      issues: validation.issues,
+      model: activeModel,
+      profileId: profile.id,
+      patched: true,
+      applied,
+    });
+    sendSseEvent(res, 'done', { model: activeModel, profileId: profile.id });
+    res.end();
+  } catch (error) {
+    if (error && /abort/i.test(String(error.message || ''))) {
+      if (!res.writableEnded) res.end();
+      return;
+    }
+    let message = 'Gagal menyunting materi. Coba lagi.';
+    let code = 'edit_failed';
+    if (error instanceof AiServiceError) { message = error.message; code = error.code; }
+    else console.warn('[AI patch error]', error?.name, '|', error?.message);
+    sendSseEvent(res, 'error', { error: message, code });
+    res.end();
+  }
+}
+
+/** Fallback: minta AI merevisi materi penuh (dipakai bila patch gagal). */
+async function runFullRevisionFallback(res, { baseMaterial, editInstruction, profile, options, abortController, activeModel }) {
+  sendSseComment(res, 'fallback-revisi-penuh');
+  const messages = [
+    { role: 'system', content: buildSystemPrompt() },
+    { role: 'user', content: buildRevisionPrompt({}, JSON.stringify(baseMaterial), editInstruction) },
+  ];
+  let output = '';
+  for await (const delta of streamChatCompletions(messages, {
+    profileId: profile.id,
+    resolvedProfile: profile,
+    model: profile.model,
+    temperature: options.temperature ?? 0.7,
+    maxTokens: options.maxTokens ?? 10000,
+    includeReasoning: false,
+    signal: abortController.signal,
+  })) {
+    if (!delta) continue;
+    output += delta;
+    sendSseEvent(res, 'delta', { content: delta });
+  }
+  const validation = validateMaterial(output);
+  if (!validation.material || validation.issues.length > 0) {
+    sendSseEvent(res, 'error', { error: 'Perubahan tidak dapat diterapkan dengan aman. Coba instruksi yang lebih spesifik.', code: 'edit_invalid' });
+    res.end();
+    return;
+  }
+  sendSseEvent(res, 'patch', { summary: 'Materi diperbarui menyeluruh sesuai permintaan.', applied: -1, skipped: [], ops: [] });
+  sendSseEvent(res, 'material', {
+    material: validation.material,
+    issues: validation.issues,
+    model: activeModel || profile.model,
+    profileId: profile.id,
+    patched: false,
+  });
+  sendSseEvent(res, 'done', { model: activeModel || profile.model, profileId: profile.id });
+  res.end();
+}
+
 module.exports = async (req, res) => {
   if (handleOptions(req, res)) return;
   if (req.method !== 'POST') {
@@ -87,6 +235,7 @@ module.exports = async (req, res) => {
   let options;
   let revisionInstruction = '';
   let currentJson = '';
+  let editInstruction = '';
 
   try {
     applyRateLimit(req, res);
@@ -94,6 +243,7 @@ module.exports = async (req, res) => {
     input = sanitizeInput(body.input ?? body);
     options = parseGenerationOptions(body);
     revisionInstruction = asString(body.revisionInstruction, 2000);
+    editInstruction = asString(body.editInstruction, 2000);
     currentJson = typeof body.currentJson === 'string' ? body.currentJson.slice(0, 80000).trim() : '';
   } catch (error) {
     if (error instanceof AiServiceError) {
@@ -106,6 +256,14 @@ module.exports = async (req, res) => {
 
   if (!options.stream) {
     sendJson(req, res, 400, { error: 'Hanya mode streaming yang didukung.', code: 'stream_required' });
+    return;
+  }
+
+  // --- MODE PATCH (Tahap 2): edit bertarget berbasis operasi ---
+  // Aktif bila ada editInstruction + currentJson. AI hanya mengembalikan daftar
+  // operasi minimal; server menerapkannya lalu memvalidasi ulang materi.
+  if (editInstruction && currentJson) {
+    await handlePatchMode(req, res, { currentJson, editInstruction, options });
     return;
   }
 

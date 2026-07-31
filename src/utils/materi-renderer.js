@@ -325,23 +325,48 @@ function renderReflection(material) {
 // API publik
 // ---------------------------------------------------------------------------
 
+// Bungkus satu bagian dengan penanda edit (mode editable) agar bisa
+// diklik-untuk-perbaiki. Non-editable → kembalikan html apa adanya.
+function editWrap(targetLabel, humanLabel, html, editable) {
+  if (!editable || !html) return html || '';
+  return `<div class="mai-editsec" data-mai-target="${escapeHtml(targetLabel)}" data-mai-label="${escapeHtml(humanLabel)}">`
+    + `<button type="button" class="mai-editbtn" data-mai-edit="${escapeHtml(targetLabel)}" data-mai-label="${escapeHtml(humanLabel)}" title="Perbaiki bagian ini dengan AI">✎ Edit bagian ini</button>`
+    + html + '</div>';
+}
+
 /** Bangun isi body materi (tanpa <html>) — untuk preview di dalam app. */
-export function buildMaterialBody(material, meta = {}) {
+export function buildMaterialBody(material, meta = {}, options = {}) {
   if (!material || typeof material !== 'object') return '';
+  const editable = options.editable === true;
+  const concepts = (material.concepts || []).map((c, i) =>
+    editWrap(`concepts[${i}]`, `Konsep ${i + 1}: ${c.heading || ''}`.trim(), renderConcept(c, i), editable)
+  ).join('');
   const parts = [
-    renderHero(material, meta),
-    renderHook(material),
-    renderObjectives(material),
-    (material.concepts || []).map((c, i) => renderConcept(c, i)).join(''),
-    renderHighlights(material),
-    renderExamples(material),
-    renderExercises(material),
-    renderGroupActivity(material),
-    renderAssignment(material),
-    renderSummary(material),
-    renderReflection(material),
+    editWrap('title', 'Judul & info materi', renderHero(material, meta), editable),
+    editWrap('hook', 'Paragraf pembuka', renderHook(material), editable),
+    editWrap('objectives', 'Tujuan pembelajaran', renderObjectives(material), editable),
+    concepts,
+    editWrap('highlights', 'Sorotan penting', renderHighlights(material), editable),
+    editWrap('examples', 'Contoh soal', renderExamples(material), editable),
+    editWrap('exercises', 'Latihan', renderExercises(material), editable),
+    editWrap('group_activity', 'Tugas kelompok', renderGroupActivity(material), editable),
+    editWrap('assignment', 'Tugas individu', renderAssignment(material), editable),
+    editWrap('summary', 'Rangkuman', renderSummary(material), editable),
+    editWrap('reflection', 'Refleksi', renderReflection(material), editable),
   ];
-  return `<style>${getStyles()}</style><div class="mai-page">${parts.join('')}</div>`;
+  const editStyles = editable ? getEditableStyles() : '';
+  return `<style>${getStyles()}${editStyles}</style><div class="mai-page${editable ? ' mai-editable' : ''}">${parts.join('')}</div>`;
+}
+
+/** CSS tambahan untuk mode editable (klik-untuk-perbaiki). */
+function getEditableStyles() {
+  return `
+    .mai-editsec { position:relative; }
+    .mai-editsec > .mai-editbtn { position:absolute; top:6px; right:6px; z-index:5; opacity:0; transform:translateY(-4px); transition:opacity .18s ease, transform .18s ease; border:none; border-radius:999px; padding:6px 12px; font-size:.72rem; font-weight:700; color:#fff; background:linear-gradient(135deg,#0a84ff,#5e5ce6); box-shadow:0 8px 20px -8px rgba(10,132,255,.7); cursor:pointer; }
+    .mai-editsec:hover > .mai-editbtn, .mai-editsec:focus-within > .mai-editbtn { opacity:1; transform:translateY(0); }
+    .mai-editsec:hover > .mai-card, .mai-editsec.mai-editsec-active > .mai-card { outline:2px solid rgba(10,132,255,.45); outline-offset:2px; }
+    @media (max-width:640px){ .mai-editsec > .mai-editbtn { opacity:1; transform:none; padding:5px 10px; font-size:.68rem; } }
+  `;
 }
 
 /** Script interaktif yang dijalankan di dalam iframe materi (self-contained). */
@@ -483,8 +508,9 @@ function getInteractionScript() {
 }
 
 /** Bangun dokumen HTML standalone (untuk iframe siswa / simpan / ekspor). */
-export function buildMaterialHtml(material, meta = {}) {
-  const body = buildMaterialBody(material, meta);
+export function buildMaterialHtml(material, meta = {}, options = {}) {
+  const editable = options.editable === true;
+  const body = buildMaterialBody(material, meta, { editable });
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -497,8 +523,33 @@ export function buildMaterialHtml(material, meta = {}) {
 <body>
 ${body}
 ${getInteractionScript()}
+${editable ? getEditBridgeScript() : ''}
 </body>
 </html>`;
+}
+
+/**
+ * Script jembatan mode editable: saat tombol "Edit bagian ini" diklik, kirim
+ * pesan ke aplikasi induk (postMessage) berisi target section + label. Aplikasi
+ * lalu mengarahkan instruksi chat ke bagian tersebut (klik-untuk-perbaiki).
+ */
+function getEditBridgeScript() {
+  return `<script>
+(function(){
+  var d=document;
+  d.addEventListener('click',function(e){
+    var btn=e.target.closest('[data-mai-edit]');
+    if(!btn)return;
+    e.preventDefault();
+    var target=btn.getAttribute('data-mai-edit');
+    var label=btn.getAttribute('data-mai-label')||target;
+    d.querySelectorAll('.mai-editsec-active').forEach(function(el){el.classList.remove('mai-editsec-active');});
+    var sec=btn.closest('.mai-editsec');
+    if(sec)sec.classList.add('mai-editsec-active');
+    try{ parent.postMessage({ type:'mai-edit-section', target:target, label:label }, '*'); }catch(_){}
+  });
+})();
+<\/script>`;
 }
 
 export const __testing = { renderBlocks, renderInline, escapeHtml, renderConcept, getStyles };

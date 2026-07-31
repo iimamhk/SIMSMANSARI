@@ -162,6 +162,171 @@ function buildRepairMessages(input, partialText) {
 }
 
 // ---------------------------------------------------------------------------
+// Mode PATCH (Tahap 2): edit bertarget tanpa menulis ulang seluruh materi
+// ---------------------------------------------------------------------------
+
+// Field array yang boleh diubah per-item.
+const ARRAY_FIELDS = ['objectives', 'concepts', 'highlights', 'examples', 'exercises', 'summary', 'reflection'];
+// Field skalar/objek yang boleh diganti utuh.
+const SCALAR_FIELDS = ['title', 'hook', 'group_activity', 'assignment'];
+
+/** Ringkasan singkat satu item array untuk membantu AI menunjuk indeks. */
+function summarizeItem(field, item) {
+  const clip = (s, n = 60) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+  if (item == null) return '(kosong)';
+  if (typeof item === 'string') return clip(item, 70);
+  if (field === 'concepts') return `${clip(item.heading, 40)} [${item.variant || 'narasi'}]`;
+  if (field === 'highlights') return `${item.kind || 'info'}: ${clip(item.content, 50)}`;
+  if (field === 'examples') return `No.${item.number ?? '?'} ${clip(item.question, 45)}`;
+  if (field === 'exercises') {
+    const label = item.question || item.prompt || item.instruction || '';
+    return `${item.kind || 'exercise'}: ${clip(label, 45)}`;
+  }
+  return clip(JSON.stringify(item), 60);
+}
+
+/**
+ * Bangun "peta" materi ringkas: nama field + indeks + label tiap item.
+ * Dipakai agar AI dapat menunjuk operasi patch secara tepat tanpa melihat JSON penuh.
+ */
+function buildMaterialOutline(material) {
+  const safe = normalizeMaterial(material) || {};
+  const lines = [];
+  lines.push(`title: ${summarizeItem('title', safe.title)}`);
+  lines.push(`hook: ${safe.hook ? summarizeItem('hook', safe.hook) : '(kosong)'}`);
+  ARRAY_FIELDS.forEach((field) => {
+    const arr = Array.isArray(safe[field]) ? safe[field] : [];
+    lines.push(`${field} (${arr.length} item):`);
+    arr.forEach((item, i) => lines.push(`  [${i}] ${summarizeItem(field, item)}`));
+  });
+  lines.push(`group_activity: ${safe.group_activity ? 'ada' : 'kosong'}`);
+  lines.push(`assignment: ${safe.assignment ? 'ada' : 'kosong'}`);
+  return lines.join('\n');
+}
+
+function buildPatchSystemPrompt() {
+  return [
+    'Kamu adalah editor materi pembelajaran SMA yang teliti. Kamu menyunting materi berformat JSON secara BERTARGET.',
+    'Kamu TIDAK menulis ulang seluruh materi. Kamu hanya mengeluarkan daftar OPERASI perubahan minimal yang diperlukan.',
+    'Keluarkan HANYA satu objek JSON valid (tanpa markdown, tanpa code fence, tanpa teks lain) dengan bentuk:',
+    '{',
+    '  "summary": string,            // ringkasan 1 kalimat Bahasa Indonesia tentang perubahan yang kamu lakukan',
+    '  "ops": [                       // urut; diterapkan berurutan',
+    '    { "op": "set_field", "field": "title|hook|group_activity|assignment", "value": <nilai baru> },',
+    '    { "op": "set_array", "field": "objectives|summary|reflection", "value": string[] },',
+    '    { "op": "replace_item", "field": "concepts|highlights|examples|exercises|objectives|summary|reflection", "index": number, "value": <item baru> },',
+    '    { "op": "insert_item", "field": <sama>, "index": number|null, "value": <item baru> },  // index null = tambah di akhir',
+    '    { "op": "delete_item", "field": <sama>, "index": number }',
+    '  ]',
+    '}',
+    'Aturan item harus sesuai skema materi:',
+    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null }',
+    '- highlights item: { "kind": "penting|miskonsepsi|info|perhatian", "content": string }',
+    '- examples item: { "number": number, "question": string, "steps": string[], "answer": string }',
+    '- exercises item: salah satu dari { kind:"fill_blank", prompt, answer, hint } | { kind:"multiple_choice", question, options[], answerIndex, explanation } | { kind:"drag_drop", instruction, pairs[{left,right}] } | { kind:"essay", question, guide }',
+    '- objectives/summary/reflection item: string',
+    'Ketentuan penting:',
+    '- Ubah HANYA yang diminta guru. Jangan menyentuh bagian lain.',
+    '- Gunakan indeks yang tepat sesuai PETA MATERI yang diberikan.',
+    '- Rumus matematika WAJIB LaTeX valid ($...$ inline, $$...$$ display). Jangan pakai \\( \\) atau \\[ \\].',
+    '- Jika instruksi tidak mungkin/ tidak jelas, kembalikan "ops": [] dan jelaskan di "summary".',
+    '- Jangan mengeluarkan apa pun selain objek JSON.',
+  ].join('\n');
+}
+
+function buildPatchPrompt(material, instruction) {
+  return [
+    'PETA MATERI saat ini (field, indeks, ringkasan tiap item):',
+    '---PETA MULAI---',
+    buildMaterialOutline(material),
+    '---PETA SELESAI---',
+    'Isi lengkap materi (JSON) sebagai rujukan konten:',
+    '---JSON MULAI---',
+    JSON.stringify(material),
+    '---JSON SELESAI---',
+    `Instruksi guru: ${instruction}`,
+    'Keluarkan objek JSON berisi "summary" dan "ops" sesuai aturan. Operasi harus seminimal mungkin namun memenuhi instruksi.',
+  ].join('\n');
+}
+
+/** Ekstrak { summary, ops } dari teks keluaran AI (toleran pembungkus). */
+function extractPatch(text) {
+  const parsed = extractJson(text);
+  if (!parsed || typeof parsed !== 'object') return null;
+  const ops = Array.isArray(parsed.ops) ? parsed.ops : null;
+  if (!ops) return null;
+  return { summary: typeof parsed.summary === 'string' ? parsed.summary : '', ops };
+}
+
+function clampIndex(index, length, allowEnd = false) {
+  const max = allowEnd ? length : length - 1;
+  const n = Number.isInteger(index) ? index : (allowEnd ? length : -1);
+  if (n < 0) return allowEnd ? length : -1;
+  if (n > max) return max;
+  return n;
+}
+
+/** Indeks valid untuk mengubah/menghapus item yang benar-benar ada (tanpa clamp). */
+function exactIndex(index, length) {
+  return Number.isInteger(index) && index >= 0 && index < length ? index : -1;
+}
+
+/**
+ * Terapkan daftar operasi patch ke materi (menghasilkan objek BARU, tidak mengubah input).
+ * @returns {{ material: object, applied: number, skipped: string[] }}
+ */
+function applyPatchOperations(material, ops) {
+  const base = normalizeMaterial(material) || {};
+  const next = JSON.parse(JSON.stringify(base));
+  const skipped = [];
+  let applied = 0;
+  const list = Array.isArray(ops) ? ops : [];
+
+  for (const op of list) {
+    if (!op || typeof op !== 'object') { skipped.push('operasi tidak valid'); continue; }
+    const field = String(op.field || '');
+    try {
+      if (op.op === 'set_field') {
+        if (!SCALAR_FIELDS.includes(field)) { skipped.push(`field skalar tak dikenal: ${field}`); continue; }
+        next[field] = op.value;
+        applied += 1;
+      } else if (op.op === 'set_array') {
+        if (!['objectives', 'summary', 'reflection'].includes(field)) { skipped.push(`set_array tak diizinkan untuk: ${field}`); continue; }
+        if (!Array.isArray(op.value)) { skipped.push(`nilai set_array bukan array: ${field}`); continue; }
+        next[field] = op.value.filter((s) => typeof s === 'string');
+        applied += 1;
+      } else if (op.op === 'replace_item') {
+        if (!ARRAY_FIELDS.includes(field)) { skipped.push(`array tak dikenal: ${field}`); continue; }
+        if (!Array.isArray(next[field])) next[field] = [];
+        const idx = exactIndex(op.index, next[field].length);
+        if (idx < 0) { skipped.push(`indeks di luar jangkauan untuk ${field}`); continue; }
+        next[field][idx] = op.value;
+        applied += 1;
+      } else if (op.op === 'insert_item') {
+        if (!ARRAY_FIELDS.includes(field)) { skipped.push(`array tak dikenal: ${field}`); continue; }
+        if (!Array.isArray(next[field])) next[field] = [];
+        const idx = clampIndex(op.index == null ? next[field].length : op.index, next[field].length, true);
+        next[field].splice(idx, 0, op.value);
+        applied += 1;
+      } else if (op.op === 'delete_item') {
+        if (!ARRAY_FIELDS.includes(field)) { skipped.push(`array tak dikenal: ${field}`); continue; }
+        if (!Array.isArray(next[field])) { skipped.push(`bukan array: ${field}`); continue; }
+        const idx = exactIndex(op.index, next[field].length);
+        if (idx < 0) { skipped.push(`indeks di luar jangkauan untuk ${field}`); continue; }
+        next[field].splice(idx, 1);
+        applied += 1;
+      } else {
+        skipped.push(`op tak dikenal: ${op.op}`);
+      }
+    } catch (e) {
+      skipped.push(`gagal menerapkan op ${op.op} pada ${field}`);
+    }
+  }
+
+  return { material: normalizeMaterial(next), applied, skipped };
+}
+
+// ---------------------------------------------------------------------------
 // Validasi & perbaikan JSON
 // ---------------------------------------------------------------------------
 
@@ -303,12 +468,17 @@ module.exports = {
   HIGHLIGHT_KINDS,
   KEDALAMAN_GUIDE,
   SECTION_TYPES,
+  applyPatchOperations,
+  buildMaterialOutline,
+  buildPatchPrompt,
+  buildPatchSystemPrompt,
   buildRevisionPrompt,
   buildRepairMessages,
   buildSystemPrompt,
   buildUserPrompt,
   collectLatexIssues,
   extractJson,
+  extractPatch,
   normalizeMaterial,
   validateMaterial,
   validateLatexBalance,

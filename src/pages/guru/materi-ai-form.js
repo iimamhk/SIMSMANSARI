@@ -102,6 +102,36 @@ export function pageStyles() {
     .maip-target span { display:block; margin-top:1px; font-size:.7rem; color:var(--mai-muted); }
     @keyframes maipPulse { 0%,100%{opacity:.3} 50%{opacity:1} }
     @media (max-width:639px){ .maip-block{padding:14px 12px; border-radius:16px;} }
+
+    /* --- Panel chat AI (Tahap 1) --- */
+    .maip-chat { margin-top:14px; border-top:1px solid var(--mai-line); padding-top:14px; }
+    .maip-chat-head { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+    .maip-chat-head .ico { width:26px; height:26px; border-radius:8px; background:linear-gradient(135deg,var(--mai-brand),var(--mai-brand2)); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; }
+    .maip-chat-head h4 { margin:0; font-size:.9rem; font-weight:700; color:var(--mai-ink); }
+    .maip-chat-head p { margin:1px 0 0; font-size:.7rem; color:var(--mai-muted); }
+    .maip-chat-log { display:flex; flex-direction:column; gap:10px; max-height:340px; overflow-y:auto; padding:4px 2px 2px; }
+    .maip-msg { display:flex; gap:8px; max-width:92%; }
+    .maip-msg.user { align-self:flex-end; flex-direction:row-reverse; }
+    .maip-msg-avatar { flex:none; width:26px; height:26px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; font-size:.72rem; font-weight:700; }
+    .maip-msg.ai .maip-msg-avatar { background:linear-gradient(135deg,var(--mai-brand),var(--mai-brand2)); color:#fff; }
+    .maip-msg.user .maip-msg-avatar { background:#e5e7eb; color:#475569; }
+    .maip-msg-bubble { border-radius:14px; padding:9px 12px; font-size:.82rem; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+    .maip-msg.ai .maip-msg-bubble { background:#f2f5f9; color:var(--mai-ink); border-top-left-radius:4px; }
+    .maip-msg.user .maip-msg-bubble { background:linear-gradient(135deg,var(--mai-brand),var(--mai-brand2)); color:#fff; border-top-right-radius:4px; }
+    .maip-msg-bubble.thinking { color:var(--mai-muted); font-style:italic; }
+    .maip-chat-empty { padding:18px 12px; text-align:center; color:var(--mai-muted); font-size:.78rem; }
+    .maip-chat-quick { display:flex; flex-wrap:wrap; gap:7px; margin:12px 0 10px; }
+    .maip-chat-input-row { display:flex; gap:8px; align-items:flex-end; }
+    .maip-chat-input { flex:1; min-width:0; resize:none; max-height:120px; }
+    .maip-chat-send { flex:none; border:none; border-radius:12px; width:44px; height:42px; background:linear-gradient(135deg,var(--mai-brand),var(--mai-brand2)); color:#fff; font-size:1.05rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:transform .15s ease, opacity .15s ease; }
+    .maip-chat-send:active { transform:scale(.94); }
+    .maip-chat-send:disabled { opacity:.5; cursor:not-allowed; }
+    .maip-chat-hint { margin:8px 0 0; font-size:.68rem; color:var(--mai-muted); }
+    .maip-focus { display:flex; align-items:center; gap:8px; margin:2px 0 8px; padding:7px 11px; border:1px solid rgba(10,132,255,.28); background:rgba(10,132,255,.07); border-radius:11px; font-size:.74rem; color:#0a6cff; }
+    .maip-focus-ico { font-size:.9rem; }
+    .maip-focus strong { color:var(--mai-ink); }
+    .maip-focus-clear { margin-left:auto; border:none; background:transparent; color:#0a6cff; font-size:1.05rem; line-height:1; cursor:pointer; padding:0 4px; }
+    .maip-focus-clear:hover { color:#d92b20; }
   `;
 }
 
@@ -180,7 +210,10 @@ export function resultHtml() {
     <div class="maip-block">
       <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
         <div class="maip-step" style="margin:0"><span class="maip-step-n">&#10003;</span><div><h3>Hasil Materi</h3><p id="maip-result-sub">Pratinjau akan tampil di sini</p></div></div>
-        <div style="display:flex; gap:7px; flex-wrap:wrap;">
+        <div style="display:flex; gap:7px; flex-wrap:wrap; align-items:center;">
+          <span id="maip-version" class="maip-status-pill idle" hidden style="font-variant-numeric:tabular-nums;"><span class="maip-dot"></span>v1</span>
+          <button type="button" id="maip-undo" class="maip-btn" disabled title="Batalkan perubahan terakhir">&#8630; Undo</button>
+          <button type="button" id="maip-redo" class="maip-btn" disabled title="Ulangi perubahan">Redo &#8631;</button>
           <button type="button" id="maip-stop" class="maip-btn" disabled>Stop</button>
           <button type="button" id="maip-simpan" class="maip-btn green" disabled>Simpan</button>
           <button type="button" id="maip-publish" class="maip-btn primary" disabled>Publish</button>
@@ -198,12 +231,27 @@ export function resultHtml() {
         <iframe id="maip-preview" class="maip-preview-frame" title="Pratinjau materi" hidden></iframe>
       </div>
       <div id="maip-revisi-wrap" hidden style="margin-top:14px; border-top:1px solid var(--mai-line); padding-top:12px;">
-        <p style="margin:0 0 8px; font-size:.72rem; font-weight:600; color:var(--mai-muted)">Revisi cepat</p>
-        <div style="display:flex; flex-wrap:wrap; gap:7px;">${revisiBtns}</div>
-        <div style="display:flex; gap:7px; margin-top:10px; flex-wrap:wrap;">
-          <input id="maip-revisi-input" class="maip-in" style="flex:1; min-width:180px" placeholder="Instruksi revisi manual, mis. perbanyak contoh numerik di SPLDV">
-          <button type="button" id="maip-revisi-btn" class="maip-btn primary">Revisi</button>
+        <div class="maip-chat-head">
+          <span class="ico">&#9998;</span>
+          <div>
+            <h4>Editor AI</h4>
+            <p>Ketik permintaan perubahan, materi langsung diperbarui.</p>
+          </div>
         </div>
+        <div id="maip-chat-log" class="maip-chat-log" aria-live="polite">
+          <div class="maip-chat-empty" id="maip-chat-empty">Mulai percakapan untuk menyempurnakan materi. Contoh: "perbanyak contoh soal", "ubah gaya jadi lebih santai", "tambah mini kuis 5 soal". Anda juga bisa klik <strong>Edit bagian ini</strong> pada pratinjau untuk memperbaiki bagian tertentu.</div>
+        </div>
+        <div id="maip-focus" class="maip-focus" hidden>
+          <span class="maip-focus-ico">&#9678;</span>
+          <span>Fokus edit: <strong id="maip-focus-label"></strong></span>
+          <button type="button" id="maip-focus-clear" class="maip-focus-clear" title="Batalkan fokus">&times;</button>
+        </div>
+        <div class="maip-chat-quick" id="maip-chat-quick">${revisiBtns}</div>
+        <div class="maip-chat-input-row">
+          <textarea id="maip-revisi-input" class="maip-in maip-chat-input" rows="1" placeholder="Tulis permintaan perubahan materi..."></textarea>
+          <button type="button" id="maip-revisi-btn" class="maip-chat-send" title="Kirim" aria-label="Kirim">&#10148;</button>
+        </div>
+        <p class="maip-chat-hint">Enter untuk kirim · Shift+Enter baris baru. Perubahan diterapkan langsung ke pratinjau di atas.</p>
       </div>
       <div id="maip-error-wrap" hidden style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin:12px 0 0; padding:10px 12px; border:1px solid rgba(255,69,58,.22); border-radius:12px; background:rgba(255,69,58,.06);">
         <p id="maip-error" style="margin:0; font-size:.8rem; line-height:1.45; color:#d92b20"></p>

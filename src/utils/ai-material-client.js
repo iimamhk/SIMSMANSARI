@@ -11,23 +11,28 @@ export { MaterialGenerationError };
  * @param {object} params
  * @param {object} params.input - field form (mapel, kelas, bab, topik, fitur, dll)
  * @param {string} [params.revisionInstruction]
+ * @param {string} [params.editInstruction] - Tahap 2: edit bertarget (patch)
  * @param {string} [params.currentJson]
  * @param {AbortSignal} [params.signal]
  * @param {(delta:string)=>void} [params.onDelta]
+ * @param {(patch:object)=>void} [params.onPatch] - ringkasan operasi patch
  * @param {(material:object, meta:object)=>void} [params.onMaterial]
  * @param {(err:MaterialGenerationError)=>void} [params.onError]
  */
 export async function streamGenerateMaterialJson({
   input,
   revisionInstruction,
+  editInstruction,
   currentJson,
   signal,
   onDelta,
+  onPatch,
   onMaterial,
   onError,
 }) {
   const body = { input, stream: true };
   if (revisionInstruction && revisionInstruction.trim()) body.revisionInstruction = revisionInstruction.trim();
+  if (editInstruction && editInstruction.trim()) body.editInstruction = editInstruction.trim();
   if (currentJson && currentJson.trim()) body.currentJson = currentJson.trim();
 
   let response;
@@ -61,10 +66,10 @@ export async function streamGenerateMaterialJson({
     throw error;
   }
 
-  await consumeSse(response, { onDelta, onMaterial, onError });
+  await consumeSse(response, { onDelta, onPatch, onMaterial, onError });
 }
 
-async function consumeSse(response, { onDelta, onMaterial, onError }) {
+async function consumeSse(response, { onDelta, onPatch, onMaterial, onError }) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -81,6 +86,8 @@ async function consumeSse(response, { onDelta, onMaterial, onError }) {
       const payload = JSON.parse(raw);
       if (currentEvent === 'delta' && typeof payload.content === 'string') {
         onDelta?.(payload.content);
+      } else if (currentEvent === 'patch') {
+        onPatch?.(payload);
       } else if (currentEvent === 'material') {
         receivedMaterial = Boolean(payload.material);
         onMaterial?.(payload.material, payload);
