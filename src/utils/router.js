@@ -4,7 +4,9 @@ import { renderPublicHomePage } from '../pages/public-home.js';
 import { renderPublicLobbyDetailPage } from '../pages/public-lobby-detail.js';
 import { renderAdminDashboard } from '../pages/admin/dashboard.js';
 import { renderAdminLobbySchoolPage } from '../pages/admin/lobi-sekolah.js';
-import { renderSystemSettingsPage } from '../pages/admin/pengatur-sistem.js';
+import { renderAdminAiSettingsPage } from '../pages/admin/pengaturan-ai.js';
+import { renderAdminBackupSettingsPage } from '../pages/admin/pengaturan-backup.js';
+import { renderAdminAccountPage } from '../pages/admin/akun.js';
 import { renderGuruDashboard } from '../pages/guru/dashboard.js';
 import { renderGuruInputAbsenPage } from '../pages/guru/input-absen.js';
 import { renderGuruKeaktifanPage } from '../pages/guru/keaktifan.js';
@@ -262,8 +264,25 @@ async function renderRoute() {
     return;
   }
 
+  if (route === '#admin/pengaturan-ai') {
+    await renderAndFinalize(renderAdminAiSettingsPage, container);
+    return;
+  }
+
+  if (route === '#admin/pengaturan-backup') {
+    await renderAndFinalize(renderAdminBackupSettingsPage, container);
+    return;
+  }
+
+  if (route === '#admin/akun') {
+    await renderAndFinalize(renderAdminAccountPage, container);
+    return;
+  }
+
   if (route === '#admin/pengatur-sistem') {
-    await renderAndFinalize(renderSystemSettingsPage, container);
+    // Halaman pengaturan lama kini dipecah menjadi tiga halaman terpisah.
+    // Arahkan tautan/bookmark lama ke Pengaturan AI.
+    window.location.hash = '#admin/pengaturan-ai';
     return;
   }
 
