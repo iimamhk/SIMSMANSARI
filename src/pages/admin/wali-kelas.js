@@ -13,7 +13,7 @@ export async function renderAdminWaliKelasPage(container) {
     ? await getDocumentsWhere('wali_kelas', [
       { field: 'tahun_ajaran_id', value: activeYear },
       { field: 'semester_id', value: activeSemester },
-    ], { cacheMs: 300000 })
+    ], { cacheMs: 300000, persist: true, persistTtlMs: 43200000 })
     : [];
 
   const guruOptions = guruList

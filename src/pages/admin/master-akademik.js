@@ -41,7 +41,7 @@ export async function renderMasterAkademikPage(container) {
         <div class="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-white/25 blur-3xl"></div>
         <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/75">Admin Console</p>
         <h3 class="mt-2 text-2xl font-bold tracking-tight">Data Akademik</h3>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Kelola mata pelajaran dan kelas yang digunakan dalam sistem dengan alur master yang rapi.</p>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-white/90">Kelola mata pelajaran dan kelas yang dipakai di seluruh sistem.</p>
       </div>
 
       <div class="rounded-[26px] border border-slate-200/80 bg-white p-4 shadow-[0_18px_44px_-30px_rgba(14,165,233,0.28)]">

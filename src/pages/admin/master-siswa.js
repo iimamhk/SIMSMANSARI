@@ -30,7 +30,7 @@ export async function renderMasterSiswaPage(container) {
           <div class="max-w-2xl">
             <p class="text-sm font-semibold uppercase tracking-[0.24em] text-white/75">Manajemen Data</p>
             <h3 class="mt-2 text-2xl font-semibold">Master Siswa</h3>
-            <p class="mt-2 text-sm text-white/90">Kelola akun siswa, kelas, dan import data dengan tampilan yang lebih terstruktur dan profesional.</p>
+            <p class="mt-2 text-sm text-white/90">Kelola akun siswa, kelas, dan impor data.</p>
           </div>
           <div class="grid gap-3 sm:grid-cols-3">
             <div class="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 backdrop-blur">
@@ -54,9 +54,8 @@ export async function renderMasterSiswaPage(container) {
           <div class="flex items-start justify-between gap-3">
             <div>
               <h4 class="text-lg font-semibold text-slate-900">Tambah Siswa</h4>
-              <p class="mt-1 text-sm text-slate-500">Buat akun siswa melalui formulir ringkas tanpa meninggalkan daftar.</p>
+              <p class="mt-1 text-sm text-slate-500">Tambah satu akun siswa.</p>
             </div>
-            <span class="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 ring-1 ring-sky-100">Form Master</span>
           </div>
           <button id="open-siswa-form-btn" type="button" class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:from-sky-600 hover:to-cyan-600">Tambah Siswa Baru</button>
         </div>
@@ -65,9 +64,8 @@ export async function renderMasterSiswaPage(container) {
           <div class="flex items-start justify-between gap-3">
             <div>
               <h4 class="text-lg font-semibold text-slate-900">Import Siswa</h4>
-              <p class="mt-1 text-sm text-slate-500">Unggah file CSV untuk mempercepat input data siswa dan asosiasi kelas.</p>
+              <p class="mt-1 text-sm text-slate-500">Impor banyak siswa sekaligus dari file CSV.</p>
             </div>
-            <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">Bulk Upload</span>
           </div>
           <div class="mt-5 flex flex-wrap gap-2">
             <button id="download-siswa-template-btn" type="button" class="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white">Unduh Template</button>
@@ -91,7 +89,6 @@ export async function renderMasterSiswaPage(container) {
         <div class="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h4 class="text-lg font-semibold text-slate-900">Daftar Siswa</h4>
-            <p class="mt-1 text-sm text-slate-500">Filter data berdasarkan kelas, status, atau kata kunci untuk pencarian yang cepat.</p>
           </div>
           <div class="flex flex-col gap-2 md:flex-row">
             <label class="text-sm text-slate-600">

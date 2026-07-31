@@ -142,17 +142,21 @@ export async function renderMasterTahunAjaranPage(container) {
   };
 
   const activatePeriod = async (recordId) => {
-    const recordsToSave = records.map((record) => ({
-      ...record,
-      is_active: record.id === recordId,
-    }));
-
-    await Promise.all(recordsToSave.map((record) => saveDocument('tahun_ajaran', record, record.id)));
     const activeRecord = records.find((record) => record.id === recordId);
     if (!activeRecord) {
       alert('Periode tidak ditemukan.');
       return;
     }
+
+    // Hemat kuota tulis: hanya perbarui dokumen yang statusnya benar-benar berubah
+    // (matikan periode aktif sebelumnya, aktifkan periode terpilih).
+    const writes = records
+      .filter((record) => record.id !== recordId && record.is_active)
+      .map((record) => saveDocument('tahun_ajaran', { ...record, is_active: false }, record.id));
+    if (!activeRecord.is_active) {
+      writes.push(saveDocument('tahun_ajaran', { ...activeRecord, is_active: true }, activeRecord.id));
+    }
+    await Promise.all(writes);
 
     const updatedContext = {
       ...getStoredContext(),

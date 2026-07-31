@@ -39,7 +39,7 @@ export async function renderAdminLobbySchoolPage(container) {
       <section class="rounded-[30px] border border-sky-100 bg-gradient-to-br from-cyan-500 via-sky-500 to-teal-400 p-5 text-white shadow-[0_28px_60px_-32px_rgba(14,165,233,0.55)]">
         <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/75">Lobi Sekolah</p>
         <h3 class="mt-2 text-2xl font-semibold text-white">Kelola halaman lobi publik sekolah</h3>
-        <p class="mt-2 text-sm leading-6 text-white/90">Atur judul beranda, kategori lobi, daftar tautan, dan token akses untuk halaman tertentu dari satu panel admin.</p>
+        <p class="mt-2 text-sm leading-6 text-white/90">Atur beranda, kategori, daftar tautan, dan token akses lobi publik.</p>
       </section>
 
       <section class="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
@@ -165,25 +165,11 @@ export async function renderAdminLobbySchoolPage(container) {
 
         <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm space-y-4">
           <div>
-            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Ringkasan</p>
-            <h4 class="mt-1 text-xl font-semibold text-slate-900">Statistik modul lobi</h4>
-          </div>
-          <div class="grid gap-3 sm:grid-cols-3">
-            <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4">
-              <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kategori Aktif</p>
-              <p class="mt-2 text-2xl font-semibold text-slate-900">${activeSections.length}</p>
-            </div>
-            <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4">
-              <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Total Tautan</p>
-              <p class="mt-2 text-2xl font-semibold text-slate-900">${links.filter((item) => item.is_active !== false).length}</p>
-            </div>
-            <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4">
-              <p class="text-xs uppercase tracking-[0.12em] text-slate-500">Kategori Bertoken</p>
-              <p class="mt-2 text-2xl font-semibold text-slate-900">${sections.filter((item) => item.requires_token).length}</p>
-            </div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sky-600">Panduan</p>
+            <h4 class="mt-1 text-xl font-semibold text-slate-900">Tips pengisian</h4>
           </div>
           <div class="rounded-[26px] border border-sky-100 bg-gradient-to-br from-white via-sky-50/50 to-cyan-50/40 p-4 text-sm leading-6 text-slate-600">
-            Kategori bertipe <span class="font-semibold text-slate-900">Link Tree</span> akan ditampilkan sebagai halaman daftar tautan. Token bisa diubah manual dari panel kategori.
+            Kategori bertipe <span class="font-semibold text-slate-900">Link Tree</span> ditampilkan sebagai halaman daftar tautan. Token bisa diubah manual dari panel kategori. Kosongkan logo login untuk memakai logo sekolah.
           </div>
         </div>
       </section>

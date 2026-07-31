@@ -17,7 +17,6 @@ export async function renderMasterGuruPage(container, pageState = {}) {
       <tr class="border-t border-slate-100 text-sm text-slate-600">
         <td class="px-3 py-2">${item.nama}</td>
         <td class="px-3 py-2">${item.username}</td>
-        <td class="px-3 py-2">Tersimpan aman</td>
         <td class="px-3 py-2">${item.status || 'active'}</td>
         <td class="px-3 py-2">
           <div class="flex flex-wrap gap-2">
@@ -75,7 +74,6 @@ export async function renderMasterGuruPage(container, pageState = {}) {
             <tr>
               <th class="px-3 py-2">Nama</th>
               <th class="px-3 py-2">Username</th>
-              <th class="px-3 py-2">Password</th>
               <th class="px-3 py-2">Status</th>
               <th class="px-3 py-2">Aksi</th>
             </tr>

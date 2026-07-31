@@ -13,7 +13,7 @@ export async function renderMasterPembelajaranPage(container) {
   const filters = [];
   if (context?.tahun_ajaran_aktif) filters.push({ field: 'tahun_ajaran_id', value: context.tahun_ajaran_aktif });
   if (context?.semester_aktif) filters.push({ field: 'semester_id', value: context.semester_aktif });
-  const pembelajaranList = (await getDocumentsWhere('pembelajaran', filters, { cacheMs: 300000 }))
+  const pembelajaranList = (await getDocumentsWhere('pembelajaran', filters, { cacheMs: 300000, persist: true, persistTtlMs: 43200000 }))
     .sort((a, b) => String(a.kelas_nama || '').localeCompare(String(b.kelas_nama || ''), 'id', { sensitivity: 'base' }));
   const totalSiswa = new Set(pembelajaranList.flatMap((item) => (Array.isArray(item.siswa) ? item.siswa : []))
     .map((student) => student.siswa_id || student.id || student.username || student.siswa_nama || student.nama)
