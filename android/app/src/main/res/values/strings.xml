@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SIM SMANSARI</string>
+    <string name="title_activity_main">SIM SMANSARI</string>
+    <string name="package_name">id.sch.smansari.sim</string>
+    <string name="custom_url_scheme">id.sch.smansari.sim</string>
+</resources>

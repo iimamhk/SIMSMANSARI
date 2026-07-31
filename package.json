@@ -1,9 +1,15 @@
 {
   "scripts": {
     "backup": "node scripts/backup-excel.js",
-    "backup:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; require('./scripts/backup-excel.js')\""
+    "backup:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; require('./scripts/backup-excel.js')\"",
+    "android:sync": "cap sync android",
+    "android:open": "cap open android",
+    "android:run": "cap run android"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1",
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.2",
     "exceljs": "^4.4.0",

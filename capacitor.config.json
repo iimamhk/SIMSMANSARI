@@ -1,0 +1,19 @@
+{
+  "appId": "id.sch.smansari.sim",
+  "appName": "SIM SMANSARI",
+  "webDir": "src",
+  "server": {
+    "url": "https://simsmansari.vercel.app",
+    "cleartext": false,
+    "androidScheme": "https",
+    "allowNavigation": [
+      "simsmansari.vercel.app",
+      "*.vercel.app",
+      "*.firebaseio.com",
+      "*.firebaseapp.com",
+      "*.googleapis.com",
+      "*.gstatic.com",
+      "*.google.com"
+    ]
+  }
+}
