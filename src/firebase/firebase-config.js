@@ -21,6 +21,19 @@ if (window.firebase) {
     }
 
     auth = window.firebase.auth(app);
+
+    // Fix #3: Pastikan sesi login bertahan antar buka-tutup aplikasi, termasuk
+    // cold start setelah "clear recent" di Android. Persistence LOCAL menyimpan
+    // sesi di IndexedDB (bukan hanya memori). Ini default untuk web, tapi kita
+    // set eksplisit agar konsisten di WebView Capacitor.
+    try {
+      auth
+        .setPersistence(window.firebase.auth.Auth.Persistence.LOCAL)
+        .catch((error) => console.warn('Auth persistence LOCAL gagal diset:', error));
+    } catch (error) {
+      console.warn('Auth persistence LOCAL tidak didukung:', error);
+    }
+
     db = window.firebase.firestore(app);
 
     // Persist query/doc snapshots across reloads. `synchronizeTabs` membuat beberapa
@@ -38,6 +51,19 @@ if (window.firebase) {
     window.firebaseAuth = auth;
     window.firebaseDb = db;
     window.firebaseConfig = firebaseConfig;
+
+    // Fix #3 (lanjutan): saat koneksi kembali (mis. WebView baru dibuka dari cold
+    // start), segarkan ID token supaya sesi custom-token tetap valid tanpa
+    // memaksa pengguna login ulang.
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('online', () => {
+        try {
+          auth?.currentUser?.getIdToken(true).catch(() => {});
+        } catch {
+          // Abaikan; token akan disegarkan otomatis pada permintaan berikutnya.
+        }
+      });
+    }
   } catch (error) {
     console.warn('Firebase initialization failed, continuing in demo mode:', error);
   }

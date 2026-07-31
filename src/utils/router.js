@@ -42,6 +42,7 @@ import { renderPlottingJadwalPage } from '../pages/admin/plotting-jadwal.js';
 import { renderMasterPembelajaranPage } from '../pages/admin/master-pembelajaran.js';
 import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
 import { logoutCurrentUser, waitForAuthReady } from '../firebase/auth-service.js';
+import { auth } from '../firebase/firebase-config.js';
 import { maybeShowBackupReminder } from '../utils/backup-reminder.js';
 import { maybeRunScheduledBackup } from '../utils/admin-backup-scheduler.js';
 import { maybeRunGuruAutoBackup } from '../utils/guru-backup-scheduler.js';
@@ -50,6 +51,71 @@ function getSession() {
   const raw = localStorage.getItem('simguru_session');
   const session = raw ? JSON.parse(raw) : null;
   return session?.firebase_uid || session?.emergency_local ? session : null;
+}
+
+// Fix #1: simpan & pulihkan halaman terakhir agar cold start (mis. "clear recent"
+// di Android) tidak selalu melempar pengguna kembali ke lobi.
+const LAST_ROUTE_KEY = 'simguru_last_route';
+
+function isRestorableRoute(hash) {
+  const h = String(hash || '');
+  return h.startsWith('#admin')
+    || h.startsWith('#guru')
+    || h.startsWith('#siswa')
+    || h.startsWith('#chat');
+}
+
+function persistLastRoute(hash) {
+  if (!isRestorableRoute(hash)) return;
+  try {
+    localStorage.setItem(LAST_ROUTE_KEY, String(hash));
+  } catch {
+    // Abaikan kegagalan localStorage.
+  }
+}
+
+function readLastRoute() {
+  try {
+    return localStorage.getItem(LAST_ROUTE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function clearLastRoute() {
+  try {
+    localStorage.removeItem(LAST_ROUTE_KEY);
+  } catch {
+    // Abaikan kegagalan localStorage.
+  }
+}
+
+/**
+ * Fix #2: tentukan apakah rute terproteksi boleh dirender, tanpa langsung
+ * menghapus sesi hanya karena Firebase Auth sesaat belum siap.
+ * - 'ok'      : sesi Firebase pulih/valid.
+ * - 'offline' : tidak bisa verifikasi (jaringan mati) tetapi ada sesi lokal;
+ *               pertahankan sesi supaya tidak logout paksa.
+ * - 'login'   : online namun Firebase benar-benar tidak punya sesi → perlu login.
+ */
+async function resolveProtectedRouteAuth(session) {
+  if (auth?.currentUser) return 'ok';
+
+  let user = await waitForAuthReady();
+  if (user) return 'ok';
+
+  // Cold start: beri beberapa kesempatan singkat untuk pemulihan sesi dari
+  // IndexedDB / inisialisasi SDK yang belum selesai.
+  for (let attempt = 0; attempt < 3 && !user; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    user = auth?.currentUser || (await waitForAuthReady());
+  }
+  if (user) return 'ok';
+
+  const online = typeof navigator === 'undefined' ? true : navigator.onLine !== false;
+  if (session && !online) return 'offline';
+
+  return 'login';
 }
 
 function getDefaultRouteByRole(role) {
@@ -124,6 +190,7 @@ function initGlobalLogout(container) {
     button.disabled = true;
 
     await logoutCurrentUser();
+    clearLastRoute();
     window.location.hash = '#login';
     loggingOut = false;
   }, true);
@@ -136,16 +203,25 @@ async function renderRoute() {
     || requestedHash.startsWith('#siswa');
   const activeSession = getSession();
   const bypassAuthReady = Boolean(activeSession?.emergency_local);
-  if (isProtectedRoute && !bypassAuthReady && !(await waitForAuthReady())) {
-    localStorage.removeItem('simguru_session');
-    localStorage.removeItem('simguru_wali');
-    if (window.location.hash !== '#login') {
-      window.location.hash = '#login';
-      return;
+  if (isProtectedRoute && !bypassAuthReady) {
+    const decision = await resolveProtectedRouteAuth(activeSession);
+    if (decision === 'login') {
+      // Hanya hapus sesi bila memang benar-benar logout (online + tidak ada sesi
+      // Firebase). Cold start yang berhasil dipulihkan atau kondisi offline tidak
+      // lagi menghapus sesi, sehingga pengguna tidak diminta login berulang.
+      localStorage.removeItem('simguru_session');
+      localStorage.removeItem('simguru_wali');
+      clearLastRoute();
+      if (window.location.hash !== '#login') {
+        window.location.hash = '#login';
+        return;
+      }
     }
+    // 'ok' / 'offline' → lanjutkan render tanpa memaksa login.
   }
 
   const route = resolveRoute(window.location.hash);
+  persistLastRoute(route);
   const container = document.getElementById('app');
 
   if (container) initGlobalLogout(container);
@@ -427,9 +503,26 @@ const bootRoute = () => renderRoute()
   .then(() => { window.__SIM_APP_READY__ = true; })
   .catch(showBootstrapError);
 
+/**
+ * Fix #1 (lanjutan): pada cold start, URL WebView dimuat ulang tanpa hash
+ * sehingga jatuh ke lobi (#home). Bila ada sesi aktif dan halaman terakhir
+ * tersimpan, kembalikan pengguna ke halaman itu alih-alih ke lobi.
+ */
+function bootWithRouteRestore() {
+  const current = window.location.hash || '';
+  if (!current || current === '#' || current === '#home') {
+    const saved = readLastRoute();
+    if (saved && getSession()) {
+      window.location.hash = saved; // memicu hashchange → bootRoute
+      return;
+    }
+  }
+  bootRoute();
+}
+
 window.addEventListener('error', (event) => {
   if (event.error) showBootstrapError(event.error);
 });
 window.addEventListener('unhandledrejection', (event) => showBootstrapError(event.reason));
 window.addEventListener('hashchange', bootRoute);
-window.addEventListener('DOMContentLoaded', bootRoute);
+window.addEventListener('DOMContentLoaded', bootWithRouteRestore);
