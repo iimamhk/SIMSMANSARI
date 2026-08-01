@@ -47,6 +47,11 @@ const state = {
   genSoal: [],
   genPaketId: null,
   genPaketJudul: '',
+  previewPaket: null,
+  previewSoal: [],
+  previewIndex: 0,
+  previewJawab: {},
+  previewRagu: new Set(),
 };
 
 const DEFAULT_AI_PRESET = 'matematika';
@@ -1720,12 +1725,279 @@ function renderPaketCard(p) {
         <button type="button" data-action="buat-sesi-dari-paket" data-paket-id="${p.id}" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">Buat Sesi</button>
         <button type="button" data-action="edit-paket" data-paket-id="${p.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Edit Paket</button>
       </div>
+      <button type="button" data-action="preview-ujian" data-paket-id="${p.id}" class="w-full rounded-xl border border-slate-900 bg-slate-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-700">👁 Pratinjau Ujian</button>
       <div class="grid grid-cols-2 gap-2">
         <button type="button" data-action="duplikat-paket" data-paket-id="${p.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Duplikat</button>
         <button type="button" data-action="hapus-paket" data-paket-id="${p.id}" class="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-100">Hapus Paket</button>
       </div>
     </div>
   `;
+}
+
+// ─── PRATINJAU UJIAN (tampilan penuh persis seperti siswa mengerjakan) ─────────
+
+/**
+ * Menampilkan pratinjau tampilan ujian tepat seperti yang dilihat siswa saat
+ * mengerjakan (renderPengerjaanKuiz di src/pages/siswa/kuiz.js): bar atas +
+ * kartu soal + area jawaban tiap tipe + navigasi soal. Mode pratinjau: tanpa
+ * timer berjalan, tanpa pengawasan, dan jawaban tidak disimpan.
+ */
+function openPreviewUjian(paketId) {
+  const paket = state.paketList.find((p) => p.id === paketId);
+  if (!paket) return;
+  const soal = Array.isArray(paket.soal) ? paket.soal : [];
+  if (!soal.length) {
+    showNotif('Paket ini belum punya soal untuk dipratinjau.', 'info');
+    return;
+  }
+
+  state.previewPaket = paket;
+  state.previewSoal = soal;
+  state.previewIndex = 0;
+  state.previewJawab = {};
+  state.previewRagu = new Set();
+
+  document.getElementById('kuiz-preview-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'kuiz-preview-overlay';
+  overlay.className = 'fixed inset-0 z-[120] overflow-y-auto bg-slate-100';
+  document.body.appendChild(overlay);
+  rerenderPreviewUjian();
+}
+
+function closePreviewUjian() {
+  document.getElementById('kuiz-preview-overlay')?.remove();
+  state.previewPaket = null;
+  state.previewSoal = [];
+  state.previewJawab = {};
+  state.previewRagu = new Set();
+}
+
+function collectPreviewAnswer() {
+  const soal = state.previewSoal[state.previewIndex];
+  if (!soal) return;
+  if (soal.tipe === 'pg') {
+    const sel = document.querySelector('input[name="pv_answer_pg"]:checked');
+    if (sel) state.previewJawab[soal.id] = sel.value; else delete state.previewJawab[soal.id];
+  } else if (soal.tipe === 'bs') {
+    const sel = document.querySelector('input[name="pv_answer_bs"]:checked');
+    if (sel) state.previewJawab[soal.id] = sel.value; else delete state.previewJawab[soal.id];
+  } else if (soal.tipe === 'isian') {
+    const val = document.getElementById('pv-answer-isian')?.value?.trim();
+    if (val) state.previewJawab[soal.id] = val; else delete state.previewJawab[soal.id];
+  } else if (soal.tipe === 'menjodohkan') {
+    const map = {};
+    document.querySelectorAll('.pv-menjodohkan-select').forEach((s) => { if (s.value) map[s.dataset.pairKiri] = s.value; });
+    if (Object.keys(map).length) state.previewJawab[soal.id] = map; else delete state.previewJawab[soal.id];
+  } else if (soal.tipe === 'essay') {
+    const val = document.getElementById('pv-answer-essay')?.value?.trim();
+    if (val) state.previewJawab[soal.id] = val; else delete state.previewJawab[soal.id];
+  }
+}
+
+function renderPreviewAnswerInput(soal) {
+  const current = state.previewJawab[soal.id];
+
+  if (soal.tipe === 'pg') {
+    const opsi = soal.opsi || [];
+    const letters = 'ABCDE';
+    return `
+      <div class="space-y-3" id="pv-pg-options">
+        ${opsi.map((o, i) => {
+          const letter = letters[i];
+          const isSelected = current === letter;
+          return `
+            <label class="flex items-center gap-4 rounded-2xl border-2 cursor-pointer py-4 px-4 transition select-none ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}">
+              <input type="radio" name="pv_answer_pg" value="${letter}" ${isSelected ? 'checked' : ''} class="sr-only"/>
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold text-sm ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}">${letter}</span>
+              <span class="text-sm text-slate-800 leading-6">${renderMathMultiline(o)}</span>
+            </label>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  if (soal.tipe === 'bs') {
+    return `
+      <div class="grid grid-cols-2 gap-3" id="pv-bs-options">
+        <label class="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 cursor-pointer py-6 transition select-none ${current === 'benar' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 bg-white hover:bg-slate-50'}">
+          <input type="radio" name="pv_answer_bs" value="benar" ${current === 'benar' ? 'checked' : ''} class="sr-only"/>
+          <span class="text-3xl">✓</span>
+          <span class="text-sm font-semibold ${current === 'benar' ? 'text-emerald-700' : 'text-slate-700'}">BENAR</span>
+        </label>
+        <label class="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 cursor-pointer py-6 transition select-none ${current === 'salah' ? 'border-red-500 bg-red-50' : 'border-slate-200 bg-white hover:bg-slate-50'}">
+          <input type="radio" name="pv_answer_bs" value="salah" ${current === 'salah' ? 'checked' : ''} class="sr-only"/>
+          <span class="text-3xl">✕</span>
+          <span class="text-sm font-semibold ${current === 'salah' ? 'text-red-600' : 'text-slate-700'}">SALAH</span>
+        </label>
+      </div>
+    `;
+  }
+
+  if (soal.tipe === 'isian') {
+    return `
+      <input type="text" id="pv-answer-isian" value="${current || ''}" placeholder="Tulis jawaban di sini…" autocomplete="off"
+        class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-base focus:border-indigo-500 focus:bg-white focus:outline-none transition"/>
+    `;
+  }
+
+  if (soal.tipe === 'menjodohkan') {
+    const pasangan = soal.pasangan || [];
+    const currentMap = (typeof current === 'object' && current !== null) ? current : {};
+    const rightSide = [...pasangan.map((p) => p.kanan)].sort();
+    return `
+      <div class="space-y-3" id="pv-menjodohkan-container">
+        ${pasangan.map((pair) => `
+          <div class="flex items-center gap-3">
+            <div class="flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800">${renderMathMultiline(pair.kiri)}</div>
+            <svg viewBox="0 0 24 24" class="h-4 w-4 shrink-0 text-slate-400 stroke-current" fill="none" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            <select data-pair-kiri="${pair.kiri}" class="pv-menjodohkan-select flex-1 rounded-2xl border-2 border-slate-200 bg-white px-3 py-3 text-sm focus:border-indigo-500 focus:outline-none transition ${currentMap[pair.kiri] ? 'border-indigo-300 bg-indigo-50' : ''}">
+              <option value="">-- Pilih --</option>
+              ${rightSide.map((r) => `<option value="${r}" ${currentMap[pair.kiri] === r ? 'selected' : ''}>${r}</option>`).join('')}
+            </select>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  if (soal.tipe === 'essay') {
+    return `
+      <textarea id="pv-answer-essay" rows="6" placeholder="Tulis jawaban essay di sini…"
+        class="w-full rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-6 resize-none focus:border-indigo-500 focus:bg-white focus:outline-none transition">${current || ''}</textarea>
+      <p class="mt-2 text-xs text-slate-400">Jawaban essay akan dinilai secara manual oleh guru.</p>
+    `;
+  }
+
+  return '<p class="text-sm text-slate-500">Tipe soal tidak dikenal.</p>';
+}
+
+function renderPreviewUjianBody() {
+  const soal = state.previewSoal[state.previewIndex];
+  const total = state.previewSoal.length;
+  if (!soal) return '<p class="text-center py-20 text-slate-500">Soal tidak tersedia.</p>';
+
+  const answered = Object.keys(state.previewJawab).length;
+  const progress = total > 0 ? Math.round((answered / total) * 100) : 0;
+  const isRagu = state.previewRagu.has(soal.id);
+
+  const navGrid = state.previewSoal.map((s, i) => {
+    const hasAnswer = state.previewJawab[s.id] !== undefined && state.previewJawab[s.id] !== '';
+    const isRaguThis = state.previewRagu.has(s.id);
+    const isCurrent = i === state.previewIndex;
+    let cls = 'h-10 w-10 rounded-xl text-sm font-semibold transition border ';
+    if (isCurrent) cls += 'border-indigo-600 bg-indigo-600 text-white ring-2 ring-indigo-300 ring-offset-1';
+    else if (isRaguThis) cls += 'border-amber-300 bg-amber-50 text-amber-700';
+    else if (hasAnswer) cls += 'border-emerald-300 bg-emerald-50 text-emerald-700';
+    else cls += 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50';
+    return `<button type="button" class="pv-nav-soal-btn ${cls}" data-q-index="${i}">${i + 1}</button>`;
+  }).join('');
+
+  return `
+    <div class="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur px-4 py-3 sm:px-6">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">Pratinjau</span>
+            <p class="truncate text-sm font-semibold text-slate-700">${state.previewPaket?.judul || 'Ujian'}</p>
+          </div>
+          <p class="mt-1 text-[11px] text-slate-500">Tampilan persis seperti yang dilihat siswa. Jawaban di sini tidak disimpan.</p>
+          <div class="mt-1.5 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div class="h-1.5 rounded-full bg-indigo-500 transition-all" style="width: ${progress}%"></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <div class="flex flex-col items-end gap-0.5">
+            <div class="tabular-nums font-mono text-2xl font-bold text-slate-400">--:--</div>
+            <p class="text-[10px] text-slate-400">${answered}/${total} dijawab</p>
+          </div>
+          <button type="button" id="pv-btn-close" class="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mx-auto mt-5 max-w-5xl space-y-5 px-4 pb-6 sm:px-6">
+      <div class="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="h-8 w-8 flex items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white">${state.previewIndex + 1}</span>
+          <span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide bg-slate-50 border-slate-200 text-slate-600">${TIPE_SOAL[soal.tipe] || soal.tipe}</span>
+          <span class="ml-auto text-xs text-slate-400">${soal.poin || 1} poin</span>
+        </div>
+        <div class="text-base leading-7 text-slate-900 whitespace-pre-wrap font-medium">${renderMathMultiline(soal.pertanyaan)}</div>
+      </div>
+
+      <div class="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-4">Jawaban Anda</p>
+        ${renderPreviewAnswerInput(soal)}
+      </div>
+
+      <button type="button" id="pv-btn-ragu" class="w-full rounded-2xl border-2 py-3 text-sm font-semibold transition ${isRagu ? 'border-amber-400 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}">
+        ${isRagu ? '★ Ditandai Ragu-ragu (klik untuk hapus tanda)' : '☆ Tandai Ragu-ragu'}
+      </button>
+
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Navigasi Soal</p>
+        <div class="flex flex-wrap gap-2">${navGrid}</div>
+        <div class="flex flex-wrap gap-3 mt-3 text-xs text-slate-500">
+          <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded bg-emerald-100 border border-emerald-300"></span> Dijawab</span>
+          <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded bg-amber-100 border border-amber-300"></span> Ragu-ragu</span>
+          <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded bg-white border border-slate-200"></span> Belum</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3 pb-4">
+        <button type="button" id="pv-btn-prev" ${state.previewIndex === 0 ? 'disabled' : ''} class="rounded-2xl border border-slate-200 bg-white py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          ← Sebelumnya
+        </button>
+        ${state.previewIndex < total - 1
+          ? `<button type="button" id="pv-btn-next" class="rounded-2xl bg-slate-900 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition">Selanjutnya →</button>`
+          : `<button type="button" id="pv-btn-selesai" class="rounded-2xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition">Selesai Pratinjau</button>`
+        }
+        <div class="text-right flex items-center justify-end">
+          <span class="text-xs text-slate-400">${state.previewIndex + 1} / ${total}</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function rerenderPreviewUjian() {
+  const overlay = document.getElementById('kuiz-preview-overlay');
+  if (!overlay) return;
+  overlay.innerHTML = renderPreviewUjianBody();
+  overlay.scrollTop = 0;
+
+  const goto = (index) => {
+    collectPreviewAnswer();
+    state.previewIndex = Math.min(Math.max(index, 0), state.previewSoal.length - 1);
+    rerenderPreviewUjian();
+  };
+
+  overlay.querySelector('#pv-btn-close')?.addEventListener('click', closePreviewUjian);
+  overlay.querySelector('#pv-btn-selesai')?.addEventListener('click', () => {
+    closePreviewUjian();
+    showNotif('Pratinjau selesai.', 'info');
+  });
+  overlay.querySelector('#pv-btn-prev')?.addEventListener('click', () => goto(state.previewIndex - 1));
+  overlay.querySelector('#pv-btn-next')?.addEventListener('click', () => goto(state.previewIndex + 1));
+  overlay.querySelectorAll('.pv-nav-soal-btn').forEach((btn) => {
+    btn.addEventListener('click', () => goto(Number(btn.dataset.qIndex)));
+  });
+  overlay.querySelector('#pv-btn-ragu')?.addEventListener('click', () => {
+    collectPreviewAnswer();
+    const soal = state.previewSoal[state.previewIndex];
+    if (soal) {
+      if (state.previewRagu.has(soal.id)) state.previewRagu.delete(soal.id);
+      else state.previewRagu.add(soal.id);
+    }
+    rerenderPreviewUjian();
+  });
+  // PG / BS: perbarui state & tampilan saat memilih (aman: hanya satu tipe per layar).
+  overlay.querySelector('#pv-pg-options')?.addEventListener('change', () => { collectPreviewAnswer(); rerenderPreviewUjian(); });
+  overlay.querySelector('#pv-bs-options')?.addEventListener('change', () => { collectPreviewAnswer(); rerenderPreviewUjian(); });
 }
 
 // ─── MODAL: GENERATE SOAL DENGAN AI ────────────────────────────────────────────
@@ -3862,14 +4134,9 @@ async function loadAndRenderHasil(sesiId) {
         <td class="py-3 pr-3 text-sm text-slate-500">${statusLabel}</td>
         <td class="py-3">${essayBadge}</td>
         <td class="py-3">
-          <div class="flex items-center justify-end gap-2">
-            ${jawabanDoc?.submitted_at
-              ? `<button data-action="review-jawaban" data-jawaban-id="${jawabanDoc.id}" class="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition">Review</button>`
-              : ''}
-            ${jawabanDoc?.id
-              ? `<button data-action="koreksi-essay" data-jawaban-id="${jawabanDoc.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">Detail</button>`
-              : '<span class="text-xs text-slate-300">-</span>'}
-          </div>
+          ${jawabanDoc?.id
+            ? `<button data-action="koreksi-essay" data-jawaban-id="${jawabanDoc.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">Detail</button>`
+            : '<span class="text-xs text-slate-300">-</span>'}
         </td>
       </tr>
     `;
@@ -4014,159 +4281,6 @@ async function loadAndRenderHasil(sesiId) {
   document.querySelectorAll('[data-action="koreksi-essay"]').forEach((btn) => {
     btn.addEventListener('click', () => openModalKoreksiEssay(btn.dataset.jawabanId, sesiId));
   });
-
-  document.querySelectorAll('[data-action="review-jawaban"]').forEach((btn) => {
-    btn.addEventListener('click', () => openReviewJawaban(btn.dataset.jawabanId, sesiId));
-  });
-}
-
-// ─── REVIEW JAWABAN SISWA (tampilan penuh, meniru sisi siswa) ──────────────────
-
-/**
- * Tampilan review satu jawaban siswa untuk guru. Strukturnya dibuat sama persis
- * dengan halaman hasil siswa (renderReviewHasil di src/pages/siswa/kuiz.js):
- * kartu skor besar + review per soal. Bedanya: label "Jawaban siswa", selalu
- * menampilkan review (guru boleh melihat semua) dan menampilkan pembahasan bila
- * ada.
- */
-function renderGuruReviewHasil(sesi, paket, jawaban) {
-  const { nilaiAkhir, total, maxTotal, detail } = hitungSkorJawaban(paket, jawaban.jawaban || {}, jawaban.nilai_manual || {});
-  const scoreBg = nilaiAkhir >= 75 ? 'from-emerald-500 to-teal-500' : nilaiAkhir >= 60 ? 'from-amber-500 to-orange-500' : 'from-red-500 to-rose-500';
-  const adaEssay = (paket.soal || []).some((s) => s.tipe === 'essay');
-  const essayBelumDikoreksi = adaEssay && !jawaban.essay_graded;
-  const namaSiswa = jawaban.siswa_nama || jawaban.siswa_id || 'Siswa';
-  const durasi = jawaban.started_at && jawaban.submitted_at
-    ? `${Math.round((new Date(jawaban.submitted_at) - new Date(jawaban.started_at)) / 60000)} menit`
-    : '-';
-
-  const soalReview = (paket.soal || []).map((s, i) => {
-    const d = detail[s.id] || {};
-    const jawabanSiswa = d.jawaban;
-    const isEssay = s.tipe === 'essay';
-    const isBenar = d.benar;
-    const komentar = jawaban.komentar_guru?.[s.id];
-    const kosong = jawabanSiswa === undefined || jawabanSiswa === null || jawabanSiswa === '';
-
-    let jawabanDisplay;
-    if (typeof jawabanSiswa === 'object' && jawabanSiswa !== null) {
-      jawabanDisplay = Object.entries(jawabanSiswa).map(([k, v]) => `${renderMathMultiline(k)} → ${renderMathMultiline(v)}`).join('<br>');
-    } else {
-      jawabanDisplay = renderMathMultiline(String(jawabanSiswa || '-'));
-    }
-
-    let jawabanBenarDisplay = '';
-    if (!isEssay && s.jawaban_benar) {
-      if (s.tipe === 'menjodohkan') {
-        jawabanBenarDisplay = (s.pasangan || []).map((p) => `${renderMathMultiline(p.kiri)} → ${renderMathMultiline(p.kanan)}`).join(', ');
-      } else {
-        jawabanBenarDisplay = renderMathMultiline(s.jawaban_benar);
-      }
-    }
-
-    const tone = isEssay ? 'amber' : isBenar ? 'emerald' : kosong ? 'slate' : 'red';
-    const cardBorder = isEssay ? 'border-amber-200 bg-amber-50/50' : isBenar ? 'border-emerald-200 bg-emerald-50/50' : kosong ? 'border-slate-200 bg-slate-50' : 'border-red-200 bg-red-50/50';
-    const badgeBg = isEssay ? 'bg-amber-100 text-amber-700' : isBenar ? 'bg-emerald-100 text-emerald-700' : kosong ? 'bg-slate-200 text-slate-500' : 'bg-red-100 text-red-700';
-    const jawabanLabelColor = isEssay ? 'text-amber-600' : isBenar ? 'text-emerald-600' : kosong ? 'text-slate-400' : 'text-red-600';
-
-    return `
-      <div class="rounded-[20px] border ${cardBorder} p-4 space-y-3">
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex items-center gap-2">
-            <span class="h-7 w-7 flex items-center justify-center rounded-xl text-xs font-bold ${badgeBg}">${i + 1}</span>
-            <span class="text-[10px] rounded-full border px-2 py-0.5 font-semibold uppercase tracking-wide bg-white border-slate-200 text-slate-500">${TIPE_SOAL[s.tipe] || s.tipe}</span>
-          </div>
-          <div class="text-right shrink-0">
-            ${isEssay
-              ? `<span class="text-sm font-semibold text-amber-700">${d.poin !== undefined ? d.poin : '-'}/${d.max} poin</span>`
-              : `<span class="text-sm font-bold ${isBenar ? 'text-emerald-600' : 'text-slate-400'}">${isBenar ? `+${d.max}` : '0'} poin</span>`}
-          </div>
-        </div>
-        <div class="text-sm font-medium text-slate-900">${renderMathMultiline(s.pertanyaan)}</div>
-        <div class="space-y-1.5">
-          <div class="space-y-1.5">
-            <span class="text-xs font-semibold ${jawabanLabelColor} shrink-0 mt-0.5">Jawaban siswa:</span>
-            ${renderGuruMathBlock(jawabanDisplay, { tone, fallback: '(kosong)' })}
-          </div>
-          ${!isEssay && jawabanBenarDisplay ? `
-            <div class="space-y-1.5">
-              <span class="text-xs font-semibold text-emerald-600 shrink-0 mt-0.5">Jawaban benar:</span>
-              ${renderGuruMathBlock(jawabanBenarDisplay, { tone: 'emerald' })}
-            </div>
-          ` : ''}
-          ${s.pembahasan ? `
-            <div class="space-y-1.5">
-              <span class="text-xs font-semibold text-indigo-600 shrink-0 mt-0.5">Pembahasan:</span>
-              ${renderGuruMathBlock(s.pembahasan, { tone: 'indigo' })}
-            </div>
-          ` : ''}
-          ${isEssay && komentar ? `
-            <div class="flex items-start gap-2 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-              <span class="text-xs font-semibold text-amber-600 shrink-0">Komentar Guru:</span>
-              <span class="text-sm text-amber-800">${komentar}</span>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  return `
-    <div class="space-y-5">
-      <div class="flex items-center justify-between gap-3">
-        <button type="button" id="btn-review-kembali" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
-          <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-          Kembali ke Hasil
-        </button>
-        ${adaEssay ? `<button type="button" id="btn-review-koreksi" data-jawaban-id="${jawaban.id}" class="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition">Koreksi Essay</button>` : ''}
-      </div>
-
-      <div class="overflow-hidden rounded-[32px] bg-gradient-to-br ${scoreBg} p-8 text-white text-center shadow-[0_24px_64px_rgba(15,23,42,0.18)]">
-        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/70">${namaSiswa}</p>
-        <div class="mt-4 flex items-baseline justify-center gap-2">
-          <p class="text-7xl font-bold tracking-tight">${nilaiAkhir}</p>
-          <p class="text-3xl font-semibold text-white/70">/100</p>
-        </div>
-        <p class="mt-2 text-white/80">Skor total: ${total} / ${maxTotal} poin</p>
-        ${essayBelumDikoreksi ? '<p class="mt-1 text-xs text-white/60">Skor essay belum dikoreksi, nilai dapat berubah.</p>' : ''}
-        <p class="mt-1 text-sm text-white/60">${paket.judul || 'Ujian'}${sesi.kelas_nama ? ` • ${sesi.kelas_nama}` : ''}</p>
-        <p class="mt-0.5 text-xs text-white/50">${jawaban.submitted_at ? `Dikumpulkan ${formatDateTime(jawaban.submitted_at)} • Durasi ${durasi}` : 'Belum dikumpulkan'}</p>
-      </div>
-
-      <div class="space-y-3">
-        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Review Jawaban</p>
-        ${soalReview || '<p class="text-sm text-slate-500">Tidak ada soal.</p>'}
-      </div>
-
-      <button type="button" id="btn-review-kembali-bawah" class="w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white hover:bg-slate-700 transition">
-        Kembali ke Hasil
-      </button>
-    </div>
-  `;
-}
-
-async function openReviewJawaban(jawabanId, sesiId) {
-  const box = document.getElementById('kuiz-tab-content');
-  if (!box) return;
-  const jawaban = (state.jawabanCache[sesiId] || []).find((j) => j.id === jawabanId);
-  const sesi = state.sesiList.find((s) => s.id === sesiId);
-  const paket = state.paketList.find((p) => p.id === sesi?.paket_id);
-  if (!jawaban || !sesi || !paket) {
-    showNotif('Data jawaban tidak ditemukan.', 'error');
-    return;
-  }
-
-  await ensureKaTeXReady();
-  box.innerHTML = renderGuruReviewHasil(sesi, paket, jawaban);
-  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  const back = () => {
-    state.tab = 'hasil';
-    rerender();
-    loadAndRenderHasil(sesiId);
-  };
-  document.getElementById('btn-review-kembali')?.addEventListener('click', back);
-  document.getElementById('btn-review-kembali-bawah')?.addEventListener('click', back);
-  document.getElementById('btn-review-koreksi')?.addEventListener('click', () => openModalKoreksiEssay(jawabanId, sesiId));
 }
 
 // ─── MODAL: KOREKSI ESSAY ─────────────────────────────────────────────────────
@@ -4281,6 +4395,7 @@ function attachTabContentListeners() {
     if (action === 'edit-soal') btn.addEventListener('click', () => openModalEditorSoal(paketId));
     if (action === 'import-soal') btn.addEventListener('click', () => openModalImportSoal(paketId));
     if (action === 'generate-soal') btn.addEventListener('click', () => openModalGenerateSoal(paketId));
+    if (action === 'preview-ujian') btn.addEventListener('click', () => openPreviewUjian(paketId));
     if (action === 'buat-sesi-dari-paket') btn.addEventListener('click', () => {
       state.tab = 'sesi';
       rerender();
