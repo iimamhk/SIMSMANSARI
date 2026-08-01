@@ -3862,9 +3862,14 @@ async function loadAndRenderHasil(sesiId) {
         <td class="py-3 pr-3 text-sm text-slate-500">${statusLabel}</td>
         <td class="py-3">${essayBadge}</td>
         <td class="py-3">
-          ${jawabanDoc?.id
-            ? `<button data-action="koreksi-essay" data-jawaban-id="${jawabanDoc.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">Detail</button>`
-            : '<span class="text-xs text-slate-300">-</span>'}
+          <div class="flex items-center justify-end gap-2">
+            ${jawabanDoc?.submitted_at
+              ? `<button data-action="review-jawaban" data-jawaban-id="${jawabanDoc.id}" class="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition">Review</button>`
+              : ''}
+            ${jawabanDoc?.id
+              ? `<button data-action="koreksi-essay" data-jawaban-id="${jawabanDoc.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition">Detail</button>`
+              : '<span class="text-xs text-slate-300">-</span>'}
+          </div>
         </td>
       </tr>
     `;
@@ -4009,6 +4014,159 @@ async function loadAndRenderHasil(sesiId) {
   document.querySelectorAll('[data-action="koreksi-essay"]').forEach((btn) => {
     btn.addEventListener('click', () => openModalKoreksiEssay(btn.dataset.jawabanId, sesiId));
   });
+
+  document.querySelectorAll('[data-action="review-jawaban"]').forEach((btn) => {
+    btn.addEventListener('click', () => openReviewJawaban(btn.dataset.jawabanId, sesiId));
+  });
+}
+
+// ─── REVIEW JAWABAN SISWA (tampilan penuh, meniru sisi siswa) ──────────────────
+
+/**
+ * Tampilan review satu jawaban siswa untuk guru. Strukturnya dibuat sama persis
+ * dengan halaman hasil siswa (renderReviewHasil di src/pages/siswa/kuiz.js):
+ * kartu skor besar + review per soal. Bedanya: label "Jawaban siswa", selalu
+ * menampilkan review (guru boleh melihat semua) dan menampilkan pembahasan bila
+ * ada.
+ */
+function renderGuruReviewHasil(sesi, paket, jawaban) {
+  const { nilaiAkhir, total, maxTotal, detail } = hitungSkorJawaban(paket, jawaban.jawaban || {}, jawaban.nilai_manual || {});
+  const scoreBg = nilaiAkhir >= 75 ? 'from-emerald-500 to-teal-500' : nilaiAkhir >= 60 ? 'from-amber-500 to-orange-500' : 'from-red-500 to-rose-500';
+  const adaEssay = (paket.soal || []).some((s) => s.tipe === 'essay');
+  const essayBelumDikoreksi = adaEssay && !jawaban.essay_graded;
+  const namaSiswa = jawaban.siswa_nama || jawaban.siswa_id || 'Siswa';
+  const durasi = jawaban.started_at && jawaban.submitted_at
+    ? `${Math.round((new Date(jawaban.submitted_at) - new Date(jawaban.started_at)) / 60000)} menit`
+    : '-';
+
+  const soalReview = (paket.soal || []).map((s, i) => {
+    const d = detail[s.id] || {};
+    const jawabanSiswa = d.jawaban;
+    const isEssay = s.tipe === 'essay';
+    const isBenar = d.benar;
+    const komentar = jawaban.komentar_guru?.[s.id];
+    const kosong = jawabanSiswa === undefined || jawabanSiswa === null || jawabanSiswa === '';
+
+    let jawabanDisplay;
+    if (typeof jawabanSiswa === 'object' && jawabanSiswa !== null) {
+      jawabanDisplay = Object.entries(jawabanSiswa).map(([k, v]) => `${renderMathMultiline(k)} → ${renderMathMultiline(v)}`).join('<br>');
+    } else {
+      jawabanDisplay = renderMathMultiline(String(jawabanSiswa || '-'));
+    }
+
+    let jawabanBenarDisplay = '';
+    if (!isEssay && s.jawaban_benar) {
+      if (s.tipe === 'menjodohkan') {
+        jawabanBenarDisplay = (s.pasangan || []).map((p) => `${renderMathMultiline(p.kiri)} → ${renderMathMultiline(p.kanan)}`).join(', ');
+      } else {
+        jawabanBenarDisplay = renderMathMultiline(s.jawaban_benar);
+      }
+    }
+
+    const tone = isEssay ? 'amber' : isBenar ? 'emerald' : kosong ? 'slate' : 'red';
+    const cardBorder = isEssay ? 'border-amber-200 bg-amber-50/50' : isBenar ? 'border-emerald-200 bg-emerald-50/50' : kosong ? 'border-slate-200 bg-slate-50' : 'border-red-200 bg-red-50/50';
+    const badgeBg = isEssay ? 'bg-amber-100 text-amber-700' : isBenar ? 'bg-emerald-100 text-emerald-700' : kosong ? 'bg-slate-200 text-slate-500' : 'bg-red-100 text-red-700';
+    const jawabanLabelColor = isEssay ? 'text-amber-600' : isBenar ? 'text-emerald-600' : kosong ? 'text-slate-400' : 'text-red-600';
+
+    return `
+      <div class="rounded-[20px] border ${cardBorder} p-4 space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="h-7 w-7 flex items-center justify-center rounded-xl text-xs font-bold ${badgeBg}">${i + 1}</span>
+            <span class="text-[10px] rounded-full border px-2 py-0.5 font-semibold uppercase tracking-wide bg-white border-slate-200 text-slate-500">${TIPE_SOAL[s.tipe] || s.tipe}</span>
+          </div>
+          <div class="text-right shrink-0">
+            ${isEssay
+              ? `<span class="text-sm font-semibold text-amber-700">${d.poin !== undefined ? d.poin : '-'}/${d.max} poin</span>`
+              : `<span class="text-sm font-bold ${isBenar ? 'text-emerald-600' : 'text-slate-400'}">${isBenar ? `+${d.max}` : '0'} poin</span>`}
+          </div>
+        </div>
+        <div class="text-sm font-medium text-slate-900">${renderMathMultiline(s.pertanyaan)}</div>
+        <div class="space-y-1.5">
+          <div class="space-y-1.5">
+            <span class="text-xs font-semibold ${jawabanLabelColor} shrink-0 mt-0.5">Jawaban siswa:</span>
+            ${renderGuruMathBlock(jawabanDisplay, { tone, fallback: '(kosong)' })}
+          </div>
+          ${!isEssay && jawabanBenarDisplay ? `
+            <div class="space-y-1.5">
+              <span class="text-xs font-semibold text-emerald-600 shrink-0 mt-0.5">Jawaban benar:</span>
+              ${renderGuruMathBlock(jawabanBenarDisplay, { tone: 'emerald' })}
+            </div>
+          ` : ''}
+          ${s.pembahasan ? `
+            <div class="space-y-1.5">
+              <span class="text-xs font-semibold text-indigo-600 shrink-0 mt-0.5">Pembahasan:</span>
+              ${renderGuruMathBlock(s.pembahasan, { tone: 'indigo' })}
+            </div>
+          ` : ''}
+          ${isEssay && komentar ? `
+            <div class="flex items-start gap-2 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <span class="text-xs font-semibold text-amber-600 shrink-0">Komentar Guru:</span>
+              <span class="text-sm text-amber-800">${komentar}</span>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="space-y-5">
+      <div class="flex items-center justify-between gap-3">
+        <button type="button" id="btn-review-kembali" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">
+          <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          Kembali ke Hasil
+        </button>
+        ${adaEssay ? `<button type="button" id="btn-review-koreksi" data-jawaban-id="${jawaban.id}" class="inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition">Koreksi Essay</button>` : ''}
+      </div>
+
+      <div class="overflow-hidden rounded-[32px] bg-gradient-to-br ${scoreBg} p-8 text-white text-center shadow-[0_24px_64px_rgba(15,23,42,0.18)]">
+        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-white/70">${namaSiswa}</p>
+        <div class="mt-4 flex items-baseline justify-center gap-2">
+          <p class="text-7xl font-bold tracking-tight">${nilaiAkhir}</p>
+          <p class="text-3xl font-semibold text-white/70">/100</p>
+        </div>
+        <p class="mt-2 text-white/80">Skor total: ${total} / ${maxTotal} poin</p>
+        ${essayBelumDikoreksi ? '<p class="mt-1 text-xs text-white/60">Skor essay belum dikoreksi, nilai dapat berubah.</p>' : ''}
+        <p class="mt-1 text-sm text-white/60">${paket.judul || 'Ujian'}${sesi.kelas_nama ? ` • ${sesi.kelas_nama}` : ''}</p>
+        <p class="mt-0.5 text-xs text-white/50">${jawaban.submitted_at ? `Dikumpulkan ${formatDateTime(jawaban.submitted_at)} • Durasi ${durasi}` : 'Belum dikumpulkan'}</p>
+      </div>
+
+      <div class="space-y-3">
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Review Jawaban</p>
+        ${soalReview || '<p class="text-sm text-slate-500">Tidak ada soal.</p>'}
+      </div>
+
+      <button type="button" id="btn-review-kembali-bawah" class="w-full rounded-2xl bg-slate-900 py-3.5 text-sm font-semibold text-white hover:bg-slate-700 transition">
+        Kembali ke Hasil
+      </button>
+    </div>
+  `;
+}
+
+async function openReviewJawaban(jawabanId, sesiId) {
+  const box = document.getElementById('kuiz-tab-content');
+  if (!box) return;
+  const jawaban = (state.jawabanCache[sesiId] || []).find((j) => j.id === jawabanId);
+  const sesi = state.sesiList.find((s) => s.id === sesiId);
+  const paket = state.paketList.find((p) => p.id === sesi?.paket_id);
+  if (!jawaban || !sesi || !paket) {
+    showNotif('Data jawaban tidak ditemukan.', 'error');
+    return;
+  }
+
+  await ensureKaTeXReady();
+  box.innerHTML = renderGuruReviewHasil(sesi, paket, jawaban);
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const back = () => {
+    state.tab = 'hasil';
+    rerender();
+    loadAndRenderHasil(sesiId);
+  };
+  document.getElementById('btn-review-kembali')?.addEventListener('click', back);
+  document.getElementById('btn-review-kembali-bawah')?.addEventListener('click', back);
+  document.getElementById('btn-review-koreksi')?.addEventListener('click', () => openModalKoreksiEssay(jawabanId, sesiId));
 }
 
 // ─── MODAL: KOREKSI ESSAY ─────────────────────────────────────────────────────
