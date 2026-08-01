@@ -24,3 +24,7 @@ Laporan-SIMSMANSARI-*.xlsx
 Backup-SIMSMANSARI-*.xlsx
 Backup-Sistem-SIMSMANSARI-*.zip
 Backup-Auto-SIMSMANSARI-*.xlsx
+
+# Berkas bantu berisi kunci privat, dibuat sementara untuk ditempel ke GitHub
+# Secrets lalu dihapus. Tidak boleh ter-commit.
+SALIN-KE-GITHUB-SECRET.txt

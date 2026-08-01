@@ -47,29 +47,69 @@ function privateKeyFromServiceAccount() {
 }
 
 /**
+ * Perluas satu bahan kunci menjadi beberapa bentuk yang setara secara maksud
+ * tetapi berbeda secara byte.
+ *
+ * Perlu karena kunci privat berpindah antar tempat penyimpanan yang memperlakukan
+ * baris baru dan tanda kutip secara berbeda:
+ *   - berkas .env menyimpannya satu baris dengan "\n" sebagai dua karakter, dan
+ *     sering dibungkus tanda kutip ganda
+ *   - GitHub Secrets menerima teks berbaris banyak, jadi "\n" bisa tersimpan
+ *     sebagai baris baru sungguhan
+ *   - private_key di dalam service account JSON memuat baris baru sungguhan
+ *
+ * Ketiganya menghasilkan kunci SHA-256 yang berbeda. Karena AES-256-GCM memuat
+ * authentication tag, mencoba semua bentuk aman: hanya bentuk yang benar akan
+ * menghasilkan teks, sisanya gagal secara pasti.
+ */
+function expandKeyMaterial(raw) {
+  if (typeof raw !== 'string' || !raw) return [];
+  const forms = new Set();
+  const add = (value) => {
+    if (typeof value === 'string' && value.length > 0) forms.add(value);
+  };
+
+  const bases = [raw, raw.trim()];
+  // Buang tanda kutip pembungkus bila ikut tertempel.
+  for (const base of [...bases]) {
+    if (/^".*"$/s.test(base) || /^'.*'$/s.test(base)) bases.push(base.slice(1, -1));
+  }
+
+  for (const base of bases) {
+    add(base);
+    // "\n" dua karakter menjadi baris baru sungguhan.
+    add(base.replace(/\\n/g, '\n'));
+    // Baris baru sungguhan menjadi "\n" dua karakter.
+    add(base.replace(/\r\n/g, '\n').replace(/\n/g, '\\n'));
+    // Normalkan akhir baris Windows.
+    add(base.replace(/\r\n/g, '\n'));
+  }
+  return [...forms];
+}
+
+/**
  * Daftar bahan kunci yang mungkin dipakai, diurutkan dari yang paling eksplisit.
- * Kandidat pertama yang ada juga dipakai untuk MENULIS (enkripsi), sehingga nilai
- * baru selalu konsisten dengan lingkungan tempat ia ditulis.
+ * Bentuk pertama dari kandidat pertama dipakai untuk MENULIS (enkripsi), sehingga
+ * nilai baru selalu konsisten dengan lingkungan tempat ia ditulis.
  */
 function secretKeyCandidates() {
-  const saPrivateKey = privateKeyFromServiceAccount();
-  const candidates = [
+  const materials = [
     process.env.AI_CONFIG_SECRET,
     process.env.FIREBASE_PRIVATE_KEY,
-    // Variasi bentuk newline: pada Vercel, FIREBASE_PRIVATE_KEY umumnya disimpan
-    // dengan "\n" literal, sedangkan private_key di dalam JSON service account
-    // memuat baris baru sungguhan. Keduanya menghasilkan kunci yang berbeda,
-    // jadi dua-duanya perlu dicoba.
-    saPrivateKey,
-    saPrivateKey ? saPrivateKey.replace(/\n/g, '\\n') : '',
-    process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : '',
+    privateKeyFromServiceAccount(),
     LEGACY_DEFAULT_SECRET,
   ];
+
   const seen = new Set();
-  return candidates
-    .filter((value) => typeof value === 'string' && value.length > 0)
-    .filter((value) => (seen.has(value) ? false : seen.add(value)))
-    .map((value) => crypto.createHash('sha256').update(value).digest());
+  const keys = [];
+  for (const material of materials) {
+    for (const form of expandKeyMaterial(material)) {
+      if (seen.has(form)) continue;
+      seen.add(form);
+      keys.push(crypto.createHash('sha256').update(form).digest());
+    }
+  }
+  return keys;
 }
 
 /** Kunci utama, dipakai untuk enkripsi nilai baru. */

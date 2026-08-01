@@ -72,13 +72,16 @@ jobs:
             exit 1
           fi
           echo "FIREBASE_SERVICE_ACCOUNT_JSON: tersedia."
-          if [ -z "${{ secrets.AI_CONFIG_SECRET }}" ]; then
-            echo "::warning::AI_CONFIG_SECRET belum diisi. Snapshot tetap berjalan dan"
-            echo "dilampirkan ke Release, tetapi kredensial Google Drive tidak dapat"
-            echo "didekripsi sehingga salinan ke Drive sekolah akan dilewati."
-            echo "Nilainya harus SAMA PERSIS dengan yang dipakai di Vercel."
-          else
+          if [ -n "${{ secrets.AI_CONFIG_SECRET }}" ]; then
             echo "AI_CONFIG_SECRET: tersedia."
+          elif [ -n "${{ secrets.FIREBASE_PRIVATE_KEY }}" ]; then
+            echo "FIREBASE_PRIVATE_KEY: tersedia (dipakai sebagai kunci dekripsi kredensial Drive)."
+          else
+            echo "::warning::Tidak ada AI_CONFIG_SECRET maupun FIREBASE_PRIVATE_KEY."
+            echo "Snapshot tetap berjalan dan dilampirkan ke Release, tetapi kredensial Google"
+            echo "Drive kemungkinan tidak dapat didekripsi sehingga salinan ke Drive dilewati."
+            echo "Perbaikan: tambahkan secret FIREBASE_PRIVATE_KEY dengan nilai yang sama"
+            echo "seperti yang dipakai aplikasi web (Vercel)."
           fi
 
       - name: Jalankan snapshot hasil kerja guru
@@ -86,6 +89,11 @@ jobs:
         run: node scripts/backup-snapshot.js
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          # Dipakai HANYA untuk menurunkan kunci dekripsi kredensial Google Drive,
+          # bukan untuk autentikasi Firebase (itu memakai service account JSON di
+          # atas). Nilainya harus sama dengan yang dipakai aplikasi web, karena
+          # kredensial Drive dienkripsi di sana.
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
           AI_CONFIG_SECRET: ${{ secrets.AI_CONFIG_SECRET }}
           BACKUP_MAX_READS: ${{ inputs.max_reads || '45000' }}
           BACKUP_SKIP_DRIVE: ${{ inputs.skip_drive && '1' || '0' }}
