@@ -16,14 +16,13 @@ server/.env
 server/.env.*
 !server/.env.example
 
-# Hasil backup — berisi nama siswa, nilai, absensi, dan data keuangan.
+# Hasil backup — berisi nama siswa, nilai, absensi, dan keaktifan.
 # JANGAN pernah ter-commit ke repository.
 Snapshot-SIMSMANSARI-*.json
 Snapshot-SIMSMANSARI-*.json.gz
+Backup-*.xlsx
+Backup-*.zip
 Laporan-SIMSMANSARI-*.xlsx
-Backup-SIMSMANSARI-*.xlsx
-Backup-Sistem-SIMSMANSARI-*.zip
-Backup-Auto-SIMSMANSARI-*.xlsx
 
 # Berkas bantu berisi kunci privat, dibuat sementara untuk ditempel ke GitHub
 # Secrets lalu dihapus. Tidak boleh ter-commit.

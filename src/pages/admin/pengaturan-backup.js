@@ -85,7 +85,24 @@ export async function renderAdminBackupSettingsPage(container) {
           <span id="sys-backup-status" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Memuat...</span>
         </div>
 
-        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div class="mt-4 rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
+          <p class="text-xs font-bold uppercase tracking-wide text-teal-700">Dua berkas dihasilkan setiap minggu</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-xl bg-white p-3 ring-1 ring-teal-100">
+              <p class="text-sm font-bold text-slate-900">Snapshot <code class="rounded bg-slate-100 px-1 text-[11px]">.json.gz</code></p>
+              <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Untuk admin</p>
+              <p class="mt-1 text-xs leading-5 text-slate-600">Memuat setiap dokumen beserta ID Firestore-nya, sehingga dapat dipakai <strong>memulihkan data</strong> ke sistem bila terjadi kehilangan.</p>
+            </div>
+            <div class="rounded-xl bg-white p-3 ring-1 ring-teal-100">
+              <p class="text-sm font-bold text-slate-900">Excel per guru <code class="rounded bg-slate-100 px-1 text-[11px]">.xlsx</code></p>
+              <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Untuk setiap guru</p>
+              <p class="mt-1 text-xs leading-5 text-slate-600">Satu berkas per guru: sheet Petunjuk, lalu 4 sheet per kelas (Rekap Absen, Absen Harian, Nilai, Keaktifan). Total dan predikat berupa rumus hidup, sehingga <strong>dapat langsung dilanjutkan</strong> di Excel.</p>
+            </div>
+          </div>
+          <p class="mt-3 text-[11px] leading-4 text-slate-500">Berkas Excel dibentuk dari data yang sama yang sudah dibaca untuk snapshot, jadi <strong>tidak menambah pemakaian database sama sekali</strong>. Keduanya tersimpan di folder Google Drive sekolah dan juga dilampirkan ke GitHub Release sebagai salinan kedua.</p>
+        </div>
+
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
             <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Dicadangkan otomatis</p>
             <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-700">
@@ -109,7 +126,7 @@ export async function renderAdminBackupSettingsPage(container) {
         </div>
 
         <div class="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
-          <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri ke Excel <strong>satu kali setiap minggu</strong> dari halaman Backup mereka. Keduanya berbeda peran: berkas JSON ini untuk <strong>memulihkan sistem</strong>, sedangkan Excel guru untuk <strong>melanjutkan pekerjaan</strong> bila aplikasi tidak dapat diakses.</p>
+          <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis, termasuk membuatkan Excel untuk setiap guru. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri dari halaman Backup <strong>satu kali setiap minggu</strong>, agar mereka memegang salinan di perangkat masing-masing dan dapat memilih sendiri kelas serta jenis data yang diperlukan.</p>
         </div>
 
         <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">

@@ -310,13 +310,16 @@ export async function renderGuruBackupPage(container) {
               </div>
             </div>
             <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <h4 class="font-bold text-amber-800">Pilih Tipe Data</h4>
-              <p class="mt-1 text-sm text-amber-700">Centang tipe data yang ingin diekspor</p>
-              <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3" id="data-type-checkboxes">
+              <h4 class="font-bold text-amber-800">Pilih Jenis Data</h4>
+              <p class="mt-1 text-sm text-amber-700">Centang data yang ingin dimasukkan ke berkas Excel. Semakin sedikit yang dicentang, semakin ringan pemakaian database.</p>
+              <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2" id="data-type-checkboxes">
                 ${Object.values(BACKUP_DATA_TYPES).map((dt) => `
-                  <label class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50 cursor-pointer">
-                    <input type="checkbox" name="dataType" value="${dt.key}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
-                    <span class="font-medium text-slate-900">${dt.icon} ${dt.label}</span>
+                  <label class="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50 cursor-pointer">
+                    <input type="checkbox" name="dataType" value="${dt.key}" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
+                    <span class="min-w-0">
+                      <span class="block font-medium text-slate-900">${dt.icon} ${escapeHtml(dt.label)}</span>
+                      <span class="mt-0.5 block text-xs leading-4 text-slate-500">${escapeHtml(dt.description || '')}</span>
+                    </span>
                   </label>
                 `).join('')}
               </div>

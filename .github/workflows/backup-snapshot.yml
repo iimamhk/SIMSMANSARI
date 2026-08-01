@@ -1,22 +1,30 @@
-name: Snapshot Backup Mingguan
+name: Backup Mingguan
 
 # Cadangan otomatis HASIL KERJA GURU: absensi, nilai, dan keaktifan siswa,
 # beserta koleksi kunci yang diperlukan untuk membacanya (pengajaran, anggota
 # kelas, bab, tugas, kolom ulangan, dan nama periode/kelas/mapel).
+#
+# Menghasilkan DUA jenis berkas dari satu kali pembacaan data:
+#   1. Snapshot .json.gz  -> untuk MEMULIHKAN data ke sistem (dipakai admin)
+#   2. Excel per guru     -> untuk DILANJUTKAN langsung di Excel oleh guru
+#                            bila aplikasi tidak dapat diakses
+#
+# Excel dibuat dari data yang sudah di memori, jadi tidak menambah satu pun
+# operasi baca Firestore.
 #
 # TIDAK dicadangkan: kuis, permainan, percakapan, materi ajar, keuangan, tampilan
 # lobi, serta `users` dan `settings` karena keduanya memuat kredensial.
 #
 # Dijalankan Sabtu 18:00 UTC = MINGGU 01:00 WIB.
 #
-# Mengapa Minggu dini hari: snapshot membaca ribuan dokumen, dan Firestore paket
+# Mengapa Minggu dini hari: pembacaan data memakai kuota Firestore, dan paket
 # gratis hanya memberi 50.000 operasi baca per hari yang dipakai bersama seluruh
 # pengguna. Pada hari Minggu tidak ada kegiatan mengajar, sehingga kuota hari itu
 # memang sedang tidak terpakai.
 #
 # Pembagian tanggung jawab:
-#   Admin (workflow ini) -> snapshot JSON otomatis, untuk MEMULIHKAN sistem
-#   Guru (halaman Backup) -> ekspor Excel mingguan, untuk MELANJUTKAN pekerjaan
+#   Admin (workflow ini) -> cadangan otomatis untuk seluruh guru
+#   Guru (halaman Backup) -> ekspor Excel mandiri, maksimal satu kali per minggu
 #
 # Catatan: GitHub menonaktifkan jadwal otomatis bila repository tidak ada
 # aktivitas selama 60 hari. Bila libur panjang, jalankan sekali secara manual
@@ -28,6 +36,10 @@ on:
     inputs:
       skip_drive:
         description: 'Lewati unggah ke Google Drive (hanya lampirkan ke Release)'
+        type: boolean
+        default: false
+      skip_excel:
+        description: 'Lewati pembuatan Excel per guru (hanya snapshot JSON)'
         type: boolean
         default: false
       extra_collections:
@@ -84,7 +96,7 @@ jobs:
             echo "seperti yang dipakai aplikasi web (Vercel)."
           fi
 
-      - name: Jalankan snapshot hasil kerja guru
+      - name: Jalankan backup hasil kerja guru
         id: snapshot
         run: node scripts/backup-snapshot.js
         env:
@@ -97,18 +109,31 @@ jobs:
           AI_CONFIG_SECRET: ${{ secrets.AI_CONFIG_SECRET }}
           BACKUP_MAX_READS: ${{ inputs.max_reads || '45000' }}
           BACKUP_SKIP_DRIVE: ${{ inputs.skip_drive && '1' || '0' }}
+          BACKUP_SKIP_EXCEL: ${{ inputs.skip_excel && '1' || '0' }}
           BACKUP_EXTRA_COLLECTIONS: ${{ inputs.extra_collections || '' }}
 
       # Lampiran Release berfungsi sebagai salinan kedua di luar Google Drive,
       # sesuai prinsip "jangan simpan semua cadangan di satu tempat".
-      - name: Lampirkan snapshot ke GitHub Release
+      - name: Lampirkan hasil backup ke GitHub Release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: snapshot-${{ github.run_number }}
-          name: Snapshot Hasil Kerja Guru ${{ github.run_number }}
+          tag_name: backup-${{ github.run_number }}
+          name: Backup Mingguan ${{ github.run_number }}
           body: |
             Cadangan otomatis data hasil kerja guru.
+
+            **Dua jenis berkas, dua kegunaan berbeda:**
+
+            | Berkas | Untuk siapa | Kegunaan |
+            | --- | --- | --- |
+            | `Snapshot-*.json.gz` | Admin | Memulihkan data ke sistem. Memuat setiap dokumen beserta ID Firestore-nya. |
+            | `Backup-<Nama Guru>-*.xlsx` | Guru | Dibuka dan dilanjutkan langsung di Excel bila aplikasi tidak dapat diakses. |
+
+            Setiap berkas Excel berisi sheet Petunjuk, lalu untuk tiap kelas yang
+            diampu ada 4 sheet: Rekap Absen, Absen Harian, Nilai, dan Keaktifan.
+            Seluruh total, persentase, nilai akhir, grade, dan predikat berupa
+            rumus Excel yang menghitung ulang sendiri bila datanya disunting.
 
             **Isi:** absensi, nilai tugas, nilai ujian, dan keaktifan siswa,
             beserta koleksi kunci untuk membacanya (pengajaran, anggota kelas,
@@ -118,14 +143,12 @@ jobs:
             keuangan, tampilan lobi, serta `users` dan `settings` karena keduanya
             memuat kredensial.
 
-            Setiap dokumen menyertakan ID Firestore-nya, sehingga berkas ini dapat
-            dipakai untuk memulihkan data. Untuk membukanya:
+            Untuk membuka snapshot JSON:
 
                 gunzip -c Snapshot-*.json.gz > snapshot.json
-
-            Bagian `meta` mencatat cakupan, jumlah dokumen per koleksi, jumlah
-            operasi baca yang terpakai, dan alasan setiap koleksi yang dikecualikan.
-          files: Snapshot-SIMSMANSARI-*.json.gz
+          files: |
+            Snapshot-SIMSMANSARI-*.json.gz
+            Backup-*.xlsx
           draft: false
           prerelease: false
         env:

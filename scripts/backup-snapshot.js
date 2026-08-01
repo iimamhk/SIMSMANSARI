@@ -250,6 +250,47 @@ async function uploadToDrive(fileName, buffer, mimeType) {
 
   const { accessToken, config } = await getAccessToken();
   const folderId = await ensureBackupFolder({ accessToken, config });
+  return uploadWithToken({ fileName, buffer, mimeType, accessToken, folderId, config, recordUpload });
+}
+
+/**
+ * Unggah beberapa berkas memakai SATU access token dan satu pemeriksaan folder.
+ *
+ * Dipakai untuk Excel per guru: memanggil getAccessToken() berulang kali berarti
+ * menukar refresh token ke Google sebanyak jumlah guru, padahal satu token
+ * berlaku sekitar satu jam.
+ */
+async function uploadManyToDrive(files, { logType = 'otomatis', by = 'snapshot-mingguan' } = {}) {
+  const { ensureBackupFolder, getAccessToken, recordUpload } = require('../src/api/_lib/backup-config');
+  const { accessToken, config } = await getAccessToken();
+  const folderId = await ensureBackupFolder({ accessToken, config });
+
+  const hasil = [];
+  for (const file of files) {
+    try {
+      const res = await uploadWithToken({
+        fileName: file.fileName,
+        buffer: file.buffer,
+        mimeType: file.mimeType,
+        accessToken,
+        folderId,
+        config,
+        recordUpload,
+        logType,
+        by: file.by || by,
+      });
+      hasil.push({ ok: true, fileName: file.fileName, id: res.id });
+    } catch (error) {
+      hasil.push({ ok: false, fileName: file.fileName, error: error.message });
+    }
+  }
+  return { hasil, folderName: config.folderName };
+}
+
+async function uploadWithToken({
+  fileName, buffer, mimeType, accessToken, folderId, config, recordUpload,
+  logType = 'otomatis', by = 'snapshot-mingguan',
+}) {
   const metadata = { name: fileName, mimeType, parents: [folderId] };
 
   const form = new FormData();
@@ -274,8 +315,8 @@ async function uploadToDrive(fileName, buffer, mimeType) {
     fileName: result.name || fileName,
     fileId: result.id,
     size: Number(result.size || buffer.length || 0),
-    uploadedBy: 'snapshot-mingguan',
-    type: 'otomatis',
+    uploadedBy: by,
+    type: logType,
   });
   return { ...result, folderName: config.folderName };
 }
@@ -301,27 +342,40 @@ async function writeLog({ status, fileName, size, message }) {
  * Tulis ringkasan ke halaman ikhtisar GitHub Actions, sehingga hasilnya terlihat
  * tanpa harus membaca seluruh log. Diabaikan saat dijalankan di luar Actions.
  */
-function writeSummary({ fileName, totalDocs, reads, gzSize, complete, drive, scope, coreDocs, refDocs }) {
+function writeSummary({
+  fileName, totalDocs, reads, gzSize, complete, drive, scope, coreDocs, refDocs,
+  excelCount = 0, excelKB = 0,
+}) {
   const target = process.env.GITHUB_STEP_SUMMARY;
   if (!target) return;
   const rows = [
-    '## Hasil Snapshot Backup',
+    '## Hasil Backup Mingguan',
     '',
     '| Keterangan | Nilai |',
     '| --- | --- |',
-    `| Berkas | \`${fileName}\` |`,
     `| Cakupan | ${scope} |`,
     `| Data hasil kerja guru | ${coreDocs.toLocaleString('id-ID')} dokumen |`,
     `| Kunci pembaca | ${refDocs.toLocaleString('id-ID')} dokumen |`,
     `| Total dokumen | ${totalDocs.toLocaleString('id-ID')} |`,
     `| Operasi baca Firestore | ${reads.toLocaleString('id-ID')} |`,
-    `| Ukuran (gzip) | ${(gzSize / 1024).toFixed(0)} KB |`,
+    '',
+    '### Berkas yang dihasilkan',
+    '',
+    '| Berkas | Untuk siapa | Kegunaan |',
+    '| --- | --- | --- |',
+    `| \`${fileName}\` (${(gzSize / 1024).toFixed(0)} KB) | Admin | Memulihkan data ke sistem bila terjadi kehilangan |`,
+    `| ${excelCount} berkas Excel (${excelKB} KB) | Setiap guru | Dibuka & dilanjutkan langsung di Excel bila aplikasi tidak dapat diakses |`,
+    '',
     `| Snapshot lengkap | ${complete ? 'Ya' : 'TIDAK — batas baca tercapai'} |`,
+    '| --- | --- |',
     `| Unggah Google Drive | ${drive} |`,
     '',
     complete
-      ? 'Cadangan minggu ini tersimpan dan dilampirkan pada Release di bawah.'
+      ? 'Cadangan minggu ini tersimpan di Google Drive dan dilampirkan pada Release di bawah.'
       : 'Snapshot berhenti di tengah karena batas baca. Naikkan `BACKUP_MAX_READS` atau tinjau koleksi bervolume besar.',
+    '',
+    'Berkas Excel dibuat dari data yang sama yang sudah dibaca untuk snapshot, '
+      + 'sehingga **tidak menambah satu pun operasi baca** Firestore.',
     '',
     '<details><summary>Apa saja yang dicadangkan dan apa yang tidak</summary>',
     '',
@@ -331,6 +385,11 @@ function writeSummary({ fileName, totalDocs, reads, gzSize, complete, drive, sco
     '',
     '**Tidak dicadangkan:** kuis, permainan, percakapan, materi ajar, keuangan, tampilan lobi, '
       + 'serta `users` dan `settings` karena keduanya memuat kredensial.',
+    '',
+    '**Isi setiap berkas Excel per guru:** satu sheet Petunjuk, lalu untuk setiap kelas yang '
+      + 'diampu ada 4 sheet — Rekap Absen, Absen Harian, Nilai, dan Keaktifan. Seluruh total, '
+      + 'persentase, nilai akhir, grade, dan predikat berupa rumus Excel yang menghitung ulang '
+      + 'sendiri bila datanya disunting.',
     '',
     '</details>',
   ];
@@ -467,13 +526,50 @@ async function main() {
     refDocs,
   };
 
+  // -------------------------------------------------------------------------
+  // Excel per guru — dari data yang SUDAH di memori, tanpa satu pun baca baru.
+  // -------------------------------------------------------------------------
+  let excelFiles = [];
+  if (process.env.BACKUP_SKIP_EXCEL === '1') {
+    log('\nPembuatan Excel per guru dilewati (BACKUP_SKIP_EXCEL=1).');
+  } else {
+    try {
+      log('\n--- Excel per guru (0 operasi baca tambahan) ---');
+      const { buildTeacherWorkbooks } = require('./build-teacher-excel');
+      excelFiles = await buildTeacherWorkbooks({
+        collections,
+        context: {
+          tahun_ajaran_aktif: period.year,
+          tahun_ajaran_aktif_nama: period.yearName || period.year,
+          semester_aktif: period.semester,
+          semester_aktif_nama: period.semesterName || period.semester,
+        },
+        log,
+      });
+      const totalKB = excelFiles.reduce((n, f) => n + f.buffer.length, 0) / 1024;
+      log(`Total: ${excelFiles.length} berkas Excel, ${totalKB.toFixed(0)} KB`);
+
+      // Simpan juga ke disk agar terlampir pada GitHub Release.
+      for (const f of excelFiles) {
+        fs.writeFileSync(path.join(process.cwd(), f.fileName), f.buffer);
+      }
+    } catch (error) {
+      // Kegagalan Excel tidak boleh menjatuhkan snapshot JSON yang sudah selesai.
+      log(`! Pembuatan Excel per guru gagal: ${error.message}`);
+      if (error.stack) log(error.stack.split('\n').slice(1, 3).join('\n'));
+      excelFiles = [];
+    }
+  }
+  summaryBase.excelCount = excelFiles.length;
+  summaryBase.excelKB = Math.round(excelFiles.reduce((n, f) => n + f.buffer.length, 0) / 1024);
+
   if (process.env.BACKUP_SKIP_DRIVE === '1') {
     log('\nUnggah Google Drive dilewati (BACKUP_SKIP_DRIVE=1).');
     await writeLog({
       status: 'success',
       fileName,
       size: gz.length,
-      message: `Snapshot hasil kerja guru: ${coreDocs} dokumen absensi/nilai/keaktifan + ${refDocs} kunci pembaca, ${budget.used} baca. Tidak diunggah ke Drive.`,
+      message: `Snapshot hasil kerja guru: ${coreDocs} dokumen absensi/nilai/keaktifan + ${refDocs} kunci pembaca, ${budget.used} baca, ${excelFiles.length} berkas Excel. Tidak diunggah ke Drive.`,
     });
     writeSummary({ ...summaryBase, drive: 'dilewati' });
     return;
@@ -481,12 +577,34 @@ async function main() {
 
   try {
     log('\nMengunggah ke Google Drive...');
-    const result = await uploadToDrive(fileName, gz, 'application/gzip');
-    log(`Folder Drive : ${result.folderName || '-'}`);
-    log(`ID berkas    : ${result.id}`);
-    if (result.webViewLink) log(`Tautan       : ${result.webViewLink}`);
-    log('\n=== Snapshot selesai ===');
-    writeSummary({ ...summaryBase, drive: 'berhasil' });
+    const berkas = [
+      { fileName, buffer: gz, mimeType: 'application/gzip' },
+      ...excelFiles.map((f) => ({
+        fileName: f.fileName,
+        buffer: f.buffer,
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        by: f.guruId || 'snapshot-mingguan',
+      })),
+    ];
+    const { hasil, folderName } = await uploadManyToDrive(berkas, { logType: 'otomatis' });
+    const sukses = hasil.filter((r) => r.ok);
+    const gagal = hasil.filter((r) => !r.ok);
+
+    log(`Folder Drive : ${folderName || '-'}`);
+    sukses.forEach((r) => log(`  terunggah  : ${r.fileName}`));
+    gagal.forEach((r) => log(`  GAGAL      : ${r.fileName} — ${r.error}`));
+
+    // Snapshot JSON adalah berkas pertama; bila itu gagal, anggap Drive gagal.
+    const snapshotOk = hasil[0]?.ok;
+    if (!snapshotOk) throw new Error(hasil[0]?.error || 'Unggah snapshot gagal.');
+
+    log(`\n=== Selesai: ${sukses.length} dari ${berkas.length} berkas terunggah ===`);
+    writeSummary({
+      ...summaryBase,
+      drive: gagal.length
+        ? `berhasil sebagian (${sukses.length}/${berkas.length}) — ${gagal[0].error}`
+        : `berhasil (${sukses.length} berkas)`,
+    });
   } catch (error) {
     // PENTING: kegagalan Drive TIDAK menggagalkan snapshot.
     //
@@ -504,7 +622,7 @@ async function main() {
       status: 'error',
       fileName,
       size: gz.length,
-      message: `Snapshot berhasil (${totalDocs} dokumen) tetapi belum tersalin ke Drive: ${error.message}`,
+      message: `Snapshot berhasil (${totalDocs} dokumen, ${excelFiles.length} Excel) tetapi belum tersalin ke Drive: ${error.message}`,
     });
     writeSummary({ ...summaryBase, drive: `gagal — ${error.message}` });
   }
