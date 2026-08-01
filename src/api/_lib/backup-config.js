@@ -468,6 +468,92 @@ async function recordUpload({ fileName, fileId, size, uploadedBy, type }) {
   return { ok: true };
 }
 
+/**
+ * Enkripsi ulang kredensial yang tersimpan memakai kunci UTAMA lingkungan ini.
+ *
+ * MASALAH YANG DIPECAHKAN
+ * -----------------------
+ * Kredensial ditulis oleh Vercel (lewat panel admin) tetapi perlu dibaca juga
+ * oleh GitHub Actions saat snapshot mingguan mengunggah ke Google Drive. Kunci
+ * enkripsi diturunkan dari variabel lingkungan, sehingga bila kedua tempat tidak
+ * memiliki variabel yang sama, GitHub Actions tidak dapat mendekripsi.
+ *
+ * Fungsi ini dijalankan DI TEMPAT YANG MASIH BISA MENDEKRIPSI (Vercel): nilainya
+ * dibaca dengan kunci lama, lalu ditulis ulang memakai kunci utama saat ini.
+ * Setelah AI_CONFIG_SECRET diset sama di Vercel dan GitHub Actions, sekali
+ * penyelarasan membuat keduanya dapat membaca nilai yang sama — tanpa admin
+ * perlu mengetik ulang Client Secret atau mengulang izin Google.
+ *
+ * Sifatnya aman: bila ada nilai yang tidak dapat didekripsi, nilai itu TIDAK
+ * disentuh sama sekali, sehingga tidak ada kredensial yang rusak.
+ */
+async function reencryptSecrets({ updatedBy } = {}) {
+  const snapshot = await docRef().get();
+  if (!snapshot.exists) {
+    return { ok: false, reason: 'Belum ada konfigurasi Google Drive untuk diselaraskan.' };
+  }
+  const data = snapshot.data() || {};
+
+  const payload = {};
+  const migrated = [];
+  const failed = [];
+
+  const fields = [
+    ['client_secret_enc', 'Client Secret'],
+    ['refresh_token_enc', 'Refresh Token'],
+  ];
+
+  for (const [field, label] of fields) {
+    const stored = data[field];
+    if (!stored) continue;
+    const plain = decryptSecret(stored);
+    if (!plain) {
+      failed.push(label);
+      continue;
+    }
+    const reencrypted = encryptSecret(plain);
+    // Verifikasi hasilnya benar-benar terbaca kembali sebelum ditulis.
+    if (decryptSecret(reencrypted) !== plain) {
+      failed.push(label);
+      continue;
+    }
+    payload[field] = reencrypted;
+    migrated.push(label);
+  }
+
+  if (failed.length) {
+    return {
+      ok: false,
+      reason: `Tidak dapat mendekripsi ${failed.join(' dan ')} di lingkungan ini. `
+        + `Kunci yang tersedia: ${describeSecretKeySources().join(', ')}. `
+        + 'Jalankan penyelarasan dari lingkungan yang menyimpan kredensial tersebut '
+        + '(biasanya aplikasi web di Vercel), bukan dari proses lain.',
+      migrated,
+      failed,
+    };
+  }
+
+  if (!migrated.length) {
+    return { ok: false, reason: 'Tidak ada kredensial terenkripsi yang perlu diselaraskan.' };
+  }
+
+  payload.updated_at = new Date().toISOString();
+  payload.updated_by = String(updatedBy || '').trim();
+  payload.secret_key_synced_at = payload.updated_at;
+
+  await docRef().set(payload, { merge: true });
+  invalidateCache();
+
+  await appendLog({
+    type: 'manual',
+    status: 'success',
+    message: `Kunci enkripsi diselaraskan untuk ${migrated.join(' dan ')}.`,
+    by: updatedBy,
+  });
+
+  return { ok: true, migrated };
+}
+
 module.exports = {
   DEFAULT_FOLDER_NAME,
   DEFAULT_SCHEDULE,
@@ -484,6 +570,7 @@ module.exports = {
   getReminderConfig,
   readStoredConfig,
   recordUpload,
+  reencryptSecrets,
   writeCredentials,
   writeReminder,
   writeSchedule,

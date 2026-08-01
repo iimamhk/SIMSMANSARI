@@ -314,6 +314,27 @@ export async function disconnectDriveBackup() {
 }
 
 /**
+ * Enkripsi ulang kredensial Drive memakai kunci utama lingkungan server.
+ *
+ * Diperlukan ketika aplikasi web (yang menulis kredensial) dan proses backup
+ * otomatis (yang membacanya) berjalan di lingkungan berbeda dengan variabel
+ * lingkungan berbeda, sehingga kunci enkripsinya tidak sama. Tidak ada rahasia
+ * yang dikirim ke atau dari peramban; seluruh proses terjadi di server.
+ */
+export async function reencryptDriveSecrets() {
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'reencrypt' }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result.reason || result.error || 'Kunci enkripsi tidak dapat diselaraskan.');
+  }
+  return result;
+}
+
+/**
  * Ambil access token Drive berumur pendek untuk unggahan langsung dari browser.
  * Mengembalikan `{ available:false, reason }` bila Drive belum siap, agar
  * pemanggil dapat melanjutkan backup lokal tanpa memunculkan error keras.

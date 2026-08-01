@@ -2,6 +2,7 @@ import { renderLayout } from '../../layouts/dashboard-layout.js';
 import {
   disconnectDriveBackup,
   getDriveBackupConfig,
+  reencryptDriveSecrets,
   saveBackupReminder,
   saveBackupSchedule,
   saveDriveBackupConfig,
@@ -54,6 +55,24 @@ export async function renderAdminBackupSettingsPage(container) {
         </form>
 
         <dl id="drive-meta" class="mt-3 grid gap-2 text-xs sm:grid-cols-3"></dl>
+
+        <div class="mt-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+          <div class="flex items-start gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 ring-1 ring-sky-200">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+            </div>
+            <div class="min-w-0 flex-1 text-xs leading-5 text-slate-600">
+              <p class="text-sm font-bold text-slate-900">Selaraskan Kunci Enkripsi</p>
+              <p class="mt-1">Client Secret dan Refresh Token disimpan dalam bentuk terenkripsi. Kuncinya berasal dari variabel lingkungan, sehingga bila aplikasi web (Vercel) dan proses backup otomatis (GitHub Actions) memakai variabel yang berbeda, backup otomatis <strong>tidak dapat mengunggah ke Google Drive</strong>.</p>
+              <p class="mt-1">Tombol ini membaca kredensial dengan kunci lama lalu menyimpannya ulang memakai kunci utama saat ini &mdash; tanpa Bapak/Ibu perlu mengetik ulang Client Secret atau mengulang izin Google.</p>
+              <p class="mt-1"><strong>Jalankan setelah</strong> menyetel <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">AI_CONFIG_SECRET</code> dengan nilai yang sama di Vercel dan di GitHub Actions.</p>
+              <div class="mt-3 flex flex-wrap items-center gap-2">
+                <button type="button" id="drive-reencrypt-btn" class="rounded-xl border border-sky-300 bg-white px-3.5 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60">Selaraskan Kunci Enkripsi</button>
+                <span id="drive-reencrypt-message" class="text-xs text-slate-500" role="status"></span>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="rounded-[24px] border border-teal-100 bg-white p-4 shadow-[0_16px_40px_-30px_rgba(13,148,136,.5)] sm:p-6">
@@ -204,12 +223,20 @@ export async function renderAdminBackupSettingsPage(container) {
   const driveConnectBtn = container.querySelector('#drive-connect-btn');
   const driveTestBtn = container.querySelector('#drive-test-btn');
   const driveDisconnectBtn = container.querySelector('#drive-disconnect-btn');
+  const driveReencryptBtn = container.querySelector('#drive-reencrypt-btn');
+  const driveReencryptMessage = container.querySelector('#drive-reencrypt-message');
   let hasStoredDriveSecret = false;
 
   function setDriveMessage(text, isError = false) {
     if (!driveMessage) return;
     driveMessage.textContent = text || '';
     driveMessage.className = isError ? 'text-xs text-rose-600 sm:col-span-2' : 'text-xs text-slate-500 sm:col-span-2';
+  }
+
+  function setReencryptMessage(text, isError = false) {
+    if (!driveReencryptMessage) return;
+    driveReencryptMessage.textContent = text || '';
+    driveReencryptMessage.className = isError ? 'text-xs text-rose-600' : 'text-xs text-slate-500';
   }
 
   function formatDriveDate(value) {
@@ -346,8 +373,36 @@ export async function renderAdminBackupSettingsPage(container) {
     }
   });
 
+  driveReencryptBtn?.addEventListener('click', async () => {
+    const ok = window.confirm(
+      'Selaraskan kunci enkripsi kredensial Google Drive?\n\n'
+      + 'Client Secret dan Refresh Token akan dibaca dengan kunci lama, lalu disimpan\n'
+      + 'ulang memakai kunci utama saat ini. Kredensialnya sendiri tidak berubah.\n\n'
+      + 'Lakukan ini SETELAH AI_CONFIG_SECRET diset dengan nilai yang sama di Vercel\n'
+      + 'dan di GitHub Actions.'
+    );
+    if (!ok) return;
+    driveReencryptBtn.disabled = true;
+    const original = driveReencryptBtn.textContent;
+    driveReencryptBtn.textContent = 'Menyelaraskan...';
+    setReencryptMessage('Membaca dan menyimpan ulang kredensial...');
+    try {
+      const result = await reencryptDriveSecrets();
+      await reloadDriveConfig();
+      setReencryptMessage(
+        `Berhasil. ${(result.migrated || []).join(' dan ')} kini terenkripsi dengan kunci utama. `
+        + 'Jalankan ulang workflow snapshot untuk memastikan unggahan Drive berhasil.'
+      );
+    } catch (error) {
+      setReencryptMessage(error.message, true);
+    } finally {
+      driveReencryptBtn.disabled = false;
+      driveReencryptBtn.textContent = original;
+    }
+  });
+
   // -------------------------------------------------------------------------
-  // Backup otomatis, backup manual, & riwayat
+  // Backup otomatis & riwayat
   // -------------------------------------------------------------------------
   const sysStatus = container.querySelector('#sys-backup-status');
   const sysMessage = container.querySelector('#sys-backup-message');

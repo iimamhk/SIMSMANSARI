@@ -7,6 +7,10 @@
  *   record-upload (guru/admin) catat metadata unggahan + tambah riwayat sukses
  *   log           (guru/admin) tambah entri riwayat (mis. backup otomatis/gagal)
  *   schedule      (admin)      simpan jadwal backup otomatis
+ *   reminder      (admin)      simpan pengingat untuk guru
+ *   reencrypt     (admin)      enkripsi ulang kredensial dengan kunci utama
+ *                              lingkungan ini, agar dapat dibaca juga oleh
+ *                              GitHub Actions (lihat reencryptSecrets)
  *   disconnect    (admin)      putuskan koneksi Drive
  *   (default)     (admin)      simpan Client ID/Secret/folder
  */
@@ -25,6 +29,7 @@ const {
   getReminderConfig,
   readStoredConfig,
   recordUpload,
+  reencryptSecrets,
   writeCredentials,
   writeReminder,
   writeSchedule,
@@ -226,6 +231,18 @@ module.exports = async (req, res) => {
           updatedBy: adminUser.username || adminUser.uid || 'admin',
         });
         sendJson(req, res, 200, { ok: true, reminder: result.reminder });
+        return;
+      }
+
+      if (action === 'reencrypt') {
+        // Penyelarasan kunci enkripsi. Dijalankan DI SINI (Vercel), tempat
+        // kredensial masih dapat didekripsi, agar nilainya ditulis ulang memakai
+        // kunci utama yang juga dimiliki GitHub Actions. Tidak ada rahasia yang
+        // dikembalikan ke klien — hanya daftar nama field yang berhasil.
+        const result = await reencryptSecrets({
+          updatedBy: adminUser.username || adminUser.uid || 'admin',
+        });
+        sendJson(req, res, result.ok ? 200 : 400, result);
         return;
       }
 
