@@ -16,6 +16,7 @@ import {
   TIPE_SOAL, COLLECTION_PAKET, COLLECTION_SESI, COLLECTION_JAWABAN,
   LS_PAKET, LS_SESI, LS_JAWABAN, readLocal, writeLocal, upsertLocal, deleteLocal,
 } from '../../utils/kuiz-engine.js';
+import { streamGenerateSoal } from '../../utils/ai-soal-client.js';
 
 // ─── MODULE STATE ─────────────────────────────────────────────────────────────
 
@@ -23,6 +24,9 @@ const state = {
   tab: 'bank',
   paketList: [],
   sesiList: [],
+  paketLoadedAt: 0,
+  sesiLoadedAt: 0,
+  loadedForGuru: '',
   jawabanCache: {},
   assignments: [],
   context: null,
@@ -39,6 +43,10 @@ const state = {
   essayJawabanId: null,
   importFormat: 'markdown',
   importingPaketId: null,
+  genAbort: null,
+  genSoal: [],
+  genPaketId: null,
+  genPaketJudul: '',
 };
 
 const DEFAULT_AI_PRESET = 'matematika';
@@ -51,6 +59,12 @@ const COLLECTION_TUGAS_BAB = 'tugas_bab';
 const COLLECTION_NILAI_TUGAS = 'nilai_tugas';
 const COLLECTION_NILAI_UJIAN = 'nilai_ujian';
 const COLLECTION_UH_KOLOM = 'ulangan_harian_kolom';
+
+// Optimasi read: paket & sesi milik guru jarang berubah antar navigasi.
+// Dengan TTL ini, membuka ulang halaman Kuiz dalam rentang waktu tersebut
+// memakai data yang sudah ada di memori (0 read Firestore). Cache di-refresh
+// otomatis setiap kali guru menyimpan/menghapus (state di-update lokal).
+const PAKET_SESI_CACHE_TTL_MS = 60000;
 
 function buildAiMathPrompt(materi = DEFAULT_AI_MATH_MATERI) {
   const finalMateri = String(materi || '').trim() || DEFAULT_AI_MATH_MATERI;
@@ -450,27 +464,39 @@ async function saveStrictDocument(collection, payload, id = null) {
 
 // ─── DATA LOADERS ─────────────────────────────────────────────────────────────
 
-async function loadPaket() {
+async function loadPaket(force = false) {
   const local = readLocal(LS_PAKET).filter((p) => p.guru_id === state.guruId);
   if (!db()) { state.paketList = local; return; }
+  // Optimasi read: lewati query bila data masih segar (kecuali dipaksa refresh).
+  if (!force && state.loadedForGuru === state.guruId && state.paketLoadedAt && (Date.now() - state.paketLoadedAt) < PAKET_SESI_CACHE_TTL_MS) {
+    return;
+  }
   try {
     const remote = await fsQuery(COLLECTION_PAKET, [{ field: 'guru_id', value: state.guruId }]);
     const merged = mergeById(remote, local);
     writeLocal(LS_PAKET, merged);
     state.paketList = merged.filter((p) => p.guru_id === state.guruId);
+    state.paketLoadedAt = Date.now();
+    state.loadedForGuru = state.guruId;
   } catch {
     state.paketList = local;
   }
 }
 
-async function loadSesi() {
+async function loadSesi(force = false) {
   const local = readLocal(LS_SESI).filter((s) => s.guru_id === state.guruId);
   if (!db()) { state.sesiList = local; return; }
+  // Optimasi read: lewati query bila data masih segar (kecuali dipaksa refresh).
+  if (!force && state.loadedForGuru === state.guruId && state.sesiLoadedAt && (Date.now() - state.sesiLoadedAt) < PAKET_SESI_CACHE_TTL_MS) {
+    return;
+  }
   try {
     const remote = await fsQuery(COLLECTION_SESI, [{ field: 'guru_id', value: state.guruId }]);
     const merged = mergeById(remote, local);
     writeLocal(LS_SESI, merged);
     state.sesiList = merged.filter((s) => s.guru_id === state.guruId);
+    state.sesiLoadedAt = Date.now();
+    state.loadedForGuru = state.guruId;
   } catch {
     state.sesiList = local;
   }
@@ -496,13 +522,24 @@ function mergeById(primary, secondary) {
 
 // ─── SAVE / DELETE ACTIONS ────────────────────────────────────────────────────
 
+function upsertStateList(listKey, saved) {
+  if (!saved?.id) return;
+  const list = state[listKey];
+  const index = list.findIndex((item) => item.id === saved.id);
+  if (index >= 0) list[index] = { ...list[index], ...saved };
+  else list.push(saved);
+}
+
 async function savePaket(data) {
   const now = new Date().toISOString();
   const payload = { ...data, guru_id: state.guruId, guru_nama: state.guruNama, updated_at: now };
   if (!payload.created_at) payload.created_at = now;
   const saved = await fsSave(COLLECTION_PAKET, payload, payload.id);
   upsertLocal(LS_PAKET, saved);
-  await loadPaket();
+  // Optimasi read: perbarui state di memori alih-alih membaca ulang seluruh
+  // koleksi paket dari Firestore setiap kali menyimpan.
+  upsertStateList('paketList', saved);
+  state.paketLoadedAt = Date.now();
 }
 
 async function removePaket(paketId) {
@@ -517,7 +554,10 @@ async function saveSesi(data) {
   if (!payload.created_at) payload.created_at = now;
   const saved = await fsSave(COLLECTION_SESI, payload, payload.id);
   upsertLocal(LS_SESI, saved);
-  await loadSesi();
+  // Optimasi read: perbarui state di memori alih-alih membaca ulang seluruh
+  // koleksi sesi dari Firestore setiap kali menyimpan.
+  upsertStateList('sesiList', saved);
+  state.sesiLoadedAt = Date.now();
 }
 
 async function removeSesi(sesiId) {
@@ -1610,16 +1650,26 @@ function renderTabBank() {
           <p class="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Buat Soal</p>
            <h3 class="text-2xl font-semibold text-slate-900">Paket Ujian Saya</h3>
         </div>
-        <button type="button" id="btn-buat-paket" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">
-          <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          Buat Paket
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" id="btn-generate-soal-baru" class="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:from-purple-700 hover:to-indigo-700">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z"/></svg>
+            Buat Soal AI
+          </button>
+          <button type="button" id="btn-buat-paket" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            Buat Paket
+          </button>
+        </div>
       </div>
 
       ${list.length === 0 ? `
         <div class="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
           <p class="text-sm font-semibold text-slate-500">Belum ada paket soal</p>
-          <p class="mt-1 text-sm text-slate-400">Mulai dengan membuat paket soal pertama Anda.</p>
+          <p class="mt-1 text-sm text-slate-400">Mulai cepat dengan membuat soal otomatis memakai AI, atau buat paket kosong.</p>
+          <button type="button" id="btn-generate-soal-empty" class="mt-4 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:from-purple-700 hover:to-indigo-700">
+            <svg viewBox="0 0 24 24" class="h-4 w-4 stroke-current" fill="none" stroke-width="2"><path d="m12 3 1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3Z"/></svg>
+            Buat Soal dengan AI
+          </button>
         </div>
       ` : `
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1666,7 +1716,7 @@ function renderPaketCard(p) {
       </div>
       <div class="grid grid-cols-2 gap-2">
         <button type="button" data-action="edit-soal" data-paket-id="${p.id}" class="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-700">Edit Soal</button>
-        <button type="button" data-action="import-soal" data-paket-id="${p.id}" class="rounded-xl bg-purple-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-purple-700">📥 Import AI</button>
+        <button type="button" data-action="generate-soal" data-paket-id="${p.id}" class="rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:from-purple-700 hover:to-indigo-700">✨ Soal AI</button>
         <button type="button" data-action="buat-sesi-dari-paket" data-paket-id="${p.id}" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700">Buat Sesi</button>
         <button type="button" data-action="edit-paket" data-paket-id="${p.id}" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Edit Paket</button>
       </div>
@@ -1676,6 +1726,308 @@ function renderPaketCard(p) {
       </div>
     </div>
   `;
+}
+
+// ─── MODAL: GENERATE SOAL DENGAN AI ────────────────────────────────────────────
+
+function buildGenerateSoalForm(paket) {
+  const isBaru = !paket;
+  const inputClass = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100';
+  const labelClass = 'block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 mb-1.5';
+  return `
+    <form id="form-gen-soal" class="space-y-4">
+      <div class="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-purple-50 px-4 py-3 text-xs leading-5 text-indigo-900">
+        Isi konteks materi, lalu AI menyusun soal otomatis dalam format yang siap dipakai. Anda selalu bisa memeriksa hasilnya sebelum menyimpan.
+      </div>
+
+      ${isBaru ? `
+        <div>
+          <label class="${labelClass}">Judul Paket Baru</label>
+          <input id="gen-judul" type="text" placeholder="Contoh: UH Bab 3 – Persamaan Linear" class="${inputClass}"/>
+        </div>
+      ` : `
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-600">
+          Soal akan ditambahkan ke paket: <span class="font-semibold text-slate-900">${paket.judul || 'Tanpa Judul'}</span>
+          ${(paket.soal || []).length ? `<span class="text-slate-400"> (sudah ada ${(paket.soal || []).length} soal)</span>` : ''}
+        </div>
+      `}
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="${labelClass}">Mata Pelajaran</label>
+          <input id="gen-mapel" type="text" placeholder="Contoh: Matematika" class="${inputClass}"/>
+        </div>
+        <div>
+          <label class="${labelClass}">Kelas / Jenjang</label>
+          <input id="gen-kelas" type="text" placeholder="Contoh: Kelas XI SMA" class="${inputClass}"/>
+        </div>
+      </div>
+
+      <div>
+        <label class="${labelClass}">Materi / Topik <span class="text-rose-500">*</span></label>
+        <textarea id="gen-materi" rows="2" placeholder="Contoh: Turunan fungsi aljabar dan penerapannya" class="${inputClass} resize-none"></textarea>
+      </div>
+
+      <div class="grid gap-3 sm:grid-cols-4">
+        <div>
+          <label class="${labelClass}">Jumlah</label>
+          <input id="gen-jumlah" type="number" min="1" max="30" value="5" class="${inputClass}"/>
+        </div>
+        <div>
+          <label class="${labelClass}">Tipe Soal</label>
+          <select id="gen-tipe" class="${inputClass}">
+            <option value="pg" selected>Pilihan Ganda</option>
+            <option value="campuran">Campuran</option>
+            <option value="bs">Benar / Salah</option>
+            <option value="isian">Isian Singkat</option>
+            <option value="essay">Essay / Uraian</option>
+            <option value="menjodohkan">Menjodohkan</option>
+          </select>
+        </div>
+        <div>
+          <label class="${labelClass}">Kesulitan</label>
+          <select id="gen-kesulitan" class="${inputClass}">
+            <option value="mudah">Mudah</option>
+            <option value="sedang" selected>Sedang</option>
+            <option value="sulit">Sulit</option>
+            <option value="hots">HOTS</option>
+            <option value="campuran">Campuran</option>
+          </select>
+        </div>
+        <div id="gen-opsi-wrap">
+          <label class="${labelClass}">Jumlah Opsi</label>
+          <input id="gen-jumlah-opsi" type="number" min="2" max="6" value="4" class="${inputClass}"/>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-4">
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input id="gen-pembahasan" type="checkbox" class="h-4 w-4 rounded accent-indigo-600"/>
+          Sertakan pembahasan / kunci
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+          <input id="gen-latex" type="checkbox" class="h-4 w-4 rounded accent-indigo-600"/>
+          Materi memuat rumus matematis
+        </label>
+      </div>
+
+      <div>
+        <label class="${labelClass}">Instruksi Tambahan (opsional)</label>
+        <textarea id="gen-instruksi" rows="2" placeholder="Contoh: fokus pada soal cerita, hindari soal hafalan" class="${inputClass} resize-none"></textarea>
+      </div>
+
+      <div id="gen-status" class="hidden rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800"></div>
+
+      <div id="gen-result" class="hidden space-y-3">
+        <div class="grid grid-cols-3 gap-3">
+          <div class="rounded-2xl bg-indigo-50 border border-indigo-200 p-3 text-center">
+            <p class="text-xl font-bold text-indigo-900" id="gen-stat-count">0</p>
+            <p class="text-[11px] text-indigo-700">Soal</p>
+          </div>
+          <div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 text-center">
+            <p class="text-sm font-bold text-emerald-900" id="gen-stat-types">-</p>
+            <p class="text-[11px] text-emerald-700">Tipe</p>
+          </div>
+          <div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 text-center">
+            <p class="text-xl font-bold text-amber-900" id="gen-stat-poin">0</p>
+            <p class="text-[11px] text-amber-700">Total Poin</p>
+          </div>
+        </div>
+        <div class="max-h-[300px] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-3" id="gen-preview"></div>
+      </div>
+
+      <div class="flex flex-wrap gap-3 pt-2">
+        <button type="button" id="btn-gen-cancel" class="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition">Tutup</button>
+        ${paket ? `<button type="button" id="btn-gen-manual" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition">Tempel Manual</button>` : ''}
+        <button type="button" id="btn-gen-run" class="flex-1 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 py-3 text-sm font-semibold text-white hover:from-purple-700 hover:to-indigo-700 transition">✨ Generate</button>
+        <button type="button" id="btn-gen-save" class="flex-1 rounded-2xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed" disabled>Tambah ke Paket</button>
+      </div>
+    </form>
+  `;
+}
+
+function openModalGenerateSoal(paketId = null) {
+  const paket = paketId ? state.paketList.find((p) => p.id === paketId) : null;
+  if (paketId && !paket) return;
+  state.genPaketId = paketId;
+  state.genSoal = [];
+  state.genAbort = null;
+
+  showModal(buildGenerateSoalForm(paket), {
+    title: paket ? `Buat Soal AI: ${paket.judul || ''}` : 'Buat Soal dengan AI',
+    wide: true,
+  });
+  attachGenerateSoalListeners(paketId);
+}
+
+function attachGenerateSoalListeners(paketId) {
+  const runBtn = document.getElementById('btn-gen-run');
+  const saveBtn = document.getElementById('btn-gen-save');
+  const cancelBtn = document.getElementById('btn-gen-cancel');
+  const manualBtn = document.getElementById('btn-gen-manual');
+  const tipeSelect = document.getElementById('gen-tipe');
+  const opsiWrap = document.getElementById('gen-opsi-wrap');
+  const statusEl = document.getElementById('gen-status');
+  const resultEl = document.getElementById('gen-result');
+  const previewEl = document.getElementById('gen-preview');
+
+  const syncOpsiVisibility = () => {
+    const tipe = tipeSelect?.value || 'pg';
+    if (opsiWrap) opsiWrap.style.display = (tipe === 'pg' || tipe === 'campuran') ? '' : 'none';
+  };
+  tipeSelect?.addEventListener('change', syncOpsiVisibility);
+  syncOpsiVisibility();
+
+  const setStatus = (html, tone = 'info') => {
+    if (!statusEl) return;
+    const tones = {
+      info: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+      error: 'border-rose-200 bg-rose-50 text-rose-700',
+      success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    };
+    statusEl.className = `rounded-2xl border px-4 py-3 text-sm ${tones[tone] || tones.info}`;
+    statusEl.innerHTML = html;
+    statusEl.classList.remove('hidden');
+  };
+
+  const collectInput = () => ({
+    mapel: document.getElementById('gen-mapel')?.value?.trim() || '',
+    kelas: document.getElementById('gen-kelas')?.value?.trim() || '',
+    materi: document.getElementById('gen-materi')?.value?.trim() || '',
+    jumlah: Number(document.getElementById('gen-jumlah')?.value) || 5,
+    tipe: tipeSelect?.value || 'pg',
+    kesulitan: document.getElementById('gen-kesulitan')?.value || 'sedang',
+    jumlahOpsi: Number(document.getElementById('gen-jumlah-opsi')?.value) || 4,
+    pembahasan: document.getElementById('gen-pembahasan')?.checked || false,
+    latex: document.getElementById('gen-latex')?.checked || false,
+    instruksi: document.getElementById('gen-instruksi')?.value?.trim() || '',
+  });
+
+  const setRunningUi = (running) => {
+    if (!runBtn) return;
+    if (running) {
+      runBtn.dataset.mode = 'stop';
+      runBtn.textContent = '■ Hentikan';
+    } else {
+      runBtn.dataset.mode = 'run';
+      runBtn.textContent = state.genSoal.length ? '✨ Generate Ulang' : '✨ Generate';
+    }
+    if (saveBtn) saveBtn.disabled = running || !state.genSoal.length;
+  };
+
+  const runGenerate = async () => {
+    const input = collectInput();
+    if (!input.mapel && !input.materi) {
+      setStatus('Isi minimal <strong>Mata Pelajaran</strong> atau <strong>Materi/Topik</strong> dulu.', 'error');
+      return;
+    }
+
+    state.genSoal = [];
+    if (saveBtn) saveBtn.disabled = true;
+    resultEl?.classList.add('hidden');
+    setStatus('AI sedang menyusun soal… <span id="gen-progress" class="font-semibold">0</span> karakter diterima.');
+
+    const controller = new AbortController();
+    state.genAbort = controller;
+    setRunningUi(true);
+    let charCount = 0;
+
+    try {
+      await streamGenerateSoal({
+        input,
+        signal: controller.signal,
+        onDelta: (chunk) => {
+          charCount += chunk.length;
+          const p = document.getElementById('gen-progress');
+          if (p) p.textContent = String(charCount);
+        },
+        onSoal: async (payload) => {
+          const result = parseJsonBulkSoal(JSON.stringify(payload));
+          if (result.error) {
+            setStatus(`Hasil AI tidak dapat dibaca: ${result.error}`, 'error');
+            return;
+          }
+          state.genSoal = result.soal || [];
+          state.genPaketJudul = payload.paket_judul || '';
+          if (!state.genSoal.length) {
+            setStatus('AI tidak menghasilkan soal. Coba ubah materi atau instruksi.', 'error');
+            return;
+          }
+          await ensureKaTeXReady();
+          if (previewEl) previewEl.innerHTML = buildPreviewHtml(state.genSoal);
+          document.getElementById('gen-stat-count').textContent = String(state.genSoal.length);
+          document.getElementById('gen-stat-types').textContent = [...new Set(state.genSoal.map((s) => TIPE_SOAL[s.tipe] || s.tipe))].join(', ');
+          document.getElementById('gen-stat-poin').textContent = String(state.genSoal.reduce((sum, s) => sum + (Number(s.poin) || 0), 0));
+          resultEl?.classList.remove('hidden');
+          if (saveBtn) saveBtn.disabled = false;
+          setStatus(`Selesai — ${state.genSoal.length} soal siap. Periksa lalu klik <strong>Tambah ke Paket</strong>.`, 'success');
+          // Prefill judul paket baru bila kosong.
+          const judulEl = document.getElementById('gen-judul');
+          if (judulEl && !judulEl.value.trim() && state.genPaketJudul) judulEl.value = state.genPaketJudul;
+        },
+        onError: (err) => {
+          if (err?.code === 'aborted') { setStatus('Generate dihentikan.', 'info'); return; }
+          setStatus(err?.message || 'Gagal menghasilkan soal.', 'error');
+        },
+      });
+    } catch {
+      /* error sudah ditangani via onError */
+    } finally {
+      state.genAbort = null;
+      setRunningUi(false);
+    }
+  };
+
+  runBtn?.addEventListener('click', () => {
+    if (runBtn.dataset.mode === 'stop') {
+      state.genAbort?.abort();
+      return;
+    }
+    runGenerate();
+  });
+
+  saveBtn?.addEventListener('click', async () => {
+    if (!state.genSoal.length) return;
+    saveBtn.disabled = true;
+
+    let targetPaket = paketId ? state.paketList.find((p) => p.id === paketId) : null;
+    if (targetPaket) {
+      targetPaket.soal = [...(targetPaket.soal || []), ...state.genSoal];
+      await savePaket(targetPaket);
+    } else {
+      const judul = (document.getElementById('gen-judul')?.value?.trim())
+        || state.genPaketJudul
+        || `Paket AI ${formatDateTime(new Date().toISOString())}`;
+      await savePaket({
+        id: generateId('paket'),
+        judul,
+        assignment_id: '',
+        mapel_id: '',
+        mapel_nama: '',
+        kelas_id: '',
+        kelas_nama: '',
+        acak_soal: false,
+        acak_opsi: false,
+        soal: [...state.genSoal],
+      });
+    }
+
+    const total = state.genSoal.length;
+    state.genSoal = [];
+    closeModal();
+    rerender();
+    showNotif(`✓ ${total} soal AI berhasil ${paketId ? 'ditambahkan' : 'dibuat'}.`, 'success');
+  });
+
+  manualBtn?.addEventListener('click', () => {
+    closeModal();
+    openModalImportSoal(paketId);
+  });
+
+  cancelBtn?.addEventListener('click', () => {
+    state.genAbort?.abort();
+    closeModal();
+  });
 }
 
 // ─── MODAL: IMPORT SOAL DARI AI ────────────────────────────────────────────────
@@ -1961,7 +2313,7 @@ function attachImportFormListeners() {
     
     closeModal();
     showNotif(`✓ ${parsedSoal.length} soal berhasil diimport`, 'success');
-    renderContent();
+    rerender();
   });
 
   // Cancel button
@@ -3759,6 +4111,8 @@ function attachTabContentListeners() {
 
   // Buat Soal actions
   document.getElementById('btn-buat-paket')?.addEventListener('click', () => openModalPaket());
+  document.getElementById('btn-generate-soal-baru')?.addEventListener('click', () => openModalGenerateSoal(null));
+  document.getElementById('btn-generate-soal-empty')?.addEventListener('click', () => openModalGenerateSoal(null));
 
   document.querySelectorAll('[data-action]').forEach((btn) => {
     const action = btn.dataset.action;
@@ -3768,6 +4122,7 @@ function attachTabContentListeners() {
     if (action === 'edit-paket') btn.addEventListener('click', () => openModalPaket(state.paketList.find((p) => p.id === paketId)));
     if (action === 'edit-soal') btn.addEventListener('click', () => openModalEditorSoal(paketId));
     if (action === 'import-soal') btn.addEventListener('click', () => openModalImportSoal(paketId));
+    if (action === 'generate-soal') btn.addEventListener('click', () => openModalGenerateSoal(paketId));
     if (action === 'buat-sesi-dari-paket') btn.addEventListener('click', () => {
       state.tab = 'sesi';
       rerender();

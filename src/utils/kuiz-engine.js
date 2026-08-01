@@ -470,6 +470,7 @@ export function parseJsonBulkSoal(jsonText) {
         kanan: normalizeLaTeX(p.kanan),
       })),
       rubrik: s.rubrik || '',
+      pembahasan: normalizeLaTeX(s.pembahasan || ''),
     })).filter(s => s.pertanyaan);
     
     return { success: true, paket_judul: data.paket_judul, soal: soalList };
@@ -572,6 +573,9 @@ export function buildPreviewHtml(soalList) {
       ` : `
         <div class="rounded-2xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-500">Essay - Rubrik: ${s.rubrik || '(tidak ada)'}</div>
       `}
+      ${s.pembahasan ? `
+        <div class="mt-2 rounded-2xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs text-indigo-700"><span class="font-semibold">Pembahasan:</span> ${renderMathPreview(s.pembahasan)}</div>
+      ` : ''}
     </div>
   `).join('');
 }

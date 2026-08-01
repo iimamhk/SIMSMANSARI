@@ -21,6 +21,9 @@ const state = {
   sesiList: [],
   paketCache: {},
   jawabanSaya: {},     // { [sesiId]: jawabanDoc }
+  sesiLoadedAt: 0,
+  jawabanLoadedAt: 0,
+  loadedForSiswa: '',
   activeSesi: null,
   activePaket: null,
   soalOrder: [],       // array of soal (shuffled if needed)
@@ -66,6 +69,12 @@ function renderQuizReviewMathBlock(text, tone = 'slate', fallback = '(kosong)') 
 
 const db = () => window.firebaseDb || null;
 
+// Optimasi read: daftar sesi & jawaban siswa dibaca ulang tiap kali halaman
+// Ujian dibuka. Dengan TTL ini, membuka ulang halaman dalam rentang waktu
+// tersebut memakai data yang sudah ada di memori (0 read Firestore). State
+// jawaban tetap diperbarui lokal setiap kali siswa submit, jadi tetap akurat.
+const SISWA_KUIZ_CACHE_TTL_MS = 45000;
+
 async function fsQuery(collection, filters = [], options = {}) {
   if (!db()) return [];
   try {
@@ -98,6 +107,16 @@ async function fsSave(collection, data, id = null) {
 
 async function loadSesiUntukSiswa() {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
+  // Optimasi read: lewati query bila daftar sesi milik siswa yang sama masih segar.
+  if (
+    db()
+    && state.loadedForSiswa === state.siswaId
+    && state.sesiLoadedAt
+    && (Date.now() - state.sesiLoadedAt) < SISWA_KUIZ_CACHE_TTL_MS
+    && state.sesiList.length
+  ) {
+    return;
+  }
   const allowedClassKeys = new Set([
     normalizeKelas(state.kelasId),
     normalizeKelas(state.kelasNama),
@@ -176,6 +195,8 @@ async function loadSesiUntukSiswa() {
     state.sesiList = remote
       .filter((s) => isVisibleToStudent(s) && filterByContext(s))
       .filter((s) => ['aktif', 'selesai', 'diarsipkan'].includes(String(s.status || '')));
+    state.sesiLoadedAt = Date.now();
+    state.loadedForSiswa = state.siswaId;
   } catch {
     state.sesiList = readLocal(LS_SESI).filter((s) => isVisibleToStudent(s) && filterByContext(s));
   }
@@ -234,6 +255,17 @@ async function loadAllJawabanSaya() {
     return;
   }
 
+  // Optimasi read: lewati query bila jawaban siswa yang sama masih segar.
+  if (
+    db()
+    && state.loadedForSiswa === state.siswaId
+    && state.jawabanLoadedAt
+    && (Date.now() - state.jawabanLoadedAt) < SISWA_KUIZ_CACHE_TTL_MS
+    && Object.keys(state.jawabanSaya).length
+  ) {
+    return;
+  }
+
   // One query for all answers of this student instead of N queries per session.
   if (db()) {
     try {
@@ -245,6 +277,8 @@ async function loadAllJawabanSaya() {
         }
       });
       state.jawabanSaya = map;
+      state.jawabanLoadedAt = Date.now();
+      state.loadedForSiswa = state.siswaId;
       return;
     } catch {
       // fallback below
