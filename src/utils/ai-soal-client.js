@@ -20,10 +20,12 @@ export { MaterialGenerationError as SoalGenerationError };
 export async function streamGenerateSoal({ input, signal, onDelta, onSoal, onDone, onError }) {
   let response;
   try {
-    response = await fetch(`${getApiBase()}/api/ai/generate-soal`, {
+    // Memakai fungsi serverless AI Materi yang sudah ter-deploy (dispatch via
+    // kind: 'soal'), sehingga logika & profil AI-nya sama persis dengan AI Materi.
+    response = await fetch(`${getApiBase()}/api/ai/generate-material-json`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input, stream: true }),
+      body: JSON.stringify({ kind: 'soal', input, stream: true }),
       signal,
     });
   } catch (err) {

@@ -11,9 +11,6 @@
     "api/ai/generate-rpm.js": {
       "maxDuration": 60
     },
-    "api/ai/generate-soal.js": {
-      "maxDuration": 300
-    },
     "api/ai/model-options.js": {
       "maxDuration": 10
     },
@@ -78,10 +75,6 @@
     {
       "source": "/api/ai/generate-rpm",
       "destination": "/api/ai/generate-rpm.js"
-    },
-    {
-      "source": "/api/ai/generate-soal",
-      "destination": "/api/ai/generate-soal.js"
     },
     {
       "source": "/firebase/(.*)",

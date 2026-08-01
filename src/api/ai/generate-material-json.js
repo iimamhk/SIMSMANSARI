@@ -231,6 +231,19 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // Delegasi ke generator soal bila body menandai kind: 'soal'. Ini sengaja
+  // dilakukan agar fitur AI Generate Soal berbagi fungsi serverless & resolusi
+  // profil AI admin yang sama dengan AI Materi (tanpa menambah fungsi baru,
+  // menjaga jumlah fungsi tetap di bawah batas plan Vercel).
+  try {
+    const peek = parseJsonBody(req);
+    if (peek && peek.kind === 'soal') {
+      return require('./generate-soal.js')(req, res);
+    }
+  } catch {
+    // Abaikan; lanjut ke alur generate materi normal di bawah.
+  }
+
   let input;
   let options;
   let revisionInstruction = '';
