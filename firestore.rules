@@ -301,9 +301,26 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
+    // Koleksi `settings` menyimpan dua jenis dokumen dengan sensitivitas berbeda:
+    //  - `app_config`  : konfigurasi non-rahasia (tahun ajaran & semester aktif,
+    //                    flag izin guru). Dibaca semua peran, ditulis admin.
+    //  - `ai`, `backup_drive` : kredensial OAuth Google Drive dan API key AI
+    //                    (terenkripsi AES-256-GCM), beserta folder tujuan dan
+    //                    riwayat backup. HANYA boleh diakses Admin SDK dari
+    //                    fungsi serverless di `src/api/`, tidak pernah dari
+    //                    browser. Klien yang bisa menulis dokumen ini dapat
+    //                    menghapus refresh token dan mematikan seluruh backup.
+    //
+    // Karena itu `settings` TIDAK dimasukkan ke allow-list wildcard di bawah:
+    // hanya `app_config` yang diizinkan secara eksplisit, sisanya jatuh ke
+    // penolakan default `match /{document=**}`.
+    match /settings/app_config {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.role == 'admin';
+    }
+
     match /{collectionName}/{documentId} {
        allow read, write: if request.auth != null && collectionName in [
-        'settings',
         'mata_pelajaran',
         'kelas',
         'tahun_ajaran',

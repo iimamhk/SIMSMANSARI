@@ -215,33 +215,59 @@ export function getFormatIcon(format) {
   return icons[format] || icons.xlsx;
 }
 
-// Validasi integritas file backup
+// Validasi integritas file backup.
+//
+// Mengembalikan valid:false bila berkas tidak dapat dibuka sebagai workbook
+// Excel atau tidak berisi sheet apa pun. Sebelumnya fungsi ini menelan error
+// parsing lalu selalu mengembalikan valid:true, sehingga berkas rusak (atau
+// berkas apa pun yang di-rename menjadi .xlsx) lolos pemeriksaan pemanggil.
 export async function validateBackupFile(file) {
   const arrayBuffer = await file.arrayBuffer();
   const checksum = await calculateSHA256(arrayBuffer);
 
-  // Coba baca sebagai Excel untuk validasi struktur
-  let sheetCount = 0;
-  let totalRows = 0;
-  let sheetsInfo = [];
+  const baseResult = {
+    valid: false,
+    checksum,
+    fileSize: arrayBuffer.byteLength,
+    sheetCount: 0,
+    totalRows: 0,
+    sheetsInfo: [],
+    reason: '',
+  };
 
+  if (!arrayBuffer.byteLength) {
+    return { ...baseResult, reason: 'Berkas kosong (0 byte).' };
+  }
+
+  let workbook;
   try {
     const ExcelJS = await loadExcelJS();
-    const workbook = new ExcelJS.Workbook();
+    workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);
+  } catch (error) {
+    // Bukan berkas Excel yang valid, terenkripsi/diproteksi, atau ExcelJS gagal dimuat.
+    const detail = String(error?.message || '');
+    const reason = /central directory|zip file/i.test(detail)
+      ? 'Berkas ini bukan file Excel (.xlsx) yang valid. Pastikan Anda memilih berkas backup, bukan berkas lain yang diganti namanya.'
+      : detail
+        ? `Berkas tidak dapat dibaca sebagai Excel: ${detail}`
+        : 'Berkas tidak dapat dibaca sebagai Excel.';
+    return { ...baseResult, reason };
+  }
 
-    sheetCount = workbook.worksheets.length;
-    workbook.worksheets.forEach((sheet) => {
-      const rowCount = sheet.rowCount || 0;
-      totalRows += rowCount;
-      sheetsInfo.push({
-        name: sheet.name,
-        rowCount,
-        colCount: sheet.columnCount || 0,
-      });
-    });
-  } catch (e) {
-    // Bukan file Excel valid atau error parsing
+  const sheetsInfo = workbook.worksheets.map((sheet) => ({
+    name: sheet.name,
+    rowCount: sheet.rowCount || 0,
+    colCount: sheet.columnCount || 0,
+  }));
+  const sheetCount = sheetsInfo.length;
+  const totalRows = sheetsInfo.reduce((sum, sheet) => sum + sheet.rowCount, 0);
+
+  if (sheetCount === 0) {
+    return { ...baseResult, reason: 'Berkas Excel tidak memiliki sheet apa pun.' };
+  }
+  if (totalRows === 0) {
+    return { ...baseResult, sheetCount, sheetsInfo, reason: 'Berkas Excel tidak memiliki baris data.' };
   }
 
   return {
@@ -251,6 +277,7 @@ export async function validateBackupFile(file) {
     sheetCount,
     totalRows,
     sheetsInfo,
+    reason: '',
   };
 }
 

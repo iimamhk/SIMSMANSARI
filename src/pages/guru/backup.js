@@ -1,21 +1,16 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
-import { showBackupReminder } from '../../utils/backup-reminder.js';
 import { checkDriveStatus, isDriveUploadEnabled, setDriveUploadEnabled } from '../../utils/drive-upload.js';
 import {
   exportGuruBackupExcel,
-  exportBackupMultiFormat,
   exportSelectiveBackupExcel,
-  getLastBackupTimestamp,
-  getDaysSinceLastBackup,
-  isBackupRequiredToday,
   BACKUP_DATA_TYPES,
-  EXPORT_FORMATS,
-  RESTORE_TYPES,
-  previewBackupFile,
-  restoreFromBackup,
-  buildGuruBackupWorkbook,
   getSession,
 } from '../../utils/backup-excel.js';
+import {
+  getExportStatus,
+  describeReadCost,
+  ESTIMATED_READS_PER_ASSIGNMENT,
+} from '../../utils/backup-policy.js';
 import {
   getBackupHistory,
   getBackupStats,
@@ -27,9 +22,7 @@ import {
   getBackupTypeLabel,
   getBackupTypeBadgeClass,
   getDestinationMeta,
-  getFormatLabel,
   getFormatIcon,
-  validateBackupFile,
 } from '../../utils/backup-history.js';
 
 function formatDateTimeDisplay(date) {
@@ -59,6 +52,27 @@ function formatDateShort(date) {
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+// ---------------------------------------------------------------------------
+// Kebijakan halaman ini
+//
+// 1. EKSPOR EXCEL SAJA. Pilihan format CSV dan JSON dibuang: keluaran CSV
+//    sebenarnya rusak (setiap sheet menjadi teks "[object Promise]" karena
+//    pemanggilan async yang tidak di-await), dan kunci pada JSON diambil dari
+//    baris judul sehingga tidak bermakna. Keduanya tetap melaporkan "Backup
+//    Berhasil", yang lebih buruk daripada tidak ada pilihan itu sama sekali.
+//
+// 2. SATU KALI PER MINGGU. Satu ekspor membaca ribuan dokumen Firestore. Batas
+//    ini melindungi kuota baca harian yang dipakai bersama seluruh aplikasi.
+//    Aturannya ada di src/utils/backup-policy.js.
+//
+// 3. DATA MILIK SENDIRI SAJA. Daftar kelas hanya berasal dari
+//    getTeachingAssignmentsForUser (difilter guru_id), dan sebelum ekspor
+//    dijalankan setiap pilihan diverifikasi ulang terhadap daftar itu.
+//
+// 4. TIDAK ADA MENU BAYANGAN. Tab Restore, tombol "Preview", dan tiga sakelar
+//    pengaturan yang tidak terhubung ke apa pun sudah dibuang, bukan disembunyikan.
+// ---------------------------------------------------------------------------
 
 // Kartu riwayat backup (desain premium, jelas di mobile & desktop).
 function renderHistoryCard(h) {
@@ -121,63 +135,68 @@ let isLoadingAssignments = false;
 export async function renderGuruBackupPage(container) {
   const session = getSession();
   const userName = session?.user?.nama || 'Bapak/Ibu Guru';
-  const last = getLastBackupTimestamp();
-  const daysSince = getDaysSinceLastBackup();
-  const required = isBackupRequiredToday();
-  const isFriday = new Date().getDay() === 5;
   const history = getBackupHistory();
   const stats = getBackupStats();
+  const policy = getExportStatus();
 
-  // Load assignments for selective backup
-  await loadAssignmentsForSelectiveBackup();
+  // Daftar kelas TIDAK dimuat di sini. Dulu `loadAssignmentsForSelectiveBackup()`
+  // dipanggil setiap kali halaman dibuka, sehingga membuka tab Riwayat pun ikut
+  // menembak query Firestore. Sekarang daftar hanya dimuat ketika guru benar-benar
+  // memilih mode "Selektif" (lihat initBackupModeToggle).
 
-  let statusCard = '';
-  if (required) {
-    statusCard = `
-      <div class="relative overflow-hidden rounded-3xl border-2 ${isFriday ? 'border-rose-200 bg-gradient-to-br from-rose-50 to-white' : 'border-amber-200 bg-gradient-to-br from-amber-50 to-white'} p-5 shadow-sm">
-        <div class="flex items-start gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${isFriday ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}">
-            <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="text-lg font-bold text-slate-900">${isFriday ? 'Wajib Backup Hari Ini' : 'Backup Diperlukan'}</h2>
-              <span class="rounded-full ${isFriday ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'} px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">${isFriday ? 'Jadwal Jumat' : `${daysSince} hari lalu`}</span>
-            </div>
-            <p class="mt-1 text-sm text-slate-600">${isFriday ? 'Hari Jumat adalah jadwal wajib backup data. Popup tidak dapat ditutup sampai backup selesai.' : `Sudah ${daysSince} hari sejak backup terakhir. Segera cadangkan data Anda.`}</p>
-          </div>
+  const TONE = {
+    ok: {
+      wrap: 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white',
+      icon: 'bg-emerald-100 text-emerald-600',
+      chip: 'bg-emerald-100 text-emerald-700',
+      svg: '<path d="M20 6L9 17l-5-5"/>',
+    },
+    warn: {
+      wrap: 'border-amber-200 bg-gradient-to-br from-amber-50 to-white',
+      icon: 'bg-amber-100 text-amber-600',
+      chip: 'bg-amber-100 text-amber-700',
+      svg: '<path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/>',
+    },
+    info: {
+      wrap: 'border-sky-200 bg-gradient-to-br from-sky-50 to-white',
+      icon: 'bg-sky-100 text-sky-600',
+      chip: 'bg-sky-100 text-sky-700',
+      svg: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+    },
+  };
+  const tone = TONE[policy.badgeTone] || TONE.info;
+
+  const statusCard = `
+    <div class="relative overflow-hidden rounded-3xl border-2 ${tone.wrap} p-5 shadow-sm">
+      <div class="flex items-start gap-4">
+        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${tone.icon}">
+          <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${tone.svg}</svg>
         </div>
-      </div>`;
-  } else if (last) {
-    statusCard = `
-      <div class="relative overflow-hidden rounded-3xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
-        <div class="flex items-start gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-            <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-lg font-bold text-slate-900">${escapeHtml(policy.title)}</h2>
+            <span class="rounded-full ${tone.chip} px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">${escapeHtml(policy.badgeLabel)}</span>
           </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h2 class="text-lg font-bold text-slate-900">Data Aman</h2>
-              <span class="rounded-full bg-emerald-100 text-emerald-700 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">Terbackup</span>
-            </div>
-            <p class="mt-1 text-sm text-slate-600">Backup terakhir: <strong>${formatDateTimeDisplay(last.at)}</strong>. Disarankan backup rutin setiap minggu.</p>
-          </div>
+          <p class="mt-1.5 text-sm leading-relaxed text-slate-600">${escapeHtml(policy.detail)}</p>
         </div>
-      </div>`;
-  } else {
-    statusCard = `
-      <div class="relative overflow-hidden rounded-3xl border-2 border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
-        <div class="flex items-start gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
-            <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-          </div>
-          <div class="min-w-0 flex-1">
-            <h2 class="text-lg font-bold text-slate-900">Belum Pernah Backup</h2>
-            <p class="mt-1 text-sm text-slate-600">Mulai cadangkan data absensi & penilaian Anda untuk menghindari kehilangan data.</p>
-          </div>
+      </div>
+    </div>`;
+
+  // Penjelasan aturan satu kali per minggu, ditulis dengan alasannya agar guru
+  // memahami batas ini sebagai perlindungan bersama, bukan sekadar larangan.
+  const quotaNotice = `
+    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex items-start gap-3">
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         </div>
-      </div>`;
-  }
+        <div class="min-w-0 text-sm leading-relaxed text-slate-600">
+          <p class="font-bold text-slate-900">Mengapa ekspor dibatasi satu kali per minggu?</p>
+          <p class="mt-1">Satu kali ekspor membaca ribuan baris data dari database sekolah. Database ini punya batas pemakaian harian yang dipakai bersama oleh semua guru dan siswa. Bila batas itu habis, seluruh aplikasi berhenti dapat membuka absensi, nilai, dan materi sampai hari berikutnya.</p>
+          <p class="mt-1">Karena itu setiap guru mengekspor sekali dalam seminggu. Cadangan lengkap seluruh sekolah tetap dibuat otomatis oleh sistem setiap <strong>hari Minggu dini hari</strong>, saat tidak ada kegiatan mengajar.</p>
+        </div>
+      </div>
+    </div>`;
 
   const statsCards = `
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -211,17 +230,6 @@ export async function renderGuruBackupPage(container) {
     </div>
   `;
 
-  const restoreTypesHtml = Object.values(RESTORE_TYPES).map((rt) => `
-    <label class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:bg-slate-50 transition cursor-pointer">
-      <input type="checkbox" name="restoreTypes" value="${rt.key}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
-      <div class="flex-1">
-        <p class="font-medium text-slate-900">${rt.label}</p>
-        <p class="text-xs text-slate-500">${rt.description}</p>
-      </div>
-      ${getFormatIcon('xlsx')}
-    </label>
-  `).join('');
-
   const pageHtml = `
     <div class="space-y-5">
       <section class="relative overflow-hidden rounded-[28px] border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-teal-50 p-5 shadow-[0_24px_70px_-42px_rgba(16,185,129,0.55)] sm:p-6">
@@ -233,13 +241,15 @@ export async function renderGuruBackupPage(container) {
             Pusat Backup Data
           </div>
           <h2 class="text-2xl font-bold text-slate-900 sm:text-3xl">Backup Data Absensi & Penilaian</h2>
-          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">Cadangkan seluruh data absensi dan nilai per kelas yang Anda ajarkan. Mendukung backup selektif, multi-format (Excel/CSV/JSON), riwayat lengkap, dan restore data.</p>
+          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">Salin data absensi dan nilai kelas yang Anda ampu menjadi berkas Excel siap kerja. Satu kali ekspor per minggu, dengan riwayat lengkap di perangkat ini.</p>
         </div>
       </section>
 
       ${statusCard}
 
       ${statsCards}
+
+      ${quotaNotice}
 
       <!-- Tab Navigation -->
       <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -249,10 +259,7 @@ export async function renderGuruBackupPage(container) {
           </button>
           <button data-tab="history" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
             <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Riwayat</span>
-          </button>
-          <button data-tab="restore" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
-            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M20 9A8 8 0 006.3 5.3L4 8M4 15a8 8 0 0013.7 2.7L20 16"/></svg>Restore</span>
-          </button>
+          </button>${restoreTabButtonHtml}
           <button data-tab="settings" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
             <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H22a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Pengaturan</span>
           </button>
@@ -355,22 +362,6 @@ export async function renderGuruBackupPage(container) {
             <p id="destination-hint" class="mt-2 text-xs text-slate-500"></p>
           </section>
 
-          <!-- Format Selection -->
-          <section class="mb-6">
-            <div class="mb-3 flex items-center gap-2">
-              <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">2</span>
-              <h3 class="text-base font-bold text-slate-900">Format Ekspor</h3>
-            </div>
-            <div class="flex flex-wrap gap-3" id="format-options">
-              ${Object.values(EXPORT_FORMATS).map((f) => `
-                <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 hover:bg-slate-50 cursor-pointer transition">
-                  <input type="radio" name="exportFormat" value="${f.key}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" ${f.key === 'xlsx' ? 'checked' : ''}>
-                  <span class="font-medium text-slate-900">${getFormatIcon(f.key)} ${f.label}</span>
-                </label>
-              `).join('')}
-            </div>
-          </section>
-
           <!-- Action Buttons -->
           <section>
             <div class="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm sm:p-6">
@@ -380,10 +371,6 @@ export async function renderGuruBackupPage(container) {
                   <p class="mt-1 text-sm text-slate-500" id="backup-action-desc">Pilih tujuan backup di atas, lalu klik tombol backup.</p>
                 </div>
                 <div class="flex flex-col gap-3 sm:flex-row">
-                  <button id="btn-preview-backup" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-6 py-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 transition">
-                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                    Preview (unduh)
-                  </button>
                   <button id="btn-start-backup" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95">
                     <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
                     <span id="btn-start-backup-label">Backup Sekarang</span>
@@ -453,56 +440,6 @@ export async function renderGuruBackupPage(container) {
           </section>
         </div>
 
-        <!-- TAB: RESTORE -->
-        <div id="tab-restore" class="tab-panel hidden p-5 sm:p-6">
-          <section class="mb-6">
-            <h3 class="mb-2 text-lg font-bold text-slate-900">Restore Data dari File Backup</h3>
-            <p class="text-sm text-slate-500">Unggah file backup Excel (.xlsx) untuk memulihkan data ke Firebase. Pilih tipe data yang ingin direstore.</p>
-          </section>
-          <section class="mb-6">
-            <div class="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-6 text-center hover:border-emerald-400 hover:bg-emerald-50 transition" id="restore-dropzone">
-              <input type="file" id="restore-file-input" accept=".xlsx,.xls" class="hidden">
-              <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-              <p class="mt-3 text-sm font-medium text-slate-700">Seret & lepas file Excel di sini, atau klik untuk memilih</p>
-              <p class="mt-1 text-xs text-slate-500">Format: .xlsx (backup dari SIM SMANSARI)</p>
-            </div>
-            <div id="restore-file-info" class="hidden mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  ${getFormatIcon('xlsx')}
-                  <div>
-                    <p class="font-medium text-emerald-800" id="restore-file-name"></p>
-                    <p class="text-sm text-emerald-700" id="restore-file-details"></p>
-                  </div>
-                </div>
-                <button id="btn-remove-restore-file" class="text-emerald-600 hover:text-emerald-800">Hapus</button>
-              </div>
-            </div>
-          </section>
-          <section class="mb-6" id="restore-options" style="display: none;">
-            <h4 class="mb-3 font-bold text-slate-900">Pilih Tipe Data untuk Restore</h4>
-            <div class="space-y-2" id="restore-type-checkboxes">
-              ${restoreTypesHtml}
-            </div>
-            <p class="mt-3 text-sm text-amber-700"><strong>Peringatan:</strong> Restore akan menimpa data yang ada di Firebase untuk tipe data yang dipilih. Pastikan Anda memiliki backup terbaru sebelum melanjutkan.</p>
-          </section>
-          <section>
-            <button id="btn-start-restore" type="button" disabled class="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-300 px-6 py-3 text-sm font-bold text-slate-500 cursor-not-allowed">
-              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7"/><path d="M9 7V4a2 2 0 012-2h2a2 2 0 012 2v3"/></svg>
-              Mulai Restore
-            </button>
-            <div id="restore-progress-box" class="hidden mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
-              <div class="flex items-center gap-3">
-                <svg class="h-5 w-5 animate-spin text-sky-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                <p id="restore-progress-text" class="text-sm font-medium text-slate-600">Memulai restore...</p>
-              </div>
-              <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                <div id="restore-progress-bar" class="h-full w-0 bg-gradient-to-r from-sky-500 to-emerald-500 transition-all duration-300"></div>
-              </div>
-            </div>
-          </section>
-        </div>
-
         <!-- TAB: SETTINGS -->
         <div id="tab-settings" class="tab-panel hidden p-5 sm:p-6 space-y-6">
           <section>
@@ -526,29 +463,18 @@ export async function renderGuruBackupPage(container) {
             </div>
           </section>
           <section>
-            <h3 class="mb-4 text-lg font-bold text-slate-900">Pengaturan Backup Otomatis</h3>
-            <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
-              <label class="flex items-center justify-between">
-                <div>
-                  <p class="font-medium text-slate-900">Backup Otomatis Setiap Jumat</p>
-                  <p class="text-sm text-slate-500">Otomatis menjalankan backup penuh setiap Jumat jam 15:00</p>
+            <h3 class="mb-4 text-lg font-bold text-slate-900">Backup Otomatis Sekolah</h3>
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+              <div class="flex items-start gap-3">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                  <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9"/></svg>
                 </div>
-                <input type="checkbox" id="auto-backup-friday" class="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" ${localStorage.getItem('auto_backup_friday') === 'true' ? 'checked' : ''}>
-              </label>
-              <label class="flex items-center justify-between">
-                <div>
-                  <p class="font-medium text-slate-900">Notifikasi Email Backup</p>
-                  <p class="text-sm text-slate-500">Kirim notifikasi email setelah backup selesai (memerlukan konfigurasi server)</p>
+                <div class="min-w-0 text-sm leading-relaxed text-slate-600">
+                  <p class="font-medium text-slate-900">Dijalankan sistem setiap Minggu dini hari</p>
+                  <p class="mt-1">Cadangan lengkap seluruh data sekolah dibuat otomatis oleh server, bukan oleh perangkat Bapak/Ibu. Karena itu tidak ada pengaturan jadwal yang perlu diatur di sini.</p>
+                  <p class="mt-1">Ekspor Excel di halaman ini bersifat pelengkap: gunanya agar Bapak/Ibu memegang salinan sendiri yang dapat dibuka dan dilanjutkan tanpa aplikasi.</p>
                 </div>
-                <input type="checkbox" id="email-notification" class="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" disabled>
-              </label>
-              <label class="flex items-center justify-between">
-                <div>
-                  <p class="font-medium text-slate-900">Simpan Riwayat Backup</p>
-                  <p class="text-sm text-slate-500">Menyimpan metadata riwayat backup di browser (localStorage)</p>
-                </div>
-                <input type="checkbox" id="save-history" class="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked disabled>
-              </label>
+              </div>
             </div>
           </section>
           <section>
@@ -585,7 +511,6 @@ export async function renderGuruBackupPage(container) {
   initDestinationToggle(container);
   initBackupActions(container);
   initHistoryActions(container);
-  initRestoreActions(container);
   initSettingsActions(container);
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
@@ -675,10 +600,6 @@ function initTabNavigation(container) {
       });
 
       currentTab = tabName;
-
-      if (tabName === 'backup') {
-        renderClassCheckboxes(container);
-      }
     });
   });
 }
@@ -701,7 +622,9 @@ function initBackupModeToggle(container) {
       const mode = btn.querySelector('input').value;
       if (mode === 'selective') {
         selectiveOptions.classList.remove('hidden');
-        renderClassCheckboxes(container);
+        // Daftar kelas dimuat SEKARANG, bukan saat halaman dibuka. Guru yang
+        // hanya melihat Riwayat atau Pengaturan tidak perlu membebani kuota baca.
+        loadAssignmentsForSelectiveBackup().then(() => renderClassCheckboxes(container));
       } else {
         selectiveOptions.classList.add('hidden');
       }
@@ -709,9 +632,10 @@ function initBackupModeToggle(container) {
     });
   });
 
-  // Refresh button for selective backup class list
+  // Tombol muat ulang daftar kelas untuk backup selektif.
   container.querySelector('#btn-refresh-classes')?.addEventListener('click', () => {
-    renderClassCheckboxes(container);
+    assignmentsCache = [];
+    loadAssignmentsForSelectiveBackup().then(() => renderClassCheckboxes(container));
   });
 }
 
@@ -733,7 +657,6 @@ function initDestinationToggle(container) {
   const destOpts = Array.from(container.querySelectorAll('.dest-opt'));
   const hint = container.querySelector('#destination-hint');
   const startLabel = container.querySelector('#btn-start-backup-label');
-  const previewBtn = container.querySelector('#btn-preview-backup');
 
   const HINTS = {
     local: 'Berkas backup akan diunduh ke perangkat ini saja.',
@@ -756,9 +679,7 @@ function initDestinationToggle(container) {
       if (check) check.classList.toggle('opacity-0', !isActive);
     });
     if (hint) hint.textContent = HINTS[value] || '';
-    if (startLabel) startLabel.textContent = LABELS[value] || 'Backup Sekarang';
-    // Preview selalu berupa unduhan lokal; sembunyikan bila tujuan hanya Drive.
-    if (previewBtn) previewBtn.style.display = value === 'drive' ? 'none' : '';
+    if (startLabel) startLabel.textContent = LABELS[value] || 'Ekspor Sekarang';
 
     // Tampilkan status koneksi Drive saat tujuan menyertakan Drive.
     if (inlineStatus) {
@@ -792,13 +713,30 @@ function initDestinationToggle(container) {
 
 function initBackupActions(container) {
   const startBtn = container.querySelector('#btn-start-backup');
-  const previewBtn = container.querySelector('#btn-preview-backup');
   const progressBox = container.querySelector('#backup-progress-box');
   const progressText = container.querySelector('#backup-progress-text');
   const progressBar = container.querySelector('#backup-progress-bar');
   const successBox = container.querySelector('#backup-success-box');
   const successText = container.querySelector('#backup-success-text');
   const successDrive = container.querySelector('#backup-success-drive');
+
+  // Kuota mingguan sudah habis: matikan tombol dan jelaskan alasannya, jangan
+  // biarkan guru menekan tombol lalu ditolak dengan pesan kesalahan.
+  const policy = getExportStatus();
+  if (!policy.allowed && startBtn) {
+    startBtn.disabled = true;
+    startBtn.classList.remove('bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'text-white', 'shadow-lg', 'shadow-emerald-500/30', 'hover:-translate-y-0.5', 'hover:shadow-xl', 'active:scale-95');
+    startBtn.classList.add('bg-slate-200', 'text-slate-500', 'cursor-not-allowed');
+    const label = container.querySelector('#btn-start-backup-label');
+    if (label) label.textContent = 'Sudah ekspor minggu ini';
+    startBtn.title = `Ekspor berikutnya tersedia mulai ${policy.nextAvailableText}.`;
+    const titleEl = container.querySelector('#backup-action-title');
+    const descEl = container.querySelector('#backup-action-desc');
+    if (titleEl) titleEl.textContent = 'Ekspor minggu ini sudah selesai';
+    if (descEl) {
+      descEl.textContent = `Berkas Excel Anda sudah tersimpan. Ekspor berikutnya dapat dilakukan mulai ${policy.nextAvailableText}. Berkas lama tetap ada di tab Riwayat.`;
+    }
+  }
 
   const updateProgress = (text, percent) => {
     if (successBox) successBox.classList.add('hidden');
@@ -822,103 +760,136 @@ function initBackupActions(container) {
     }
   };
 
-  // isPreview memaksa tujuan 'local' (hanya unduh untuk melihat isi berkas).
-  const runBackup = async (isPreview = false) => {
-    const buttons = [startBtn, previewBtn].filter(Boolean);
-    buttons.forEach((b) => { b.disabled = true; b.classList.add('opacity-60', 'cursor-not-allowed'); });
+  const runBackup = async () => {
+    // Pemeriksaan ulang tepat sebelum jalan. Tombol memang sudah dimatikan bila
+    // kuota habis, tapi halaman bisa terbuka lama sehingga statusnya berubah.
+    const current = getExportStatus();
+    if (!current.allowed) {
+      alert(
+        'Ekspor minggu ini sudah dilakukan.\n\n'
+        + `${current.detail}\n\n`
+        + 'Batas satu kali per minggu ini menjaga agar kuota database sekolah '
+        + 'tidak habis, karena kuota tersebut dipakai bersama oleh semua guru dan siswa.'
+      );
+      return;
+    }
+
+    if (startBtn) { startBtn.disabled = true; startBtn.classList.add('opacity-60', 'cursor-not-allowed'); }
 
     try {
       const mode = container.querySelector('input[name="backupMode"]:checked')?.value || 'full';
-      const format = container.querySelector('input[name="exportFormat"]:checked')?.value || 'xlsx';
-      const destination = isPreview
-        ? 'local'
-        : (container.querySelector('input[name="backupDestination"]:checked')?.value || 'local');
+      const destination = container.querySelector('input[name="backupDestination"]:checked')?.value || 'local';
       const dataTypes = Array.from(container.querySelectorAll('input[name="dataType"]:checked')).map((cb) => cb.value);
-      const selectedAssignments = Array.from(container.querySelectorAll('input[name="assignment"]:checked')).map((cb) => cb.value)
+
+      // Verifikasi pemilikan data: setiap kelas yang dipilih harus benar-benar
+      // ada di daftar pengajaran milik guru ini. assignmentsCache hanya diisi
+      // getTeachingAssignmentsForUser (difilter guru_id), dan pencarian .find
+      // di bawah membuang nilai apa pun yang tidak berasal dari daftar itu —
+      // termasuk bila nilai checkbox diubah lewat DevTools.
+      const selectedAssignments = Array.from(container.querySelectorAll('input[name="assignment"]:checked'))
+        .map((cb) => cb.value)
         .map((id) => assignmentsCache.find((a) => a.id === id))
         .filter(Boolean);
-
-      // Bila tujuan menyertakan Drive, pastikan Drive siap sebelum memproses.
-      if (destination === 'drive' || destination === 'both') {
-        updateProgress('Memeriksa koneksi Google Drive...', 6);
-        const status = await checkDriveStatus();
-        if (!status.available) {
-          if (progressBox) progressBox.classList.add('hidden');
-          alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}`);
-          return;
-        }
-      }
-
-      updateProgress('Memeriksa data pengajaran...', 12);
 
       const context = (await import('../../utils/helpers.js')).getStoredContext();
       const session = getSession();
       const userId = session?.user?.username || context?.user_logged_in || '';
       const userName = session?.user?.nama || 'Guru';
 
-      if (mode === 'selective') {
-        if (!selectedAssignments.length) { alert('Pilih minimal satu kelas untuk backup selektif.'); return; }
-        if (!dataTypes.length) { alert('Pilih minimal satu tipe data untuk backup selektif.'); return; }
+      if (!userId) {
+        alert('Sesi Anda tidak terbaca. Silakan keluar lalu masuk kembali.');
+        return;
       }
+
+      if (mode === 'selective') {
+        if (!selectedAssignments.length) { alert('Pilih minimal satu kelas untuk ekspor selektif.'); return; }
+        if (!dataTypes.length) { alert('Pilih minimal satu jenis data untuk ekspor selektif.'); return; }
+        // Lapis kedua: tolak bila ada pilihan yang guru_id-nya bukan guru ini.
+        const foreign = selectedAssignments.filter((a) => {
+          const owner = String(a.guru_id || '').trim().toLowerCase();
+          return owner && owner !== String(userId).trim().toLowerCase();
+        });
+        if (foreign.length) {
+          alert('Ekspor dibatalkan: terdapat kelas yang bukan kelas Anda. Setiap guru hanya dapat mengekspor data kelas yang diampunya sendiri.');
+          return;
+        }
+      }
+
+      // Konfirmasi sekali, dengan biayanya dinyatakan terbuka. Ini satu-satunya
+      // kesempatan ekspor untuk minggu ini, jadi guru perlu tahu sebelum menekan.
+      const jumlahKelas = mode === 'selective' ? selectedAssignments.length : assignmentsCache.length;
+      const biaya = describeReadCost(jumlahKelas);
+      const tujuanTeks = destination === 'local'
+        ? 'diunduh ke perangkat ini'
+        : destination === 'drive'
+          ? 'diunggah ke Google Drive sekolah'
+          : 'diunduh ke perangkat dan diunggah ke Google Drive';
+      const konfirmasi = [
+        'Jalankan ekspor Excel sekarang?',
+        '',
+        `Mode      : ${mode === 'selective' ? 'Selektif (kelas terpilih)' : 'Penuh (semua kelas Anda)'}`,
+        `Hasil     : ${tujuanTeks}`,
+        biaya ? `Cakupan   : ${biaya}` : '',
+        '',
+        'Ini adalah ekspor Anda untuk minggu ini. Setelah selesai, tombol ekspor',
+        'akan terkunci sampai minggu depan.',
+      ].filter(Boolean).join('\n');
+      if (!confirm(konfirmasi)) return;
+
+      // Bila tujuan menyertakan Drive, pastikan Drive siap SEBELUM membaca data,
+      // supaya kuota baca tidak terpakai untuk ekspor yang pasti gagal diunggah.
+      if (destination === 'drive' || destination === 'both') {
+        updateProgress('Memeriksa koneksi Google Drive...', 6);
+        const status = await checkDriveStatus();
+        if (!status.available) {
+          if (progressBox) progressBox.classList.add('hidden');
+          alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}\n\nKuota database tidak terpakai, jadi Anda masih bisa mencoba lagi setelah admin mengatur Drive, atau pilih tujuan "Lokal".`);
+          return;
+        }
+      }
+
+      updateProgress('Membaca data pengajaran...', 12);
 
       const progress = (p) => {
         const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
         updateProgress(`Memproses ${p.label} (${p.current}/${p.total})...`, pct);
       };
 
-      let result;
-      if (format !== 'xlsx') {
-        // Format non-Excel (CSV/JSON) memakai jalur multi-format.
-        const { exportBackupMultiFormat, EXPORT_FORMATS } = await import('../../utils/backup-excel.js');
-        const fmt = Object.values(EXPORT_FORMATS).find((f) => f.key === format) || EXPORT_FORMATS.XLSX;
-        const assignmentsForFmt = mode === 'selective'
-          ? selectedAssignments
-          : assignmentsCache;
-        const typesForFmt = mode === 'selective'
-          ? dataTypes
-          : Object.values(BACKUP_DATA_TYPES).map((d) => d.key);
-        result = await exportBackupMultiFormat(context, userId, userName, assignmentsForFmt, typesForFmt, fmt, progress, { destination });
-      } else if (mode === 'full') {
-        result = await exportGuruBackupExcel(progress, { destination });
-      } else {
-        result = await exportSelectiveBackupExcel(context, userId, userName, selectedAssignments, dataTypes, progress, { destination });
-      }
+      const result = mode === 'full'
+        ? await exportGuruBackupExcel(progress, { destination })
+        : await exportSelectiveBackupExcel(context, userId, userName, selectedAssignments, dataTypes, progress, { destination });
 
       updateProgress('Selesai!', 100);
 
-      // Pesan hasil sesuai tujuan.
       const drive = result?.drive || {};
       const driveFolderLink = drive.folderLink || drive.webViewLink || '';
       let doneMsg = '';
-      if (destination === 'local') doneMsg = 'Berkas telah diunduh ke perangkat Anda.';
+      if (destination === 'local') doneMsg = 'Berkas Excel sudah diunduh ke perangkat Anda. Buka sheet "Petunjuk" di dalamnya untuk cara melanjutkan pekerjaan.';
       else if (destination === 'drive') {
-        doneMsg = drive.uploaded ? 'Berkas berhasil diunggah ke Google Drive sekolah.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
+        doneMsg = drive.uploaded ? 'Berkas Excel berhasil diunggah ke Google Drive sekolah.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
       } else {
         doneMsg = drive.uploaded
-          ? 'Berkas diunduh ke perangkat dan diunggah ke Google Drive.'
+          ? 'Berkas Excel diunduh ke perangkat dan diunggah ke Google Drive.'
           : `Berkas diunduh ke perangkat. Unggah Drive gagal: ${drive.reason || 'terjadi kesalahan.'}`;
       }
 
-      if (isPreview) {
-        if (progressBox) progressBox.classList.add('hidden');
-        showSuccess('Preview berhasil diunduh ke perangkat Anda.', '');
-      } else {
-        showSuccess(doneMsg, drive.uploaded ? driveFolderLink : '');
-        // Muat ulang halaman agar riwayat & statistik ikut ter-update,
-        // beri jeda agar guru sempat melihat tombol folder Drive.
-        setTimeout(() => { renderGuruBackupPage(container); }, drive.uploaded && driveFolderLink ? 3500 : 1500);
-      }
+      showSuccess(doneMsg, drive.uploaded ? driveFolderLink : '');
+      // Muat ulang halaman agar status mingguan, riwayat, dan statistik ikut
+      // ter-update. Jeda diberi agar guru sempat melihat tombol folder Drive.
+      setTimeout(() => { renderGuruBackupPage(container); }, drive.uploaded && driveFolderLink ? 3500 : 1800);
     } catch (err) {
-      console.error('Backup error:', err);
+      console.error('Ekspor gagal:', err);
       if (progressBox) progressBox.classList.add('hidden');
-      alert(`Backup gagal: ${err?.message || 'Terjadi kesalahan.'}`);
+      alert(`Ekspor gagal: ${err?.message || 'Terjadi kesalahan.'}`);
     } finally {
-      buttons.forEach((b) => { b.disabled = false; b.classList.remove('opacity-60', 'cursor-not-allowed'); });
+      if (startBtn && getExportStatus().allowed) {
+        startBtn.disabled = false;
+        startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+      }
     }
   };
 
-  startBtn?.addEventListener('click', () => runBackup(false));
-  previewBtn?.addEventListener('click', () => runBackup(true));
+  startBtn?.addEventListener('click', () => runBackup());
 }
 
 function initHistoryActions(container) {
@@ -994,119 +965,7 @@ function initHistoryActions(container) {
   });
 }
 
-function initRestoreActions(container) {
-  const dropzone = container.querySelector('#restore-dropzone');
-  const fileInput = container.querySelector('#restore-file-input');
-  const fileInfo = container.querySelector('#restore-file-info');
-  const fileNameEl = container.querySelector('#restore-file-name');
-  const fileDetailsEl = container.querySelector('#restore-file-details');
-  const removeBtn = container.querySelector('#btn-remove-restore-file');
-  const restoreOptions = container.querySelector('#restore-options');
-  const startBtn = container.querySelector('#btn-start-restore');
-  const progressBox = container.querySelector('#restore-progress-box');
-  const progressText = container.querySelector('#restore-progress-text');
-  const progressBar = container.querySelector('#restore-progress-bar');
-
-  let selectedFile = null;
-
-  const updateProgress = (text, percent) => {
-    if (progressBox) progressBox.classList.remove('hidden');
-    if (progressText) progressText.textContent = text;
-    if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-  };
-
-  dropzone?.addEventListener('click', () => fileInput.click());
-  dropzone?.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('border-emerald-400', 'bg-emerald-50');
-  });
-  dropzone?.addEventListener('dragleave', () => dropzone.classList.remove('border-emerald-400', 'bg-emerald-50'));
-  dropzone?.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('border-emerald-400', 'bg-emerald-50');
-    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-  });
-  fileInput?.addEventListener('change', (e) => {
-    if (e.target.files.length) handleFile(e.target.files[0]);
-  });
-  removeBtn?.addEventListener('click', () => {
-    selectedFile = null;
-    fileInput.value = '';
-    fileInfo.classList.add('hidden');
-    dropzone.classList.remove('hidden');
-    restoreOptions.style.display = 'none';
-    startBtn.disabled = true;
-    startBtn.classList.add('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-    startBtn.classList.remove('bg-gradient-to-r', 'from-sky-500', 'to-emerald-500', 'text-white');
-  });
-
-  async function handleFile(file) {
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
-      alert('Format file tidak didukung. Gunakan .xlsx atau .xls');
-      return;
-    }
-
-    updateProgress('Memvalidasi file...', 10);
-    const validation = await validateBackupFile(file);
-    if (!validation.valid) {
-      alert('File tidak valid atau rusak.');
-      return;
-    }
-
-    selectedFile = file;
-    fileNameEl.textContent = file.name;
-    fileDetailsEl.textContent = `${validation.sheetCount} sheet, ${validation.totalRows} baris total, ${formatFileSize(validation.fileSize)}`;
-    dropzone.classList.add('hidden');
-    fileInfo.classList.remove('hidden');
-    restoreOptions.style.display = 'block';
-    startBtn.disabled = false;
-    startBtn.classList.remove('bg-slate-300', 'text-slate-500', 'cursor-not-allowed');
-    startBtn.classList.add('bg-gradient-to-r', 'from-sky-500', 'to-emerald-500', 'text-white');
-  }
-
-  startBtn?.addEventListener('click', async () => {
-    if (!selectedFile) return;
-
-    const restoreTypes = Array.from(container.querySelectorAll('input[name="restoreTypes"]:checked')).map((cb) => cb.value);
-    if (!restoreTypes.length) {
-      alert('Pilih minimal satu tipe data untuk direstore.');
-      return;
-    }
-
-    if (!confirm(`Restore akan menimpa data di Firebase untuk: ${restoreTypes.join(', ')}. Lanjutkan?`)) return;
-
-    startBtn.disabled = true;
-    startBtn.classList.add('opacity-60', 'cursor-not-allowed');
-
-    try {
-      updateProgress('Memuat file backup...', 10);
-      const { restoreFromBackup } = await import('../../utils/backup-excel.js');
-      const result = await restoreFromBackup(selectedFile, restoreTypes, (p) => {
-        const pct = 20 + Math.floor((p.current / Math.max(p.total, 1)) * 70);
-        updateProgress(`${p.label} (${p.current}/${p.total})...`, pct);
-      });
-      updateProgress('Restore selesai!', 100);
-      setTimeout(() => {
-        alert(`Restore berhasil!\n${result.summary}`);
-        renderGuruBackupPage(container);
-      }, 500);
-    } catch (err) {
-      console.error('Restore error:', err);
-      updateProgress('Restore gagal', 0);
-      progressBox.classList.add('hidden');
-      startBtn.disabled = false;
-      startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
-      alert(`Restore gagal: ${err?.message || 'Terjadi kesalahan.'}`);
-    }
-  });
-}
-
 function initSettingsActions(container) {
-  const autoBackupFriday = container.querySelector('#auto-backup-friday');
-  autoBackupFriday?.addEventListener('change', () => {
-    localStorage.setItem('auto_backup_friday', autoBackupFriday.checked);
-  });
-
   // --- Google Drive ---
   const driveToggle = container.querySelector('#drive-upload-toggle');
   const driveBadge = container.querySelector('#drive-state-badge');

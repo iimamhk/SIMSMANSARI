@@ -11,15 +11,12 @@ import { getStoredContext } from './helpers.js';
 import { isDriveUploadEnabled, uploadBackupToDrive } from './drive-upload.js';
 import {
   getTeachingAssignmentsForUser,
-  getActiveTeachingAssignments,
   getClassMembers,
   getDocumentsWhere,
-  batchWrite,
 } from '../firebase/data-service.js';
 import { addBackupHistory, computeChecksum } from './backup-history.js';
 
 const EXCELJS_CDN = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
-const JSZIP_CDN = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
 const BACKUP_TS_KEY = 'simguru_backup_last_run';
 const INSTITUTION_NAME = 'SIM SMANSARI';
 
@@ -70,6 +67,18 @@ export function getLastBackupTimestamp() {
   }
 }
 
+/**
+ * Catat waktu ekspor terakhir. Penanda inilah yang dibaca src/utils/backup-policy.js
+ * untuk menentukan apakah kuota ekspor mingguan guru sudah dipakai, dan dibaca
+ * dasbor untuk menampilkan status "sudah tersimpan minggu ini".
+ *
+ * Aturan mingguannya sendiri (kapan boleh ekspor, apa keterangannya) berada di
+ * backup-policy.js supaya hanya ada satu sumber kebenaran. Fungsi lama
+ * getDaysSinceLastBackup() dan isBackupRequiredToday() dihapus dari berkas ini:
+ * keduanya memakai ukuran "7 hari berjalan" dan "setiap Jumat", yang berbeda dari
+ * aturan minggu kalender yang kini dipakai, sehingga dulu bisa memberi jawaban
+ * yang bertentangan dengan halaman Backup.
+ */
 export function setLastBackupTimestamp(meta = {}) {
   try {
     localStorage.setItem(BACKUP_TS_KEY, JSON.stringify({
@@ -77,22 +86,6 @@ export function setLastBackupTimestamp(meta = {}) {
       ...meta,
     }));
   } catch { /* ignore */ }
-}
-
-export function getDaysSinceLastBackup() {
-  const last = getLastBackupTimestamp();
-  if (!last?.at) return Infinity;
-  const ms = Date.now() - new Date(last.at).getTime();
-  return Math.floor(ms / 86400000);
-}
-
-function isFriday() {
-  return new Date().getDay() === 5;
-}
-
-export function isBackupRequiredToday() {
-  if (isFriday()) return true;
-  return getDaysSinceLastBackup() >= 7;
 }
 
 async function ensureExcelJSLoaded() {
@@ -106,20 +99,6 @@ async function ensureExcelJSLoaded() {
   });
   if (!window.ExcelJS || !window.ExcelJS.Workbook) {
     throw new Error('ExcelJS gagal dimuat.');
-  }
-}
-
-async function ensureJSZipLoaded() {
-  if (window.JSZip) return;
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = JSZIP_CDN;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Gagal memuat JSZip dari CDN. Periksa koneksi internet.'));
-    document.head.appendChild(s);
-  });
-  if (!window.JSZip) {
-    throw new Error('JSZip gagal dimuat.');
   }
 }
 
@@ -165,6 +144,63 @@ function formatDateTimeDisplay(date) {
   } catch {
     return String(date);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helper rumus Excel
+//
+// Sel angka pada berkas backup ditulis sebagai RUMUS, bukan angka mati, supaya
+// guru dapat melanjutkan pekerjaan di Excel bila aplikasi tidak dapat diakses:
+// mengubah satu status kehadiran atau satu nilai akan otomatis memperbarui
+// total, persentase, rata-rata, dan grade.
+//
+// Setiap rumus juga menyertakan `result` (hasil yang sudah dihitung sistem) agar
+// nilainya tetap tampil benar di penampil yang tidak menghitung ulang rumus,
+// misalnya pratinjau Google Drive, WhatsApp, atau ponsel.
+// ---------------------------------------------------------------------------
+
+/** Nomor kolom (1-based) menjadi huruf kolom Excel. 1 → A, 27 → AA. */
+function colLetter(column) {
+  let n = Number(column) || 1;
+  let letter = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(rem + 65) + letter;
+    n = (n - rem - 1) / 26;
+  }
+  return letter;
+}
+
+/**
+ * Bentuk nilai sel berupa rumus beserta hasil cache-nya.
+ * @param {string} formula Rumus tanpa tanda '=' di depan.
+ * @param {number|string} result Hasil yang sudah dihitung sistem.
+ */
+function formulaCell(formula, result) {
+  return { formula, result: result === undefined || result === null ? '' : result };
+}
+
+/** Alamat rentang satu baris pada kolom tertentu, mis. C6:G6. */
+function rowRange(startCol, endCol, row) {
+  return `${colLetter(startCol)}${row}:${colLetter(endCol)}${row}`;
+}
+
+/** Alamat rentang satu kolom pada rentang baris, mis. C6:C40. */
+function colRange(col, startRow, endRow) {
+  const L = colLetter(col);
+  return `${L}${startRow}:${L}${endRow}`;
+}
+
+/**
+ * Pasang AutoFilter pada tabel dengan satu baris header, sehingga guru dapat
+ * menyaring dan mengurutkan data langsung di Excel.
+ */
+function applyAutoFilter(sheet, headerRow, lastDataRow, totalCols) {
+  if (!(lastDataRow > headerRow) || totalCols < 1) return;
+  sheet.autoFilter = {
+    from: { row: headerRow, column: 1 },
+    to: { row: lastDataRow, column: totalCols },
+  };
 }
 
 function downloadBlob(blob, fileName) {
@@ -518,6 +554,7 @@ function buildRekapAbsensiSheet(workbook, assignment, members, absensi, context,
   });
 
   const sorted = sortMembers(members);
+  const firstDataRow = headerRowNum + 1;
   let dataRowNum = headerRowNum + 1;
   let n = 1;
   const totals = { H: 0, S: 0, I: 0, A: 0, K: 0, Total: 0 };
@@ -539,16 +576,27 @@ function buildRekapAbsensiSheet(workbook, assignment, members, absensi, context,
       applyDataCell(cell, dataRowNum, { fill: s[2], fontColor: s[3], bold: true });
       totals[s[0]] += s[1];
     });
-    applyDataCell(row.getCell(8), dataRowNum, { bold: true });
-    row.getCell(8).value = d.Total;
+    // Total = jumlah kolom H..K pada baris ini (rumus, ikut berubah bila diedit).
+    const totalCell = row.getCell(8);
+    applyDataCell(totalCell, dataRowNum, { bold: true });
+    totalCell.value = formulaCell(`SUM(${rowRange(3, 7, dataRowNum)})`, d.Total);
     totals.Total += d.Total;
+    // % Kehadiran = Hadir / Total, disimpan sebagai angka desimal + format persen
+    // supaya bisa diurutkan dan dihitung, bukan teks seperti "85,7%".
     const pctCell = row.getCell(9);
-    pctCell.value = `${pct.toFixed(1)}%`;
+    pctCell.value = formulaCell(
+      `IF(H${dataRowNum}=0,"",C${dataRowNum}/H${dataRowNum})`,
+      d.Total > 0 ? d.H / d.Total : ''
+    );
+    pctCell.numFmt = '0.0%';
     const pctFill = pct >= 80 ? COLOR.hadir : pct >= 60 ? COLOR.sakit : COLOR.alpa;
     const pctFont = pct >= 80 ? COLOR.hadirFont : pct >= 60 ? COLOR.sakitFont : COLOR.alpaFont;
     applyDataCell(pctCell, dataRowNum, { fill: pctFill, fontColor: pctFont, bold: true });
     dataRowNum++;
   });
+
+  const lastDataRow = dataRowNum - 1;
+  const hasData = lastDataRow >= firstDataRow;
 
   // Footer total
   const totalRow = sheet.getRow(dataRowNum);
@@ -556,14 +604,34 @@ function buildRekapAbsensiSheet(workbook, assignment, members, absensi, context,
   applyTotalCell(totalRow.getCell(1), '', 'center');
   applyTotalCell(totalRow.getCell(2), 'TOTAL KESELURUHAN', 'left');
   [['H'], ['S'], ['I'], ['A'], ['K']].forEach((s, i) => {
-    applyTotalCell(totalRow.getCell(i + 3), totals[s[0]], 'center');
+    const col = i + 3;
+    const value = hasData
+      ? formulaCell(`SUM(${colRange(col, firstDataRow, lastDataRow)})`, totals[s[0]])
+      : totals[s[0]];
+    applyTotalCell(totalRow.getCell(col), value, 'center');
   });
-  applyTotalCell(totalRow.getCell(8), totals.Total, 'center');
+  applyTotalCell(
+    totalRow.getCell(8),
+    hasData ? formulaCell(`SUM(${colRange(8, firstDataRow, lastDataRow)})`, totals.Total) : totals.Total,
+    'center'
+  );
   const grandPct = totals.Total > 0 ? (totals.H / totals.Total) * 100 : 0;
-  applyTotalCell(totalRow.getCell(9), `${grandPct.toFixed(1)}%`, 'center');
+  const grandPctCell = totalRow.getCell(9);
+  applyTotalCell(
+    grandPctCell,
+    hasData
+      ? formulaCell(
+        `IF(H${dataRowNum}=0,"",C${dataRowNum}/H${dataRowNum})`,
+        totals.Total > 0 ? totals.H / totals.Total : ''
+      )
+      : (totals.Total > 0 ? grandPct / 100 : ''),
+    'center'
+  );
+  grandPctCell.numFmt = '0.0%';
 
   // Freeze: keep No+Nama visible, keep header visible
   sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: headerRowNum }];
+  applyAutoFilter(sheet, headerRowNum, lastDataRow, headers.length);
 
   autoFitColumns(sheet, headerRowNum, 8, 32);
   sheet.getColumn(2).width = Math.max(sheet.getColumn(2).width || 20, 22);
@@ -594,10 +662,16 @@ function buildAbsensiHarianSheet(workbook, assignment, members, absensi, context
   });
 
   const sorted = sortMembers(members);
+  const firstDataRow = headerRowNum + 1;
   let dataRowNum = headerRowNum + 1;
   let n = 1;
   const dailyTotals = {};
   dates.forEach((d) => { dailyTotals[d] = { H: 0, S: 0, I: 0, A: 0 }; });
+
+  // Rentang kolom tanggal: dipakai rumus COUNTIF pada kolom rekap H/S/I/A.
+  const dateFirstCol = 3;
+  const dateLastCol = dates.length + 2;
+  const sumStart = dates.length + 3;
 
   sorted.forEach((m) => {
     const sd = bySiswa[m.siswa_id] || {};
@@ -621,15 +695,20 @@ function buildAbsensiHarianSheet(workbook, assignment, members, absensi, context
       else if (st === 'A') { A++; dailyTotals[d].A++; }
     });
 
-    const sumStart = dates.length + 3;
+    // Kolom rekap memakai COUNTIF pada baris tanggal, sehingga bila guru
+    // mengubah/menambah status harian, rekapnya ikut terhitung ulang.
+    const dailyRange = dates.length ? rowRange(dateFirstCol, dateLastCol, dataRowNum) : '';
     [['H', H, COLOR.hadir, COLOR.hadirFont], ['S', S, COLOR.sakit, COLOR.sakitFont],
      ['I', I, COLOR.izin, COLOR.izinFont], ['A', A, COLOR.alpa, COLOR.alpaFont]].forEach((s, i) => {
       const cell = row.getCell(sumStart + i);
-      cell.value = s[1];
+      cell.value = dailyRange ? formulaCell(`COUNTIF(${dailyRange},"${s[0]}")`, s[1]) : s[1];
       applyDataCell(cell, dataRowNum, { fill: s[2], fontColor: s[3], bold: true });
     });
     dataRowNum++;
   });
+
+  const lastDataRow = dataRowNum - 1;
+  const hasData = lastDataRow >= firstDataRow;
 
   // Footer total harian
   const totalRow = sheet.getRow(dataRowNum);
@@ -640,15 +719,27 @@ function buildAbsensiHarianSheet(workbook, assignment, members, absensi, context
     const dt = dailyTotals[d];
     const present = dt.H;
     const total = dt.H + dt.S + dt.I + dt.A;
-    applyTotalCell(totalRow.getCell(di + 3), total > 0 ? `${present}/${total}` : '', 'center');
+    const cached = total > 0 ? `${present}/${total}` : '';
+    let value = cached;
+    if (hasData) {
+      // Tampilkan "hadir/terisi" sebagai rumus agar mengikuti perubahan kolom.
+      const rng = colRange(di + 3, firstDataRow, lastDataRow);
+      const terisi = `COUNTIF(${rng},"H")+COUNTIF(${rng},"S")+COUNTIF(${rng},"I")+COUNTIF(${rng},"A")`;
+      value = formulaCell(`IF((${terisi})=0,"",COUNTIF(${rng},"H")&"/"&(${terisi}))`, cached);
+    }
+    applyTotalCell(totalRow.getCell(di + 3), value, 'center');
   });
-  const sumStart = dates.length + 3;
   ['H', 'S', 'I', 'A'].forEach((k, i) => {
+    const col = sumStart + i;
     const sum = Object.values(dailyTotals).reduce((acc, dt) => acc + dt[k], 0);
-    applyTotalCell(totalRow.getCell(sumStart + i), sum, 'center');
+    const value = hasData
+      ? formulaCell(`SUM(${colRange(col, firstDataRow, lastDataRow)})`, sum)
+      : sum;
+    applyTotalCell(totalRow.getCell(col), value, 'center');
   });
 
   sheet.views = [{ state: 'frozen', xSplit: 2, ySplit: headerRowNum }];
+  applyAutoFilter(sheet, headerRowNum, lastDataRow, totalCols);
   autoFitColumns(sheet, headerRowNum, 8, 22);
   sheet.getColumn(2).width = Math.max(sheet.getColumn(2).width || 20, 22);
   return sheet;
@@ -672,10 +763,16 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
   // Header institusi
   const startRow = writeInstitutionHeader(sheet, totalCols, 'REKAPITULASI NILAI SISWA', buildInfoPairs(assignment, context, userName));
 
-  // Row konfigurasi bobot
+  // Row keterangan cara Nilai Akhir dihitung.
+  //
+  // Catatan penting: label lama menyebut "Tugas 25% • UH 25% • PTS 25% • PAS 25%",
+  // padahal perhitungan di bawah adalah RATA-RATA SEDERHANA dari seluruh nilai
+  // yang terisi (setiap tugas, UH, PTS, dan PAS berbobot sama). Label diselaraskan
+  // dengan perhitungan yang sebenarnya agar tidak menyesatkan guru. Bila memang
+  // menginginkan bobot 25% per komponen, rumusnya harus diubah lebih dulu.
   const cfgRow = sheet.getRow(startRow);
   cfgRow.height = 16;
-  applyInfoCell(cfgRow.getCell(1), 'Bobot', 'Tugas 25% • UH 25% • PTS 25% • PAS 25%');
+  applyInfoCell(cfgRow.getCell(1), 'Nilai Akhir', 'Rata-rata semua nilai yang terisi (tugas, UH, PTS, PAS berbobot sama) • dibulatkan 1 desimal');
   sheet.mergeCells(startRow, 1, startRow, totalCols);
 
   // Header 2-level
@@ -857,8 +954,15 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
     if (allVals.length > 0) {
       akhir = Number((allVals.reduce((s, v) => s + v, 0) / allVals.length).toFixed(1));
     }
+    // Kolom 3 s/d (akhirCol-1) berisi SEMUA kolom nilai (tugas, UH, PTS, PAS)
+    // secara berurutan, jadi rata-ratanya cukup satu AVERAGE. AVERAGE otomatis
+    // mengabaikan sel kosong, persis seperti perhitungan sistem di atas.
+    const nilaiRange = rowRange(3, akhirCol - 1, dataRowNum);
     const akhirCell = row.getCell(akhirCol);
-    akhirCell.value = akhir;
+    akhirCell.value = formulaCell(
+      `IF(COUNT(${nilaiRange})=0,"",ROUND(AVERAGE(${nilaiRange}),1))`,
+      akhir
+    );
     let akhirFill = null, akhirFont = COLOR.hadirFont;
     if (typeof akhir === 'number') {
       if (akhir >= 80) { akhirFill = COLOR.hadir; }
@@ -879,12 +983,21 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
       else grade = 'D';
     }
     const gradeCell = row.getCell(gradeCol);
-    gradeCell.value = grade;
+    // Grade mengikuti kolom Nilai Akhir, jadi ikut berubah bila nilai diperbaiki.
+    const akhirRef = `${colLetter(akhirCol)}${dataRowNum}`;
+    gradeCell.value = formulaCell(
+      `IF(${akhirRef}="","",IF(${akhirRef}>=90,"A",IF(${akhirRef}>=85,"A-",IF(${akhirRef}>=80,"B+",IF(${akhirRef}>=75,"B",IF(${akhirRef}>=60,"C","D"))))))`,
+      grade
+    );
     const gSty = gradeStyle(grade);
     applyDataCell(gradeCell, dataRowNum, { align: 'center', bold: true, fill: gSty.fill, fontColor: gSty.fontColor });
 
     dataRowNum++;
   });
+
+  const firstDataRow = hdrSubRowNum + 1;
+  const lastDataRow = dataRowNum - 1;
+  const hasData = lastDataRow >= firstDataRow;
 
   // Footer statistik kelas
   const statRow = sheet.getRow(dataRowNum);
@@ -893,13 +1006,22 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
   applyTotalCell(statRow.getCell(2), 'RERATA KELAS', 'left');
   // Hitung rerata kolom akhir
   let kelasSum = 0, kelasCount = 0;
-  for (let r = hdrSubRowNum + 1; r < dataRowNum; r++) {
-    const v = sheet.getRow(r).getCell(akhirCol).value;
+  for (let r = firstDataRow; r < dataRowNum; r++) {
+    const cellVal = sheet.getRow(r).getCell(akhirCol).value;
+    const v = cellVal && typeof cellVal === 'object' ? cellVal.result : cellVal;
     if (typeof v === 'number') { kelasSum += v; kelasCount++; }
   }
+  const rerataKelas = kelasCount > 0 ? Number((kelasSum / kelasCount).toFixed(1)) : '';
   for (let c = 3; c <= totalCols; c++) {
     if (c === akhirCol) {
-      applyTotalCell(statRow.getCell(c), kelasCount > 0 ? Number((kelasSum / kelasCount).toFixed(1)) : '', 'center');
+      const rng = colRange(akhirCol, firstDataRow, lastDataRow);
+      applyTotalCell(
+        statRow.getCell(c),
+        hasData
+          ? formulaCell(`IF(COUNT(${rng})=0,"",ROUND(AVERAGE(${rng}),1))`, rerataKelas)
+          : rerataKelas,
+        'center'
+      );
     } else {
       applyTotalCell(statRow.getCell(c), '', 'center');
     }
@@ -912,11 +1034,122 @@ function buildRekapNilaiSheet(workbook, assignment, members, data, context, user
 }
 
 // ---------------------------------------------------------------------------
+// Sheet "Petunjuk"
+// ---------------------------------------------------------------------------
+
+/**
+ * Tambahkan sheet petunjuk sebagai sheet pertama. Tujuannya agar berkas ini
+ * dapat dipakai sebagai dokumen kerja mandiri: guru yang membukanya tanpa
+ * membuka aplikasi tetap tahu isinya apa, mana yang boleh diedit, dan bagian
+ * mana yang menghitung ulang sendiri.
+ *
+ * @param {object} workbook Workbook ExcelJS.
+ * @param {object} meta
+ * @param {string} [meta.userName] Nama guru pemilik berkas.
+ * @param {object} [meta.context] Konteks periode aktif.
+ * @param {string} [meta.scope] Keterangan cakupan isi berkas.
+ */
+function addGuideSheet(workbook, meta = {}) {
+  const { userName = '', context = {}, scope = '' } = meta;
+  const sheet = workbook.addWorksheet('Petunjuk', {
+    views: [{ state: 'frozen', ySplit: 2 }],
+    properties: { defaultRowHeight: 18 },
+  });
+
+  const COLS = 2;
+  sheet.getColumn(1).width = 30;
+  sheet.getColumn(2).width = 86;
+
+  const row1 = sheet.getRow(1);
+  row1.height = 28;
+  applyTitleCell(row1.getCell(1), 'PETUNJUK PEMAKAIAN BERKAS BACKUP');
+  sheet.mergeCells(1, 1, 1, COLS);
+
+  const row2 = sheet.getRow(2);
+  row2.height = 18;
+  applySubtitleCell(row2.getCell(1), INSTITUTION_NAME);
+  sheet.mergeCells(2, 1, 2, COLS);
+
+  let r = 4;
+
+  const addSectionRow = (title) => {
+    const row = sheet.getRow(r);
+    row.height = 22;
+    applyHeaderCell(row.getCell(1), title);
+    applyHeaderCell(row.getCell(2), '');
+    sheet.mergeCells(r, 1, r, COLS);
+    r += 1;
+  };
+
+  const addPairRow = (label, value) => {
+    const row = sheet.getRow(r);
+    row.height = 18;
+    applyDataCell(row.getCell(1), r, { align: 'left', bold: true });
+    row.getCell(1).value = label;
+    applyDataCell(row.getCell(2), r, { align: 'left', wrap: true });
+    row.getCell(2).value = value;
+    r += 1;
+  };
+
+  const addNoteRow = (text) => {
+    const row = sheet.getRow(r);
+    row.height = 18;
+    applyDataCell(row.getCell(1), r, { align: 'left' });
+    row.getCell(1).value = '';
+    applyDataCell(row.getCell(2), r, { align: 'left', wrap: true });
+    row.getCell(2).value = text;
+    r += 1;
+  };
+
+  const addSpacer = () => {
+    sheet.getRow(r).height = 8;
+    r += 1;
+  };
+
+  addSectionRow('IDENTITAS BERKAS');
+  addPairRow('Pemilik', userName || '-');
+  addPairRow('Tahun Ajaran', context.tahun_ajaran_aktif_nama || context.tahun_ajaran_aktif || '-');
+  addPairRow('Semester', context.semester_aktif_nama || context.semester_aktif || '-');
+  addPairRow('Dibuat pada', formatDateTimeDisplay(new Date()));
+  addPairRow('Cakupan', scope || 'Absensi dan penilaian pada periode aktif di atas.');
+  addSpacer();
+
+  addSectionRow('BERKAS INI DAPAT DIPAKAI SEBAGAI LEMBAR KERJA');
+  addNoteRow('Bila aplikasi SIMSMANSARI tidak dapat diakses, Bapak/Ibu tetap dapat melanjutkan pencatatan langsung di berkas Excel ini. Angka rekap di dalamnya bukan angka mati: sebagian besar berupa rumus yang menghitung ulang secara otomatis.');
+  addSpacer();
+
+  addSectionRow('KOLOM YANG MENGHITUNG SENDIRI (RUMUS)');
+  addPairRow('Rekap Absen', 'Kolom "Total" dan "% Kehadiran", serta baris "TOTAL KESELURUHAN" di bagian bawah.');
+  addPairRow('Absen Harian', 'Kolom rekap "H", "S", "I", "A" di sisi kanan, serta baris total di bagian bawah.');
+  addPairRow('Nilai', 'Kolom "Nilai Akhir", kolom "Grade", dan baris "RERATA KELAS" di bagian bawah.');
+  addNoteRow('Kolom-kolom tersebut tidak perlu dihitung manual. Cukup ubah data mentahnya, hasilnya menyesuaikan sendiri.');
+  addSpacer();
+
+  addSectionRow('CARA MELANJUTKAN PEKERJAAN');
+  addPairRow('Menambah hari absen', 'Pada sheet "Absen Harian", sisipkan kolom baru SEBELUM kolom rekap "H" (bukan sesudahnya), lalu tulis tanggalnya di baris header dan isi status setiap siswa.');
+  addPairRow('Status yang dipakai', 'H = Hadir, S = Sakit, I = Izin, A = Alpa, K = Keluar. Tulis dengan huruf kapital agar terhitung.');
+  addPairRow('Mengubah nilai', 'Pada sheet "Nilai", ketik langsung angka di kolom tugas, UH, PTS, atau PAS. Kolom "Nilai Akhir" dan "Grade" akan menyesuaikan.');
+  addPairRow('Menambah siswa', 'Sisipkan baris baru DI ANTARA baris siswa yang ada (jangan di bawah baris total), agar tercakup rumus total.');
+  addPairRow('Menyaring & mengurutkan', 'Sheet "Rekap Absen" dan "Absen Harian" sudah dilengkapi filter otomatis pada baris header.');
+  addSpacer();
+
+  addSectionRow('HAL YANG PERLU DIPERHATIKAN');
+  addNoteRow('1. Berkas ini adalah SALINAN. Perubahan yang Bapak/Ibu lakukan di sini TIDAK otomatis masuk ke aplikasi, dan sebaliknya perubahan di aplikasi tidak masuk ke berkas ini.');
+  addNoteRow('2. Bila nanti aplikasi kembali normal, data yang sudah ditambahkan di Excel perlu dimasukkan kembali ke aplikasi secara manual. Berkas Excel tidak dapat diunggah balik ke sistem.');
+  addNoteRow('3. Simpanlah berkas ini dengan nama baru setiap kali diubah (misalnya diberi tambahan tanggal), agar versi aslinya tetap utuh sebagai bukti cadangan.');
+  addNoteRow('4. "Nilai Akhir" dihitung sebagai rata-rata sederhana dari semua nilai yang terisi; setiap tugas, UH, PTS, dan PAS berbobot sama.');
+  addNoteRow('5. Jangan menghapus baris header berwarna biru atau baris total di bagian bawah, karena rumus mengacu ke baris-baris tersebut.');
+
+  return sheet;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Ambil data satu pengajaran lalu tambahkan 3 sheet (rekap absensi, absensi
+
  * harian, rekap nilai) ke workbook. Dipakai bersama oleh backup guru dan backup
  * sistem (semua guru) agar formatnya identik.
  */
@@ -1006,6 +1239,12 @@ export async function buildGuruBackupWorkbook(context, userId, userName, onProgr
   workbook.created = new Date();
   workbook.modified = new Date();
 
+  addGuideSheet(workbook, {
+    userName,
+    context,
+    scope: `Backup penuh: ${assignments.length} pengajaran (kelas × mata pelajaran) yang diampu.`,
+  });
+
   let processed = 0;
 
   for (const assignment of assignments) {
@@ -1026,143 +1265,18 @@ export async function buildGuruBackupWorkbook(context, userId, userName, onProgr
 }
 
 /**
- * Backup sistem tingkat admin: bangun satu workbook berisi 3 sheet per pengajaran
- * untuk SELURUH guru pada periode aktif (format identik dengan backup guru).
+ * CATATAN: buildSystemBackupWorkbook() dan buildSystemBackupZip() DIHAPUS.
  *
- * Catatan: dipertahankan untuk kompatibilitas. Untuk backup sistem yang benar
- * gunakan buildSystemBackupZip yang memisahkan berkas per guru sehingga tidak
- * ada bentrok nama sheet antar guru yang mengajar kelas sama.
+ * Keduanya membangun backup SELURUH SEKOLAH di dalam tab peramban admin:
+ * memanggil getActiveTeachingAssignments() lalu, untuk setiap pengajaran,
+ * menjalankan 7 query Firestore. Untuk 40 guru x 5 kelas itu berarti sekitar
+ * 200.000 operasi baca dalam sekali jalan — empat kali kuota harian Firestore
+ * paket gratis (50.000/hari) — sekaligus menahan ratusan megabyte di memori tab.
+ *
+ * Backup seluruh sekolah kini dikerjakan server, sekali seminggu, pada hari yang
+ * tidak ada kegiatan mengajar: scripts/backup-snapshot.js yang dijalankan oleh
+ * .github/workflows/backup-snapshot.yml setiap Minggu 01:00 WIB.
  */
-export async function buildSystemBackupWorkbook(context, onProgress = () => {}) {
-  await ensureExcelJSLoaded();
-  const ExcelJS = window.ExcelJS;
-
-  const assignments = await getActiveTeachingAssignments(context);
-  if (!assignments.length) {
-    throw new Error('Tidak ada data pengajaran aktif untuk dibackup pada periode ini.');
-  }
-
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'SIM SMANSARI Backup Sistem';
-  workbook.lastModifiedBy = 'Admin';
-  workbook.created = new Date();
-  workbook.modified = new Date();
-
-  let processed = 0;
-  for (const assignment of assignments) {
-    const guru = assignment.guru_nama || assignment.guru_id || 'Guru';
-    const kelasNama = assignment.kelas_nama || assignment.kelas_id || 'Kelas';
-    const mapelNama = assignment.mapel_nama || 'Mapel';
-
-    onProgress({
-      label: `${guru} • ${kelasNama} • ${mapelNama}`,
-      current: processed + 1,
-      total: assignments.length,
-    });
-
-    try {
-      await appendAssignmentSheets(workbook, assignment, context, guru);
-    } catch (error) {
-      console.warn(`Backup sistem: gagal memproses pengajaran ${assignment.id}:`, error);
-    }
-    processed++;
-  }
-
-  return { workbook, assignmentsCount: assignments.length };
-}
-
-/**
- * Backup sistem yang benar: satu berkas Excel PER GURU, dikemas dalam satu ZIP.
- *
- * Kenapa per guru (bukan satu workbook gabungan): nama sheet Excel harus unik
- * dalam satu workbook. Bila dua guru mengajar kelas yang sama (mis. "Rekap Absen
- * XII-1"), penggabungan ke satu workbook menimbulkan bentrok nama sehingga guru
- * yang diproses belakangan gagal ditambahkan — inilah sebab hanya satu guru yang
- * datanya masuk. Memisahkan per guru menghilangkan bentrok tersebut sekaligus
- * membuat berkas lebih mudah dibagikan ke masing-masing guru.
- *
- * @returns {Promise<{blob:Blob, fileName:string, guruCount:number, assignmentsCount:number, failures:Array}>}
- */
-export async function buildSystemBackupZip(context, onProgress = () => {}) {
-  await ensureExcelJSLoaded();
-  await ensureJSZipLoaded();
-  const ExcelJS = window.ExcelJS;
-  const JSZip = window.JSZip;
-
-  const assignments = await getActiveTeachingAssignments(context);
-  if (!assignments.length) {
-    throw new Error('Tidak ada data pengajaran aktif untuk dibackup pada periode ini.');
-  }
-
-  // Kelompokkan pengajaran per guru.
-  const byGuru = new Map();
-  for (const a of assignments) {
-    const key = String(a.guru_id || a.guru_nama || 'tanpa-guru');
-    if (!byGuru.has(key)) {
-      byGuru.set(key, { guruId: key, guruNama: a.guru_nama || a.guru_id || 'Guru', items: [] });
-    }
-    byGuru.get(key).items.push(a);
-  }
-
-  const zip = new JSZip();
-  const guruList = [...byGuru.values()];
-  const usedNames = new Set();
-  const failures = [];
-  let processed = 0;
-
-  for (const guru of guruList) {
-    processed++;
-    onProgress({
-      label: `${guru.guruNama} (${guru.items.length} kelas)`,
-      current: processed,
-      total: guruList.length,
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'SIM SMANSARI Backup Sistem';
-    workbook.lastModifiedBy = guru.guruNama;
-    workbook.created = new Date();
-    workbook.modified = new Date();
-
-    let sheetsAdded = 0;
-    for (const assignment of guru.items) {
-      try {
-        await appendAssignmentSheets(workbook, assignment, context, guru.guruNama);
-        sheetsAdded++;
-      } catch (error) {
-        console.warn(`Backup sistem: gagal memproses pengajaran ${assignment.id} (${guru.guruNama}):`, error);
-        failures.push({ guru: guru.guruNama, pengajaran: assignment.id, reason: error?.message || 'gagal' });
-      }
-    }
-
-    // Guru tanpa sheet yang berhasil (mis. semua kelas kosong) tetap dilewati.
-    if (sheetsAdded === 0) continue;
-
-    // Nama berkas unik & aman di dalam ZIP.
-    const safeName = String(guru.guruNama).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Guru';
-    let fileName = `${safeName}.xlsx`;
-    let n = 2;
-    while (usedNames.has(fileName)) { fileName = `${safeName}_${n++}.xlsx`; }
-    usedNames.add(fileName);
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    zip.file(fileName, buffer);
-  }
-
-  if (usedNames.size === 0) {
-    throw new Error('Tidak ada data guru yang berhasil dibackup pada periode ini.');
-  }
-
-  onProgress({ label: 'Mengemas ZIP...', current: guruList.length, total: guruList.length });
-  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-
-  return {
-    blob,
-    guruCount: usedNames.size,
-    assignmentsCount: assignments.length,
-    failures,
-  };
-}
 
 export async function exportGuruBackupExcel(onProgress = () => {}, options = {}) {
   const context = getStoredContext();
@@ -1187,7 +1301,8 @@ export async function exportGuruBackupExcel(onProgress = () => {}, options = {})
   });
 
   const sheetCount = workbook.worksheets.length;
-  const assignmentsCount = Math.ceil(sheetCount / 3);
+  // Setiap pengajaran menghasilkan 3 sheet, ditambah 1 sheet "Petunjuk" di depan.
+  const assignmentsCount = Math.max(0, Math.ceil((sheetCount - 1) / 3));
 
   // Catat ke riwayat lokal agar tab Riwayat selalu terisi (dulu hanya selektif).
   try {
@@ -1224,53 +1339,23 @@ export async function exportGuruBackupExcel(onProgress = () => {}, options = {})
 }
 
 /**
- * Auto-upload senyap: bangun workbook guru yang sedang login lalu unggah ke Drive
- * SAJA (tanpa mengunduh ke perangkat, tanpa popup). Dipakai penjadwal agar data
- * guru tercadangkan otomatis saat mereka membuka aplikasi.
+ * CATATAN: uploadGuruBackupSilently() DIHAPUS.
  *
- * @returns {Promise<{uploaded:boolean, fileName?:string, reason?:string}>}
+ * Fungsi ini mengunggah backup seorang guru ke Drive secara diam-diam setiap
+ * kali guru itu membuka aplikasi dan jadwalnya dianggap jatuh tempo. Masalahnya:
+ *
+ *  - Biayanya sekitar 5.000 operasi baca Firestore per guru per jalan, dipicu
+ *    tanpa sepengetahuan guru. Dengan puluhan guru, kuota harian habis sendiri.
+ *  - Kegagalannya tidak pernah tercatat di mana pun (hanya console.info), jadi
+ *    admin tidak punya cara mengetahui backup sudah gagal berminggu-minggu.
+ *  - Penandanya memakai localStorage yang sama dengan ekspor manual, sehingga
+ *    guru yang mengunduh berkas secara manual justru mematikan unggahan otomatis
+ *    miliknya sendiri tanpa ada apa pun yang benar-benar sampai ke Drive.
+ *
+ * Penggantinya: guru mengekspor sendiri satu kali per minggu (dengan status yang
+ * terlihat jelas di dasbor), dan cadangan seluruh sekolah dikerjakan server
+ * setiap Minggu dini hari lewat scripts/backup-snapshot.js.
  */
-export async function uploadGuruBackupSilently() {
-  const context = getStoredContext();
-  const session = getSession();
-  const userId = session?.user?.username || context?.user_logged_in || '';
-  const userName = session?.user?.nama || 'Guru';
-  if (!userId) return { uploaded: false, reason: 'Sesi guru tidak ditemukan.' };
-
-  let workbook;
-  try {
-    workbook = await buildGuruBackupWorkbook(context, userId, userName);
-  } catch (error) {
-    // Tidak ada pengajaran / data — bukan kegagalan yang perlu dicatat.
-    return { uploaded: false, reason: error?.message || 'Tidak ada data untuk dibackup.' };
-  }
-
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const safeName = String(userName).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30);
-  const fileName = `Backup-Auto-SIMSMANSARI-${safeName}-${dateStr}.xlsx`;
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-  const result = await uploadBackupToDrive(blob, fileName, {
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    logType: 'otomatis-guru',
-  });
-
-  if (result.uploaded) {
-    setLastBackupTimestamp({
-      guru_id: userId,
-      guru_nama: userName,
-      tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-      semester_id: context?.semester_aktif || '',
-      file_name: fileName,
-      drive_uploaded: true,
-      auto: true,
-    });
-  }
-
-  return result;
-}
 
 // ============================================================================
 // NEW: Selective Backup (per kelas, per tipe data)
@@ -1298,6 +1383,15 @@ export async function buildSelectiveBackupWorkbook(
   workbook.lastModifiedBy = userName || 'Guru';
   workbook.created = new Date();
   workbook.modified = new Date();
+
+  const scopeLabels = selectedDataTypes
+    .map((key) => Object.values(BACKUP_DATA_TYPES).find((t) => t.key === key)?.label || key)
+    .join(', ');
+  addGuideSheet(workbook, {
+    userName,
+    context,
+    scope: `Backup selektif: ${selectedAssignments.length} pengajaran • tipe data: ${scopeLabels || '-'}.`,
+  });
 
   let processed = 0;
 
@@ -1450,532 +1544,3 @@ export async function exportSelectiveBackupExcel(
   return { fileName, assignments_count: selectedAssignments.length, sheets: sheetCount, drive: delivery };
 }
 
-// ============================================================================
-// NEW: Multi-format Export (CSV, JSON)
-// ============================================================================
-
-export const EXPORT_FORMATS = {
-  XLSX: { key: 'xlsx', label: 'Excel (.xlsx)', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: '.xlsx' },
-  CSV: { key: 'csv', label: 'CSV (.csv)', mime: 'text/csv', ext: '.csv' },
-  JSON: { key: 'json', label: 'JSON (.json)', mime: 'application/json', ext: '.json' },
-};
-
-async function workbookToCSV(workbook, sheetName) {
-  const sheet = workbook.getWorksheet(sheetName);
-  if (!sheet) return '';
-  let csv = '';
-  sheet.eachRow((row, rowNumber) => {
-    const values = [];
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      let val = cell.value;
-      if (val === null || val === undefined) val = '';
-      if (typeof val === 'object' && val !== null) {
-        if (val.text) val = val.text;
-        else if (val.result !== undefined) val = val.result;
-        else if (val.formula) val = val.formula;
-        else if (val.richText) val = val.richText.map((r) => r.text || '').join('');
-        else val = JSON.stringify(val);
-      }
-      val = String(val).replace(/"/g, '""');
-      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
-        val = `"${val}"`;
-      }
-      values.push(val);
-    });
-    csv += values.join(',') + '\n';
-  });
-  return csv;
-}
-
-export async function exportWorkbookAsCSV(workbook) {
-  const csvParts = [];
-  workbook.eachSheet((sheet) => {
-    csvParts.push(`# Sheet: ${sheet.name}\n`);
-    csvParts.push(workbookToCSV(workbook, sheet.name));
-    csvParts.push('\n');
-  });
-  const blob = new Blob(csvParts, { type: 'text/csv;charset=utf-8;' });
-  return blob;
-}
-
-export async function exportWorkbookAsJSON(workbook) {
-  const jsonData = {};
-  workbook.eachSheet((sheet) => {
-    const rows = [];
-    const headers = [];
-    let headerRowFound = false;
-    sheet.eachRow((row, rowNumber) => {
-      const rowData = {};
-      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-        if (!headerRowFound && rowNumber <= 10) {
-          // Try to detect header row
-          const val = cell.value;
-          if (val && typeof val === 'string' && val.length > 0) {
-            headers[colNumber - 1] = val;
-          }
-        }
-        let val = cell.value;
-        if (val === null || val === undefined) val = '';
-        if (typeof val === 'object' && val !== null) {
-          if (val.text) val = val.text;
-          else if (val.result !== undefined) val = val.result;
-          else if (val.formula) val = val.formula;
-          else if (val.richText) val = val.richText.map((r) => r.text || '').join('');
-          else val = JSON.stringify(val);
-        }
-        const header = headers[colNumber - 1] || `col_${colNumber}`;
-        rowData[header] = val;
-      });
-      if (Object.keys(rowData).length > 0) {
-        rows.push(rowData);
-      }
-    });
-    jsonData[sheet.name] = rows;
-  });
-  const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
-  return blob;
-}
-
-export async function exportBackupMultiFormat(
-  context,
-  userId,
-  userName,
-  selectedAssignments,
-  selectedDataTypes,
-  format = EXPORT_FORMATS.XLSX,
-  onProgress = () => {},
-  options = {}
-) {
-  const workbook = await buildSelectiveBackupWorkbook(context, userId, userName, selectedAssignments, selectedDataTypes, onProgress);
-
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const safeName = String(userName).replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 30);
-  const typesStr = selectedDataTypes.map((k) => k.slice(0, 3)).join('-');
-  const fileName = `Backup-SIMSMANSARI-${safeName}-${dateStr}-${typesStr}${format.ext}`;
-
-  let blob;
-  switch (format.key) {
-    case 'csv':
-      blob = await exportWorkbookAsCSV(workbook);
-      break;
-    case 'json':
-      blob = await exportWorkbookAsJSON(workbook);
-      break;
-    case 'xlsx':
-    default:
-      const buffer = await workbook.xlsx.writeBuffer();
-      blob = new Blob([buffer], { type: format.mime });
-      break;
-  }
-
-  const delivery = await deliverBackupBlob(blob, fileName, onProgress, {
-    destination: options.destination,
-    mimeType: format.mime,
-    logType: 'guru',
-  });
-
-  const checksum = await computeChecksum(blob);
-  await addBackupHistory({
-    fileName,
-    fileSize: blob.size,
-    checksum,
-    assignmentsCount: selectedAssignments.length,
-    tahunAjaranId: context?.tahun_ajaran_aktif || '',
-    semesterId: context?.semester_aktif || '',
-    selectedDataTypes,
-    format: format.key,
-    backupType: 'selective',
-    destination: options.destination || 'local',
-    driveUploaded: delivery.uploaded === true,
-    driveWebViewLink: delivery.webViewLink || '',
-    driveFolderLink: delivery.folderLink || '',
-  });
-
-  setLastBackupTimestamp({
-    guru_id: userId,
-    guru_nama: userName,
-    tahun_ajaran_id: context?.tahun_ajaran_aktif || '',
-    semester_id: context?.semester_aktif || '',
-    file_name: fileName,
-    drive_uploaded: delivery.uploaded === true,
-  });
-
-  return { fileName, format: format.key, assignments_count: selectedAssignments.length, drive: delivery };
-}
-
-// ============================================================================
-// NEW: Restore/Import from Backup (Excel -> Firestore)
-// ============================================================================
-
-export const RESTORE_TYPES = {
-  ABSENSI: { key: 'absensi', label: 'Data Absensi', collections: ['absensi'] },
-  NILAI_TUGAS: { key: 'nilai_tugas', label: 'Nilai Tugas', collections: ['nilai_tugas'] },
-  NILAI_UJIAN: { key: 'nilai_ujian', label: 'Nilai Ujian (UH/PTS/PAS)', collections: ['nilai_ujian'] },
-  ALL: { key: 'all', label: 'Semua Data', collections: ['absensi', 'nilai_tugas', 'nilai_ujian'] },
-};
-
-export async function parseBackupFile(file) {
-  await ensureExcelJSLoaded();
-  const ExcelJS = window.ExcelJS;
-  const arrayBuffer = await file.arrayBuffer();
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(arrayBuffer);
-  return workbook;
-}
-
-function extractSheetData(workbook, sheetNamePattern) {
-  const sheets = [];
-  workbook.eachSheet((sheet) => {
-    if (sheetNamePattern.test(sheet.name)) {
-      const rows = [];
-      let headers = [];
-      let headerRowNum = -1;
-      sheet.eachRow((row, rowNumber) => {
-        // Skip institution header rows (first few rows)
-        if (rowNumber <= 10 && !headerRowNum) {
-          const hasHeader = row.values.some((v) => v && typeof v === 'string' && /^(No|Nama|Hadir|Sakit|Izin|Alpa|Keluar|Total|Persen|Tugas|UH|PTS|PAS|Nilai|Grade)$/i.test(v));
-          if (hasHeader) {
-            headerRowNum = rowNumber;
-            row.eachCell({ includeEmpty: true }, (cell) => {
-              headers.push(cell.value || '');
-            });
-          }
-        } else if (headerRowNum > 0 && rowNumber > headerRowNum) {
-          const rowData = {};
-          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-            const header = headers[colNumber - 1] || `col_${colNumber}`;
-            let val = cell.value;
-            if (val === null || val === undefined) val = '';
-            if (typeof val === 'object' && val !== null) {
-              if (val.text) val = val.text;
-              else if (val.result !== undefined) val = val.result;
-              else if (val.formula) val = val.formula;
-              else if (val.richText) val = val.richText.map((r) => r.text || '').join('');
-              else val = JSON.stringify(val);
-            }
-            rowData[header] = val;
-          });
-          if (Object.values(rowData).some((v) => v !== '')) {
-            rows.push(rowData);
-          }
-        }
-      });
-      if (rows.length > 0) {
-        sheets.push({ name: sheet.name, headers, rows, type: detectSheetType(sheet.name) });
-      }
-    }
-  });
-  return sheets;
-}
-
-function detectSheetType(sheetName) {
-  const name = sheetName.toLowerCase();
-  if (name.includes('rekap absen') || name.includes('rekap_absen')) return 'absensi_rekap';
-  if (name.includes('absen harian') || name.includes('absen_harian')) return 'absensi_harian';
-  if (name.includes('nilai') || name.includes('rekap nilai')) return 'nilai_rekap';
-  return 'unknown';
-}
-
-// Helper: convert simple writes to batchWrite operations format
-function toBatchWriteOps(writes) {
-  return writes.map((w) => ({
-    collection: w.collection,
-    id: w.id || crypto.randomUUID(),
-    type: 'set',
-    payload: w.data,
-    merge: true,
-  }));
-}
-
-export async function previewBackupFile(file, onProgress = () => {}) {
-  const workbook = await parseBackupFile(file);
-  const allSheets = [];
-  workbook.eachSheet((sheet) => {
-    allSheets.push({ name: sheet.name, rowCount: sheet.rowCount, colCount: sheet.columnCount });
-  });
-  return { fileName: file.name, fileSize: file.size, sheets: allSheets };
-}
-
-export async function restoreFromBackup(file, context, options = {}, onProgress = () => {}) {
-  const { restoreTypes = [RESTORE_TYPES.ALL.key], assignmentFilter = null, dryRun = false } = options;
-  const workbook = await parseBackupFile(file);
-
-  const results = {
-    totalSheets: 0,
-    processedSheets: 0,
-    totalRows: 0,
-    restoredRows: 0,
-    errors: [],
-    details: [],
-  };
-
-  const sheetsToProcess = [];
-  workbook.eachSheet((sheet) => {
-    const type = detectSheetType(sheet.name);
-    if (restoreTypes.includes('all') || restoreTypes.includes(type)) {
-      if (!assignmentFilter || sheet.name.includes(assignmentFilter)) {
-        sheetsToProcess.push({ sheet, type });
-      }
-    }
-  });
-
-  results.totalSheets = sheetsToProcess.length;
-
-  for (const { sheet, type } of sheetsToProcess) {
-    onProgress({ label: sheet.name, current: results.processedSheets + 1, total: results.totalSheets });
-    results.processedSheets++;
-
-    try {
-      if (type === 'absensi_rekap' || type === 'absensi_harian') {
-        const rowCount = await restoreAbsensiSheet(sheet, context, type, { dryRun });
-        results.totalRows += rowCount;
-        results.restoredRows += rowCount;
-        results.details.push({ sheet: sheet.name, type, rows: rowCount });
-      } else if (type === 'nilai_rekap') {
-        const rowCount = await restoreNilaiSheet(sheet, context, { dryRun });
-        results.totalRows += rowCount;
-        results.restoredRows += rowCount;
-        results.details.push({ sheet: sheet.name, type, rows: rowCount });
-      }
-    } catch (err) {
-      results.errors.push({ sheet: sheet.name, error: err.message });
-    }
-  }
-
-  return results;
-}
-
-async function restoreAbsensiSheet(sheet, context, type, options = {}) {
-  const { dryRun = false } = options;
-  let count = 0;
-
-  // Find header row
-  let headerRowNum = -1;
-  let headers = [];
-  sheet.eachRow((row, rowNumber) => {
-    if (headerRowNum === -1 && rowNumber <= 15) {
-      const vals = [];
-      row.eachCell({ includeEmpty: true }, (cell) => vals.push(cell.value));
-      if (vals.some((v) => v && /^(No|Nama|Hadir|Sakit|Izin|Alpa|Keluar|Total|%? ?Kehadiran)$/i.test(String(v)))) {
-        headerRowNum = rowNumber;
-        headers = vals;
-      }
-    }
-  });
-
-  if (headerRowNum === -1) return 0;
-
-  const pengajaranId = extractPengajaranId(sheet.name);
-  if (!pengajaranId) return 0;
-
-  const writes = [];
-  sheet.eachRow((row, rowNumber) => {
-    if (rowNumber <= headerRowNum) return;
-    const rowData = {};
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      const header = headers[colNumber - 1];
-      if (header) rowData[header] = cell.value;
-    });
-    if (!rowData.Nama && !rowData['Nama Siswa']) return;
-
-    const siswaId = findSiswaIdByName(context, rowData['Nama Siswa'] || rowData.Nama);
-    if (!siswaId) return;
-
-    // Parse absensi rekap or harian
-    if (type === 'absensi_rekap') {
-      // Format: No, Nama Siswa, Hadir, Sakit, Izin, Alpa, Keluar, Total, % Kehadiran
-      ['Hadir', 'Sakit', 'Izin', 'Alpa', 'Keluar'].forEach((status) => {
-        const cnt = parseInt(rowData[status]) || 0;
-        for (let i = 0; i < cnt; i++) {
-          writes.push({
-            collection: 'absensi',
-            data: {
-              pengajaran_id: pengajaranId,
-              siswa_id: siswaId,
-              status: status[0], // H, S, I, A, K
-              tanggal: new Date().toISOString().slice(0, 10),
-              tahun_ajaran_id: context.tahun_ajaran_aktif,
-              semester_id: context.semester_aktif,
-              created_at: new Date().toISOString(),
-            },
-          });
-          count++;
-        }
-      });
-    } else if (type === 'absensi_harian') {
-      // Daily columns - find date columns
-      const dateCols = headers.filter((h) => h && /^\d{4}-\d{2}-\d{2}$/.test(String(h)));
-      dateCols.forEach((dateCol) => {
-        const status = rowData[dateCol];
-        if (status && ['H', 'S', 'I', 'A', 'K'].includes(status)) {
-          writes.push({
-            collection: 'absensi',
-            data: {
-              pengajaran_id: pengajaranId,
-              siswa_id: siswaId,
-              status,
-              tanggal: dateCol,
-              tahun_ajaran_id: context.tahun_ajaran_aktif,
-              semester_id: context.semester_aktif,
-              created_at: new Date().toISOString(),
-            },
-          });
-          count++;
-        }
-      });
-    }
-  });
-
-  if (!dryRun && writes.length > 0) {
-    await batchWrite(toBatchWriteOps(writes));
-  }
-  return count;
-}
-
-async function restoreNilaiSheet(sheet, context, options = {}) {
-  const { dryRun = false } = options;
-  let count = 0;
-
-  // Find header rows (2-level header)
-  let headerTopRow = -1, headerSubRow = -1;
-  let topHeaders = [], subHeaders = [];
-  sheet.eachRow((row, rowNumber) => {
-    if (headerTopRow === -1 && rowNumber <= 15) {
-      const vals = [];
-      row.eachCell({ includeEmpty: true }, (cell) => vals.push(cell.value));
-      if (vals.some((v) => v && /^(No|Nama|Tugas|UH|PTS|PAS|Nilai|Grade)$/i.test(String(v)))) {
-        headerTopRow = rowNumber;
-        topHeaders = vals;
-      }
-    } else if (headerTopRow > 0 && headerSubRow === -1 && rowNumber === headerTopRow + 1) {
-      const vals = [];
-      row.eachCell({ includeEmpty: true }, (cell) => vals.push(cell.value));
-      headerSubRow = rowNumber;
-      subHeaders = vals;
-    }
-  });
-
-  if (headerTopRow === -1 || headerSubRow === -1) return 0;
-
-  const pengajaranId = extractPengajaranId(sheet.name);
-  if (!pengajaranId) return 0;
-
-  const writes = [];
-  sheet.eachRow((row, rowNumber) => {
-    if (rowNumber <= headerSubRow) return;
-    const rowData = {};
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      const top = topHeaders[colNumber - 1] || '';
-      const sub = subHeaders[colNumber - 1] || '';
-      const header = `${top}_${sub}`.replace(/^_+|_+$/g, '') || `col_${colNumber}`;
-      let val = cell.value;
-      if (val === null || val === undefined) val = '';
-      if (typeof val === 'object' && val !== null) {
-        if (val.text) val = val.text;
-        else if (val.result !== undefined) val = val.result;
-        else if (val.formula) val = val.formula;
-        else if (val.richText) val = val.richText.map((r) => r.text || '').join('');
-        else val = JSON.stringify(val);
-      }
-      rowData[header] = val;
-    });
-    if (!rowData.Nama && !rowData['Nama Siswa']) return;
-
-    const siswaId = findSiswaIdByName(context, rowData['Nama Siswa'] || rowData.Nama);
-    if (!siswaId) return;
-
-    // Parse nilai columns
-    Object.entries(rowData).forEach(([key, val]) => {
-      if (typeof val !== 'number' && typeof val !== 'string') return;
-      const numVal = typeof val === 'string' ? parseFloat(val) : val;
-      if (isNaN(numVal)) return;
-
-      // Determine jenis_nilai and tipe from key
-      let jenis_nilai = 'tugas';
-      let tipe = 'murni';
-      const keyLower = key.toLowerCase();
-      if (keyLower.includes('uh') || keyLower.includes('ulangan')) {
-        jenis_nilai = 'ulangan_harian';
-        tipe = keyLower.includes('remidi') ? 'remidi' : 'murni';
-      } else if (keyLower.includes('pts')) {
-        jenis_nilai = 'pts';
-        tipe = keyLower.includes('remidi') ? 'remidi' : 'murni';
-      } else if (keyLower.includes('pas')) {
-        jenis_nilai = 'pas';
-        tipe = keyLower.includes('remidi') ? 'remidi' : 'murni';
-      } else if (keyLower.includes('tugas')) {
-        jenis_nilai = 'tugas';
-        tipe = 'murni';
-      }
-
-      writes.push({
-        collection: 'nilai_ujian',
-        data: {
-          pengajaran_id: pengajaranId,
-          siswa_id: siswaId,
-          jenis_nilai,
-          tipe,
-          nilai: numVal,
-          tahun_ajaran_id: context.tahun_ajaran_aktif,
-          semester_id: context.semester_aktif,
-          created_at: new Date().toISOString(),
-        },
-      });
-      count++;
-    });
-  });
-
-  if (!dryRun && writes.length > 0) {
-    await batchWrite(toBatchWriteOps(writes));
-  }
-  return count;
-}
-
-function extractPengajaranId(sheetName) {
-  // Sheet names are sanitized, try to find pengajaran_id pattern or use context
-  const match = sheetName.match(/pengajaran[_-]?([a-zA-Z0-9]+)/i);
-  if (match) return match[1];
-  // Fallback: try to find in context or use first assignment
-  return null;
-}
-
-function findSiswaIdByName(context, nama) {
-  // This would need a mapping from context or a lookup
-  // For now return null - would need to be implemented with actual data
-  return null;
-}
-
-// ============================================================================
-// NEW: Auto Backup Scheduler (Service Worker based)
-// ============================================================================
-
-export function registerAutoBackupScheduler() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw-backup.js').then((reg) => {
-      console.log('Auto-backup SW registered:', reg.scope);
-      // Schedule periodic sync
-      if ('periodicSync' in reg) {
-        reg.periodicSync.register('auto-backup', { minInterval: 24 * 60 * 60 * 1000 }).catch(() => {});
-      }
-    }).catch((err) => console.warn('SW registration failed:', err));
-  }
-}
-
-export function scheduleDailyBackupCheck() {
-  // Client-side fallback: check every hour if it's Friday 15:00 or 7 days since last backup
-  setInterval(() => {
-    const now = new Date();
-    const isFriday = now.getDay() === 5;
-    const isFriday3PM = isFriday && now.getHours() === 15 && now.getMinutes() === 0;
-
-    const lastBackup = getLastBackupTimestamp();
-    const daysSince = lastBackup?.at ? Math.floor((Date.now() - new Date(lastBackup.at).getTime()) / 86400000) : Infinity;
-
-    if (isFriday3PM || daysSince >= 7) {
-      // Dispatch custom event for UI to show notification
-      window.dispatchEvent(new CustomEvent('simguru:auto-backup-due', {
-        detail: { isFriday, daysSince, lastBackup }
-      }));
-    }
-  }, 60 * 60 * 1000); // Check every hour
-}

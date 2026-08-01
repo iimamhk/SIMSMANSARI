@@ -1,0 +1,109 @@
+name: Snapshot Backup Mingguan
+
+# Dijalankan Sabtu 18:00 UTC = MINGGU 01:00 WIB.
+#
+# Mengapa Minggu dini hari: snapshot membaca seluruh basis data, dan Firestore
+# paket gratis hanya memberi 50.000 operasi baca per hari. Pada hari Minggu tidak
+# ada kegiatan mengajar, sehingga kuota hari itu memang sedang tidak terpakai dan
+# snapshot tidak mengganggu pemakaian guru maupun siswa.
+#
+# Catatan: GitHub menonaktifkan jadwal otomatis bila repository tidak ada
+# aktivitas selama 60 hari. Bila libur panjang, jalankan sekali secara manual
+# lewat tombol "Run workflow" agar jadwalnya tetap hidup.
+on:
+  schedule:
+    - cron: '0 18 * * 6'
+  workflow_dispatch:
+    inputs:
+      skip_drive:
+        description: 'Lewati unggah ke Google Drive (hanya lampirkan ke Release)'
+        type: boolean
+        default: false
+      max_reads:
+        description: 'Batas operasi baca Firestore'
+        default: '45000'
+
+env:
+  NODE_VERSION: '20'
+
+# Cegah dua snapshot berjalan bersamaan — kuota baca akan terpakai dua kali.
+concurrency:
+  group: backup-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout kode
+        uses: actions/checkout@v4
+
+      - name: Siapkan Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Pasang dependensi
+        run: npm ci --omit=dev
+
+      - name: Periksa secret yang diperlukan
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT_JSON belum diisi."
+            echo "Buka Settings > Secrets and variables > Actions, lalu tambahkan secret tersebut"
+            echo "berisi seluruh isi berkas JSON service account Firebase."
+            exit 1
+          fi
+          echo "FIREBASE_SERVICE_ACCOUNT_JSON: tersedia."
+          if [ -z "${{ secrets.AI_CONFIG_SECRET }}" ]; then
+            echo "::warning::AI_CONFIG_SECRET belum diisi. Snapshot tetap berjalan dan"
+            echo "dilampirkan ke Release, tetapi kredensial Google Drive tidak dapat"
+            echo "didekripsi sehingga salinan ke Drive sekolah akan dilewati."
+            echo "Nilainya harus SAMA PERSIS dengan yang dipakai di Vercel."
+          else
+            echo "AI_CONFIG_SECRET: tersedia."
+          fi
+
+      - name: Jalankan snapshot basis data
+        id: snapshot
+        run: node scripts/backup-snapshot.js
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          AI_CONFIG_SECRET: ${{ secrets.AI_CONFIG_SECRET }}
+          BACKUP_MAX_READS: ${{ inputs.max_reads || '45000' }}
+          BACKUP_SKIP_DRIVE: ${{ inputs.skip_drive && '1' || '0' }}
+
+      # Lampiran Release berfungsi sebagai salinan kedua di luar Google Drive,
+      # sesuai prinsip "jangan simpan semua cadangan di satu tempat".
+      - name: Lampirkan snapshot ke GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: snapshot-${{ github.run_number }}
+          name: Snapshot Basis Data ${{ github.run_number }}
+          body: |
+            Snapshot otomatis seluruh basis data Firestore.
+
+            Berkas `.json.gz` ini berisi setiap dokumen beserta ID-nya, sehingga
+            dapat dipakai untuk memulihkan data. Untuk membukanya:
+
+                gunzip -c Snapshot-*.json.gz > snapshot.json
+
+            Bagian `meta` di dalamnya mencatat jumlah dokumen, jumlah operasi
+            baca yang terpakai, dan apakah snapshot lengkap.
+          files: Snapshot-SIMSMANSARI-*.json.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Laporkan kegagalan
+        if: failure()
+        run: |
+          echo "::error::Snapshot backup mingguan GAGAL."
+          echo "Log lengkap: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "Periksa: (1) secret FIREBASE_SERVICE_ACCOUNT_JSON, (2) apakah batas baca tercapai."
+          exit 1

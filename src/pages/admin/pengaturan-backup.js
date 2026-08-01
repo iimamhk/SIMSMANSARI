@@ -7,8 +7,7 @@ import {
   saveDriveBackupConfig,
 } from '../../firebase/auth-service.js';
 import { uploadBackupToDrive } from '../../utils/drive-upload.js';
-import { runSystemBackupToDrive } from '../../utils/system-backup.js';
-import { computeLastScheduledOccurrence } from '../../utils/admin-backup-scheduler.js';
+import { computeLastScheduledOccurrence } from '../../utils/backup-schedule.js';
 import { adminAccentPanel, adminIcons, adminPageHero, bindAdminLogout } from '../../utils/admin-ui.js';
 
 export async function renderAdminBackupSettingsPage(container) {
@@ -61,37 +60,25 @@ export async function renderAdminBackupSettingsPage(container) {
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600">Backup</p>
-            <h3 class="mt-1 text-lg font-bold text-slate-900">Backup Otomatis &amp; Manual</h3>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Cadangkan rekap absensi &amp; nilai seluruh guru ke Google Drive (satu Excel per guru dalam satu arsip ZIP). Jadwal otomatis berjalan saat admin membuka aplikasi setelah waktu jadwal.</p>
+            <h3 class="mt-1 text-lg font-bold text-slate-900">Cadangan Otomatis Mingguan</h3>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Cadangan seluruh basis data dibuat oleh server setiap <strong>Minggu 01:00 WIB</strong>, saat tidak ada kegiatan mengajar. Tidak ada tombol backup manual di halaman ini &mdash; penjelasannya di bawah.</p>
           </div>
           <span id="sys-backup-status" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Memuat...</span>
         </div>
 
-        <div class="mt-4 rounded-2xl border border-teal-100 bg-teal-50/60 p-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p class="text-sm font-bold text-slate-900">Backup Sekarang</p>
-              <p class="mt-0.5 text-xs text-slate-500">Rekap absensi &amp; nilai semua guru (1 Excel/guru, dikemas ZIP), langsung diunggah ke Drive.</p>
+        <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div class="flex items-start gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
             </div>
-            <button type="button" id="sys-backup-btn" class="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:opacity-60">
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-              Backup ke Drive
-            </button>
-          </div>
-          <div class="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" id="sys-test-auto-btn" class="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 transition hover:bg-teal-50 disabled:opacity-60">Uji Backup Otomatis (sekarang)</button>
-            <span class="text-[11px] text-slate-400">Menjalankan alur backup otomatis segera untuk pengujian, tanpa menunggu jadwal.</span>
-          </div>
-          <div id="sys-backup-progress-box" class="mt-3 hidden">
-            <div class="flex items-center gap-2">
-              <svg class="h-4 w-4 animate-spin text-teal-600" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-              <p id="sys-backup-progress-text" class="text-xs font-medium text-slate-600">Memulai...</p>
-            </div>
-            <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
-              <div id="sys-backup-progress-bar" class="h-full w-0 bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-300"></div>
+            <div class="min-w-0 text-xs leading-5 text-slate-600">
+              <p class="text-sm font-bold text-slate-900">Mengapa tidak ada tombol "Backup Sekarang"?</p>
+              <p class="mt-1">Tombol itu dulu membangun cadangan seluruh sekolah di dalam tab peramban admin. Sekali tekan berarti membaca setiap kelas setiap guru &mdash; sekitar <strong>200.000 operasi baca</strong>, atau empat kali kuota harian database pada paket gratis. Menekannya pada jam kerja membuat absensi, nilai, dan materi berhenti dapat dibuka oleh semua pengguna sampai hari berikutnya.</p>
+              <p class="mt-1">Karena itu pekerjaan tersebut dipindahkan ke server dan dijadwalkan pada hari Minggu dini hari. Bila cadangan perlu dijalankan segera, buka <strong>GitHub &rarr; Actions &rarr; Snapshot Backup Mingguan &rarr; Run workflow</strong>. Cara itu tidak membebani perangkat siapa pun dan tetap tercatat di riwayat di bawah.</p>
+              <p class="mt-1">Isi cadangan: seluruh dokumen beserta ID-nya dalam satu berkas <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">.json.gz</code>, disimpan di Google Drive sekolah dan dilampirkan ke GitHub Release sebagai salinan kedua.</p>
             </div>
           </div>
-          <p id="sys-backup-message" class="mt-2 text-xs text-slate-500" role="status"></p>
+          <p id="sys-backup-message" class="mt-3 text-xs text-slate-500" role="status"></p>
         </div>
 
         <form id="schedule-form" class="mt-4 grid gap-3 sm:grid-cols-2">
@@ -363,11 +350,6 @@ export async function renderAdminBackupSettingsPage(container) {
   // Backup otomatis, backup manual, & riwayat
   // -------------------------------------------------------------------------
   const sysStatus = container.querySelector('#sys-backup-status');
-  const sysBackupBtn = container.querySelector('#sys-backup-btn');
-  const sysTestAutoBtn = container.querySelector('#sys-test-auto-btn');
-  const sysProgressBox = container.querySelector('#sys-backup-progress-box');
-  const sysProgressBar = container.querySelector('#sys-backup-progress-bar');
-  const sysProgressText = container.querySelector('#sys-backup-progress-text');
   const sysMessage = container.querySelector('#sys-backup-message');
   const scheduleForm = container.querySelector('#schedule-form');
   const scheduleEnabled = container.querySelector('#schedule-enabled');
@@ -408,7 +390,7 @@ export async function renderAdminBackupSettingsPage(container) {
   function setSysMessage(text, isError = false) {
     if (!sysMessage) return;
     sysMessage.textContent = text || '';
-    sysMessage.className = isError ? 'mt-2 text-xs text-rose-600' : 'mt-2 text-xs text-slate-500';
+    sysMessage.className = isError ? 'mt-3 text-xs text-rose-600' : 'mt-3 text-xs text-slate-500';
   }
 
   function setScheduleMessage(text, isError = false) {
@@ -432,7 +414,7 @@ export async function renderAdminBackupSettingsPage(container) {
   }
 
   function describeSchedule(schedule) {
-    if (!schedule || !schedule.enabled) return 'Backup otomatis nonaktif.';
+    if (!schedule || !schedule.enabled) return 'Jadwal pengingat nonaktif. Snapshot mingguan oleh server tetap berjalan.';
     const freq = FREQ_LABELS[schedule.frequency] || schedule.frequency;
     let when = `pukul ${schedule.time}`;
     if (schedule.frequency === 'weekly') when = `setiap ${DOW_NAMES[schedule.dayOfWeek] || 'Jumat'} pukul ${schedule.time}`;
@@ -449,7 +431,7 @@ export async function renderAdminBackupSettingsPage(container) {
         nextText = ` Perkiraan jadwal berikutnya: ${formatDriveDate(next.toISOString())}.`;
       }
     } catch { /* abaikan */ }
-    return `Jadwal ${freq}, ${when}.${nextText} Backup otomatis hanya berjalan saat ada admin membuka aplikasi.`;
+    return `Jadwal ${freq}, ${when}.${nextText} Catatan: jadwal ini dipakai untuk pengingat guru dan pencatatan. Snapshot basis data yang sebenarnya dijalankan GitHub Actions setiap Minggu 01:00 WIB, tidak bergantung pada admin membuka aplikasi.`;
   }
 
   function renderLogs(logs) {
@@ -500,12 +482,15 @@ export async function renderAdminBackupSettingsPage(container) {
         sysStatus.textContent = 'Otomatis aktif';
         sysStatus.className = 'rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700';
       } else {
-        sysStatus.textContent = 'Manual';
-        sysStatus.className = 'rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500';
+        sysStatus.textContent = 'Jadwal server aktif';
+        sysStatus.className = 'rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700';
       }
     }
-    if (sysBackupBtn) sysBackupBtn.disabled = !config?.connected;
-    if (!config?.connected) setSysMessage('Hubungkan Google Drive terlebih dahulu untuk mengaktifkan backup sistem.');
+    if (!config?.connected) {
+      setSysMessage('Google Drive belum terhubung. Snapshot mingguan tetap dibuat dan dilampirkan ke GitHub Release, tetapi tidak akan tersalin ke Drive sekolah sampai koneksi diatur di atas.', true);
+    } else {
+      setSysMessage('');
+    }
 
     applyReminderConfig(config?.reminder);
     renderLogs(config?.logs);
@@ -592,74 +577,6 @@ export async function renderAdminBackupSettingsPage(container) {
       setReminderMessage(error?.message || 'Gagal menyimpan pengingat.', true);
     } finally {
       if (reminderSaveBtn) { reminderSaveBtn.disabled = false; reminderSaveBtn.textContent = 'Simpan Pengingat'; }
-    }
-  });
-
-  sysBackupBtn?.addEventListener('click', async () => {
-    sysBackupBtn.disabled = true;
-    if (sysProgressBox) sysProgressBox.classList.remove('hidden');
-    setSysMessage('');
-    const setProgress = (text, pct) => {
-      if (sysProgressText) sysProgressText.textContent = text;
-      if (sysProgressBar) sysProgressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    };
-    setProgress('Menyiapkan...', 5);
-    try {
-      const result = await runSystemBackupToDrive({
-        type: 'manual',
-        onProgress: (p) => {
-          const total = Math.max(p.total || 1, 1);
-          const pct = Math.floor((p.current / total) * 95);
-          setProgress(typeof p.label === 'string' ? p.label : `Memproses (${p.current}/${total})...`, pct);
-        },
-      });
-      setProgress('Selesai.', 100);
-      if (result.uploaded) {
-        setSysMessage(`Backup berhasil: ${result.fileName} — ${result.guruCount} guru, ${result.assignments} pengajaran (1 Excel per guru dalam ZIP) tersimpan di Drive.`);
-      } else {
-        setSysMessage(result.reason || 'Backup gagal diunggah ke Drive.', true);
-      }
-    } catch (error) {
-      setSysMessage(error?.message || 'Backup gagal.', true);
-    } finally {
-      sysBackupBtn.disabled = false;
-      setTimeout(() => { if (sysProgressBox) sysProgressBox.classList.add('hidden'); }, 1500);
-      await reloadDriveConfig();
-    }
-  });
-
-  sysTestAutoBtn?.addEventListener('click', async () => {
-    sysTestAutoBtn.disabled = true;
-    if (sysBackupBtn) sysBackupBtn.disabled = true;
-    if (sysProgressBox) sysProgressBox.classList.remove('hidden');
-    setSysMessage('Menjalankan uji backup otomatis...');
-    const setProgress = (text, pct) => {
-      if (sysProgressText) sysProgressText.textContent = text;
-      if (sysProgressBar) sysProgressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-    };
-    setProgress('Menyiapkan...', 5);
-    try {
-      const result = await runSystemBackupToDrive({
-        type: 'otomatis',
-        onProgress: (p) => {
-          const total = Math.max(p.total || 1, 1);
-          const pct = Math.floor((p.current / total) * 95);
-          setProgress(typeof p.label === 'string' ? p.label : `Memproses (${p.current}/${total})...`, pct);
-        },
-      });
-      setProgress('Selesai.', 100);
-      if (result.uploaded) {
-        setSysMessage(`Uji otomatis berhasil: ${result.fileName} — ${result.guruCount} guru, ${result.assignments} pengajaran. Cek baris "otomatis" pada riwayat di bawah.`);
-      } else {
-        setSysMessage(result.reason || 'Uji otomatis gagal.', true);
-      }
-    } catch (error) {
-      setSysMessage(error?.message || 'Uji otomatis gagal.', true);
-    } finally {
-      sysTestAutoBtn.disabled = false;
-      if (sysBackupBtn) sysBackupBtn.disabled = false;
-      setTimeout(() => { if (sysProgressBox) sysProgressBox.classList.add('hidden'); }, 1500);
-      await reloadDriveConfig();
     }
   });
 

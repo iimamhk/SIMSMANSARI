@@ -6,8 +6,9 @@
  * yang perlu dibuat manual: secret diturunkan dari AI_CONFIG_SECRET bila ada,
  * atau dari kredensial service account Firebase yang sudah terpasang.
  *
- * Koleksi `settings` ditolak total oleh Firestore Rules untuk klien, jadi hanya
- * Admin SDK (fungsi serverless ini) yang dapat membacanya.
+ * Dokumen `settings/backup_drive` ditolak untuk klien oleh Firestore Rules
+ * (hanya `settings/app_config` yang diizinkan dari browser), jadi hanya Admin
+ * SDK (fungsi serverless ini) yang dapat membaca dan menulisnya.
  *
  * Model otorisasi: OAuth 2.0 refresh token milik akun Google sekolah.
  * Service account sengaja tidak dipakai karena akun Google non-Workspace tidak
@@ -322,11 +323,32 @@ async function exchangeCodeForRefreshToken({ code, redirectUri }) {
 /** Tukar refresh token menjadi access token berumur pendek. */
 async function getAccessToken() {
   const config = await readStoredConfig();
-  if (!config?.clientId || !config?.clientSecret) {
-    throw new Error('Google Drive belum dikonfigurasi oleh admin.');
+
+  // Pesan kesalahan dibedakan per penyebab, karena penanganannya berbeda jauh.
+  // `client_id` disimpan sebagai teks biasa, sedangkan `client_secret` dan
+  // `refresh_token` dienkripsi. Jadi bila client_id ADA tetapi secret kosong,
+  // yang bermasalah adalah kunci dekripsinya, bukan konfigurasinya.
+  if (!config?.clientId) {
+    throw new Error(
+      'Google Drive belum dikonfigurasi. Buka panel Admin > Pengaturan Backup, '
+      + 'isi Client ID dan Client Secret, lalu tekan "Hubungkan Google Drive".'
+    );
+  }
+  if (!config.clientSecret) {
+    throw new Error(
+      'Client Secret Google Drive tidak dapat didekripsi. Penyebab paling umum: '
+      + 'nilai AI_CONFIG_SECRET berbeda antara tempat kredensial disimpan (Vercel) '
+      + 'dan tempat proses ini berjalan (mis. GitHub Actions). Pastikan secret '
+      + 'AI_CONFIG_SECRET di kedua tempat sama persis, atau simpan ulang '
+      + 'kredensial Drive dari panel admin.'
+    );
   }
   if (!config.refreshToken) {
-    throw new Error('Google Drive belum dihubungkan. Admin perlu menekan "Hubungkan Google Drive".');
+    throw new Error(
+      'Google Drive belum dihubungkan. Admin perlu menekan "Hubungkan Google Drive" '
+      + 'di panel admin untuk memberi izin akses, karena tanpa refresh token '
+      + 'unggahan tidak dapat dilakukan.'
+    );
   }
 
   const token = await postForm(OAUTH_TOKEN_URL, {

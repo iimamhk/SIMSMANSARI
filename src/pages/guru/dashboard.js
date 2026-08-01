@@ -1,6 +1,11 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getTeachingAssignmentsForUser, getDocumentsWhere } from '../../firebase/data-service.js';
-import { getLastBackupTimestamp, getDaysSinceLastBackup, isBackupRequiredToday } from '../../utils/backup-excel.js';
+import { getExportStatus } from '../../utils/backup-policy.js';
+
+/** Amankan teks untuk dipakai di dalam atribut HTML (mis. title="..."). */
+function escapeAttr(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 export function renderGuruDashboard(container) {
   const context = JSON.parse(localStorage.getItem('simguru_context') || '{}');
@@ -134,16 +139,20 @@ export function renderGuruDashboard(container) {
     ? quickCard('#guru/wali-kelas', 'Wali Kelas', `Kelola kelas ${waliCacheDash.kelas_nama}.`, '<rect x="3.5" y="5" width="17" height="11" rx="2"/><path d="M8 20h8M12 16v4"/>', 'sky')
     : '';
 
-  const lastBackup = getLastBackupTimestamp();
-  const daysSince = getDaysSinceLastBackup();
-  const backupRequired = isBackupRequiredToday();
-  let backupBadge = '';
-  if (backupRequired) {
-    const today = new Date().getDay() === 5;
-    backupBadge = `<span class="ios-notification-badge" title="${today ? 'Backup wajib dilakukan' : 'Backup perlu dilakukan'}">!</span>`;
-  } else if (lastBackup) {
-    backupBadge = `<span class="ios-status-dot" title="Backup aman"><span class="visually-hidden">Backup aman</span></span>`;
-  }
+  // Status ekspor data guru. Seluruhnya dibaca dari localStorage, jadi tidak ada
+  // satu pun operasi baca Firestore untuk menampilkan bagian ini.
+  const exportStatus = getExportStatus();
+  const backupBadge = exportStatus.allowed
+    ? `<span class="ios-notification-badge" title="${escapeAttr(exportStatus.title)}">!</span>`
+    : `<span class="ios-status-dot" title="${escapeAttr(exportStatus.title)}"><span class="visually-hidden">${escapeAttr(exportStatus.title)}</span></span>`;
+
+  // Keterangan pada kartu dibuat sebagai kalimat utuh, bukan hanya titik warna,
+  // agar guru langsung tahu keadaannya tanpa perlu membuka halaman backup.
+  const backupCardDesc = exportStatus.state === 'done'
+    ? 'Sudah tersimpan minggu ini.'
+    : exportStatus.state === 'never'
+      ? 'Belum pernah disimpan.'
+      : 'Belum tersimpan minggu ini.';
 
   const L = heroTheme.onLight;
   const txt = heroTheme.txt || '#0f172a';
@@ -257,7 +266,7 @@ export function renderGuruDashboard(container) {
             ${quickCard('#guru/materi', 'Materi', 'Buat bahan belajar.', '<path d="M6 4.5h10a2 2 0 0 1 2 2v12.5H8a2 2 0 0 0-2 2V4.5z"/><path d="M8 19h10"/>', 'teal')}
             ${quickCard('#guru/materi-ai', 'Materi AI', 'Mulai dari ide cerdas.', '<path d="M12 3l1.8 4.8L18.5 9.5l-4.7 1.7L12 16l-1.8-4.8L5.5 9.5l4.7-1.7L12 3z"/><path d="M18.5 15l.9 2.3 2.4.9-2.4.9-.9 2.3-.9-2.3-2.4-.9 2.4-.9.9-2.3z"/>', 'cyan')}
             ${waliQuickCard}
-            ${quickCardButton('btn-backup-data', 'Backup Data', 'Cadangkan ke Excel.', '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', 'amber', backupBadge)}
+            ${quickCardButton('btn-backup-data', 'Backup Data', backupCardDesc, '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>', 'amber', backupBadge)}
             <div class="ios-today-widget" aria-label="Ringkasan hari ini">
               <div class="ios-today-date"><span>${todayName.slice(0, 3)}</span><strong>${new Date().getDate()}</strong></div>
               <div class="min-w-0 flex-1">

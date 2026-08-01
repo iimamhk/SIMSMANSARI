@@ -15,3 +15,12 @@ server/dist/
 server/.env
 server/.env.*
 !server/.env.example
+
+# Hasil backup — berisi nama siswa, nilai, absensi, dan data keuangan.
+# JANGAN pernah ter-commit ke repository.
+Snapshot-SIMSMANSARI-*.json
+Snapshot-SIMSMANSARI-*.json.gz
+Laporan-SIMSMANSARI-*.xlsx
+Backup-SIMSMANSARI-*.xlsx
+Backup-Sistem-SIMSMANSARI-*.zip
+Backup-Auto-SIMSMANSARI-*.xlsx

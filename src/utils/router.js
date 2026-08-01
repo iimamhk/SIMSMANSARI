@@ -46,8 +46,7 @@ import { renderAdminWaliKelasPage } from '../pages/admin/wali-kelas.js';
 import { logoutCurrentUser, waitForAuthReady } from '../firebase/auth-service.js';
 import { auth } from '../firebase/firebase-config.js';
 import { maybeShowBackupReminder } from '../utils/backup-reminder.js';
-import { maybeRunScheduledBackup } from '../utils/admin-backup-scheduler.js';
-import { maybeRunGuruAutoBackup } from '../utils/guru-backup-scheduler.js';
+
 
 function getSession() {
   const raw = localStorage.getItem('simguru_session');
@@ -232,10 +231,15 @@ async function renderRoute() {
     await renderer(...args);
     initHeaderClock(container);
     initSidebarToggle(container);
+    // Hanya pengingat (murni localStorage + satu panggilan HTTP ringan yang
+    // di-throttle 6 jam). Dua "cron tiruan" yang dulu ada di sini —
+    // maybeRunScheduledBackup dan maybeRunGuruAutoBackup — sudah dibuang karena
+    // keduanya memicu pembacaan Firestore berskala besar pada SETIAP perpindahan
+    // halaman, yang menghabiskan kuota baca harian. Backup otomatis kini
+    // dijalankan GitHub Actions setiap Minggu dini hari.
     maybeShowBackupReminder();
-    maybeRunScheduledBackup();
-    maybeRunGuruAutoBackup();
   };
+
 
   if (!container) {
     return;
