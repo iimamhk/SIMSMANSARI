@@ -119,6 +119,8 @@ async function readStoredConfig({ forceRefresh = false } = {}) {
         updatedBy: String(data.updated_by || ''),
         lastUploadAt: String(data.last_upload_at || ''),
         lastUploadName: String(data.last_upload_name || ''),
+        lastManualTriggerAt: String(data.last_manual_trigger_at || ''),
+        lastManualTriggerBy: String(data.last_manual_trigger_by || ''),
         schedule: normalizeSchedule(data.schedule),
         reminder: normalizeReminder(data.reminder),
         lastAutoBackupAt: String(data.last_auto_backup_at || ''),
@@ -131,6 +133,45 @@ async function readStoredConfig({ forceRefresh = false } = {}) {
 
   cache = { at: now, config };
   return config;
+}
+
+/**
+ * Catat bahwa admin memicu backup manual, sekaligus menjadi pembatas laju.
+ *
+ * Pembatas ini bukan soal keamanan melainkan soal kuota: satu kali backup membaca
+ * ribuan dokumen Firestore dan memakai menit GitHub Actions. Klik ganda karena
+ * tidak sabar atau halaman yang dimuat ulang bisa menjalankannya dua kali.
+ *
+ * Jendelanya sengaja pendek (5 menit) agar admin tetap dapat mencoba lagi bila
+ * percobaan pertama gagal.
+ */
+const MANUAL_TRIGGER_COOLDOWN_MS = 5 * 60 * 1000;
+
+async function claimManualTriggerSlot({ triggeredBy } = {}) {
+  const config = await readStoredConfig({ forceRefresh: true });
+  const lastAt = config?.lastManualTriggerAt ? new Date(config.lastManualTriggerAt).getTime() : 0;
+  const now = Date.now();
+
+  if (Number.isFinite(lastAt) && lastAt > 0 && now - lastAt < MANUAL_TRIGGER_COOLDOWN_MS) {
+    const sisaDetik = Math.ceil((MANUAL_TRIGGER_COOLDOWN_MS - (now - lastAt)) / 1000);
+    const menit = Math.floor(sisaDetik / 60);
+    const detik = sisaDetik % 60;
+    return {
+      ok: false,
+      reason: `Backup manual baru saja dijalankan${config.lastManualTriggerBy ? ` oleh ${config.lastManualTriggerBy}` : ''}. `
+        + `Tunggu ${menit > 0 ? `${menit} menit ` : ''}${detik} detik lagi. `
+        + 'Jeda ini mencegah backup berjalan dua kali dan memboroskan kuota database.',
+      retryAfterSeconds: sisaDetik,
+    };
+  }
+
+  const at = new Date(now).toISOString();
+  await docRef().set({
+    last_manual_trigger_at: at,
+    last_manual_trigger_by: String(triggeredBy || '').trim(),
+  }, { merge: true });
+  invalidateCache();
+  return { ok: true, at };
 }
 
 /** Simpan kredensial OAuth dari panel admin. Client secret dienkripsi. */
@@ -222,6 +263,8 @@ async function getPublicConfig({ forceRefresh = false } = {}) {
     updatedBy: config.updatedBy,
     lastUploadAt: config.lastUploadAt,
     lastUploadName: config.lastUploadName,
+    lastManualTriggerAt: config.lastManualTriggerAt || '',
+    lastManualTriggerBy: config.lastManualTriggerBy || '',
     scope: DRIVE_SCOPE,
     schedule: config.schedule || DEFAULT_SCHEDULE,
     reminder: config.reminder || DEFAULT_REMINDER,
@@ -562,6 +605,7 @@ module.exports = {
   appendLog,
   buildConsentUrl,
   buildRedirectUri,
+  claimManualTriggerSlot,
   disconnectDrive,
   ensureBackupFolder,
   exchangeCodeForRefreshToken,

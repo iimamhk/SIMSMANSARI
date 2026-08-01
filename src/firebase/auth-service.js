@@ -314,6 +314,34 @@ export async function disconnectDriveBackup() {
 }
 
 /**
+ * Jalankan workflow backup di GitHub Actions sekarang.
+ *
+ * Peramban tidak memegang kredensial apa pun: token GitHub hanya ada di server.
+ * Balasan 202 berarti GitHub sudah menerima permintaan; hasil backup baru muncul
+ * satu-dua menit kemudian, jadi pemanggil perlu memberi tahu pengguna untuk
+ * menunggu, bukan menganggap backup sudah selesai.
+ */
+export async function runBackupNow(options = {}) {
+  const response = await authenticatedFetch('/api/admin/backup-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'run-backup',
+      skipDrive: options.skipDrive === true,
+      skipExcel: options.skipExcel === true,
+      extraCollections: options.extraCollections || '',
+    }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    const error = new Error(result.reason || result.error || 'Backup tidak dapat dijalankan.');
+    error.retryAfterSeconds = Number(result.retryAfterSeconds || 0);
+    throw error;
+  }
+  return result;
+}
+
+/**
  * Enkripsi ulang kredensial Drive memakai kunci utama lingkungan server.
  *
  * Diperlukan ketika aplikasi web (yang menulis kredensial) dan proses backup

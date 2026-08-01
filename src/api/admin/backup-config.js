@@ -8,6 +8,8 @@
  *   log           (guru/admin) tambah entri riwayat (mis. backup otomatis/gagal)
  *   schedule      (admin)      simpan jadwal backup otomatis
  *   reminder      (admin)      simpan pengingat untuk guru
+ *   run-backup    (admin)      jalankan workflow backup di GitHub Actions
+ *                              sekarang; token GitHub tetap di server
  *   reencrypt     (admin)      enkripsi ulang kredensial dengan kunci utama
  *                              lingkungan ini, agar dapat dibaca juga oleh
  *                              GitHub Actions (lihat reencryptSecrets)
@@ -17,10 +19,12 @@
 
 const { getAuth } = require('../_lib/firebase-admin');
 const { handleOptions, sendJson } = require('../_lib/ai');
+const { getWorkflowStatus, triggerBackupWorkflow } = require('../_lib/github-actions');
 const {
   appendLog,
   buildConsentUrl,
   buildRedirectUri,
+  claimManualTriggerSlot,
   disconnectDrive,
   ensureBackupFolder,
   exchangeCodeForRefreshToken,
@@ -201,7 +205,9 @@ module.exports = async (req, res) => {
           state: adminUser.username || adminUser.uid || 'admin',
         })
         : '';
-      sendJson(req, res, 200, { ...config, redirectUri, consentUrl });
+      // Status pemicu manual disertakan agar panel dapat menampilkan tombolnya
+      // dengan keadaan yang benar tanpa permintaan tambahan.
+      sendJson(req, res, 200, { ...config, redirectUri, consentUrl, workflow: getWorkflowStatus() });
     } catch (error) {
       sendJson(req, res, 500, { error: 'Gagal membaca konfigurasi backup Drive.', code: 'read_failed' });
     }
@@ -231,6 +237,43 @@ module.exports = async (req, res) => {
           updatedBy: adminUser.username || adminUser.uid || 'admin',
         });
         sendJson(req, res, 200, { ok: true, reminder: result.reminder });
+        return;
+      }
+
+      if (action === 'run-backup') {
+        // Jalankan workflow backup yang SAMA dengan jadwal mingguan.
+        //
+        // Token GitHub hanya dibaca di sini (server) dan tidak pernah dikirim ke
+        // peramban. Peramban cukup mengirim permintaan tanpa kredensial apa pun.
+        const actor = adminUser.username || adminUser.uid || 'admin';
+
+        const slot = await claimManualTriggerSlot({ triggeredBy: actor });
+        if (!slot.ok) {
+          sendJson(req, res, 429, { ok: false, reason: slot.reason, retryAfterSeconds: slot.retryAfterSeconds });
+          return;
+        }
+
+        const result = await triggerBackupWorkflow({
+          skipDrive: body.skipDrive === true,
+          skipExcel: body.skipExcel === true,
+          extraCollections: typeof body.extraCollections === 'string' ? body.extraCollections : '',
+          triggeredBy: actor,
+        });
+
+        // Catat ke riwayat agar terlihat siapa yang menjalankan dan hasilnya,
+        // termasuk bila permintaan ke GitHub sendiri yang gagal.
+        try {
+          await appendLog({
+            type: 'manual',
+            status: result.ok ? 'success' : 'error',
+            message: result.ok
+              ? 'Backup manual dijalankan dari panel admin. Hasilnya menyusul setelah GitHub Actions selesai.'
+              : `Gagal menjalankan backup manual: ${result.reason}`,
+            by: actor,
+          });
+        } catch { /* kegagalan pencatatan tidak boleh menutupi hasil utama */ }
+
+        sendJson(req, res, result.ok ? 202 : 400, result);
         return;
       }
 

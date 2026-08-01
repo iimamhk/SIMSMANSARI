@@ -3,6 +3,7 @@ import {
   disconnectDriveBackup,
   getDriveBackupConfig,
   reencryptDriveSecrets,
+  runBackupNow,
   saveBackupReminder,
   saveBackupSchedule,
   saveDriveBackupConfig,
@@ -129,16 +130,38 @@ export async function renderAdminBackupSettingsPage(container) {
           <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis, termasuk membuatkan Excel untuk setiap guru. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri dari halaman Backup <strong>satu kali setiap minggu</strong>, agar mereka memegang salinan di perangkat masing-masing dan dapat memilih sendiri kelas serta jenis data yang diperlukan.</p>
         </div>
 
+        <!-- Peringatan bila cadangan sudah lama tidak muncul. Seluruh datanya
+             berasal dari konfigurasi yang sudah dimuat, jadi nol operasi baca
+             tambahan. Masalah terbesar dengan backup bukan sulit menjalankannya,
+             melainkan tidak sadar bahwa ia sudah berhenti. -->
+        <div id="backup-health" class="mt-4 hidden rounded-2xl border p-4"></div>
+
+        <div class="mt-4 rounded-2xl border border-teal-100 bg-teal-50/60 p-4">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-sm font-bold text-slate-900">Jalankan Backup Sekarang</p>
+              <p class="mt-1 text-xs leading-5 text-slate-600">Menjalankan proses yang <strong>sama persis</strong> dengan jadwal mingguan, di server GitHub. Perangkat Bapak/Ibu tidak membaca data apa pun, sehingga tidak membebani kuota database dari sisi ini.</p>
+              <p class="mt-1 text-xs leading-5 text-slate-500">Prosesnya berjalan di latar belakang sekitar satu sampai dua menit. Hasilnya muncul di Google Drive dan di daftar Riwayat setelah selesai.</p>
+            </div>
+            <button type="button" id="run-backup-btn" class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+              <span id="run-backup-label">Jalankan Backup Sekarang</span>
+            </button>
+          </div>
+          <p id="run-backup-message" class="mt-3 text-xs text-slate-600" role="status"></p>
+          <p id="run-backup-hint" class="mt-2 hidden text-[11px] leading-4 text-slate-500"></p>
+        </div>
+
         <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
           <div class="flex items-start gap-3">
             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200">
               <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
             </div>
             <div class="min-w-0 text-xs leading-5 text-slate-600">
-              <p class="text-sm font-bold text-slate-900">Mengapa tidak ada tombol "Backup Sekarang"?</p>
-              <p class="mt-1">Tombol itu dulu membangun cadangan seluruh sekolah di dalam tab peramban admin. Sekali tekan berarti membaca setiap kelas setiap guru &mdash; sekitar <strong>200.000 operasi baca</strong>, atau empat kali kuota harian database pada paket gratis. Menekannya pada jam kerja membuat absensi, nilai, dan materi berhenti dapat dibuka oleh semua pengguna sampai hari berikutnya.</p>
-              <p class="mt-1">Karena itu pekerjaan tersebut dipindahkan ke server dan dijadwalkan pada hari Minggu dini hari. Bila cadangan perlu dijalankan segera, buka <strong>GitHub &rarr; Actions &rarr; Snapshot Backup Mingguan &rarr; Run workflow</strong>. Cara itu tidak membebani perangkat siapa pun dan tetap tercatat di riwayat di bawah.</p>
-              <p class="mt-1">Isi cadangan: setiap dokumen beserta ID-nya dalam satu berkas <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">.json.gz</code>, disimpan di Google Drive sekolah dan dilampirkan ke GitHub Release sebagai salinan kedua.</p>
+              <p class="text-sm font-bold text-slate-900">Mengapa tombol di atas tidak memproses di perangkat ini?</p>
+              <p class="mt-1">Versi lama tombol ini membangun cadangan di dalam tab peramban admin: membaca setiap kelas setiap guru, lalu menahan hasilnya di memori tab. Pada sekolah besar biayanya bisa melampaui kuota harian database, dan bila ditekan pada jam kerja, absensi serta nilai berhenti dapat dibuka oleh semua pengguna sampai hari berikutnya.</p>
+              <p class="mt-1">Sekarang tombol itu hanya <strong>meminta server GitHub</strong> menjalankan proses yang sama dengan jadwal mingguan. Tidak ada dua versi kode yang bisa berbeda hasilnya, dan perangkat siapa pun tidak terbebani.</p>
+              <p class="mt-1">Isi cadangan: berkas <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">.json.gz</code> untuk pemulihan, ditambah satu berkas Excel untuk setiap guru. Keduanya disimpan di Google Drive sekolah dan dilampirkan ke GitHub Release sebagai salinan kedua.</p>
             </div>
           </div>
           <p id="sys-backup-message" class="mt-3 text-xs text-slate-500" role="status"></p>
@@ -591,9 +614,143 @@ export async function renderAdminBackupSettingsPage(container) {
       setSysMessage('');
     }
 
+    applyWorkflowStatus(config?.workflow);
+    applyBackupHealth(config);
     applyReminderConfig(config?.reminder);
     renderLogs(config?.logs);
   }
+
+  // -------------------------------------------------------------------------
+  // Tombol "Jalankan Backup Sekarang" & peringatan cadangan kedaluwarsa
+  // -------------------------------------------------------------------------
+  const runBackupBtn = container.querySelector('#run-backup-btn');
+  const runBackupLabel = container.querySelector('#run-backup-label');
+  const runBackupMessage = container.querySelector('#run-backup-message');
+  const runBackupHint = container.querySelector('#run-backup-hint');
+  const backupHealth = container.querySelector('#backup-health');
+  let workflowInfo = null;
+
+  function setRunMessage(text, tone = 'info') {
+    if (!runBackupMessage) return;
+    runBackupMessage.textContent = text || '';
+    const warna = tone === 'error' ? 'text-rose-600' : tone === 'ok' ? 'text-emerald-700' : 'text-slate-600';
+    runBackupMessage.className = `mt-3 text-xs font-medium ${warna}`;
+  }
+
+  function setRunHint(html) {
+    if (!runBackupHint) return;
+    runBackupHint.innerHTML = html || '';
+    runBackupHint.classList.toggle('hidden', !html);
+  }
+
+  /** Matikan tombol bila token GitHub belum disetel, dengan alasan yang jelas. */
+  function applyWorkflowStatus(workflow) {
+    workflowInfo = workflow || null;
+    if (!runBackupBtn) return;
+    if (workflow?.configured) {
+      runBackupBtn.disabled = false;
+      runBackupBtn.title = `Menjalankan ${workflow.workflow} pada ${workflow.repo} (branch ${workflow.branch}).`;
+      return;
+    }
+    runBackupBtn.disabled = true;
+    if (runBackupLabel) runBackupLabel.textContent = 'Belum tersedia';
+    setRunMessage(workflow?.reason || 'Pemicu backup manual belum dikonfigurasi.', 'error');
+    setRunHint(
+      'Agar tombol ini aktif, variabel lingkungan <code class="rounded bg-white px-1 ring-1 ring-slate-200">GITHUB_BACKUP_TOKEN</code> '
+      + 'perlu disetel di Vercel, berisi GitHub token dengan izin <strong>Actions: Read and write</strong> '
+      + 'pada repository ini. Selama itu belum ada, backup otomatis mingguan tetap berjalan seperti biasa.'
+    );
+  }
+
+  /**
+   * Peringatkan bila cadangan sudah lama tidak muncul.
+   *
+   * Ini menutup celah yang paling sering terjadi: backup berhenti tanpa ada yang
+   * menyadarinya. GitHub menonaktifkan jadwal otomatis setelah 60 hari repository
+   * tidak ada aktivitas, dan kegagalan lain juga mungkin. Datanya diambil dari
+   * konfigurasi yang sudah dimuat, jadi nol operasi baca tambahan.
+   */
+  function applyBackupHealth(config) {
+    if (!backupHealth) return;
+    const lastAt = config?.lastUploadAt ? new Date(config.lastUploadAt) : null;
+    const valid = lastAt && !Number.isNaN(lastAt.getTime());
+    const hari = valid ? Math.floor((Date.now() - lastAt.getTime()) / 86400000) : Infinity;
+
+    if (!valid) {
+      backupHealth.className = 'mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4';
+      backupHealth.innerHTML = '<p class="text-sm font-bold text-amber-900">Belum ada cadangan yang pernah tersimpan</p>'
+        + '<p class="mt-1 text-xs leading-5 text-amber-800">Jalankan backup sekali sekarang untuk memastikan seluruh rangkaiannya berfungsi, jangan menunggu jadwal Minggu dini hari.</p>';
+      backupHealth.classList.remove('hidden');
+      return;
+    }
+
+    const waktu = formatDriveDate(config.lastUploadAt);
+    if (hari >= 10) {
+      backupHealth.className = 'mt-4 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4';
+      backupHealth.innerHTML = `<p class="text-sm font-bold text-rose-900">Cadangan terakhir ${hari} hari lalu &mdash; perlu diperiksa</p>`
+        + `<p class="mt-1 text-xs leading-5 text-rose-800">Terakhir tersimpan ${waktu}. Backup mingguan seharusnya menghasilkan berkas baru setiap Minggu dini hari.</p>`
+        + '<p class="mt-1 text-xs leading-5 text-rose-800">Kemungkinan penyebab: GitHub menonaktifkan jadwal otomatis karena repository tidak ada aktivitas selama 60 hari, atau prosesnya gagal. Tekan <strong>Jalankan Backup Sekarang</strong> di bawah, lalu periksa daftar Riwayat.</p>';
+      backupHealth.classList.remove('hidden');
+      return;
+    }
+    if (hari >= 8) {
+      backupHealth.className = 'mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4';
+      backupHealth.innerHTML = `<p class="text-sm font-bold text-amber-900">Cadangan terakhir ${hari} hari lalu</p>`
+        + `<p class="mt-1 text-xs leading-5 text-amber-800">Terakhir tersimpan ${waktu}. Sedikit melewati satu minggu; bila besok belum ada yang baru, jalankan backup secara manual.</p>`;
+      backupHealth.classList.remove('hidden');
+      return;
+    }
+
+    backupHealth.className = 'mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4';
+    backupHealth.innerHTML = '<p class="text-sm font-bold text-emerald-900">Cadangan terbaru tersimpan</p>'
+      + `<p class="mt-1 text-xs leading-5 text-emerald-800">${waktu}${hari > 0 ? ` (${hari} hari lalu)` : ' (hari ini)'} &mdash; <span class="font-medium">${escapeHtml(config.lastUploadName || '')}</span></p>`;
+    backupHealth.classList.remove('hidden');
+  }
+
+  runBackupBtn?.addEventListener('click', async () => {
+    if (!workflowInfo?.configured) return;
+    const ok = window.confirm(
+      'Jalankan backup sekarang?\n\n'
+      + 'Proses yang sama dengan jadwal mingguan akan dijalankan di server GitHub:\n'
+      + '  1. Snapshot .json.gz untuk pemulihan data\n'
+      + '  2. Satu berkas Excel untuk setiap guru\n'
+      + 'Keduanya diunggah ke Google Drive sekolah.\n\n'
+      + 'Perangkat ini tidak membaca data apa pun, jadi kuota database dari sisi\n'
+      + 'admin tidak terpakai. Prosesnya sekitar 1-2 menit.'
+    );
+    if (!ok) return;
+
+    runBackupBtn.disabled = true;
+    const labelAsli = runBackupLabel ? runBackupLabel.textContent : '';
+    if (runBackupLabel) runBackupLabel.textContent = 'Mengirim permintaan...';
+    setRunMessage('Menghubungi GitHub...');
+    setRunHint('');
+
+    try {
+      const result = await runBackupNow();
+      setRunMessage('Permintaan diterima GitHub. Backup sedang diproses di latar belakang.', 'ok');
+      const tautan = result.runsUrl || workflowInfo?.runsUrl || '';
+      setRunHint(
+        'Hasilnya akan muncul di Google Drive dan di daftar Riwayat sekitar 1-2 menit lagi. '
+        + 'Muat ulang halaman ini untuk melihatnya.'
+        + (tautan ? ` <a href="${tautan}" target="_blank" rel="noopener" class="font-semibold text-teal-700 underline">Pantau prosesnya di GitHub</a>.` : '')
+      );
+      if (runBackupLabel) runBackupLabel.textContent = 'Sedang diproses...';
+      // Tombol dibiarkan mati beberapa saat: server juga membatasi 5 menit, dan
+      // menekan berulang hanya akan menjalankan backup ganda.
+      setTimeout(() => {
+        runBackupBtn.disabled = false;
+        if (runBackupLabel) runBackupLabel.textContent = labelAsli || 'Jalankan Backup Sekarang';
+      }, 60000);
+    } catch (error) {
+      setRunMessage(error.message, 'error');
+      if (error.retryAfterSeconds > 0) {
+        setRunHint('Jeda ini mencegah backup berjalan dua kali. Tunggu sebentar lalu coba lagi.');
+      }
+      runBackupBtn.disabled = false;
+      if (runBackupLabel) runBackupLabel.textContent = labelAsli || 'Jalankan Backup Sekarang';
+    }
+  });
 
   const REM_FREQ_LABELS = { daily: 'Harian', weekly: 'Mingguan', custom: 'Custom' };
 
