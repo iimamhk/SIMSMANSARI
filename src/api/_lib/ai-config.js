@@ -6,6 +6,22 @@
  * tanpa menyunting env Vercel. Hanya satu secret stabil (AI_CONFIG_SECRET)
  * yang diperlukan untuk enkripsi; bila tidak diset, secret diturunkan dari
  * kredensial service account Firebase yang sudah ada.
+ *
+ * PENTING — KUNCI ENKRIPSI HARUS SAMA DI SEMUA LINGKUNGAN
+ * ------------------------------------------------------
+ * Nilai terenkripsi ditulis oleh satu lingkungan (biasanya Vercel, lewat panel
+ * admin) tetapi bisa perlu dibaca oleh lingkungan lain (GitHub Actions, saat
+ * snapshot mingguan mengunggah ke Google Drive). Karena kuncinya diturunkan dari
+ * variabel lingkungan, kedua tempat harus menghasilkan kunci yang sama.
+ *
+ * Dulu `getSecretKey()` hanya mengembalikan SATU kunci, sehingga perbedaan kecil
+ * antar lingkungan membuat dekripsi gagal dan hasilnya string kosong — yang lalu
+ * tampak seperti "Google Drive belum dikonfigurasi", padahal kredensialnya ada.
+ *
+ * Sekarang dekripsi MENCOBA beberapa kandidat kunci. Ini tidak melemahkan
+ * keamanan: AES-256-GCM memuat authentication tag, jadi kunci yang salah gagal
+ * secara pasti dan tidak mungkin menghasilkan teks asal-asalan. Pendekatan yang
+ * sama dipakai untuk mendukung rotasi kunci.
  */
 
 const crypto = require('crypto');
@@ -15,14 +31,51 @@ const CONFIG_COLLECTION = 'settings';
 const CONFIG_DOC_ID = 'ai';
 const CACHE_TTL_MS = 30000;
 const DEFAULT_BASE_URL = 'https://api.groq.com/openai/v1';
+const LEGACY_DEFAULT_SECRET = 'sim-ai-config-default-secret-change-me';
 
 let cache = { at: 0, config: null };
 
+/** Ambil private_key dari FIREBASE_SERVICE_ACCOUNT_JSON bila tersedia. */
+function privateKeyFromServiceAccount() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) return '';
+  try {
+    return String(JSON.parse(raw).private_key || '');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Daftar bahan kunci yang mungkin dipakai, diurutkan dari yang paling eksplisit.
+ * Kandidat pertama yang ada juga dipakai untuk MENULIS (enkripsi), sehingga nilai
+ * baru selalu konsisten dengan lingkungan tempat ia ditulis.
+ */
+function secretKeyCandidates() {
+  const saPrivateKey = privateKeyFromServiceAccount();
+  const candidates = [
+    process.env.AI_CONFIG_SECRET,
+    process.env.FIREBASE_PRIVATE_KEY,
+    // Variasi bentuk newline: pada Vercel, FIREBASE_PRIVATE_KEY umumnya disimpan
+    // dengan "\n" literal, sedangkan private_key di dalam JSON service account
+    // memuat baris baru sungguhan. Keduanya menghasilkan kunci yang berbeda,
+    // jadi dua-duanya perlu dicoba.
+    saPrivateKey,
+    saPrivateKey ? saPrivateKey.replace(/\n/g, '\\n') : '',
+    process.env.FIREBASE_PRIVATE_KEY ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n') : '',
+    LEGACY_DEFAULT_SECRET,
+  ];
+  const seen = new Set();
+  return candidates
+    .filter((value) => typeof value === 'string' && value.length > 0)
+    .filter((value) => (seen.has(value) ? false : seen.add(value)))
+    .map((value) => crypto.createHash('sha256').update(value).digest());
+}
+
+/** Kunci utama, dipakai untuk enkripsi nilai baru. */
 function getSecretKey() {
-  const raw = process.env.AI_CONFIG_SECRET
-    || process.env.FIREBASE_PRIVATE_KEY
-    || 'sim-ai-config-default-secret-change-me';
-  return crypto.createHash('sha256').update(String(raw)).digest();
+  const [primary] = secretKeyCandidates();
+  return primary || crypto.createHash('sha256').update(LEGACY_DEFAULT_SECRET).digest();
 }
 
 function encryptSecret(plain) {
@@ -36,14 +89,35 @@ function encryptSecret(plain) {
 function decryptSecret(payload) {
   const parts = String(payload || '').split('.');
   if (parts.length !== 3) return '';
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', getSecretKey(), Buffer.from(parts[0], 'base64'));
-    decipher.setAuthTag(Buffer.from(parts[1], 'base64'));
-    const dec = Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64')), decipher.final()]);
-    return dec.toString('utf8');
-  } catch {
-    return '';
+  const iv = Buffer.from(parts[0], 'base64');
+  const tag = Buffer.from(parts[1], 'base64');
+  const data = Buffer.from(parts[2], 'base64');
+
+  for (const key of secretKeyCandidates()) {
+    try {
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(tag);
+      const dec = Buffer.concat([decipher.update(data), decipher.final()]);
+      return dec.toString('utf8');
+    } catch {
+      // Kunci ini bukan yang dipakai saat mengenkripsi; coba kandidat berikutnya.
+      // Tag GCM menjamin kegagalan bersifat pasti, bukan hasil yang salah.
+    }
   }
+  return '';
+}
+
+/**
+ * Diagnostik untuk pesan kesalahan: berapa kandidat kunci yang tersedia dan dari
+ * sumber apa. TIDAK pernah mengembalikan bahan kunci itu sendiri.
+ */
+function describeSecretKeySources() {
+  const sources = [];
+  if (process.env.AI_CONFIG_SECRET) sources.push('AI_CONFIG_SECRET');
+  if (process.env.FIREBASE_PRIVATE_KEY) sources.push('FIREBASE_PRIVATE_KEY');
+  if (privateKeyFromServiceAccount()) sources.push('private_key dari FIREBASE_SERVICE_ACCOUNT_JSON');
+  sources.push('kunci bawaan lama');
+  return sources;
 }
 
 function normalizeBaseUrl(value) {
@@ -150,6 +224,7 @@ async function getPublicConfig() {
 module.exports = {
   DEFAULT_BASE_URL,
   decryptSecret,
+  describeSecretKeySources,
   encryptSecret,
   getPublicConfig,
   readStoredConfig,

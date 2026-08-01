@@ -15,7 +15,7 @@
  * memiliki kuota penyimpanan Drive untuk service account (storageQuotaExceeded).
  */
 
-const { encryptSecret, decryptSecret } = require('./ai-config');
+const { encryptSecret, decryptSecret, describeSecretKeySources } = require('./ai-config');
 const { getFirestore } = require('./firebase-admin');
 
 const CONFIG_COLLECTION = 'settings';
@@ -336,11 +336,12 @@ async function getAccessToken() {
   }
   if (!config.clientSecret) {
     throw new Error(
-      'Client Secret Google Drive tidak dapat didekripsi. Penyebab paling umum: '
-      + 'nilai AI_CONFIG_SECRET berbeda antara tempat kredensial disimpan (Vercel) '
-      + 'dan tempat proses ini berjalan (mis. GitHub Actions). Pastikan secret '
-      + 'AI_CONFIG_SECRET di kedua tempat sama persis, atau simpan ulang '
-      + 'kredensial Drive dari panel admin.'
+      'Client Secret Google Drive tidak dapat didekripsi dengan kunci apa pun yang '
+      + `tersedia di lingkungan ini (${describeSecretKeySources().join(', ')}). `
+      + 'Artinya kredensial memang tersimpan, tetapi dienkripsi memakai kunci lain. '
+      + 'Perbaikan paling pasti: setel secret AI_CONFIG_SECRET dengan nilai yang '
+      + 'SAMA PERSIS di Vercel dan di GitHub Actions, lalu simpan ulang kredensial '
+      + 'Drive dari panel admin agar terenkripsi memakai kunci tersebut.'
     );
   }
   if (!config.refreshToken) {
