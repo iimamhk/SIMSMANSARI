@@ -1,0 +1,12 @@
+{
+  "//": "Menyatakan bahwa seluruh berkas .js di folder ini adalah ES module.",
+  "//1": "Peramban memang sudah memperlakukannya demikian lewat <script type=\"module\">,",
+  "//2": "tetapi Node.js perlu diberi tahu secara eksplisit. Tanpa berkas ini, Node 20",
+  "//3": "mencoba memuat excel-sheets.js sebagai CommonJS lalu gagal dengan",
+  "//4": "\"SyntaxError: Unexpected token 'export'\". Deteksi sintaks otomatis baru ada",
+  "//5": "sejak Node 22.7, sehingga kode yang berhasil di komputer pengembang (Node 24)",
+  "//6": "gagal di GitHub Actions (Node 20).",
+  "//7": "Seluruh 22 berkas .js di folder ini memakai import/export, tidak ada satu pun",
+  "//8": "yang memakai require, jadi penandaan ini aman.",
+  "type": "module"
+}

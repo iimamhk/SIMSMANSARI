@@ -50,7 +50,12 @@ on:
         default: '45000'
 
 env:
-  NODE_VERSION: '20'
+  # Node 22+ dipilih bukan sekadar mengikuti versi terbaru: scripts/ berupa
+  # CommonJS sedangkan src/utils/ berupa ES module, dan jembatannya adalah
+  # dynamic import(). Node 20 pernah membuat pembuatan Excel gagal senyap di sini.
+  # src/utils/package.json sudah menyatakan "type":"module" sebagai pengaman utama,
+  # dan versi Node ini menjadi lapis keduanya.
+  NODE_VERSION: '22'
 
 # Cegah dua snapshot berjalan bersamaan — kuota baca akan terpakai dua kali.
 concurrency:

@@ -344,10 +344,13 @@ async function writeLog({ status, fileName, size, message }) {
  */
 function writeSummary({
   fileName, totalDocs, reads, gzSize, complete, drive, scope, coreDocs, refDocs,
-  excelCount = 0, excelKB = 0,
+  excelCount = 0, excelKB = 0, excelError = '',
 }) {
   const target = process.env.GITHUB_STEP_SUMMARY;
   if (!target) return;
+  const barisExcel = excelError
+    ? `| **Excel per guru GAGAL** | — | ${excelError} |`
+    : `| ${excelCount} berkas Excel (${excelKB} KB) | Setiap guru | Dibuka & dilanjutkan langsung di Excel bila aplikasi tidak dapat diakses |`;
   const rows = [
     '## Hasil Backup Mingguan',
     '',
@@ -364,19 +367,36 @@ function writeSummary({
     '| Berkas | Untuk siapa | Kegunaan |',
     '| --- | --- | --- |',
     `| \`${fileName}\` (${(gzSize / 1024).toFixed(0)} KB) | Admin | Memulihkan data ke sistem bila terjadi kehilangan |`,
-    `| ${excelCount} berkas Excel (${excelKB} KB) | Setiap guru | Dibuka & dilanjutkan langsung di Excel bila aplikasi tidak dapat diakses |`,
+    barisExcel,
     '',
-    `| Snapshot lengkap | ${complete ? 'Ya' : 'TIDAK — batas baca tercapai'} |`,
+    '| Keterangan | Nilai |',
     '| --- | --- |',
+    `| Snapshot lengkap | ${complete ? 'Ya' : 'TIDAK — batas baca tercapai'} |`,
     `| Unggah Google Drive | ${drive} |`,
     '',
-    complete
-      ? 'Cadangan minggu ini tersimpan di Google Drive dan dilampirkan pada Release di bawah.'
-      : 'Snapshot berhenti di tengah karena batas baca. Naikkan `BACKUP_MAX_READS` atau tinjau koleksi bervolume besar.',
-    '',
-    'Berkas Excel dibuat dari data yang sama yang sudah dibaca untuk snapshot, '
-      + 'sehingga **tidak menambah satu pun operasi baca** Firestore.',
-    '',
+  ];
+
+  if (excelError) {
+    rows.push(
+      '> **Excel per guru tidak terbentuk.** Snapshot JSON tetap berhasil dan tersimpan,',
+      '> jadi data tidak hilang. Namun guru tidak mendapat berkas Excel minggu ini;',
+      '> mereka masih dapat mengekspor sendiri dari halaman Backup.',
+      `> Alasan teknis: \`${excelError}\``,
+      ''
+    );
+  } else {
+    rows.push(
+      complete
+        ? 'Cadangan minggu ini tersimpan di Google Drive dan dilampirkan pada Release di bawah.'
+        : 'Snapshot berhenti di tengah karena batas baca. Naikkan `BACKUP_MAX_READS` atau tinjau koleksi bervolume besar.',
+      '',
+      'Berkas Excel dibuat dari data yang sama yang sudah dibaca untuk snapshot, '
+        + 'sehingga **tidak menambah satu pun operasi baca** Firestore.',
+      ''
+    );
+  }
+
+  rows.push(
     '<details><summary>Apa saja yang dicadangkan dan apa yang tidak</summary>',
     '',
     `**Hasil kerja guru:** ${CORE_COLLECTIONS.join(', ')}`,
@@ -391,8 +411,9 @@ function writeSummary({
       + 'persentase, nilai akhir, grade, dan predikat berupa rumus Excel yang menghitung ulang '
       + 'sendiri bila datanya disunting.',
     '',
-    '</details>',
-  ];
+    '</details>'
+  );
+
   if (String(drive).startsWith('gagal')) {
     rows.push(
       '',
@@ -530,6 +551,7 @@ async function main() {
   // Excel per guru — dari data yang SUDAH di memori, tanpa satu pun baca baru.
   // -------------------------------------------------------------------------
   let excelFiles = [];
+  let excelError = '';
   if (process.env.BACKUP_SKIP_EXCEL === '1') {
     log('\nPembuatan Excel per guru dilewati (BACKUP_SKIP_EXCEL=1).');
   } else {
@@ -546,22 +568,33 @@ async function main() {
         },
         log,
       });
-      const totalKB = excelFiles.reduce((n, f) => n + f.buffer.length, 0) / 1024;
-      log(`Total: ${excelFiles.length} berkas Excel, ${totalKB.toFixed(0)} KB`);
-
-      // Simpan juga ke disk agar terlampir pada GitHub Release.
-      for (const f of excelFiles) {
-        fs.writeFileSync(path.join(process.cwd(), f.fileName), f.buffer);
+      if (!excelFiles.length) {
+        excelError = 'Tidak ada berkas Excel yang terbentuk. Periksa apakah koleksi pengajaran memuat guru_id.';
+        log(`! ${excelError}`);
+      } else {
+        const totalKB = excelFiles.reduce((n, f) => n + f.buffer.length, 0) / 1024;
+        log(`Total: ${excelFiles.length} berkas Excel, ${totalKB.toFixed(0)} KB`);
+        // Simpan juga ke disk agar terlampir pada GitHub Release.
+        for (const f of excelFiles) {
+          fs.writeFileSync(path.join(process.cwd(), f.fileName), f.buffer);
+        }
       }
     } catch (error) {
-      // Kegagalan Excel tidak boleh menjatuhkan snapshot JSON yang sudah selesai.
-      log(`! Pembuatan Excel per guru gagal: ${error.message}`);
-      if (error.stack) log(error.stack.split('\n').slice(1, 3).join('\n'));
+      // Kegagalan Excel tidak boleh menjatuhkan snapshot JSON yang sudah selesai,
+      // TETAPI harus terlihat jelas. Versi sebelumnya hanya mencatatnya ke log
+      // Actions, sehingga kegagalan nyata (dynamic import ESM gagal di Node 20)
+      // tampak seolah tidak terjadi apa-apa: ringkasan tetap hijau dan riwayat
+      // tetap "success". Sekarang alasannya dibawa ke ringkasan dan riwayat.
+      excelError = error.message || String(error);
+      log(`\n! GAGAL membuat Excel per guru: ${excelError}`);
+      if (error.stack) log(error.stack.split('\n').slice(1, 4).join('\n'));
+      log('  Snapshot JSON tetap dibuat dan diunggah.');
       excelFiles = [];
     }
   }
   summaryBase.excelCount = excelFiles.length;
   summaryBase.excelKB = Math.round(excelFiles.reduce((n, f) => n + f.buffer.length, 0) / 1024);
+  summaryBase.excelError = excelError;
 
   if (process.env.BACKUP_SKIP_DRIVE === '1') {
     log('\nUnggah Google Drive dilewati (BACKUP_SKIP_DRIVE=1).');
@@ -599,6 +632,16 @@ async function main() {
     if (!snapshotOk) throw new Error(hasil[0]?.error || 'Unggah snapshot gagal.');
 
     log(`\n=== Selesai: ${sukses.length} dari ${berkas.length} berkas terunggah ===`);
+    // Riwayat di panel admin harus ikut menandai bila Excel tidak terbentuk,
+    // supaya kegagalannya tidak tampak seperti keberhasilan.
+    if (excelError) {
+      await writeLog({
+        status: 'error',
+        fileName,
+        size: gz.length,
+        message: `Snapshot berhasil & terunggah, tetapi Excel per guru GAGAL dibuat: ${excelError}`,
+      });
+    }
     writeSummary({
       ...summaryBase,
       drive: gagal.length
