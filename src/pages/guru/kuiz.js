@@ -2040,35 +2040,49 @@ function buildGenerateSoalForm(paket) {
         <textarea id="gen-materi" rows="2" placeholder="Contoh: Turunan fungsi aljabar dan penerapannya" class="${inputClass} resize-none"></textarea>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-4">
+      <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="${labelClass}">Jumlah</label>
+          <label class="${labelClass}">Jumlah Soal</label>
           <input id="gen-jumlah" type="number" min="1" max="30" value="5" class="${inputClass}"/>
         </div>
-        <div>
-          <label class="${labelClass}">Tipe Soal</label>
-          <select id="gen-tipe" class="${inputClass}">
-            <option value="pg" selected>Pilihan Ganda</option>
-            <option value="campuran">Campuran</option>
-            <option value="bs">Benar / Salah</option>
-            <option value="isian">Isian Singkat</option>
-            <option value="essay">Essay / Uraian</option>
-            <option value="menjodohkan">Menjodohkan</option>
-          </select>
-        </div>
-        <div>
-          <label class="${labelClass}">Kesulitan</label>
-          <select id="gen-kesulitan" class="${inputClass}">
-            <option value="mudah">Mudah</option>
-            <option value="sedang" selected>Sedang</option>
-            <option value="sulit">Sulit</option>
-            <option value="hots">HOTS</option>
-            <option value="campuran">Campuran</option>
-          </select>
-        </div>
         <div id="gen-opsi-wrap">
-          <label class="${labelClass}">Jumlah Opsi</label>
+          <label class="${labelClass}">Jumlah Opsi (Pilihan Ganda)</label>
           <input id="gen-jumlah-opsi" type="number" min="2" max="6" value="4" class="${inputClass}"/>
+        </div>
+      </div>
+
+      <div>
+        <label class="${labelClass}">Tipe Soal <span class="normal-case text-slate-400 font-normal">(bisa pilih lebih dari satu)</span></label>
+        <div id="gen-tipe-group" class="flex flex-wrap gap-2">
+          ${[
+            ['pg', 'Pilihan Ganda', true],
+            ['bs', 'Benar / Salah', false],
+            ['isian', 'Isian Singkat', false],
+            ['essay', 'Essay / Uraian', false],
+            ['menjodohkan', 'Menjodohkan', false],
+          ].map(([val, label, checked]) => `
+            <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 cursor-pointer hover:bg-slate-100 transition">
+              <input type="checkbox" class="gen-tipe h-4 w-4 rounded accent-indigo-600" value="${val}" ${checked ? 'checked' : ''}/>
+              ${label}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div>
+        <label class="${labelClass}">Tingkat Kesulitan <span class="normal-case text-slate-400 font-normal">(bisa pilih lebih dari satu)</span></label>
+        <div class="flex flex-wrap gap-2">
+          ${[
+            ['mudah', 'Mudah', false],
+            ['sedang', 'Sedang', true],
+            ['sulit', 'Sulit', false],
+            ['hots', 'HOTS', false],
+          ].map(([val, label, checked]) => `
+            <label class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 cursor-pointer hover:bg-slate-100 transition">
+              <input type="checkbox" class="gen-kesulitan h-4 w-4 rounded accent-indigo-600" value="${val}" ${checked ? 'checked' : ''}/>
+              ${label}
+            </label>
+          `).join('')}
         </div>
       </div>
 
@@ -2137,17 +2151,21 @@ function attachGenerateSoalListeners(paketId) {
   const saveBtn = document.getElementById('btn-gen-save');
   const cancelBtn = document.getElementById('btn-gen-cancel');
   const manualBtn = document.getElementById('btn-gen-manual');
-  const tipeSelect = document.getElementById('gen-tipe');
+  const tipeGroup = document.getElementById('gen-tipe-group');
   const opsiWrap = document.getElementById('gen-opsi-wrap');
   const statusEl = document.getElementById('gen-status');
   const resultEl = document.getElementById('gen-result');
   const previewEl = document.getElementById('gen-preview');
 
+  const getCheckedValues = (selector) => Array.from(document.querySelectorAll(selector))
+    .filter((el) => el.checked)
+    .map((el) => el.value);
+
   const syncOpsiVisibility = () => {
-    const tipe = tipeSelect?.value || 'pg';
-    if (opsiWrap) opsiWrap.style.display = (tipe === 'pg' || tipe === 'campuran') ? '' : 'none';
+    const pgDipilih = getCheckedValues('.gen-tipe').includes('pg');
+    if (opsiWrap) opsiWrap.style.display = pgDipilih ? '' : 'none';
   };
-  tipeSelect?.addEventListener('change', syncOpsiVisibility);
+  tipeGroup?.addEventListener('change', syncOpsiVisibility);
   syncOpsiVisibility();
 
   const setStatus = (html, tone = 'info') => {
@@ -2167,8 +2185,8 @@ function attachGenerateSoalListeners(paketId) {
     kelas: document.getElementById('gen-kelas')?.value?.trim() || '',
     materi: document.getElementById('gen-materi')?.value?.trim() || '',
     jumlah: Number(document.getElementById('gen-jumlah')?.value) || 5,
-    tipe: tipeSelect?.value || 'pg',
-    kesulitan: document.getElementById('gen-kesulitan')?.value || 'sedang',
+    tipe: getCheckedValues('.gen-tipe'),
+    kesulitan: getCheckedValues('.gen-kesulitan'),
     jumlahOpsi: Number(document.getElementById('gen-jumlah-opsi')?.value) || 4,
     pembahasan: document.getElementById('gen-pembahasan')?.checked || false,
     latex: document.getElementById('gen-latex')?.checked || false,
@@ -2191,6 +2209,14 @@ function attachGenerateSoalListeners(paketId) {
     const input = collectInput();
     if (!input.mapel && !input.materi) {
       setStatus('Isi minimal <strong>Mata Pelajaran</strong> atau <strong>Materi/Topik</strong> dulu.', 'error');
+      return;
+    }
+    if (!input.tipe.length) {
+      setStatus('Pilih minimal satu <strong>Tipe Soal</strong>.', 'error');
+      return;
+    }
+    if (!input.kesulitan.length) {
+      setStatus('Pilih minimal satu <strong>Tingkat Kesulitan</strong>.', 'error');
       return;
     }
 

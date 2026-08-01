@@ -44,6 +44,26 @@ function asInt(value, fallback, min, max) {
 }
 
 /**
+ * Normalisasi nilai enum menjadi array unik yang tervalidasi.
+ * Menerima array, string tunggal, atau string dipisah koma. Bila kosong/tidak
+ * valid, kembalikan fallback. Untuk kompatibilitas dengan payload lama yang
+ * mengirim string tunggal.
+ */
+function asEnumArray(value, allowed, fallback) {
+  let items = [];
+  if (Array.isArray(value)) {
+    items = value;
+  } else if (typeof value === 'string' && value.trim()) {
+    items = value.split(',');
+  }
+  const cleaned = items
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter((item) => allowed.includes(item));
+  const unique = Array.from(new Set(cleaned));
+  return unique.length ? unique : fallback.slice();
+}
+
+/**
  * Normalisasi input form generate soal.
  * Wajib: minimal salah satu dari `mapel` atau `materi`.
  */
@@ -55,16 +75,14 @@ function sanitizeSoalInput(raw) {
     throw err;
   }
   const d = raw;
-  const tipeRaw = asString(d.tipe, 20).toLowerCase();
-  const kesulitanRaw = asString(d.kesulitan, 20).toLowerCase();
   const input = {
     mapel: asString(d.mapel, 200),
     kelas: asString(d.kelas, 60),
     jenjang: asString(d.jenjang, 60),
     materi: asString(d.materi, 500),
     jumlah: asInt(d.jumlah, 5, 1, 30),
-    tipe: TIPE_ALLOWED.includes(tipeRaw) ? tipeRaw : 'pg',
-    kesulitan: KESULITAN_ALLOWED.includes(kesulitanRaw) ? kesulitanRaw : 'sedang',
+    tipe: asEnumArray(d.tipe, TIPE_ALLOWED, ['pg']),
+    kesulitan: asEnumArray(d.kesulitan, KESULITAN_ALLOWED, ['sedang']),
     jumlahOpsi: asInt(d.jumlahOpsi, 4, 2, 6),
     poin: asInt(d.poin, 0, 0, 100),
     pembahasan: d.pembahasan === true || d.pembahasan === 'true',
@@ -117,11 +135,33 @@ function buildUserPrompt(input) {
   push('Kelas', input.kelas);
   push('Materi/Topik', input.materi);
   lines.push(`- Jumlah soal: ${input.jumlah}`);
-  lines.push(`- Tipe soal: ${TIPE_LABEL[input.tipe] || input.tipe}`);
-  if (input.tipe === 'pg') {
-    lines.push(`- Jumlah opsi untuk pilihan ganda: ${input.jumlahOpsi}`);
+
+  // Tipe soal (bisa lebih dari satu). "campuran" diperlakukan sebagai isyarat
+  // untuk memvariasikan tipe.
+  const tipeList = Array.isArray(input.tipe) ? input.tipe : [input.tipe];
+  const tipeConcrete = tipeList.filter((t) => t && t !== 'campuran');
+  if (tipeConcrete.length <= 1 && !tipeList.includes('campuran')) {
+    const t = tipeConcrete[0] || 'pg';
+    lines.push(`- Tipe soal: ${TIPE_LABEL[t] || t}`);
+  } else {
+    const labels = tipeConcrete.map((t) => TIPE_LABEL[t] || t);
+    lines.push(`- Tipe soal (gunakan HANYA tipe berikut dan distribusikan secara berimbang antar soal): ${labels.length ? labels.join('; ') : 'campuran berbagai tipe'}`);
   }
-  lines.push(`- Tingkat kesulitan: ${KESULITAN_LABEL[input.kesulitan] || input.kesulitan}`);
+  if (tipeList.includes('pg') || tipeList.includes('campuran')) {
+    lines.push(`- Jumlah opsi untuk soal pilihan ganda: ${input.jumlahOpsi}`);
+  }
+
+  // Tingkat kesulitan (bisa lebih dari satu).
+  const kesulitanList = Array.isArray(input.kesulitan) ? input.kesulitan : [input.kesulitan];
+  const kesulitanConcrete = kesulitanList.filter((k) => k && k !== 'campuran');
+  if (kesulitanConcrete.length <= 1 && !kesulitanList.includes('campuran')) {
+    const k = kesulitanConcrete[0] || 'sedang';
+    lines.push(`- Tingkat kesulitan: ${KESULITAN_LABEL[k] || k}`);
+  } else {
+    const labels = kesulitanConcrete.map((k) => KESULITAN_LABEL[k] || k);
+    lines.push(`- Tingkat kesulitan (variasikan proporsional antar soal): ${labels.length ? labels.join('; ') : 'campuran mudah hingga sulit'}`);
+  }
+
   if (input.poin > 0) {
     lines.push(`- Poin default per soal: ${input.poin}`);
   }
