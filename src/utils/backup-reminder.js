@@ -87,7 +87,14 @@ function hasSeenReminderToday() {
   }
 }
 
-/** Kuota ekspor minggu ini sudah dipakai, jadi tidak perlu diingatkan lagi. */
+/**
+ * Sudah ada MINIMAL SATU ekspor minggu ini, jadi tidak perlu diingatkan lagi.
+ *
+ * Sengaja memakai "minimal satu", bukan "kuota habis": pengingat ini bertugas
+ * memastikan guru punya salinan minggu ini, bukan mendorong mereka memakai
+ * seluruh kuota. Sisa kuota tetap tersedia bila diperlukan, tetapi tidak perlu
+ * diingatkan.
+ */
 function alreadyDone() {
   return hasExportedThisWeek();
 }
@@ -164,9 +171,9 @@ function shouldShowReminder() {
   if (alreadyDone()) return false;
   const level = getReminderLevel();
   if (!level) return false;
-  // Satu kali per hari untuk semua tingkat. Guru hanya punya satu kesempatan
-  // ekspor per minggu, jadi mengingatkan lebih dari sekali sehari tidak menambah
-  // manfaat dan hanya mengganggu.
+  // Satu kali per hari untuk semua tingkat. Pengingat berhenti begitu ada satu
+  // ekspor minggu ini, jadi memunculkannya lebih dari sekali sehari tidak
+  // menambah manfaat dan hanya mengganggu.
   return !hasSeenReminderToday();
 }
 
@@ -204,7 +211,7 @@ function getMessages(level) {
     : 'belum pernah';
 
   const alasan = 'Berkas Excel ini dapat Bapak/Ibu buka dan lanjutkan sendiri bila aplikasi sedang tidak dapat diakses.';
-  const batas = 'Ekspor cukup <strong>satu kali dalam seminggu</strong>. Batas ini menjaga kuota database sekolah yang dipakai bersama oleh semua guru dan siswa.';
+  const batas = `Tersedia <strong>${status.limit} kali ekspor per minggu</strong>; Bapak/Ibu baru memakai <strong>${status.quotaText}</strong>. Batas ini menjaga kuota database sekolah yang dipakai bersama oleh semua guru dan siswa.`;
 
   if (level === 'admin') {
     return {

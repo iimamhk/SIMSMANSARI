@@ -142,17 +142,23 @@ export function renderGuruDashboard(container) {
   // Status ekspor data guru. Seluruhnya dibaca dari localStorage, jadi tidak ada
   // satu pun operasi baca Firestore untuk menampilkan bagian ini.
   const exportStatus = getExportStatus();
-  const backupBadge = exportStatus.allowed
+  // Lencana seru hanya untuk keadaan yang benar-benar perlu tindakan: belum pernah
+  // mengekspor, atau belum mengekspor minggu ini. Bila sudah ada satu ekspor,
+  // titik hijau sudah cukup meski kuotanya masih tersisa.
+  const perluTindakan = exportStatus.state === 'never' || exportStatus.state === 'due';
+  const backupBadge = perluTindakan
     ? `<span class="ios-notification-badge" title="${escapeAttr(exportStatus.title)}">!</span>`
     : `<span class="ios-status-dot" title="${escapeAttr(exportStatus.title)}"><span class="visually-hidden">${escapeAttr(exportStatus.title)}</span></span>`;
 
-  // Keterangan pada kartu dibuat sebagai kalimat utuh, bukan hanya titik warna,
-  // agar guru langsung tahu keadaannya tanpa perlu membuka halaman backup.
-  const backupCardDesc = exportStatus.state === 'done'
-    ? 'Sudah tersimpan minggu ini.'
-    : exportStatus.state === 'never'
-      ? 'Belum pernah disimpan.'
-      : 'Belum tersimpan minggu ini.';
+  // Keterangan pada kartu menyebut sisa kuota, bukan hanya "sudah" atau "belum",
+  // agar guru tahu masih boleh mengekspor lagi tanpa harus membuka halamannya.
+  const backupCardDesc = exportStatus.state === 'never'
+    ? `Belum pernah. Kuota ${exportStatus.limit}x/minggu.`
+    : exportStatus.state === 'due'
+      ? `Belum minggu ini. Kuota ${exportStatus.limit}x.`
+      : exportStatus.state === 'partial'
+        ? `Tersimpan ${exportStatus.quotaText}, sisa ${exportStatus.remaining}.`
+        : `Kuota minggu ini penuh (${exportStatus.quotaText}).`;
 
   const L = heroTheme.onLight;
   const txt = heroTheme.txt || '#0f172a';

@@ -127,7 +127,7 @@ export async function renderAdminBackupSettingsPage(container) {
         </div>
 
         <div class="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
-          <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis, termasuk membuatkan Excel untuk setiap guru. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri dari halaman Backup <strong>satu kali setiap minggu</strong>, agar mereka memegang salinan di perangkat masing-masing dan dapat memilih sendiri kelas serta jenis data yang diperlukan.</p>
+          <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis, termasuk membuatkan Excel untuk setiap guru. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri dari halaman Backup, dengan kuota <strong>maksimal 3 kali setiap minggu</strong>, agar mereka memegang salinan di perangkat masing-masing dan dapat memilih sendiri kelas serta jenis data yang diperlukan.</p>
         </div>
 
         <!-- Peringatan bila cadangan sudah lama tidak muncul. Seluruh datanya

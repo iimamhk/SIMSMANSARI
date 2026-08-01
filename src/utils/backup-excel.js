@@ -15,6 +15,7 @@ import {
   getDocumentsWhere,
 } from '../firebase/data-service.js';
 import { addBackupHistory, computeChecksum } from './backup-history.js';
+import { recordExport } from './backup-policy.js';
 import {
   INSTITUTION_NAME,
   addGuideSheet,
@@ -47,24 +48,19 @@ export function getLastBackupTimestamp() {
 }
 
 /**
- * Catat waktu ekspor terakhir. Penanda inilah yang dibaca src/utils/backup-policy.js
- * untuk menentukan apakah kuota ekspor mingguan guru sudah dipakai, dan dibaca
- * dasbor untuk menampilkan status "sudah tersimpan minggu ini".
+ * Catat satu ekspor yang baru selesai.
  *
- * Aturan mingguannya sendiri (kapan boleh ekspor, apa keterangannya) berada di
- * backup-policy.js supaya hanya ada satu sumber kebenaran. Fungsi lama
- * getDaysSinceLastBackup() dan isBackupRequiredToday() dihapus dari berkas ini:
- * keduanya memakai ukuran "7 hari berjalan" dan "setiap Jumat", yang berbeda dari
- * aturan minggu kalender yang kini dipakai, sehingga dulu bisa memberi jawaban
- * yang bertentangan dengan halaman Backup.
+ * Seluruh aturan kuota dan bentuk penyimpanannya berada di
+ * src/utils/backup-policy.js supaya hanya ada satu sumber kebenaran. Fungsi ini
+ * tinggal meneruskan, dan namanya dipertahankan agar pemanggil lama tetap jalan.
+ *
+ * recordExport() menulis DUA penanda: daftar riwayat ekspor (untuk menghitung
+ * pemakaian kuota mingguan) dan penanda ekspor terakhir (dipakai dasbor serta
+ * pengingat). Sebelumnya berkas ini hanya menulis penanda terakhir, sehingga
+ * jumlah ekspor per minggu tidak dapat dihitung.
  */
 export function setLastBackupTimestamp(meta = {}) {
-  try {
-    localStorage.setItem(BACKUP_TS_KEY, JSON.stringify({
-      at: new Date().toISOString(),
-      ...meta,
-    }));
-  } catch { /* ignore */ }
+  recordExport(meta);
 }
 
 async function ensureExcelJSLoaded() {
@@ -333,7 +329,7 @@ export async function exportGuruBackupExcel(onProgress = () => {}, options = {})
  *    guru yang mengunduh berkas secara manual justru mematikan unggahan otomatis
  *    miliknya sendiri tanpa ada apa pun yang benar-benar sampai ke Drive.
  *
- * Penggantinya: guru mengekspor sendiri satu kali per minggu (dengan status yang
+ * Penggantinya: guru mengekspor sendiri, maksimal 3 kali per minggu (dengan status yang
  * terlihat jelas di dasbor), dan cadangan seluruh sekolah dikerjakan server
  * setiap Minggu dini hari lewat scripts/backup-snapshot.js.
  */

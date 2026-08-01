@@ -2,34 +2,50 @@
 // backup-policy.js
 // Satu sumber kebenaran untuk aturan ekspor data guru.
 //
-// LATAR BELAKANG KUOTA
-// --------------------
-// Firestore paket gratis (Spark) memberi 50.000 operasi baca per hari, dan
-// Firestore menagih 1 baca per DOKUMEN yang dikembalikan query — bukan per query.
-// Satu ekspor penuh milik seorang guru membaca kira-kira:
+// ATURAN: maksimal 3 kali ekspor per minggu kalender (Senin-Minggu) per guru.
 //
-//   anggota_kelas        ~ jumlah siswa            (mis. 32)
-//   absensi              ~ siswa x pertemuan       (mis. 32 x 18 = 576)
-//   nilai_tugas          ~ siswa x jumlah tugas    (mis. 256)
-//   nilai_ujian          ~ siswa x jumlah ujian    (mis. 128)
-//   bab, tugas_bab, ulangan_harian_kolom  ~ 20
-//   ------------------------------------------------------------
-//   ~ 1.000 baca per pengajaran, jadi ~5.000 baca untuk 5 kelas.
+// MENGAPA 3, BUKAN 1
+// ------------------
+// Batas awalnya 1 kali per minggu, ditetapkan ketika biaya ekspor masih
+// diperkirakan ~1.000 operasi baca per pengajaran untuk sekolah berisi puluhan
+// guru. Angka nyata dari data sekolah ini jauh lebih kecil: 23 pengajaran dan
+// 4 guru, dengan seluruh basis data hanya sekitar 3.400 dokumen.
 //
-// Bila 10 guru mengekspor pada hari yang sama, kuota harian habis dan SELURUH
-// aplikasi berhenti bisa membaca data — absensi, nilai, materi, semuanya.
-// Karena itu ekspor dibatasi satu kali per minggu kalender per guru.
+// Perhitungan ulang dengan angka nyata:
 //
-// Batas ini adalah PAGAR KESELAMATAN, bukan kontrol keamanan: penandanya ada di
-// localStorage sehingga bisa dihapus dari peramban. Tujuannya mencegah ekspor
-// berulang karena tidak sengaja (klik ganda, coba-coba, lupa sudah ekspor),
-// yang merupakan penyebab pemborosan kuota yang nyata.
+//   1 ekspor penuh seorang guru        ~ 6.000 operasi baca
+//   4 guru x 3 ekspor per minggu       ~ 72.000 operasi baca per minggu
+//   Kuota Firestore paket gratis       50.000 per HARI = 350.000 per minggu
+//   ------------------------------------------------------------------------
+//   Pemakaian ekspor pada batas 3x     ~ 20% kuota mingguan, tersebar antar hari
+//
+// Batas 1x terlalu ketat: guru yang salah pilih kelas atau kehilangan berkasnya
+// harus menunggu berhari-hari, padahal kuotanya masih sangat longgar. Batas 3x
+// memberi ruang koreksi tanpa membuka peluang pemborosan tanpa batas.
+//
+// SIFAT BATAS INI
+// ---------------
+// Ini PAGAR KESELAMATAN, bukan kontrol keamanan. Penandanya ada di localStorage
+// sehingga hilang bila data peramban dibersihkan atau guru berganti perangkat,
+// dan tidak ada pemeriksaan di sisi server. Tujuannya mencegah ekspor berulang
+// karena tidak sengaja — klik ganda, coba-coba, atau lupa sudah mengekspor —
+// yang merupakan penyebab pemborosan kuota yang nyata dalam praktik.
 // ============================================================================
 
+/** Penanda ekspor terakhir. Dipertahankan agar data lama tetap terbaca. */
 const LAST_RUN_KEY = 'simguru_backup_last_run';
+
+/** Daftar waktu setiap ekspor, dipakai untuk menghitung pemakaian per minggu. */
+const RUNS_KEY = 'simguru_backup_runs';
+
+/** Batas ekspor per minggu kalender per guru. */
+export const WEEKLY_EXPORT_LIMIT = 3;
 
 /** Perkiraan baca Firestore untuk satu pengajaran, dipakai untuk info ke guru. */
 export const ESTIMATED_READS_PER_ASSIGNMENT = 1000;
+
+/** Simpan riwayat maksimal 5 minggu agar localStorage tidak menumpuk. */
+const RETENTION_WEEKS = 5;
 
 /**
  * Awal minggu kalender (Senin 00:00 waktu lokal) untuk tanggal tertentu.
@@ -55,6 +71,65 @@ export function getLastExport() {
   }
 }
 
+/**
+ * Daftar waktu ekspor (ISO), terurut dari terlama ke terbaru.
+ *
+ * Bila daftar belum ada tetapi penanda ekspor terakhir ada, penanda itu dipakai
+ * sebagai satu entri. Tanpa ini, guru yang sudah mengekspor sebelum pembaruan
+ * akan terlihat belum memakai kuota sama sekali.
+ */
+export function getExportRuns() {
+  let runs = [];
+  try {
+    const raw = localStorage.getItem(RUNS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed)) runs = parsed;
+  } catch { runs = []; }
+
+  runs = runs
+    .map((item) => (typeof item === 'string' ? item : item?.at))
+    .filter((at) => typeof at === 'string' && Number.isFinite(new Date(at).getTime()));
+
+  if (!runs.length) {
+    const last = getLastExport();
+    if (last?.at && Number.isFinite(new Date(last.at).getTime())) runs = [last.at];
+  }
+
+  return runs.sort((a, b) => new Date(a) - new Date(b));
+}
+
+/**
+ * Catat satu ekspor yang baru selesai.
+ *
+ * Menulis kedua penanda: daftar riwayat (untuk menghitung kuota mingguan) dan
+ * penanda ekspor terakhir (dipakai dasbor serta pengingat).
+ */
+export function recordExport(meta = {}) {
+  const at = new Date().toISOString();
+  try {
+    const batas = startOfWeek(new Date());
+    batas.setDate(batas.getDate() - RETENTION_WEEKS * 7);
+    const runs = [...getExportRuns(), at]
+      .filter((iso) => new Date(iso).getTime() >= batas.getTime());
+    localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+  } catch { /* localStorage penuh atau diblokir; penanda terakhir tetap ditulis */ }
+  try {
+    localStorage.setItem(LAST_RUN_KEY, JSON.stringify({ at, ...meta }));
+  } catch { /* ignore */ }
+  return at;
+}
+
+/** Jumlah ekspor yang sudah dipakai pada minggu kalender yang sedang berjalan. */
+export function getExportsThisWeek(now = new Date()) {
+  const awal = startOfWeek(now).getTime();
+  return getExportRuns().filter((iso) => new Date(iso).getTime() >= awal).length;
+}
+
+/** Sisa kuota ekspor untuk minggu ini. */
+export function getRemainingExports(now = new Date()) {
+  return Math.max(0, WEEKLY_EXPORT_LIMIT - getExportsThisWeek(now));
+}
+
 /** Jumlah hari penuh sejak ekspor terakhir. Infinity bila belum pernah. */
 export function getDaysSinceLastExport() {
   const last = getLastExport();
@@ -66,14 +141,10 @@ export function getDaysSinceLastExport() {
 
 /** Apakah sudah ada ekspor pada minggu kalender yang sedang berjalan. */
 export function hasExportedThisWeek(now = new Date()) {
-  const last = getLastExport();
-  if (!last?.at) return false;
-  const lastAt = new Date(last.at).getTime();
-  if (!Number.isFinite(lastAt)) return false;
-  return lastAt >= startOfWeek(now).getTime();
+  return getExportsThisWeek(now) > 0;
 }
 
-/** Senin berikutnya 00:00 — saat kuota ekspor mingguan terbuka lagi. */
+/** Senin berikutnya 00:00 — saat kuota ekspor mingguan terisi lagi. */
 export function nextExportAvailableAt(now = new Date()) {
   const next = startOfWeek(now);
   next.setDate(next.getDate() + 7);
@@ -101,20 +172,36 @@ function formatTanggalJam(date) {
   }
 }
 
+/** "Ekspor ke-2 dari 3 minggu ini" — dipakai di beberapa tempat. */
+export function describeQuota(now = new Date()) {
+  const dipakai = getExportsThisWeek(now);
+  return {
+    used: dipakai,
+    limit: WEEKLY_EXPORT_LIMIT,
+    remaining: Math.max(0, WEEKLY_EXPORT_LIMIT - dipakai),
+    usedText: `${dipakai} dari ${WEEKLY_EXPORT_LIMIT}`,
+    nextText: `ke-${Math.min(dipakai + 1, WEEKLY_EXPORT_LIMIT)} dari ${WEEKLY_EXPORT_LIMIT}`,
+  };
+}
+
 /**
  * Status ekspor guru dalam bentuk siap tampil di UI.
  *
  * @returns {{
  *   allowed: boolean,          apakah ekspor boleh dijalankan sekarang
- *   state: 'never'|'done'|'due',
+ *   state: 'never'|'due'|'partial'|'full',
+ *   used: number,              ekspor yang sudah dipakai minggu ini
+ *   limit: number,             batas per minggu
+ *   remaining: number,         sisa kuota minggu ini
  *   badgeLabel: string,        teks pendek untuk lencana
  *   badgeTone: 'ok'|'warn'|'info',
  *   title: string,             kalimat utama
  *   detail: string,            penjelasan lengkap
+ *   quotaText: string,         mis. "2 dari 3"
  *   lastAt: string,            ISO waktu ekspor terakhir ('' bila belum pernah)
  *   lastFileName: string,
  *   daysSince: number,
- *   nextAvailableText: string, kapan boleh ekspor lagi ('' bila boleh sekarang)
+ *   nextAvailableText: string, kapan kuota terisi lagi ('' bila masih ada sisa)
  * }}
  */
 export function getExportStatus(now = new Date()) {
@@ -122,48 +209,70 @@ export function getExportStatus(now = new Date()) {
   const daysSince = getDaysSinceLastExport();
   const lastAt = last?.at || '';
   const lastFileName = last?.file_name || '';
+  const kuota = describeQuota(now);
+  const dasar = {
+    used: kuota.used,
+    limit: kuota.limit,
+    remaining: kuota.remaining,
+    quotaText: kuota.usedText,
+    lastAt,
+    lastFileName,
+    daysSince,
+  };
 
-  if (!lastAt) {
+  // Belum pernah mengekspor sama sekali.
+  if (!lastAt && kuota.used === 0) {
     return {
+      ...dasar,
       allowed: true,
       state: 'never',
       badgeLabel: 'Belum pernah',
       badgeTone: 'warn',
       title: 'Belum pernah ekspor data',
-      detail: 'Data Anda belum pernah disalin ke Excel. Lakukan ekspor sekali minggu ini agar Anda punya salinan mandiri bila aplikasi tidak dapat diakses.',
-      lastAt: '',
-      lastFileName: '',
+      detail: `Data Anda belum pernah disalin ke Excel. Tersedia ${kuota.limit} kali ekspor setiap minggu — lakukan sekali agar Anda punya salinan mandiri bila aplikasi tidak dapat diakses.`,
       daysSince: Infinity,
       nextAvailableText: '',
     };
   }
 
-  if (hasExportedThisWeek(now)) {
+  // Kuota minggu ini sudah terpakai habis.
+  if (kuota.remaining === 0) {
     const nextAt = nextExportAvailableAt(now);
     return {
+      ...dasar,
       allowed: false,
-      state: 'done',
-      badgeLabel: 'Sudah tersimpan',
+      state: 'full',
+      badgeLabel: 'Kuota penuh',
       badgeTone: 'ok',
-      title: 'Data minggu ini sudah tersimpan di perangkat Anda',
-      detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Ekspor berikutnya dapat dilakukan mulai ${formatTanggal(nextAt)}.`,
-      lastAt,
-      lastFileName,
-      daysSince,
+      title: `Kuota ekspor minggu ini sudah terpakai (${kuota.usedText})`,
+      detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Kuota terisi kembali pada ${formatTanggal(nextAt)}. Berkas yang sudah diunduh tetap tersimpan dan dapat dibuka kapan saja.`,
       nextAvailableText: formatTanggal(nextAt),
     };
   }
 
+  // Sudah mengekspor minggu ini, tetapi masih ada sisa.
+  if (kuota.used > 0) {
+    return {
+      ...dasar,
+      allowed: true,
+      state: 'partial',
+      badgeLabel: `Sisa ${kuota.remaining}`,
+      badgeTone: 'ok',
+      title: `Sudah ${kuota.usedText} ekspor minggu ini`,
+      detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Masih tersisa ${kuota.remaining} kali ekspor untuk minggu ini, misalnya bila ada data yang baru diperbaiki.`,
+      nextAvailableText: '',
+    };
+  }
+
+  // Belum mengekspor minggu ini, tetapi pernah pada minggu sebelumnya.
   return {
+    ...dasar,
     allowed: true,
     state: 'due',
     badgeLabel: 'Perlu ekspor',
     badgeTone: 'warn',
     title: 'Belum ekspor data minggu ini',
-    detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)} (${daysSince} hari lalu). Silakan ekspor sekali untuk minggu ini.`,
-    lastAt,
-    lastFileName,
-    daysSince,
+    detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)} (${daysSince} hari lalu). Tersedia ${kuota.limit} kali ekspor untuk minggu ini.`,
     nextAvailableText: '',
   };
 }

@@ -62,9 +62,10 @@ function escapeHtml(value) {
 //    baris judul sehingga tidak bermakna. Keduanya tetap melaporkan "Backup
 //    Berhasil", yang lebih buruk daripada tidak ada pilihan itu sama sekali.
 //
-// 2. SATU KALI PER MINGGU. Satu ekspor membaca ribuan dokumen Firestore. Batas
-//    ini melindungi kuota baca harian yang dipakai bersama seluruh aplikasi.
-//    Aturannya ada di src/utils/backup-policy.js.
+// 2. MAKSIMAL 3 KALI PER MINGGU. Satu ekspor membaca ribuan dokumen Firestore.
+//    Batas ini melindungi kuota baca harian yang dipakai bersama seluruh aplikasi,
+//    sekaligus memberi ruang koreksi bila guru salah pilih kelas atau kehilangan
+//    berkasnya. Aturan dan perhitungannya ada di src/utils/backup-policy.js.
 //
 // 3. DATA MILIK SENDIRI SAJA. Daftar kelas hanya berasal dari
 //    getTeachingAssignmentsForUser (difilter guru_id), dan sebelum ekspor
@@ -182,8 +183,8 @@ export async function renderGuruBackupPage(container) {
       </div>
     </div>`;
 
-  // Penjelasan aturan satu kali per minggu, ditulis dengan alasannya agar guru
-  // memahami batas ini sebagai perlindungan bersama, bukan sekadar larangan.
+  // Penjelasan batas mingguan, ditulis dengan alasannya agar guru memahami batas
+  // ini sebagai perlindungan bersama, bukan sekadar larangan.
   const quotaNotice = `
     <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div class="flex items-start gap-3">
@@ -191,9 +192,10 @@ export async function renderGuruBackupPage(container) {
           <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         </div>
         <div class="min-w-0 text-sm leading-relaxed text-slate-600">
-          <p class="font-bold text-slate-900">Mengapa ekspor dibatasi satu kali per minggu?</p>
+          <p class="font-bold text-slate-900">Mengapa ekspor dibatasi ${policy.limit} kali per minggu?</p>
           <p class="mt-1">Satu kali ekspor membaca ribuan baris data dari database sekolah. Database ini punya batas pemakaian harian yang dipakai bersama oleh semua guru dan siswa. Bila batas itu habis, seluruh aplikasi berhenti dapat membuka absensi, nilai, dan materi sampai hari berikutnya.</p>
-          <p class="mt-1">Karena itu setiap guru mengekspor sekali dalam seminggu. Cadangan lengkap seluruh sekolah tetap dibuat otomatis oleh sistem setiap <strong>hari Minggu dini hari</strong>, saat tidak ada kegiatan mengajar.</p>
+          <p class="mt-1">Karena itu setiap guru mendapat <strong>${policy.limit} kali ekspor per minggu</strong> &mdash; cukup untuk sekali rutin, ditambah cadangan bila ada data yang perlu diperbaiki. Cadangan lengkap seluruh sekolah tetap dibuat otomatis oleh sistem setiap <strong>hari Minggu dini hari</strong>, saat tidak ada kegiatan mengajar.</p>
+          <p class="mt-1">Pemakaian Anda minggu ini: <strong>${policy.quotaText}</strong>${policy.remaining > 0 ? `, sisa ${policy.remaining} kali` : ", kuota sudah penuh"}.</p>
         </div>
       </div>
     </div>`;
@@ -723,22 +725,28 @@ function initBackupActions(container) {
   const successText = container.querySelector('#backup-success-text');
   const successDrive = container.querySelector('#backup-success-drive');
 
-  // Kuota mingguan sudah habis: matikan tombol dan jelaskan alasannya, jangan
-  // biarkan guru menekan tombol lalu ditolak dengan pesan kesalahan.
+  // Keadaan tombol ekspor mengikuti sisa kuota. Guru perlu tahu SISA kuotanya,
+  // bukan hanya tahu bahwa tombolnya terkunci.
   const policy = getExportStatus();
+  const labelEl = container.querySelector('#btn-start-backup-label');
+  const titleEl = container.querySelector('#backup-action-title');
+  const descEl = container.querySelector('#backup-action-desc');
+
   if (!policy.allowed && startBtn) {
     startBtn.disabled = true;
     startBtn.classList.remove('bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'text-white', 'shadow-lg', 'shadow-emerald-500/30', 'hover:-translate-y-0.5', 'hover:shadow-xl', 'active:scale-95');
     startBtn.classList.add('bg-slate-200', 'text-slate-500', 'cursor-not-allowed');
-    const label = container.querySelector('#btn-start-backup-label');
-    if (label) label.textContent = 'Sudah ekspor minggu ini';
-    startBtn.title = `Ekspor berikutnya tersedia mulai ${policy.nextAvailableText}.`;
-    const titleEl = container.querySelector('#backup-action-title');
-    const descEl = container.querySelector('#backup-action-desc');
-    if (titleEl) titleEl.textContent = 'Ekspor minggu ini sudah selesai';
+    if (labelEl) labelEl.textContent = `Kuota minggu ini penuh (${policy.quotaText})`;
+    startBtn.title = `Kuota terisi kembali pada ${policy.nextAvailableText}.`;
+    if (titleEl) titleEl.textContent = `Kuota ekspor minggu ini sudah terpakai (${policy.quotaText})`;
     if (descEl) {
-      descEl.textContent = `Berkas Excel Anda sudah tersimpan. Ekspor berikutnya dapat dilakukan mulai ${policy.nextAvailableText}. Berkas lama tetap ada di tab Riwayat.`;
+      descEl.textContent = `Berkas Excel Anda sudah tersimpan dan tetap dapat dibuka kapan saja dari tab Riwayat. Kuota ${policy.limit} kali ekspor akan terisi kembali pada ${policy.nextAvailableText}.`;
     }
+  } else if (policy.remaining < policy.limit && descEl) {
+    // Masih ada sisa kuota: tampilkan sisanya supaya guru tidak ragu memakainya
+    // saat ada data yang baru diperbaiki.
+    if (titleEl) titleEl.textContent = `Ekspor ke-${policy.used + 1} dari ${policy.limit} minggu ini`;
+    descEl.textContent = `Anda sudah memakai ${policy.quotaText} kuota ekspor minggu ini, tersisa ${policy.remaining} kali. Gunakan bila ada absensi atau nilai yang baru diperbaiki.`;
   }
 
   const updateProgress = (text, percent) => {
@@ -769,9 +777,9 @@ function initBackupActions(container) {
     const current = getExportStatus();
     if (!current.allowed) {
       alert(
-        'Ekspor minggu ini sudah dilakukan.\n\n'
+        `Kuota ekspor minggu ini sudah terpakai (${current.quotaText}).\n\n`
         + `${current.detail}\n\n`
-        + 'Batas satu kali per minggu ini menjaga agar kuota database sekolah '
+        + `Batas ${current.limit} kali per minggu ini menjaga agar kuota database sekolah `
         + 'tidak habis, karena kuota tersebut dipakai bersama oleh semua guru dan siswa.'
       );
       return;
@@ -834,8 +842,10 @@ function initBackupActions(container) {
         `Hasil     : ${tujuanTeks}`,
         biaya ? `Cakupan   : ${biaya}` : '',
         '',
-        'Ini adalah ekspor Anda untuk minggu ini. Setelah selesai, tombol ekspor',
-        'akan terkunci sampai minggu depan.',
+        `Ini ekspor ${current.limit - current.remaining + 1} dari ${current.limit} untuk minggu ini.`,
+        current.remaining > 1
+          ? `Setelah ini masih tersisa ${current.remaining - 1} kali ekspor.`
+          : 'Setelah ini kuota minggu ini penuh, dan terisi lagi hari Senin.',
       ].filter(Boolean).join('\n');
       if (!confirm(konfirmasi)) return;
 
