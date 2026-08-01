@@ -1,37 +1,47 @@
 /**
- * backup-snapshot.js — cadangan penuh basis data dalam format JSON.
+ * backup-snapshot.js — cadangan otomatis hasil kerja guru dalam format JSON.
  *
- * PERAN
- * -----
- * Ini adalah backup yang sesungguhnya: satu berkas JSON berisi seluruh dokumen
- * beserta ID-nya, sehingga data dapat dipulihkan kembali ke Firestore. Berkas
- * Excel yang diunduh guru BUKAN backup dalam pengertian ini, karena Excel hanya
- * menyimpan nama siswa, bukan ID dokumen, sehingga tidak bisa dipulihkan.
+ * CAKUPAN
+ * -------
+ * Hanya data hasil kerja guru: ABSENSI, NILAI, dan KEAKTIFAN SISWA. Data lain
+ * (kuis, permainan, percakapan, materi ajar, keuangan, tampilan lobi) tidak
+ * dicadangkan. Koleksi `users` dan `settings` juga tidak, karena keduanya memuat
+ * kredensial; nama siswa dan guru sudah tersedia di `anggota_kelas` dan
+ * `pengajaran`.
+ *
+ * Cadangan ini adalah tanggung jawab ADMIN dan berjalan otomatis tanpa campur
+ * tangan siapa pun. Guru tetap punya tanggung jawab terpisah: mengekspor data
+ * miliknya sendiri ke Excel satu kali per minggu dari halaman Backup, karena
+ * berkas Excel itulah yang dapat langsung dipakai bekerja bila aplikasi tidak
+ * dapat diakses. Keduanya saling melengkapi, bukan menggantikan:
+ *
+ *   Snapshot JSON (admin, otomatis)  -> untuk MEMULIHKAN sistem
+ *   Excel (guru, mingguan)           -> untuk MELANJUTKAN pekerjaan
  *
  * MENGAPA DIJALANKAN DI GITHUB ACTIONS, BUKAN DI PERAMBAN
  * -------------------------------------------------------
- * 1. Kuota baca. Membaca seluruh basis data memerlukan puluhan ribu operasi
- *    baca. Bila dijalankan dari peramban admin pada jam kerja, kuota harian
- *    Firestore (50.000 baca/hari pada paket gratis) habis dan seluruh aplikasi
- *    berhenti bisa membaca data. Dijalankan Minggu dini hari, kuota hari itu
- *    memang sedang tidak terpakai karena tidak ada kegiatan mengajar.
- * 2. Token Google Drive tidak pernah keluar dari server. Peramban tidak lagi
- *    perlu diberi access token Drive.
+ * 1. Kuota baca. Firestore paket gratis memberi 50.000 operasi baca per hari,
+ *    dipakai bersama seluruh pengguna. Bila cadangan dijalankan dari peramban
+ *    admin pada jam kerja, kuota bisa habis dan aplikasi berhenti bisa membaca
+ *    data. Dijalankan Minggu dini hari, kuota hari itu memang tidak terpakai.
+ * 2. Token Google Drive tidak pernah keluar dari server.
  * 3. Tidak bergantung pada ada tidaknya admin yang membuka aplikasi.
- * 4. Admin SDK melewati Firestore Rules, sehingga koleksi yang tidak dapat
- *    dibaca peramban (mis. `users`, `settings`) tetap tercadangkan.
+ * 4. Admin SDK melewati Firestore Rules, sehingga cakupannya tidak dibatasi oleh
+ *    aturan akses peramban.
  *
  * PENGAMAN KUOTA
  * --------------
  * Skrip menghitung setiap dokumen yang dibaca dan BERHENTI bila melewati
- * MAX_READS. Lebih baik snapshot gagal dengan pesan jelas daripada menghabiskan
- * kuota dan membuat aplikasi mati pada hari Senin.
+ * MAX_READS. Lebih baik snapshot berhenti dengan pesan jelas daripada
+ * menghabiskan kuota dan membuat aplikasi mati pada hari Senin.
  *
  * Variabel lingkungan:
  *   FIREBASE_SERVICE_ACCOUNT_JSON  (wajib) kredensial service account
  *   AI_CONFIG_SECRET               (opsional) kunci dekripsi kredensial Drive
  *   BACKUP_MAX_READS               (opsional) batas baca, default 45000
  *   BACKUP_SKIP_DRIVE              (opsional) '1' untuk melewati unggah Drive
+ *   BACKUP_CORE_ONLY               (opsional) '1' untuk melewati kunci pembaca
+ *   BACKUP_EXTRA_COLLECTIONS       (opsional) koleksi tambahan, dipisah koma
  */
 
 const admin = require('firebase-admin');
@@ -46,58 +56,50 @@ const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploa
 const DEFAULT_MAX_READS = 45000;
 
 /**
- * Koleksi yang dicadangkan, diurutkan dari yang paling penting.
+ * Cakupan backup: HANYA hasil kerja guru.
  *
- * Urutan ini disengaja: bila pengaman kuota memutus proses di tengah jalan,
- * data yang paling tidak tergantikan (struktur kelas, nilai, absensi) sudah
- * masuk lebih dulu. Koleksi bervolume besar dan mudah dibuat ulang berada di
- * urutan belakang.
+ * Keputusan cakupan (diminta oleh sekolah): yang dicadangkan otomatis adalah
+ * absensi, nilai, dan keaktifan siswa. Data lain — kuis, permainan, percakapan,
+ * materi, keuangan, tampilan lobi — TIDAK dicadangkan.
+ *
+ * Daftar dibagi dua lapis karena data hasil kerja guru menyimpan relasi berupa
+ * ID saja, bukan nama. Tanpa lapis kedua, angka-angkanya tetap ada tetapi tidak
+ * dapat dibaca lagi: absensi hanya berisi `siswa_id` dan `pengajaran_id`, dan
+ * nilai hanya berisi `bab_id`, `tugas_id`, atau `uh_id`.
  */
-const COLLECTIONS = [
-  // -- Struktur & identitas: kecil, tapi tanpa ini data lain kehilangan makna --
-  'users',
-  'tahun_ajaran',
-  'kelas',
-  'mata_pelajaran',
-  'pengajaran',
-  'pembelajaran',
-  'anggota_kelas',
-  'wali_kelas',
-  'settings',
 
-  // -- Data akademik inti: hasil kerja guru sepanjang semester --
+/** LAPIS 1 — hasil kerja guru. Tidak dapat dibuat ulang bila hilang. */
+const CORE_COLLECTIONS = [
   'absensi',
-  'absensi_ringkasan_siswa',
   'nilai_tugas',
   'nilai_ujian',
+  'keaktifan_siswa',
+];
+
+/**
+ * LAPIS 2 — kunci pembaca. Volumenya kecil (puluhan sampai ratusan dokumen),
+ * tetapi tanpa ini lapis 1 kehilangan makna:
+ *
+ *   pengajaran            `pengajaran_id` yang dipakai SETIAP dokumen lapis 1;
+ *                         memuat guru, kelas, dan mata pelajaran sekaligus
+ *   anggota_kelas         memetakan `siswa_id` menjadi nama dan nomor absen
+ *   bab, tugas_bab        memberi nama pada `bab_id` dan `tugas_id` di nilai tugas
+ *   ulangan_harian_kolom  memberi nama pada `uh_id` di nilai ujian
+ *   tahun_ajaran, kelas,  nama periode, kelas, dan mata pelajaran
+ *   mata_pelajaran
+ *
+ * Lapis ini dapat dimatikan dengan BACKUP_CORE_ONLY=1, tetapi hasilnya menjadi
+ * kumpulan angka tanpa keterangan siapa dan pelajaran apa.
+ */
+const REFERENCE_COLLECTIONS = [
+  'pengajaran',
+  'anggota_kelas',
   'bab',
   'tugas_bab',
   'ulangan_harian_kolom',
-  'catatan_khusus',
-  'jurnal_guru',
-  'keaktifan_siswa',
-
-  // -- Keuangan: tidak punya cadangan lain sama sekali --
-  'item_pembayaran_buku',
-  'pembayaran_buku',
-  'kas_kelas',
-  'kas_transaksi',
-
-  // -- Materi & pengumuman --
-  'materi_publish',
-  'materi_ai',
-  'rpm_drafts',
-  'pengumuman',
-
-  // -- Kuis: bervolume besar, nilai akhirnya sudah tersalin ke nilai_ujian --
-  'kuiz_paket',
-  'kuiz_nilai_final',
-  'kuiz_sesi',
-
-  // -- Tampilan publik: mudah dibuat ulang --
-  'lobby_settings',
-  'lobby_sections',
-  'lobby_links',
+  'tahun_ajaran',
+  'kelas',
+  'mata_pelajaran',
 ];
 
 /**
@@ -105,19 +107,71 @@ const COLLECTIONS = [
  * agar keputusan ini dapat ditinjau ulang, bukan terlihat sebagai kelalaian.
  */
 const EXCLUDED = {
-  kuiz_jawaban: 'Jawaban mentah per soal; volumenya terbesar di basis data dan nilai akhirnya sudah tersimpan di kuiz_nilai_final.',
-  game_sessions: 'Sesi permainan bersifat sementara.',
-  game_session_rekap: 'Rekap permainan, bukan nilai resmi.',
-  game_configs: 'Konfigurasi permainan, mudah dibuat ulang.',
-  game_tokens: 'Token harian, kedaluwarsa dengan sendirinya.',
-  battle_rooms: 'Ruang permainan sementara.',
-  battle_participants: 'Peserta permainan sementara.',
-  chat_rooms: 'Percakapan, bukan data akademik.',
-  materi_reads: 'Penanda "sudah dibaca", dapat dibentuk ulang.',
-  pengumuman_reads: 'Penanda "sudah dibaca", dapat dibentuk ulang.',
-  materi_workspace_drafts: 'Draf kerja sementara milik guru.',
-  dashboard_counts: 'Angka ringkasan yang dihitung ulang otomatis.',
+  users: 'Menyimpan password_hash bcrypt dan, pada akun lama yang belum pernah login, password teks biasa. Memasukkannya ke berkas backup menjadikan berkas itu materi kredensial. Nama siswa dan guru sudah tersedia di anggota_kelas dan pengajaran, jadi tidak diperlukan.',
+  settings: 'Memuat kredensial Google Drive dan API key AI dalam bentuk terenkripsi. Tidak boleh ikut ke berkas yang tersimpan di luar Firestore.',
+  usernames: 'Indeks keunikan nama pengguna; dibentuk ulang dari users.',
+  absensi_ringkasan_siswa: 'Sepenuhnya turunan dari absensi. Dihitung ulang otomatis pada penulisan absensi berikutnya, dan getAttendanceSummary sudah punya jalur hitung ulang bila dokumennya tidak ada.',
+  catatan_khusus: 'Di luar cakupan yang diminta (absensi, nilai, keaktifan). Catatan: ini masukan asli guru yang tidak punya salinan lain — dapat ditambahkan lewat BACKUP_EXTRA_COLLECTIONS bila diinginkan.',
+  jurnal_guru: 'Di luar cakupan yang diminta. Sama seperti catatan_khusus, ini masukan asli guru tanpa salinan lain.',
+  item_pembayaran_buku: 'Di luar cakupan yang diminta (data keuangan).',
+  pembayaran_buku: 'Di luar cakupan yang diminta (data keuangan).',
+  kas_kelas: 'Di luar cakupan yang diminta (data keuangan).',
+  kas_transaksi: 'Di luar cakupan yang diminta (data keuangan).',
+  kuiz_paket: 'Di luar cakupan yang diminta. Nilai akhir kuis sudah tersalin ke nilai_ujian dan nilai_tugas.',
+  kuiz_sesi: 'Di luar cakupan yang diminta.',
+  kuiz_jawaban: 'Di luar cakupan yang diminta; volumenya terbesar di basis data.',
+  kuiz_nilai_final: 'Di luar cakupan yang diminta; nilainya sudah tersalin ke nilai_ujian/nilai_tugas.',
+  materi_publish: 'Di luar cakupan yang diminta (bahan ajar, bukan hasil penilaian).',
+  materi_ai: 'Di luar cakupan yang diminta.',
+  rpm_drafts: 'Di luar cakupan yang diminta.',
+  pengumuman: 'Di luar cakupan yang diminta.',
+  pembelajaran: 'Di luar cakupan yang diminta; relasi yang dipakai data akademik adalah pengajaran.',
+  wali_kelas: 'Di luar cakupan yang diminta; keanggotaan kelas sudah tercakup anggota_kelas.',
+  game_configs: 'Di luar cakupan yang diminta.',
+  game_sessions: 'Di luar cakupan yang diminta; bersifat sementara.',
+  game_session_rekap: 'Di luar cakupan yang diminta; bukan nilai resmi.',
+  chat_rooms: 'Di luar cakupan yang diminta.',
+  lobby_settings: 'Di luar cakupan yang diminta; memuat PIN akses lobi.',
+  lobby_sections: 'Di luar cakupan yang diminta; memuat access_token lobi.',
+  lobby_links: 'Di luar cakupan yang diminta.',
 };
+
+/**
+ * Nama field yang SELALU dibuang dari setiap dokumen sebelum ditulis ke berkas.
+ *
+ * Jaring pengaman, bukan pengganti pemilihan koleksi: bila suatu saat koleksi
+ * ditambahkan lewat BACKUP_EXTRA_COLLECTIONS, kredensial tetap tidak akan ikut
+ * ke berkas yang tersimpan di luar Firestore.
+ */
+const REDACTED_FIELDS = [
+  'password',
+  'password_hash',
+  'client_secret_enc',
+  'refresh_token_enc',
+  'api_key_enc',
+  'access_token',
+  'refresh_token',
+  'client_secret',
+];
+
+/** Koleksi tambahan atas permintaan operator, mis. "catatan_khusus,jurnal_guru". */
+function extraCollections() {
+  return String(process.env.BACKUP_EXTRA_COLLECTIONS || '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
+
+/** Daftar koleksi final, sesuai urutan pencadangan. */
+function resolveCollections() {
+  const coreOnly = process.env.BACKUP_CORE_ONLY === '1';
+  const list = [...CORE_COLLECTIONS];
+  if (!coreOnly) list.push(...REFERENCE_COLLECTIONS);
+  for (const name of extraCollections()) {
+    if (!list.includes(name)) list.push(name);
+  }
+  return list;
+}
 
 function log(message) {
   process.stdout.write(`${message}\n`);
@@ -157,6 +211,20 @@ async function readActivePeriod(db) {
   }
 }
 
+/** Buang field kredensial dari satu dokumen, termasuk objek bersarang. */
+function redact(value) {
+  if (Array.isArray(value)) return value.map(redact);
+  if (!value || typeof value !== 'object') return value;
+  // Timestamp Firestore dan tipe khusus lain dibiarkan apa adanya.
+  if (typeof value.toDate === 'function') return value;
+  const out = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (REDACTED_FIELDS.includes(key)) continue;
+    out[key] = redact(val);
+  }
+  return out;
+}
+
 /**
  * Salin satu koleksi apa adanya.
  *
@@ -169,7 +237,7 @@ async function dumpCollection(db, name, budget) {
   const snapshot = await db.collection(name).get();
   const docs = [];
   snapshot.forEach((doc) => {
-    docs.push({ id: doc.id, data: doc.data() });
+    docs.push({ id: doc.id, data: redact(doc.data()) });
   });
   // Query kosong tetap ditagih 1 baca oleh Firestore.
   budget.used += Math.max(1, docs.length);
@@ -233,7 +301,7 @@ async function writeLog({ status, fileName, size, message }) {
  * Tulis ringkasan ke halaman ikhtisar GitHub Actions, sehingga hasilnya terlihat
  * tanpa harus membaca seluruh log. Diabaikan saat dijalankan di luar Actions.
  */
-function writeSummary({ fileName, totalDocs, reads, gzSize, complete, drive }) {
+function writeSummary({ fileName, totalDocs, reads, gzSize, complete, drive, scope, coreDocs, refDocs }) {
   const target = process.env.GITHUB_STEP_SUMMARY;
   if (!target) return;
   const rows = [
@@ -242,7 +310,10 @@ function writeSummary({ fileName, totalDocs, reads, gzSize, complete, drive }) {
     '| Keterangan | Nilai |',
     '| --- | --- |',
     `| Berkas | \`${fileName}\` |`,
-    `| Dokumen tersalin | ${totalDocs.toLocaleString('id-ID')} |`,
+    `| Cakupan | ${scope} |`,
+    `| Data hasil kerja guru | ${coreDocs.toLocaleString('id-ID')} dokumen |`,
+    `| Kunci pembaca | ${refDocs.toLocaleString('id-ID')} dokumen |`,
+    `| Total dokumen | ${totalDocs.toLocaleString('id-ID')} |`,
     `| Operasi baca Firestore | ${reads.toLocaleString('id-ID')} |`,
     `| Ukuran (gzip) | ${(gzSize / 1024).toFixed(0)} KB |`,
     `| Snapshot lengkap | ${complete ? 'Ya' : 'TIDAK — batas baca tercapai'} |`,
@@ -251,6 +322,17 @@ function writeSummary({ fileName, totalDocs, reads, gzSize, complete, drive }) {
     complete
       ? 'Cadangan minggu ini tersimpan dan dilampirkan pada Release di bawah.'
       : 'Snapshot berhenti di tengah karena batas baca. Naikkan `BACKUP_MAX_READS` atau tinjau koleksi bervolume besar.',
+    '',
+    '<details><summary>Apa saja yang dicadangkan dan apa yang tidak</summary>',
+    '',
+    `**Hasil kerja guru:** ${CORE_COLLECTIONS.join(', ')}`,
+    '',
+    `**Kunci pembaca** (kecil, tanpa ini data di atas kehilangan keterangan siswa, kelas, dan nama tugas): ${REFERENCE_COLLECTIONS.join(', ')}`,
+    '',
+    '**Tidak dicadangkan:** kuis, permainan, percakapan, materi ajar, keuangan, tampilan lobi, '
+      + 'serta `users` dan `settings` karena keduanya memuat kredensial.',
+    '',
+    '</details>',
   ];
   if (String(drive).startsWith('gagal')) {
     rows.push(
@@ -271,8 +353,16 @@ async function main() {
   const budget = { used: 0, max: maxReads };
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
   const fileName = `Snapshot-SIMSMANSARI-${stamp}.json.gz`;
+  const COLLECTIONS = resolveCollections();
+  const coreOnly = process.env.BACKUP_CORE_ONLY === '1';
+  const extras = extraCollections();
 
-  log('=== Snapshot basis data SIMSMANSARI ===');
+  log('=== Snapshot data hasil kerja guru — SIMSMANSARI ===');
+  log('Cakupan: absensi, nilai, keaktifan siswa (beserta kunci pembacanya).');
+  log('Tidak dicadangkan: kuis, permainan, percakapan, materi, keuangan, lobi,');
+  log('serta users dan settings karena keduanya memuat kredensial.');
+  if (coreOnly) log('! BACKUP_CORE_ONLY=1 — kunci pembaca DILEWATI, hasilnya angka tanpa keterangan.');
+  if (extras.length) log(`Koleksi tambahan atas permintaan: ${extras.join(', ')}`);
   log(`Batas baca: ${maxReads.toLocaleString('id-ID')} dokumen\n`);
 
   let db;
@@ -319,9 +409,15 @@ async function main() {
 
   const snapshot = {
     meta: {
-      schema_version: 1,
+      schema_version: 2,
       generated_at: new Date().toISOString(),
       generated_by: 'scripts/backup-snapshot.js',
+      scope: 'hasil-kerja-guru',
+      scope_description: 'Absensi, nilai, dan keaktifan siswa, beserta koleksi kunci yang diperlukan untuk membacanya.',
+      core_collections: CORE_COLLECTIONS,
+      reference_collections: coreOnly ? [] : REFERENCE_COLLECTIONS,
+      extra_collections: extras,
+      redacted_fields: REDACTED_FIELDS,
       active_period: period,
       total_reads: budget.used,
       max_reads: budget.max,
@@ -338,11 +434,21 @@ async function main() {
   const outPath = path.join(process.cwd(), fileName);
   fs.writeFileSync(outPath, gz);
 
+  const docsIn = (names) => stats
+    .filter((s) => names.includes(s.collection))
+    .reduce((sum, s) => sum + s.documents, 0);
+  const coreDocs = docsIn(CORE_COLLECTIONS);
+  const refDocs = docsIn(REFERENCE_COLLECTIONS);
   const totalDocs = stats.reduce((sum, s) => sum + s.documents, 0);
   const durationSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  const scopeLabel = coreOnly
+    ? 'Hasil kerja guru saja (tanpa kunci pembaca)'
+    : 'Hasil kerja guru + kunci pembaca';
 
   log('\n--- Ringkasan ---');
-  log(`Dokumen tersalin : ${totalDocs.toLocaleString('id-ID')}`);
+  log(`Hasil kerja guru : ${coreDocs.toLocaleString('id-ID')} dokumen (absensi, nilai, keaktifan)`);
+  log(`Kunci pembaca    : ${refDocs.toLocaleString('id-ID')} dokumen (pengajaran, anggota kelas, bab, dll)`);
+  log(`Total dokumen    : ${totalDocs.toLocaleString('id-ID')}`);
   log(`Operasi baca     : ${budget.used.toLocaleString('id-ID')} dari batas ${budget.max.toLocaleString('id-ID')}`);
   log(`Ukuran JSON      : ${(json.length / 1048576).toFixed(2)} MB`);
   log(`Setelah gzip     : ${(gz.length / 1048576).toFixed(2)} MB`);
@@ -350,15 +456,26 @@ async function main() {
   log(`Berkas           : ${outPath}`);
   log(`Lengkap          : ${snapshot.meta.complete ? 'ya' : 'TIDAK (batas baca tercapai)'}`);
 
+  const summaryBase = {
+    fileName,
+    totalDocs,
+    reads: budget.used,
+    gzSize: gz.length,
+    complete: snapshot.meta.complete,
+    scope: scopeLabel,
+    coreDocs,
+    refDocs,
+  };
+
   if (process.env.BACKUP_SKIP_DRIVE === '1') {
     log('\nUnggah Google Drive dilewati (BACKUP_SKIP_DRIVE=1).');
     await writeLog({
       status: 'success',
       fileName,
       size: gz.length,
-      message: `Snapshot lokal: ${totalDocs} dokumen, ${budget.used} baca. Tidak diunggah ke Drive.`,
+      message: `Snapshot hasil kerja guru: ${coreDocs} dokumen absensi/nilai/keaktifan + ${refDocs} kunci pembaca, ${budget.used} baca. Tidak diunggah ke Drive.`,
     });
-    writeSummary({ fileName, totalDocs, reads: budget.used, gzSize: gz.length, complete: snapshot.meta.complete, drive: 'dilewati' });
+    writeSummary({ ...summaryBase, drive: 'dilewati' });
     return;
   }
 
@@ -369,7 +486,7 @@ async function main() {
     log(`ID berkas    : ${result.id}`);
     if (result.webViewLink) log(`Tautan       : ${result.webViewLink}`);
     log('\n=== Snapshot selesai ===');
-    writeSummary({ fileName, totalDocs, reads: budget.used, gzSize: gz.length, complete: snapshot.meta.complete, drive: 'berhasil' });
+    writeSummary({ ...summaryBase, drive: 'berhasil' });
   } catch (error) {
     // PENTING: kegagalan Drive TIDAK menggagalkan snapshot.
     //
@@ -389,10 +506,7 @@ async function main() {
       size: gz.length,
       message: `Snapshot berhasil (${totalDocs} dokumen) tetapi belum tersalin ke Drive: ${error.message}`,
     });
-    writeSummary({
-      fileName, totalDocs, reads: budget.used, gzSize: gz.length,
-      complete: snapshot.meta.complete, drive: `gagal — ${error.message}`,
-    });
+    writeSummary({ ...summaryBase, drive: `gagal — ${error.message}` });
   }
 }
 

@@ -80,9 +80,36 @@ export async function renderAdminBackupSettingsPage(container) {
           <div>
             <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600">Backup</p>
             <h3 class="mt-1 text-lg font-bold text-slate-900">Cadangan Otomatis Mingguan</h3>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Cadangan seluruh basis data dibuat oleh server setiap <strong>Minggu 01:00 WIB</strong>, saat tidak ada kegiatan mengajar. Tidak ada tombol backup manual di halaman ini &mdash; penjelasannya di bawah.</p>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Cadangan <strong>hasil kerja guru</strong> &mdash; absensi, nilai, dan keaktifan siswa &mdash; dibuat oleh server setiap <strong>Minggu 01:00 WIB</strong>, saat tidak ada kegiatan mengajar. Tidak ada tombol backup manual di halaman ini; penjelasannya di bawah.</p>
           </div>
           <span id="sys-backup-status" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Memuat...</span>
+        </div>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Dicadangkan otomatis</p>
+            <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-700">
+              <li>&bull; Absensi harian</li>
+              <li>&bull; Nilai tugas, ulangan, PTS, PAS</li>
+              <li>&bull; Keaktifan siswa</li>
+            </ul>
+            <p class="mt-2 text-[11px] leading-4 text-slate-500">Disertai data kunci yang kecil namun wajib agar angka di atas tetap terbaca: pengajaran, anggota kelas, bab, tugas, kolom ulangan, serta nama tahun ajaran, kelas, dan mata pelajaran.</p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Tidak dicadangkan</p>
+            <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-600">
+              <li>&bull; Kuis, permainan, percakapan</li>
+              <li>&bull; Materi ajar &amp; pengumuman</li>
+              <li>&bull; Keuangan (kas kelas, pembayaran buku)</li>
+              <li>&bull; Tampilan lobi</li>
+              <li>&bull; Akun pengguna &amp; pengaturan sistem</li>
+            </ul>
+            <p class="mt-2 text-[11px] leading-4 text-slate-500">Akun dan pengaturan sengaja dikecualikan karena memuat kata sandi terenkripsi dan kredensial Google Drive; nama siswa dan guru sudah tersedia dari data anggota kelas.</p>
+          </div>
+        </div>
+
+        <div class="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+          <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri ke Excel <strong>satu kali setiap minggu</strong> dari halaman Backup mereka. Keduanya berbeda peran: berkas JSON ini untuk <strong>memulihkan sistem</strong>, sedangkan Excel guru untuk <strong>melanjutkan pekerjaan</strong> bila aplikasi tidak dapat diakses.</p>
         </div>
 
         <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
@@ -94,7 +121,7 @@ export async function renderAdminBackupSettingsPage(container) {
               <p class="text-sm font-bold text-slate-900">Mengapa tidak ada tombol "Backup Sekarang"?</p>
               <p class="mt-1">Tombol itu dulu membangun cadangan seluruh sekolah di dalam tab peramban admin. Sekali tekan berarti membaca setiap kelas setiap guru &mdash; sekitar <strong>200.000 operasi baca</strong>, atau empat kali kuota harian database pada paket gratis. Menekannya pada jam kerja membuat absensi, nilai, dan materi berhenti dapat dibuka oleh semua pengguna sampai hari berikutnya.</p>
               <p class="mt-1">Karena itu pekerjaan tersebut dipindahkan ke server dan dijadwalkan pada hari Minggu dini hari. Bila cadangan perlu dijalankan segera, buka <strong>GitHub &rarr; Actions &rarr; Snapshot Backup Mingguan &rarr; Run workflow</strong>. Cara itu tidak membebani perangkat siapa pun dan tetap tercatat di riwayat di bawah.</p>
-              <p class="mt-1">Isi cadangan: seluruh dokumen beserta ID-nya dalam satu berkas <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">.json.gz</code>, disimpan di Google Drive sekolah dan dilampirkan ke GitHub Release sebagai salinan kedua.</p>
+              <p class="mt-1">Isi cadangan: setiap dokumen beserta ID-nya dalam satu berkas <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">.json.gz</code>, disimpan di Google Drive sekolah dan dilampirkan ke GitHub Release sebagai salinan kedua.</p>
             </div>
           </div>
           <p id="sys-backup-message" class="mt-3 text-xs text-slate-500" role="status"></p>
