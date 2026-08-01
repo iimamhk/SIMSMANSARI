@@ -229,7 +229,7 @@ export function getExportStatus(now = new Date()) {
       badgeLabel: 'Belum pernah',
       badgeTone: 'warn',
       title: 'Belum pernah ekspor data',
-      detail: `Data Anda belum pernah disalin ke Excel. Tersedia ${kuota.limit} kali ekspor setiap minggu — lakukan sekali agar Anda punya salinan mandiri bila aplikasi tidak dapat diakses.`,
+      detail: `Belum ada salinan Excel dari data Anda. Tersedia ${kuota.limit} ekspor setiap minggu.`,
       daysSince: Infinity,
       nextAvailableText: '',
     };
@@ -245,7 +245,7 @@ export function getExportStatus(now = new Date()) {
       badgeLabel: 'Kuota penuh',
       badgeTone: 'ok',
       title: `Kuota ekspor minggu ini sudah terpakai (${kuota.usedText})`,
-      detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Kuota terisi kembali pada ${formatTanggal(nextAt)}. Berkas yang sudah diunduh tetap tersimpan dan dapat dibuka kapan saja.`,
+      detail: `Ekspor terakhir ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Kuota terisi kembali pada ${formatTanggal(nextAt)}.`,
       nextAvailableText: formatTanggal(nextAt),
     };
   }
@@ -259,7 +259,7 @@ export function getExportStatus(now = new Date()) {
       badgeLabel: `Sisa ${kuota.remaining}`,
       badgeTone: 'ok',
       title: `Sudah ${kuota.usedText} ekspor minggu ini`,
-      detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Masih tersisa ${kuota.remaining} kali ekspor untuk minggu ini, misalnya bila ada data yang baru diperbaiki.`,
+      detail: `Ekspor terakhir ${formatTanggalJam(lastAt)}${lastFileName ? ` (${lastFileName})` : ''}. Sisa ${kuota.remaining} ekspor untuk minggu ini.`,
       nextAvailableText: '',
     };
   }
@@ -272,7 +272,7 @@ export function getExportStatus(now = new Date()) {
     badgeLabel: 'Perlu ekspor',
     badgeTone: 'warn',
     title: 'Belum ekspor data minggu ini',
-    detail: `Ekspor terakhir: ${formatTanggalJam(lastAt)} (${daysSince} hari lalu). Tersedia ${kuota.limit} kali ekspor untuk minggu ini.`,
+    detail: `Ekspor terakhir ${formatTanggalJam(lastAt)} (${daysSince} hari lalu). Tersedia ${kuota.limit} ekspor untuk minggu ini.`,
     nextAvailableText: '',
   };
 }

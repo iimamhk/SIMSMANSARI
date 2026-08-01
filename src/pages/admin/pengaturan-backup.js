@@ -10,180 +10,140 @@ import {
 } from '../../firebase/auth-service.js';
 import { uploadBackupToDrive } from '../../utils/drive-upload.js';
 import { computeLastScheduledOccurrence } from '../../utils/backup-schedule.js';
-import { adminAccentPanel, adminIcons, adminPageHero, bindAdminLogout } from '../../utils/admin-ui.js';
+import {
+  adminAccentPanel,
+  adminIcons,
+  adminPageHero,
+  adminTheme,
+  bindAdminLogout,
+} from '../../utils/admin-ui.js';
 
 export async function renderAdminBackupSettingsPage(container) {
   container.innerHTML = renderLayout('Backup & Ekspor', `
-    <div class="space-y-6">
+    <div class="space-y-5">
       ${adminPageHero({
         eyebrow: 'Backup',
         title: 'Backup & Ekspor',
-        description: 'Cadangkan rekap absensi & nilai seluruh guru ke Google Drive, atur jadwal otomatis, dan kelola pengingat backup guru.',
+        description: 'Cadangan mingguan hasil kerja guru ke Google Drive, beserta pengingat ekspor untuk guru.',
         chips: [`${adminIcons.download} Google Drive`],
       })}
 
-      <section class="rounded-[24px] border border-emerald-100 bg-white p-4 shadow-[0_16px_40px_-30px_rgba(5,150,105,.5)] sm:p-6">
+      <section class="${adminTheme.card} p-4 sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600">Backup</p>
-            <h3 class="mt-1 text-lg font-bold text-slate-900">Google Drive</h3>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Backup guru otomatis diunggah ke Drive sekolah. Client Secret dan refresh token dienkripsi di server.</p>
+          <div class="min-w-0">
+            <h3 class="text-base font-semibold text-slate-900 sm:text-lg">Google Drive</h3>
+            <p class="mt-1 text-sm leading-6 text-slate-500">Tujuan unggahan cadangan. Client Secret dan refresh token disimpan terenkripsi di server.</p>
           </div>
-          <span id="drive-status" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Memuat...</span>
+          <span id="drive-status" class="${adminTheme.badgeMuted}">Memuat...</span>
         </div>
 
-        <div id="drive-redirect-box" class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
-          <p class="text-xs font-bold text-amber-900">Authorized redirect URI</p>
-          <p class="mt-1 text-[11px] leading-5 text-amber-800">Daftarkan URI berikut di Google Cloud Console → Credentials → OAuth client Anda, tepat seperti tertulis.</p>
+        <div id="drive-redirect-box" class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <p class="text-xs font-semibold text-slate-700">Authorized redirect URI</p>
+          <p class="mt-1 text-[11px] leading-5 text-slate-500">Daftarkan tepat seperti tertulis di Google Cloud Console → Credentials → OAuth client.</p>
           <div class="mt-2 flex items-center gap-2">
-            <code id="drive-redirect-uri" class="flex-1 overflow-x-auto rounded-lg bg-white px-2.5 py-2 text-[11px] text-slate-700">Memuat...</code>
-            <button type="button" id="drive-copy-redirect" class="flex-none rounded-lg border border-amber-300 bg-white px-2.5 py-2 text-[11px] font-bold text-amber-800 transition hover:bg-amber-100">Salin</button>
+            <code id="drive-redirect-uri" class="flex-1 overflow-x-auto rounded-lg bg-white px-2.5 py-2 text-[11px] text-slate-700 ring-1 ring-slate-200">Memuat...</code>
+            <button type="button" id="drive-copy-redirect" class="flex-none rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50">Salin</button>
           </div>
         </div>
 
         <form id="drive-config-form" class="mt-4 grid gap-3 sm:grid-cols-2">
-          <label class="sm:col-span-2"><span class="mb-1 block text-xs font-semibold text-slate-600">Client ID</span><input id="drive-client-id" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="1234567890-abc.apps.googleusercontent.com"></label>
-          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Client Secret</span><input id="drive-client-secret" type="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="Isi untuk mengganti secret"></label>
-          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Nama Folder Drive</span><input id="drive-folder-name" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100" placeholder="SIMSMANSARI Backup"></label>
+          <label class="sm:col-span-2"><span class="mb-1 block text-xs font-semibold text-slate-600">Client ID</span><input id="drive-client-id" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100" placeholder="1234567890-abc.apps.googleusercontent.com"></label>
+          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Client Secret</span><input id="drive-client-secret" type="password" autocomplete="new-password" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100" placeholder="Isi untuk mengganti secret"></label>
+          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Nama Folder Drive</span><input id="drive-folder-name" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100" placeholder="SIMSMANSARI Backup"></label>
           <p id="drive-secret-hint" class="text-xs text-slate-500 sm:col-span-2">Client Secret belum disimpan.</p>
           <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
-            <button type="submit" id="drive-save-btn" class="rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105">Simpan Kredensial</button>
-            <a id="drive-connect-btn" href="#" class="pointer-events-none rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 opacity-50 transition hover:bg-emerald-50">Hubungkan Google Drive</a>
+            <button type="submit" id="drive-save-btn" class="rounded-xl ${adminTheme.primaryBtn} px-4 py-2.5 text-sm font-semibold transition">Simpan Kredensial</button>
+            <a id="drive-connect-btn" href="#" class="pointer-events-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 opacity-50 transition hover:bg-slate-50">Hubungkan Google Drive</a>
             <button type="button" id="drive-test-btn" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Tes Unggah</button>
-            <button type="button" id="drive-disconnect-btn" class="rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Putuskan</button>
+            <button type="button" id="drive-reencrypt-btn" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60" title="Baca ulang kredensial dengan kunci lama lalu simpan memakai AI_CONFIG_SECRET saat ini">Selaraskan Kunci</button>
+            <button type="button" id="drive-disconnect-btn" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-600 transition hover:bg-rose-50">Putuskan</button>
           </div>
           <p id="drive-message" class="text-xs text-slate-500 sm:col-span-2" role="status"></p>
+          <p id="drive-reencrypt-message" class="text-xs text-slate-500 sm:col-span-2" role="status"></p>
         </form>
 
-        <dl id="drive-meta" class="mt-3 grid gap-2 text-xs sm:grid-cols-3"></dl>
-
-        <div class="mt-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
-          <div class="flex items-start gap-3">
-            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sky-600 ring-1 ring-sky-200">
-              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-            </div>
-            <div class="min-w-0 flex-1 text-xs leading-5 text-slate-600">
-              <p class="text-sm font-bold text-slate-900">Selaraskan Kunci Enkripsi</p>
-              <p class="mt-1">Client Secret dan Refresh Token disimpan dalam bentuk terenkripsi. Kuncinya berasal dari variabel lingkungan, sehingga bila aplikasi web (Vercel) dan proses backup otomatis (GitHub Actions) memakai variabel yang berbeda, backup otomatis <strong>tidak dapat mengunggah ke Google Drive</strong>.</p>
-              <p class="mt-1">Tombol ini membaca kredensial dengan kunci lama lalu menyimpannya ulang memakai kunci utama saat ini &mdash; tanpa Bapak/Ibu perlu mengetik ulang Client Secret atau mengulang izin Google.</p>
-              <p class="mt-1"><strong>Jalankan setelah</strong> menyetel <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">AI_CONFIG_SECRET</code> dengan nilai yang sama di Vercel dan di GitHub Actions.</p>
-              <div class="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" id="drive-reencrypt-btn" class="rounded-xl border border-sky-300 bg-white px-3.5 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100 disabled:opacity-60">Selaraskan Kunci Enkripsi</button>
-                <span id="drive-reencrypt-message" class="text-xs text-slate-500" role="status"></span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <dl id="drive-meta" class="mt-4 grid gap-2 text-xs sm:grid-cols-3"></dl>
       </section>
 
-      <section class="rounded-[24px] border border-teal-100 bg-white p-4 shadow-[0_16px_40px_-30px_rgba(13,148,136,.5)] sm:p-6">
+      <section class="${adminTheme.card} p-4 sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-600">Backup</p>
-            <h3 class="mt-1 text-lg font-bold text-slate-900">Cadangan Otomatis Mingguan</h3>
-            <p class="mt-1 text-xs leading-5 text-slate-500">Cadangan <strong>hasil kerja guru</strong> &mdash; absensi, nilai, dan keaktifan siswa &mdash; dibuat oleh server setiap <strong>Minggu 01:00 WIB</strong>, saat tidak ada kegiatan mengajar. Tidak ada tombol backup manual di halaman ini; penjelasannya di bawah.</p>
+          <div class="min-w-0">
+            <h3 class="text-base font-semibold text-slate-900 sm:text-lg">Cadangan Otomatis Mingguan</h3>
+            <p class="mt-1 text-sm leading-6 text-slate-500">Server mencadangkan absensi, nilai, dan keaktifan setiap Minggu 01:00 WIB. Guru tetap dapat mengekspor kelasnya sendiri, maksimal 3 kali per minggu.</p>
           </div>
-          <span id="sys-backup-status" class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">Memuat...</span>
+          <span id="sys-backup-status" class="${adminTheme.badgeMuted}">Memuat...</span>
         </div>
 
-        <div class="mt-4 rounded-2xl border border-teal-100 bg-teal-50/50 p-4">
-          <p class="text-xs font-bold uppercase tracking-wide text-teal-700">Dua berkas dihasilkan setiap minggu</p>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-xl bg-white p-3 ring-1 ring-teal-100">
-              <p class="text-sm font-bold text-slate-900">Snapshot <code class="rounded bg-slate-100 px-1 text-[11px]">.json.gz</code></p>
-              <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Untuk admin</p>
-              <p class="mt-1 text-xs leading-5 text-slate-600">Memuat setiap dokumen beserta ID Firestore-nya, sehingga dapat dipakai <strong>memulihkan data</strong> ke sistem bila terjadi kehilangan.</p>
-            </div>
-            <div class="rounded-xl bg-white p-3 ring-1 ring-teal-100">
-              <p class="text-sm font-bold text-slate-900">Excel per guru <code class="rounded bg-slate-100 px-1 text-[11px]">.xlsx</code></p>
-              <p class="mt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Untuk setiap guru</p>
-              <p class="mt-1 text-xs leading-5 text-slate-600">Satu berkas per guru: sheet Petunjuk, lalu 4 sheet per kelas (Rekap Absen, Absen Harian, Nilai, Keaktifan). Total dan predikat berupa rumus hidup, sehingga <strong>dapat langsung dilanjutkan</strong> di Excel.</p>
-            </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+            <p class="text-sm font-semibold text-slate-900">Snapshot <code class="rounded bg-white px-1 text-[11px] ring-1 ring-slate-200">.json.gz</code></p>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Untuk admin. Menyimpan ID Firestore setiap dokumen sehingga dapat dipakai memulihkan data.</p>
           </div>
-          <p class="mt-3 text-[11px] leading-4 text-slate-500">Berkas Excel dibentuk dari data yang sama yang sudah dibaca untuk snapshot, jadi <strong>tidak menambah pemakaian database sama sekali</strong>. Keduanya tersimpan di folder Google Drive sekolah dan juga dilampirkan ke GitHub Release sebagai salinan kedua.</p>
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+            <p class="text-sm font-semibold text-slate-900">Excel per guru <code class="rounded bg-white px-1 text-[11px] ring-1 ring-slate-200">.xlsx</code></p>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Satu berkas tiap guru: 4 sheet per kelas, total dan predikat berupa rumus hidup.</p>
+          </div>
         </div>
 
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <div class="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
-            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Dicadangkan otomatis</p>
-            <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-700">
-              <li>&bull; Absensi harian</li>
-              <li>&bull; Nilai tugas, ulangan, PTS, PAS</li>
-              <li>&bull; Keaktifan siswa</li>
-            </ul>
-            <p class="mt-2 text-[11px] leading-4 text-slate-500">Disertai data kunci yang kecil namun wajib agar angka di atas tetap terbaca: pengajaran, anggota kelas, bab, tugas, kolom ulangan, serta nama tahun ajaran, kelas, dan mata pelajaran.</p>
-          </div>
-          <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Tidak dicadangkan</p>
+          <div class="rounded-2xl border border-slate-200 p-3.5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Dicadangkan</p>
             <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-600">
-              <li>&bull; Kuis, permainan, percakapan</li>
-              <li>&bull; Materi ajar &amp; pengumuman</li>
-              <li>&bull; Keuangan (kas kelas, pembayaran buku)</li>
-              <li>&bull; Tampilan lobi</li>
-              <li>&bull; Akun pengguna &amp; pengaturan sistem</li>
+              <li>Absensi harian</li>
+              <li>Nilai tugas, ulangan, PTS, PAS</li>
+              <li>Keaktifan siswa</li>
+              <li>Data kunci: pengajaran, anggota kelas, bab, tugas, kolom ulangan</li>
             </ul>
-            <p class="mt-2 text-[11px] leading-4 text-slate-500">Akun dan pengaturan sengaja dikecualikan karena memuat kata sandi terenkripsi dan kredensial Google Drive; nama siswa dan guru sudah tersedia dari data anggota kelas.</p>
+          </div>
+          <div class="rounded-2xl border border-slate-200 p-3.5">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Tidak dicadangkan</p>
+            <ul class="mt-2 space-y-1 text-xs leading-5 text-slate-600">
+              <li>Kuis, permainan, percakapan</li>
+              <li>Materi ajar &amp; pengumuman</li>
+              <li>Keuangan dan tampilan lobi</li>
+              <li>Akun pengguna &amp; pengaturan sistem</li>
+            </ul>
           </div>
         </div>
 
-        <div class="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
-          <p class="text-xs leading-5 text-slate-600"><strong class="text-slate-900">Pembagian tanggung jawab.</strong> Cadangan di atas adalah tanggung jawab admin dan berjalan otomatis, termasuk membuatkan Excel untuk setiap guru. Guru tetap bertanggung jawab mengekspor data kelasnya sendiri dari halaman Backup, dengan kuota <strong>maksimal 3 kali setiap minggu</strong>, agar mereka memegang salinan di perangkat masing-masing dan dapat memilih sendiri kelas serta jenis data yang diperlukan.</p>
-        </div>
-
-        <!-- Peringatan bila cadangan sudah lama tidak muncul. Seluruh datanya
-             berasal dari konfigurasi yang sudah dimuat, jadi nol operasi baca
-             tambahan. Masalah terbesar dengan backup bukan sulit menjalankannya,
-             melainkan tidak sadar bahwa ia sudah berhenti. -->
+        <!-- Peringatan bila cadangan sudah lama tidak muncul. Datanya berasal dari
+             konfigurasi yang sudah dimuat, jadi nol operasi baca tambahan. -->
         <div id="backup-health" class="mt-4 hidden rounded-2xl border p-4"></div>
 
-        <div class="mt-4 rounded-2xl border border-teal-100 bg-teal-50/60 p-4">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-sm font-bold text-slate-900">Jalankan Backup Sekarang</p>
-              <p class="mt-1 text-xs leading-5 text-slate-600">Menjalankan proses yang <strong>sama persis</strong> dengan jadwal mingguan, di server GitHub. Perangkat Bapak/Ibu tidak membaca data apa pun, sehingga tidak membebani kuota database dari sisi ini.</p>
-              <p class="mt-1 text-xs leading-5 text-slate-500">Prosesnya berjalan di latar belakang sekitar satu sampai dua menit. Hasilnya muncul di Google Drive dan di daftar Riwayat setelah selesai.</p>
-            </div>
-            <button type="button" id="run-backup-btn" class="inline-flex shrink-0 items-center gap-2 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">
-              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
-              <span id="run-backup-label">Jalankan Backup Sekarang</span>
-            </button>
+        <div class="mt-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-slate-900">Jalankan sekarang</p>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Menjalankan proses yang sama dengan jadwal mingguan di server GitHub, sekitar 1&ndash;2 menit. Perangkat ini tidak membaca data.</p>
           </div>
-          <p id="run-backup-message" class="mt-3 text-xs text-slate-600" role="status"></p>
-          <p id="run-backup-hint" class="mt-2 hidden text-[11px] leading-4 text-slate-500"></p>
+          <button type="button" id="run-backup-btn" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl ${adminTheme.primaryBtn} px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60">
+            <span id="run-backup-label">Jalankan Backup</span>
+          </button>
         </div>
+        <p id="run-backup-message" class="mt-2 text-xs text-slate-600" role="status"></p>
+        <p id="run-backup-hint" class="mt-2 hidden text-[11px] leading-4 text-slate-500"></p>
+        <p id="sys-backup-message" class="mt-2 text-xs text-slate-500" role="status"></p>
 
-        <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-          <div class="flex items-start gap-3">
-            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200">
-              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-            </div>
-            <div class="min-w-0 text-xs leading-5 text-slate-600">
-              <p class="text-sm font-bold text-slate-900">Mengapa tombol di atas tidak memproses di perangkat ini?</p>
-              <p class="mt-1">Versi lama tombol ini membangun cadangan di dalam tab peramban admin: membaca setiap kelas setiap guru, lalu menahan hasilnya di memori tab. Pada sekolah besar biayanya bisa melampaui kuota harian database, dan bila ditekan pada jam kerja, absensi serta nilai berhenti dapat dibuka oleh semua pengguna sampai hari berikutnya.</p>
-              <p class="mt-1">Sekarang tombol itu hanya <strong>meminta server GitHub</strong> menjalankan proses yang sama dengan jadwal mingguan. Tidak ada dua versi kode yang bisa berbeda hasilnya, dan perangkat siapa pun tidak terbebani.</p>
-              <p class="mt-1">Isi cadangan: berkas <code class="rounded bg-white px-1 py-0.5 ring-1 ring-slate-200">.json.gz</code> untuk pemulihan, ditambah satu berkas Excel untuk setiap guru. Keduanya disimpan di Google Drive sekolah dan dilampirkan ke GitHub Release sebagai salinan kedua.</p>
-            </div>
+        <form id="schedule-form" class="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2">
+          <div class="sm:col-span-2">
+            <h4 class="text-sm font-semibold text-slate-900">Jadwal pencatatan &amp; pengingat</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Dipakai untuk pengingat guru dan pencatatan. Snapshot server tetap berjalan setiap Minggu 01:00 WIB.</p>
           </div>
-          <p id="sys-backup-message" class="mt-3 text-xs text-slate-500" role="status"></p>
-        </div>
-
-        <form id="schedule-form" class="mt-4 grid gap-3 sm:grid-cols-2">
           <label class="flex items-center gap-2 sm:col-span-2">
-            <input type="checkbox" id="schedule-enabled" class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-200">
-            <span class="text-sm font-semibold text-slate-700">Aktifkan backup otomatis terjadwal</span>
+            <input type="checkbox" id="schedule-enabled" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-200">
+            <span class="text-sm font-medium text-slate-700">Aktifkan jadwal</span>
           </label>
           <label><span class="mb-1 block text-xs font-semibold text-slate-600">Frekuensi</span>
-            <select id="schedule-frequency" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100">
+            <select id="schedule-frequency" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100">
               <option value="daily">Harian</option>
               <option value="weekly">Mingguan</option>
               <option value="monthly">Bulanan</option>
             </select>
           </label>
           <label><span class="mb-1 block text-xs font-semibold text-slate-600">Jam (waktu perangkat)</span>
-            <input type="time" id="schedule-time" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100">
+            <input type="time" id="schedule-time" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100">
           </label>
           <label id="schedule-dow-wrap"><span class="mb-1 block text-xs font-semibold text-slate-600">Hari (mingguan)</span>
-            <select id="schedule-dow" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100">
+            <select id="schedule-dow" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100">
               <option value="1">Senin</option>
               <option value="2">Selasa</option>
               <option value="3">Rabu</option>
@@ -194,72 +154,70 @@ export async function renderAdminBackupSettingsPage(container) {
             </select>
           </label>
           <label id="schedule-dom-wrap"><span class="mb-1 block text-xs font-semibold text-slate-600">Tanggal (bulanan, 1-28)</span>
-            <input type="number" id="schedule-dom" min="1" max="28" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100">
+            <input type="number" id="schedule-dom" min="1" max="28" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100">
           </label>
           <p id="schedule-next" class="text-xs text-slate-500 sm:col-span-2"></p>
           <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
-            <button type="submit" id="schedule-save-btn" class="rounded-xl border border-teal-200 bg-white px-4 py-2.5 text-sm font-semibold text-teal-700 transition hover:bg-teal-50">Simpan Jadwal</button>
+            <button type="submit" id="schedule-save-btn" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Simpan Jadwal</button>
             <span id="schedule-message" class="text-xs text-slate-500" role="status"></span>
           </div>
         </form>
 
-        <div class="mt-6 border-t border-slate-100 pt-5">
-          <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-600">Pengingat Guru</p>
-          <h4 class="mt-1 text-sm font-bold text-slate-900">Pengingat Backup untuk Guru</h4>
-          <p class="mt-1 text-xs leading-5 text-slate-500">Popup pengingat muncul untuk guru sesuai jadwal ini, mengajak backup ke perangkat (lokal) dan unggah ke Drive (online). Opsional kirim notifikasi browser.</p>
-
-          <form id="reminder-form" class="mt-3 grid gap-3 sm:grid-cols-2">
-            <label class="flex items-center gap-2 sm:col-span-2">
-              <input type="checkbox" id="reminder-enabled" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-200">
-              <span class="text-sm font-semibold text-slate-700">Aktifkan pengingat backup untuk guru</span>
-            </label>
-            <label><span class="mb-1 block text-xs font-semibold text-slate-600">Frekuensi</span>
-              <select id="reminder-frequency" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-amber-300 focus:bg-white focus:ring-4 focus:ring-amber-100">
-                <option value="daily">Harian</option>
-                <option value="weekly">Mingguan</option>
-                <option value="custom">Custom (pilih beberapa hari)</option>
-              </select>
-            </label>
-            <label><span class="mb-1 block text-xs font-semibold text-slate-600">Jam pengingat</span>
-              <input type="time" id="reminder-time" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-amber-300 focus:bg-white focus:ring-4 focus:ring-amber-100">
-            </label>
-            <div id="reminder-days-wrap" class="sm:col-span-2">
-              <span class="mb-1 block text-xs font-semibold text-slate-600">Pilih hari</span>
-              <div class="flex flex-wrap gap-1.5">
-                ${[['1', 'Sen'], ['2', 'Sel'], ['3', 'Rab'], ['4', 'Kam'], ['5', 'Jum'], ['6', 'Sab'], ['0', 'Min']].map(([v, l]) => `
-                  <label class="reminder-day inline-flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-amber-50">
-                    <input type="checkbox" value="${v}" class="reminder-day-cb h-3.5 w-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-200">${l}
-                  </label>`).join('')}
-              </div>
-              <p id="reminder-day-mode" class="mt-1 text-[11px] text-slate-400"></p>
-            </div>
-            <label class="flex items-center gap-2 sm:col-span-2">
-              <input type="checkbox" id="reminder-push" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-200">
-              <span class="text-xs font-medium text-slate-700">Kirim juga notifikasi browser (push) bila diizinkan perangkat guru</span>
-            </label>
-            <p id="reminder-next" class="text-xs text-slate-500 sm:col-span-2"></p>
-            <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
-              <button type="submit" id="reminder-save-btn" class="rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-50">Simpan Pengingat</button>
-              <span id="reminder-message" class="text-xs text-slate-500" role="status"></span>
-            </div>
-          </form>
-        </div>
-
-        <div class="mt-4">
-          <div class="flex items-center justify-between">
-            <p class="text-xs font-bold uppercase tracking-wider text-slate-400">Riwayat Backup</p>
-            <button type="button" id="backup-log-refresh" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50">Muat ulang</button>
+        <form id="reminder-form" class="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2">
+          <div class="sm:col-span-2">
+            <h4 class="text-sm font-semibold text-slate-900">Pengingat ekspor untuk guru</h4>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Popup muncul di perangkat guru sesuai jadwal ini.</p>
           </div>
-          <div class="mt-2 overflow-x-auto rounded-xl border border-slate-100">
+          <label class="flex items-center gap-2 sm:col-span-2">
+            <input type="checkbox" id="reminder-enabled" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-200">
+            <span class="text-sm font-medium text-slate-700">Aktifkan pengingat</span>
+          </label>
+          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Frekuensi</span>
+            <select id="reminder-frequency" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100">
+              <option value="daily">Harian</option>
+              <option value="weekly">Mingguan</option>
+              <option value="custom">Beberapa hari</option>
+            </select>
+          </label>
+          <label><span class="mb-1 block text-xs font-semibold text-slate-600">Jam pengingat</span>
+            <input type="time" id="reminder-time" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100">
+          </label>
+          <div id="reminder-days-wrap" class="sm:col-span-2">
+            <span class="mb-1 block text-xs font-semibold text-slate-600">Hari</span>
+            <div class="flex flex-wrap gap-1.5">
+              ${[['1', 'Sen'], ['2', 'Sel'], ['3', 'Rab'], ['4', 'Kam'], ['5', 'Jum'], ['6', 'Sab'], ['0', 'Min']].map(([v, l]) => `
+                <label class="reminder-day inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50">
+                  <input type="checkbox" value="${v}" class="reminder-day-cb h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-200">${l}
+                </label>`).join('')}
+            </div>
+            <p id="reminder-day-mode" class="mt-1 text-[11px] text-slate-400"></p>
+          </div>
+          <label class="flex items-center gap-2 sm:col-span-2">
+            <input type="checkbox" id="reminder-push" class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-200">
+            <span class="text-xs font-medium text-slate-700">Kirim juga notifikasi browser bila diizinkan perangkat guru</span>
+          </label>
+          <p id="reminder-next" class="text-xs text-slate-500 sm:col-span-2"></p>
+          <div class="flex flex-wrap items-center gap-2 sm:col-span-2">
+            <button type="submit" id="reminder-save-btn" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Simpan Pengingat</button>
+            <span id="reminder-message" class="text-xs text-slate-500" role="status"></span>
+          </div>
+        </form>
+
+        <div class="mt-5 border-t border-slate-100 pt-5">
+          <div class="flex items-center justify-between gap-2">
+            <h4 class="text-sm font-semibold text-slate-900">Riwayat backup</h4>
+            <button type="button" id="backup-log-refresh" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50">Muat ulang</button>
+          </div>
+          <div class="mt-3 overflow-x-auto rounded-xl border border-slate-200">
             <table class="w-full min-w-[520px] text-left text-xs">
               <thead class="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400">
                 <tr>
-                  <th class="px-3 py-2 font-bold">Waktu</th>
-                  <th class="px-3 py-2 font-bold">Jenis</th>
-                  <th class="px-3 py-2 font-bold">Berkas</th>
-                  <th class="px-3 py-2 font-bold">Ukuran</th>
-                  <th class="px-3 py-2 font-bold">Oleh</th>
-                  <th class="px-3 py-2 font-bold">Status</th>
+                  <th class="px-3 py-2 font-semibold">Waktu</th>
+                  <th class="px-3 py-2 font-semibold">Jenis</th>
+                  <th class="px-3 py-2 font-semibold">Berkas</th>
+                  <th class="px-3 py-2 font-semibold">Ukuran</th>
+                  <th class="px-3 py-2 font-semibold">Oleh</th>
+                  <th class="px-3 py-2 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody id="backup-log-body" class="divide-y divide-slate-100"></tbody>
@@ -303,7 +261,7 @@ export async function renderAdminBackupSettingsPage(container) {
   function setReencryptMessage(text, isError = false) {
     if (!driveReencryptMessage) return;
     driveReencryptMessage.textContent = text || '';
-    driveReencryptMessage.className = isError ? 'text-xs text-rose-600' : 'text-xs text-slate-500';
+    driveReencryptMessage.className = isError ? 'text-xs text-rose-600 sm:col-span-2' : 'text-xs text-slate-500 sm:col-span-2';
   }
 
   function formatDriveDate(value) {
@@ -332,13 +290,13 @@ export async function renderAdminBackupSettingsPage(container) {
 
     if (!config.configured) {
       driveStatus.textContent = 'Belum diatur';
-      driveStatus.className = 'rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500';
+      driveStatus.className = adminTheme.badgeMuted;
     } else if (config.connected) {
       driveStatus.textContent = 'Terhubung';
-      driveStatus.className = 'rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700';
+      driveStatus.className = adminTheme.badgeLive;
     } else {
       driveStatus.textContent = 'Perlu dihubungkan';
-      driveStatus.className = 'rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700';
+      driveStatus.className = adminTheme.badgeWarn;
     }
 
     const rows = [
@@ -350,9 +308,9 @@ export async function renderAdminBackupSettingsPage(container) {
       ['Cakupan izin', 'drive.file (hanya berkas aplikasi)'],
     ];
     driveMeta.innerHTML = rows.map(([label, value]) => `
-      <div class="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-        <dt class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${label}</dt>
-        <dd class="mt-0.5 break-words text-[11px] font-semibold text-slate-700">${value}</dd>
+      <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <dt class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">${label}</dt>
+        <dd class="mt-0.5 break-words text-[11px] font-medium text-slate-700">${value}</dd>
       </div>`).join('');
   }
 
@@ -363,7 +321,7 @@ export async function renderAdminBackupSettingsPage(container) {
       applyBackupExtras(config);
     } catch (error) {
       driveStatus.textContent = 'Gagal memuat';
-      driveStatus.className = 'rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700';
+      driveStatus.className = 'inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-100';
       setDriveMessage(error.message, true);
     }
   }
@@ -443,10 +401,9 @@ export async function renderAdminBackupSettingsPage(container) {
   driveReencryptBtn?.addEventListener('click', async () => {
     const ok = window.confirm(
       'Selaraskan kunci enkripsi kredensial Google Drive?\n\n'
-      + 'Client Secret dan Refresh Token akan dibaca dengan kunci lama, lalu disimpan\n'
-      + 'ulang memakai kunci utama saat ini. Kredensialnya sendiri tidak berubah.\n\n'
-      + 'Lakukan ini SETELAH AI_CONFIG_SECRET diset dengan nilai yang sama di Vercel\n'
-      + 'dan di GitHub Actions.'
+      + 'Client Secret dan Refresh Token dibaca dengan kunci lama lalu disimpan ulang\n'
+      + 'memakai kunci utama saat ini. Lakukan setelah AI_CONFIG_SECRET diset dengan\n'
+      + 'nilai yang sama di Vercel dan GitHub Actions.'
     );
     if (!ok) return;
     driveReencryptBtn.disabled = true;
@@ -456,10 +413,7 @@ export async function renderAdminBackupSettingsPage(container) {
     try {
       const result = await reencryptDriveSecrets();
       await reloadDriveConfig();
-      setReencryptMessage(
-        `Berhasil. ${(result.migrated || []).join(' dan ')} kini terenkripsi dengan kunci utama. `
-        + 'Jalankan ulang workflow snapshot untuk memastikan unggahan Drive berhasil.'
-      );
+      setReencryptMessage(`Selesai. ${(result.migrated || []).join(' dan ')} kini memakai kunci utama.`);
     } catch (error) {
       setReencryptMessage(error.message, true);
     } finally {
@@ -512,7 +466,7 @@ export async function renderAdminBackupSettingsPage(container) {
   function setSysMessage(text, isError = false) {
     if (!sysMessage) return;
     sysMessage.textContent = text || '';
-    sysMessage.className = isError ? 'mt-3 text-xs text-rose-600' : 'mt-3 text-xs text-slate-500';
+    sysMessage.className = isError ? 'mt-2 text-xs text-rose-600' : 'mt-2 text-xs text-slate-500';
   }
 
   function setScheduleMessage(text, isError = false) {
@@ -536,7 +490,7 @@ export async function renderAdminBackupSettingsPage(container) {
   }
 
   function describeSchedule(schedule) {
-    if (!schedule || !schedule.enabled) return 'Jadwal pengingat nonaktif. Snapshot mingguan oleh server tetap berjalan.';
+    if (!schedule || !schedule.enabled) return 'Jadwal nonaktif. Snapshot server tetap berjalan.';
     const freq = FREQ_LABELS[schedule.frequency] || schedule.frequency;
     let when = `pukul ${schedule.time}`;
     if (schedule.frequency === 'weekly') when = `setiap ${DOW_NAMES[schedule.dayOfWeek] || 'Jumat'} pukul ${schedule.time}`;
@@ -550,10 +504,10 @@ export async function renderAdminBackupSettingsPage(container) {
         if (schedule.frequency === 'daily') next.setDate(next.getDate() + 1);
         else if (schedule.frequency === 'weekly') next.setDate(next.getDate() + 7);
         else next.setMonth(next.getMonth() + 1);
-        nextText = ` Perkiraan jadwal berikutnya: ${formatDriveDate(next.toISOString())}.`;
+        nextText = ` Berikutnya sekitar ${formatDriveDate(next.toISOString())}.`;
       }
     } catch { /* abaikan */ }
-    return `Jadwal ${freq}, ${when}.${nextText} Catatan: jadwal ini dipakai untuk pengingat guru dan pencatatan. Snapshot basis data yang sebenarnya dijalankan GitHub Actions setiap Minggu 01:00 WIB, tidak bergantung pada admin membuka aplikasi.`;
+    return `Jadwal ${freq}, ${when}.${nextText}`;
   }
 
   function renderLogs(logs) {
@@ -569,11 +523,11 @@ export async function renderAdminBackupSettingsPage(container) {
       const badge = LOG_TYPE_BADGE[entry.type] || 'bg-slate-100 text-slate-600';
       const statusOk = entry.status !== 'error';
       const statusHtml = statusOk
-        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Sukses</span>'
-        : `<span class="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700" title="${escapeHtml(entry.message || '')}">Gagal</span>`;
+        ? '<span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Sukses</span>'
+        : `<span class="inline-flex items-center rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700" title="${escapeHtml(entry.message || '')}">Gagal</span>`;
       return `<tr class="text-slate-600">
         <td class="whitespace-nowrap px-3 py-2">${formatDriveDate(entry.at)}</td>
-        <td class="px-3 py-2"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${badge}">${escapeHtml(entry.type || '-')}</span></td>
+        <td class="px-3 py-2"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${badge}">${escapeHtml(entry.type || '-')}</span></td>
         <td class="max-w-[180px] truncate px-3 py-2" title="${escapeHtml(entry.file_name || '')}">${escapeHtml(entry.file_name || '-')}</td>
         <td class="whitespace-nowrap px-3 py-2">${formatBytes(entry.size)}</td>
         <td class="px-3 py-2">${escapeHtml(entry.by || '-')}</td>
@@ -599,17 +553,17 @@ export async function renderAdminBackupSettingsPage(container) {
     if (sysStatus) {
       if (!config?.connected) {
         sysStatus.textContent = 'Drive belum terhubung';
-        sysStatus.className = 'rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700';
+        sysStatus.className = adminTheme.badgeWarn;
       } else if (schedule.enabled) {
-        sysStatus.textContent = 'Otomatis aktif';
-        sysStatus.className = 'rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700';
+        sysStatus.textContent = 'Jadwal aktif';
+        sysStatus.className = adminTheme.badgeLive;
       } else {
         sysStatus.textContent = 'Jadwal server aktif';
-        sysStatus.className = 'rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700';
+        sysStatus.className = adminTheme.badgeLive;
       }
     }
     if (!config?.connected) {
-      setSysMessage('Google Drive belum terhubung. Snapshot mingguan tetap dibuat dan dilampirkan ke GitHub Release, tetapi tidak akan tersalin ke Drive sekolah sampai koneksi diatur di atas.', true);
+      setSysMessage('Google Drive belum terhubung. Snapshot tetap dibuat dan dilampirkan ke GitHub Release, tetapi belum tersalin ke Drive sekolah.', true);
     } else {
       setSysMessage('');
     }
@@ -621,7 +575,7 @@ export async function renderAdminBackupSettingsPage(container) {
   }
 
   // -------------------------------------------------------------------------
-  // Tombol "Jalankan Backup Sekarang" & peringatan cadangan kedaluwarsa
+  // Tombol "Jalankan Backup" & peringatan cadangan kedaluwarsa
   // -------------------------------------------------------------------------
   const runBackupBtn = container.querySelector('#run-backup-btn');
   const runBackupLabel = container.querySelector('#run-backup-label');
@@ -634,7 +588,7 @@ export async function renderAdminBackupSettingsPage(container) {
     if (!runBackupMessage) return;
     runBackupMessage.textContent = text || '';
     const warna = tone === 'error' ? 'text-rose-600' : tone === 'ok' ? 'text-emerald-700' : 'text-slate-600';
-    runBackupMessage.className = `mt-3 text-xs font-medium ${warna}`;
+    runBackupMessage.className = `mt-2 text-xs font-medium ${warna}`;
   }
 
   function setRunHint(html) {
@@ -656,19 +610,16 @@ export async function renderAdminBackupSettingsPage(container) {
     if (runBackupLabel) runBackupLabel.textContent = 'Belum tersedia';
     setRunMessage(workflow?.reason || 'Pemicu backup manual belum dikonfigurasi.', 'error');
     setRunHint(
-      'Agar tombol ini aktif, variabel lingkungan <code class="rounded bg-white px-1 ring-1 ring-slate-200">GITHUB_BACKUP_TOKEN</code> '
-      + 'perlu disetel di Vercel, berisi GitHub token dengan izin <strong>Actions: Read and write</strong> '
-      + 'pada repository ini. Selama itu belum ada, backup otomatis mingguan tetap berjalan seperti biasa.'
+      'Setel <code class="rounded bg-white px-1 ring-1 ring-slate-200">GITHUB_BACKUP_TOKEN</code> di Vercel '
+      + '(izin <strong>Actions: Read and write</strong>) untuk mengaktifkan tombol ini. '
+      + 'Cadangan mingguan tetap berjalan.'
     );
   }
 
   /**
-   * Peringatkan bila cadangan sudah lama tidak muncul.
-   *
-   * Ini menutup celah yang paling sering terjadi: backup berhenti tanpa ada yang
-   * menyadarinya. GitHub menonaktifkan jadwal otomatis setelah 60 hari repository
-   * tidak ada aktivitas, dan kegagalan lain juga mungkin. Datanya diambil dari
-   * konfigurasi yang sudah dimuat, jadi nol operasi baca tambahan.
+   * Peringatkan bila cadangan sudah lama tidak muncul: GitHub menonaktifkan jadwal
+   * setelah 60 hari repository tanpa aktivitas, dan kegagalan lain juga mungkin.
+   * Datanya dari konfigurasi yang sudah dimuat, jadi nol operasi baca tambahan.
    */
   function applyBackupHealth(config) {
     if (!backupHealth) return;
@@ -678,32 +629,31 @@ export async function renderAdminBackupSettingsPage(container) {
 
     if (!valid) {
       backupHealth.className = 'mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4';
-      backupHealth.innerHTML = '<p class="text-sm font-bold text-amber-900">Belum ada cadangan yang pernah tersimpan</p>'
-        + '<p class="mt-1 text-xs leading-5 text-amber-800">Jalankan backup sekali sekarang untuk memastikan seluruh rangkaiannya berfungsi, jangan menunggu jadwal Minggu dini hari.</p>';
+      backupHealth.innerHTML = '<p class="text-sm font-semibold text-amber-900">Belum ada cadangan tersimpan</p>'
+        + '<p class="mt-1 text-xs leading-5 text-amber-800">Jalankan sekali sekarang untuk memastikan rangkaiannya berfungsi.</p>';
       backupHealth.classList.remove('hidden');
       return;
     }
 
     const waktu = formatDriveDate(config.lastUploadAt);
     if (hari >= 10) {
-      backupHealth.className = 'mt-4 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4';
-      backupHealth.innerHTML = `<p class="text-sm font-bold text-rose-900">Cadangan terakhir ${hari} hari lalu &mdash; perlu diperiksa</p>`
-        + `<p class="mt-1 text-xs leading-5 text-rose-800">Terakhir tersimpan ${waktu}. Backup mingguan seharusnya menghasilkan berkas baru setiap Minggu dini hari.</p>`
-        + '<p class="mt-1 text-xs leading-5 text-rose-800">Kemungkinan penyebab: GitHub menonaktifkan jadwal otomatis karena repository tidak ada aktivitas selama 60 hari, atau prosesnya gagal. Tekan <strong>Jalankan Backup Sekarang</strong> di bawah, lalu periksa daftar Riwayat.</p>';
+      backupHealth.className = 'mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4';
+      backupHealth.innerHTML = `<p class="text-sm font-semibold text-rose-900">Cadangan terakhir ${hari} hari lalu</p>`
+        + `<p class="mt-1 text-xs leading-5 text-rose-800">Terakhir tersimpan ${waktu}, padahal seharusnya ada berkas baru setiap Minggu. Jalankan backup manual, lalu periksa daftar Riwayat.</p>`;
       backupHealth.classList.remove('hidden');
       return;
     }
     if (hari >= 8) {
       backupHealth.className = 'mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4';
-      backupHealth.innerHTML = `<p class="text-sm font-bold text-amber-900">Cadangan terakhir ${hari} hari lalu</p>`
-        + `<p class="mt-1 text-xs leading-5 text-amber-800">Terakhir tersimpan ${waktu}. Sedikit melewati satu minggu; bila besok belum ada yang baru, jalankan backup secara manual.</p>`;
+      backupHealth.innerHTML = `<p class="text-sm font-semibold text-amber-900">Cadangan terakhir ${hari} hari lalu</p>`
+        + `<p class="mt-1 text-xs leading-5 text-amber-800">Terakhir tersimpan ${waktu}. Bila besok belum ada yang baru, jalankan backup manual.</p>`;
       backupHealth.classList.remove('hidden');
       return;
     }
 
     backupHealth.className = 'mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4';
-    backupHealth.innerHTML = '<p class="text-sm font-bold text-emerald-900">Cadangan terbaru tersimpan</p>'
-      + `<p class="mt-1 text-xs leading-5 text-emerald-800">${waktu}${hari > 0 ? ` (${hari} hari lalu)` : ' (hari ini)'} &mdash; <span class="font-medium">${escapeHtml(config.lastUploadName || '')}</span></p>`;
+    backupHealth.innerHTML = '<p class="text-sm font-semibold text-emerald-900">Cadangan terbaru tersimpan</p>'
+      + `<p class="mt-1 text-xs leading-5 text-emerald-800">${waktu}${hari > 0 ? ` (${hari} hari lalu)` : ' (hari ini)'} &mdash; ${escapeHtml(config.lastUploadName || '')}</p>`;
     backupHealth.classList.remove('hidden');
   }
 
@@ -711,36 +661,31 @@ export async function renderAdminBackupSettingsPage(container) {
     if (!workflowInfo?.configured) return;
     const ok = window.confirm(
       'Jalankan backup sekarang?\n\n'
-      + 'Proses yang sama dengan jadwal mingguan akan dijalankan di server GitHub:\n'
-      + '  1. Snapshot .json.gz untuk pemulihan data\n'
-      + '  2. Satu berkas Excel untuk setiap guru\n'
-      + 'Keduanya diunggah ke Google Drive sekolah.\n\n'
-      + 'Perangkat ini tidak membaca data apa pun, jadi kuota database dari sisi\n'
-      + 'admin tidak terpakai. Prosesnya sekitar 1-2 menit.'
+      + 'Server GitHub akan membuat snapshot .json.gz dan satu berkas Excel per guru,\n'
+      + 'lalu mengunggahnya ke Google Drive sekolah. Sekitar 1-2 menit.'
     );
     if (!ok) return;
 
     runBackupBtn.disabled = true;
     const labelAsli = runBackupLabel ? runBackupLabel.textContent : '';
-    if (runBackupLabel) runBackupLabel.textContent = 'Mengirim permintaan...';
+    if (runBackupLabel) runBackupLabel.textContent = 'Mengirim...';
     setRunMessage('Menghubungi GitHub...');
     setRunHint('');
 
     try {
       const result = await runBackupNow();
-      setRunMessage('Permintaan diterima GitHub. Backup sedang diproses di latar belakang.', 'ok');
+      setRunMessage('Permintaan diterima. Backup diproses di latar belakang.', 'ok');
       const tautan = result.runsUrl || workflowInfo?.runsUrl || '';
       setRunHint(
-        'Hasilnya akan muncul di Google Drive dan di daftar Riwayat sekitar 1-2 menit lagi. '
-        + 'Muat ulang halaman ini untuk melihatnya.'
-        + (tautan ? ` <a href="${tautan}" target="_blank" rel="noopener" class="font-semibold text-teal-700 underline">Pantau prosesnya di GitHub</a>.` : '')
+        'Hasilnya muncul di Drive dan daftar Riwayat sekitar 1-2 menit lagi; muat ulang halaman untuk melihatnya.'
+        + (tautan ? ` <a href="${tautan}" target="_blank" rel="noopener" class="font-semibold text-sky-700 underline">Pantau di GitHub</a>.` : '')
       );
       if (runBackupLabel) runBackupLabel.textContent = 'Sedang diproses...';
       // Tombol dibiarkan mati beberapa saat: server juga membatasi 5 menit, dan
       // menekan berulang hanya akan menjalankan backup ganda.
       setTimeout(() => {
         runBackupBtn.disabled = false;
-        if (runBackupLabel) runBackupLabel.textContent = labelAsli || 'Jalankan Backup Sekarang';
+        if (runBackupLabel) runBackupLabel.textContent = labelAsli || 'Jalankan Backup';
       }, 60000);
     } catch (error) {
       setRunMessage(error.message, 'error');
@@ -748,11 +693,11 @@ export async function renderAdminBackupSettingsPage(container) {
         setRunHint('Jeda ini mencegah backup berjalan dua kali. Tunggu sebentar lalu coba lagi.');
       }
       runBackupBtn.disabled = false;
-      if (runBackupLabel) runBackupLabel.textContent = labelAsli || 'Jalankan Backup Sekarang';
+      if (runBackupLabel) runBackupLabel.textContent = labelAsli || 'Jalankan Backup';
     }
   });
 
-  const REM_FREQ_LABELS = { daily: 'Harian', weekly: 'Mingguan', custom: 'Custom' };
+  const REM_FREQ_LABELS = { daily: 'Harian', weekly: 'Mingguan', custom: 'Beberapa hari' };
 
   function setReminderMessage(text, isError = false) {
     if (!reminderMessage) return;
@@ -765,9 +710,9 @@ export async function renderAdminBackupSettingsPage(container) {
     if (reminderDaysWrap) reminderDaysWrap.style.display = freq === 'daily' ? 'none' : '';
     if (reminderDayMode) {
       reminderDayMode.textContent = freq === 'weekly'
-        ? 'Mode mingguan: pilih tepat satu hari (hari pertama yang dicentang dipakai).'
+        ? 'Dipakai satu hari saja: hari pertama yang dicentang.'
         : freq === 'custom'
-          ? 'Mode custom: pilih satu atau beberapa hari.'
+          ? 'Centang satu atau beberapa hari.'
           : '';
     }
   }
@@ -817,7 +762,7 @@ export async function renderAdminBackupSettingsPage(container) {
     event.preventDefault();
     const reminder = readReminderForm();
     if (reminder.enabled && reminder.frequency === 'custom' && !reminder.days.length) {
-      setReminderMessage('Pilih minimal satu hari untuk mode custom.', true);
+      setReminderMessage('Pilih minimal satu hari.', true);
       return;
     }
     if (reminderSaveBtn) { reminderSaveBtn.disabled = true; reminderSaveBtn.textContent = 'Menyimpan...'; }

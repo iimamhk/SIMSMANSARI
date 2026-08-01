@@ -9,7 +9,6 @@ import {
 import {
   getExportStatus,
   describeReadCost,
-  ESTIMATED_READS_PER_ASSIGNMENT,
 } from '../../utils/backup-policy.js';
 import {
   getBackupHistory,
@@ -24,18 +23,6 @@ import {
   getDestinationMeta,
   getFormatIcon,
 } from '../../utils/backup-history.js';
-
-function formatDateTimeDisplay(date) {
-  if (!date) return 'Belum pernah';
-  try {
-    return new Date(date).toLocaleString('id-ID', {
-      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    });
-  } catch {
-    return String(date);
-  }
-}
 
 function formatDateShort(date) {
   if (!date) return '-';
@@ -55,27 +42,13 @@ function escapeHtml(value) {
 
 // ---------------------------------------------------------------------------
 // Kebijakan halaman ini
-//
-// 1. EKSPOR EXCEL SAJA. Pilihan format CSV dan JSON dibuang: keluaran CSV
-//    sebenarnya rusak (setiap sheet menjadi teks "[object Promise]" karena
-//    pemanggilan async yang tidak di-await), dan kunci pada JSON diambil dari
-//    baris judul sehingga tidak bermakna. Keduanya tetap melaporkan "Backup
-//    Berhasil", yang lebih buruk daripada tidak ada pilihan itu sama sekali.
-//
-// 2. MAKSIMAL 3 KALI PER MINGGU. Satu ekspor membaca ribuan dokumen Firestore.
-//    Batas ini melindungi kuota baca harian yang dipakai bersama seluruh aplikasi,
-//    sekaligus memberi ruang koreksi bila guru salah pilih kelas atau kehilangan
-//    berkasnya. Aturan dan perhitungannya ada di src/utils/backup-policy.js.
-//
-// 3. DATA MILIK SENDIRI SAJA. Daftar kelas hanya berasal dari
-//    getTeachingAssignmentsForUser (difilter guru_id), dan sebelum ekspor
-//    dijalankan setiap pilihan diverifikasi ulang terhadap daftar itu.
-//
-// 4. TIDAK ADA MENU BAYANGAN. Tab Restore, tombol "Preview", dan tiga sakelar
-//    pengaturan yang tidak terhubung ke apa pun sudah dibuang, bukan disembunyikan.
+// 1. Hanya ekspor Excel. Pilihan CSV dan JSON dibuang karena keluarannya rusak
+//    namun tetap dilaporkan berhasil.
+// 2. Maksimal 3 ekspor per minggu per guru; aturannya di utils/backup-policy.js.
+// 3. Hanya data milik sendiri: daftar kelas berasal dari
+//    getTeachingAssignmentsForUser dan diverifikasi ulang sebelum ekspor jalan.
 // ---------------------------------------------------------------------------
 
-// Kartu riwayat backup (desain premium, jelas di mobile & desktop).
 function renderHistoryCard(h) {
   const dest = getDestinationMeta(h.destination || 'local', h.driveUploaded);
   const typeLabel = getBackupTypeLabel(h.backupType);
@@ -87,39 +60,34 @@ function renderHistoryCard(h) {
   if (h.durationMs) meta.push(formatDuration(h.durationMs));
 
   const driveBtn = h.driveUploaded && (h.driveWebViewLink || h.driveFolderLink)
-    ? `<a href="${escapeHtml(h.driveWebViewLink || h.driveFolderLink)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 transition hover:bg-sky-100" title="Buka di Google Drive">
-        <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
-        Drive
-      </a>`
+    ? `<a href="${escapeHtml(h.driveWebViewLink || h.driveFolderLink)}" target="_blank" rel="noopener" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Drive</a>`
     : '';
 
   return `
-    <div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-200 hover:shadow-md" data-id="${h.id}">
+    <div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300" data-id="${h.id}">
       <div class="flex items-start gap-3">
-        <div class="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-600">
+        <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-slate-100 text-slate-500">
           ${getFormatIcon(h.format)}
         </div>
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-bold text-slate-900" title="${escapeHtml(h.fileName)}">${escapeHtml(h.fileName)}</p>
+          <p class="truncate text-sm font-semibold text-slate-900" title="${escapeHtml(h.fileName)}">${escapeHtml(h.fileName)}</p>
           <p class="mt-0.5 text-xs text-slate-500">${formatDateShort(h.timestamp)}</p>
         </div>
-        <button class="btn-delete flex-none rounded-lg p-1.5 text-slate-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100" title="Hapus riwayat" data-id="${h.id}">
+        <button class="btn-delete flex-none rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 sm:opacity-0 sm:group-hover:opacity-100" title="Hapus riwayat" aria-label="Hapus riwayat" data-id="${h.id}">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeBadge}">${typeLabel}</span>
-        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${dest.badge}">${dest.icon}${dest.label}</span>
-        ${h.driveUploaded ? '<span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Tersimpan di Drive</span>' : ''}
+        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${typeBadge}">${typeLabel}</span>
+        <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${dest.badge}">${dest.icon}${dest.label}</span>
       </div>
 
       <div class="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
         <p class="text-xs text-slate-500">${meta.join(' • ')}</p>
         <div class="flex items-center gap-1.5">
           ${driveBtn}
-          <button class="btn-preview inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50" title="Detail" data-id="${h.id}">
-            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+          <button class="btn-preview inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50" data-id="${h.id}">
             Detail
           </button>
         </div>
@@ -128,14 +96,19 @@ function renderHistoryCard(h) {
   `;
 }
 
-let currentTab = 'backup';
+// Satu sumber untuk keadaan kosong: sebelumnya markup yang sama ditulis ulang di
+// tiga tempat dengan kalimat yang berbeda-beda.
+const EMPTY_HISTORY_HTML = `
+  <div class="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-12 text-center">
+    <p class="text-sm font-semibold text-slate-700">Belum ada riwayat ekspor</p>
+    <p class="mt-1 text-xs text-slate-500">Riwayat muncul setelah ekspor pertama dan hanya tersimpan di perangkat ini.</p>
+  </div>`;
+
 let assignmentsCache = [];
-let membersCache = {};
+let assignmentsLoaded = false;
 let isLoadingAssignments = false;
 
 export async function renderGuruBackupPage(container) {
-  const session = getSession();
-  const userName = session?.user?.nama || 'Bapak/Ibu Guru';
   const history = getBackupHistory();
   const stats = getBackupStats();
   const policy = getExportStatus();
@@ -145,181 +118,93 @@ export async function renderGuruBackupPage(container) {
   // menembak query Firestore. Sekarang daftar hanya dimuat ketika guru benar-benar
   // memilih mode "Selektif" (lihat initBackupModeToggle).
 
-  const TONE = {
-    ok: {
-      wrap: 'border-emerald-200 bg-gradient-to-br from-emerald-50 to-white',
-      icon: 'bg-emerald-100 text-emerald-600',
-      chip: 'bg-emerald-100 text-emerald-700',
-      svg: '<path d="M20 6L9 17l-5-5"/>',
-    },
-    warn: {
-      wrap: 'border-amber-200 bg-gradient-to-br from-amber-50 to-white',
-      icon: 'bg-amber-100 text-amber-600',
-      chip: 'bg-amber-100 text-amber-700',
-      svg: '<path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/>',
-    },
-    info: {
-      wrap: 'border-sky-200 bg-gradient-to-br from-sky-50 to-white',
-      icon: 'bg-sky-100 text-sky-600',
-      chip: 'bg-sky-100 text-sky-700',
-      svg: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
-    },
+  const BADGE = {
+    ok: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    warn: 'bg-amber-50 text-amber-700 ring-amber-100',
+    info: 'bg-slate-100 text-slate-600 ring-slate-200',
   };
-  const tone = TONE[policy.badgeTone] || TONE.info;
+  const badgeClass = BADGE[policy.badgeTone] || BADGE.info;
+
+  // Satu kartu ringkas menggantikan hero + kartu status + empat kartu statistik +
+  // esai kuota. Angka yang dibutuhkan guru muncul sekaligus, tanpa mendorong
+  // tombol ekspor jauh ke bawah layar.
+  const summary = [
+    ['Kuota minggu ini', `${policy.quotaText}${policy.remaining > 0 ? ` · sisa ${policy.remaining}` : ''}`],
+    ['Ekspor tersimpan', String(stats.totalBackups)],
+    ['Total ukuran', formatFileSize(stats.totalSize)],
+    ['Terakhir', stats.lastBackup ? formatDateShort(stats.lastBackup) : 'Belum ada'],
+  ];
 
   const statusCard = `
-    <div class="relative overflow-hidden rounded-3xl border-2 ${tone.wrap} p-5 shadow-sm">
-      <div class="flex items-start gap-4">
-        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${tone.icon}">
-          <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${tone.svg}</svg>
+    <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-base font-semibold text-slate-900 sm:text-lg">${escapeHtml(policy.title)}</h2>
+          <p class="mt-1 max-w-2xl text-sm leading-6 text-slate-500">${escapeHtml(policy.detail)}</p>
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-bold text-slate-900">${escapeHtml(policy.title)}</h2>
-            <span class="rounded-full ${tone.chip} px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">${escapeHtml(policy.badgeLabel)}</span>
-          </div>
-          <p class="mt-1.5 text-sm leading-relaxed text-slate-600">${escapeHtml(policy.detail)}</p>
-        </div>
+        <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${badgeClass}">${escapeHtml(policy.badgeLabel)}</span>
       </div>
-    </div>`;
+      <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 sm:grid-cols-4">
+        ${summary.map(([label, value]) => `
+          <div>
+            <dt class="text-[11px] font-medium uppercase tracking-wide text-slate-400">${label}</dt>
+            <dd class="mt-1 text-sm font-semibold text-slate-900">${escapeHtml(value)}</dd>
+          </div>`).join('')}
+      </dl>
+      <p class="mt-4 text-xs leading-5 text-slate-500">Batas ${policy.limit} ekspor per minggu menjaga kuota baca database yang dipakai bersama seluruh pengguna. Cadangan seluruh sekolah tetap dibuat server setiap Minggu dini hari.</p>
+    </section>`;
 
-  // Penjelasan batas mingguan, ditulis dengan alasannya agar guru memahami batas
-  // ini sebagai perlindungan bersama, bukan sekadar larangan.
-  const quotaNotice = `
-    <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="flex items-start gap-3">
-        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
-          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        </div>
-        <div class="min-w-0 text-sm leading-relaxed text-slate-600">
-          <p class="font-bold text-slate-900">Mengapa ekspor dibatasi ${policy.limit} kali per minggu?</p>
-          <p class="mt-1">Satu kali ekspor membaca ribuan baris data dari database sekolah. Database ini punya batas pemakaian harian yang dipakai bersama oleh semua guru dan siswa. Bila batas itu habis, seluruh aplikasi berhenti dapat membuka absensi, nilai, dan materi sampai hari berikutnya.</p>
-          <p class="mt-1">Karena itu setiap guru mendapat <strong>${policy.limit} kali ekspor per minggu</strong> &mdash; cukup untuk sekali rutin, ditambah cadangan bila ada data yang perlu diperbaiki. Cadangan lengkap seluruh sekolah tetap dibuat otomatis oleh sistem setiap <strong>hari Minggu dini hari</strong>, saat tidak ada kegiatan mengajar.</p>
-          <p class="mt-1">Pemakaian Anda minggu ini: <strong>${policy.quotaText}</strong>${policy.remaining > 0 ? `, sisa ${policy.remaining} kali` : ", kuota sudah penuh"}.</p>
-        </div>
-      </div>
-    </div>`;
-
-  const statsCards = `
-    <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7"/><path stroke-linecap="round" stroke-linejoin="round" d="M4 7l8-4 8 4M4 7l8 4 8-4"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Total Backup</p></div>
-        <p class="mt-2 text-2xl font-bold text-slate-900">${stats.totalBackups}</p>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1a2 2 0 01-2 2M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Total Ukuran</p></div>
-        <p class="mt-2 text-2xl font-bold text-slate-900">${formatFileSize(stats.totalSize)}</p>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m6 10V11M3 21h18"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Rata-rata</p></div>
-        <p class="mt-2 text-2xl font-bold text-slate-900">${formatFileSize(stats.avgSize)}</p>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex items-center gap-2 text-slate-400"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 2"/></svg><p class="text-[10px] font-semibold uppercase tracking-wider">Terakhir</p></div>
-        <p class="mt-2 text-sm font-semibold text-slate-900">${stats.lastBackup ? formatDateShort(stats.lastBackup) : 'Belum ada'}</p>
-      </div>
-    </div>`;
-
-  const historyCards = history.length > 0 ? history.slice(0, 20).map((h) => renderHistoryCard(h)).join('') : `
-    <div class="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-14 text-center">
-      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-        <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-      </div>
-      <div>
-        <p class="text-sm font-bold text-slate-700">Belum ada riwayat backup</p>
-        <p class="mt-1 text-xs text-slate-500">Riwayat backup Anda akan muncul di sini setelah backup pertama.</p>
-      </div>
-    </div>
-  `;
+  const historyCards = history.length > 0
+    ? history.slice(0, 20).map((h) => renderHistoryCard(h)).join('')
+    : EMPTY_HISTORY_HTML;
 
   const pageHtml = `
-    <div class="space-y-5">
-      <section class="relative overflow-hidden rounded-[28px] border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-teal-50 p-5 shadow-[0_24px_70px_-42px_rgba(16,185,129,0.55)] sm:p-6">
-        <div class="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-emerald-200/40 blur-3xl"></div>
-        <div class="absolute bottom-0 left-6 h-24 w-24 rounded-full bg-teal-200/40 blur-3xl"></div>
-        <div class="relative">
-          <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700 backdrop-blur-sm">
-            <span class="inline-block h-2 w-2 rounded-full bg-emerald-500"></span>
-            Pusat Backup Data
-          </div>
-          <h2 class="text-2xl font-bold text-slate-900 sm:text-3xl">Backup Data Absensi & Penilaian</h2>
-          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">Salin data absensi dan nilai kelas yang Anda ampu menjadi berkas Excel siap kerja. Satu kali ekspor per minggu, dengan riwayat lengkap di perangkat ini.</p>
-        </div>
-      </section>
-
+    <div class="space-y-4">
       ${statusCard}
 
-      ${statsCards}
-
-      ${quotaNotice}
-
-      <!-- Tab Navigation -->
-      <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <nav class="flex gap-1 border-b border-slate-100 bg-slate-50/60 p-1.5" id="backup-tabs">
-          <button data-tab="backup" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 shadow-sm transition">
-            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Backup</span>
-          </button>
-          <button data-tab="history" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
-            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Riwayat</span>
-          </button>
-          <button data-tab="settings" class="tab-btn flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white">
-            <span class="inline-flex items-center justify-center gap-2"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H2a2 2 0 010-4h.09A1.65 1.65 0 004.6 8a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V2a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H22a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Pengaturan</span>
-          </button>
+      <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <nav class="flex gap-5 overflow-x-auto border-b border-slate-100 px-4 sm:px-5" id="backup-tabs" role="tablist">
+          <button data-tab="backup" role="tab" aria-selected="true" aria-controls="tab-backup" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-slate-900 px-1 py-3 text-sm font-semibold text-slate-900 transition">Ekspor</button>
+          <button data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-sm font-semibold text-slate-500 transition hover:text-slate-900">Riwayat</button>
+          <button data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-sm font-semibold text-slate-500 transition hover:text-slate-900">Pengaturan</button>
         </nav>
 
-        <!-- TAB: BACKUP -->
-        <div id="tab-backup" class="tab-panel p-5 sm:p-6">
-          <section class="mb-6">
-            <h3 class="mb-4 text-lg font-bold text-slate-900">Pilih Mode Backup</h3>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <button id="mode-full" class="mode-btn relative rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 text-left transition">
+        <!-- TAB: EKSPOR -->
+        <div id="tab-backup" class="tab-panel p-4 sm:p-5" role="tabpanel">
+          <section>
+            <h3 class="text-sm font-semibold text-slate-900">Cakupan data</h3>
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label id="mode-full" class="mode-btn cursor-pointer rounded-xl border border-emerald-300 bg-emerald-50 p-3.5 transition">
                 <input type="radio" name="backupMode" value="full" class="sr-only" checked>
-                <div class="flex items-start gap-3">
-                  <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v4"/></svg></div>
-                  <div>
-                    <p class="font-bold text-slate-900">Backup Penuh (Full)</p>
-                    <p class="mt-1 text-sm text-slate-600">Semua kelas, semua tipe data (Rekap Absensi, Absensi Harian, Rekap Nilai)</p>
-                  </div>
-                </div>
-                <span class="absolute right-4 top-4 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">Direkomendasikan</span>
-              </button>
-              <button id="mode-selective" class="mode-btn relative rounded-2xl border-2 border-slate-200 bg-white p-4 text-left transition hover:border-slate-300">
+                <p class="text-sm font-semibold text-slate-900">Semua kelas</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Seluruh kelas yang Anda ampu, dengan semua jenis data.</p>
+              </label>
+              <label id="mode-selective" class="mode-btn cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-slate-300">
                 <input type="radio" name="backupMode" value="selective" class="sr-only">
-                <div class="flex items-start gap-3">
-                  <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-sky-100 text-sky-600"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg></div>
-                  <div>
-                    <p class="font-bold text-slate-900">Backup Selektif</p>
-                    <p class="mt-1 text-sm text-slate-600">Pilih kelas & tipe data tertentu (Rekap Absensi / Absensi Harian / Rekap Nilai)</p>
-                  </div>
-                </div>
-              </button>
+                <p class="text-sm font-semibold text-slate-900">Pilih sendiri</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Tentukan kelas dan jenis data yang diperlukan saja.</p>
+              </label>
             </div>
           </section>
 
-          <!-- Selective Options (hidden by default) -->
-          <section id="selective-options" class="hidden mb-6 space-y-4">
-            <div class="rounded-xl border border-sky-200 bg-sky-50 p-4">
-              <div class="flex items-center justify-between">
-                <h4 class="font-bold text-sky-800">Pilih Kelas</h4>
-                <button id="btn-refresh-classes" type="button" class="text-xs text-sky-600 hover:text-sky-800 flex items-center gap-1" title="Muat ulang daftar kelas">
-                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                  Refresh
-                </button>
+          <section id="selective-options" class="mt-5 hidden space-y-4">
+            <div class="rounded-xl border border-slate-200 p-3.5">
+              <div class="flex items-center justify-between gap-2">
+                <h4 class="text-sm font-semibold text-slate-900">Kelas</h4>
+                <button id="btn-refresh-classes" type="button" class="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-900">Muat ulang</button>
               </div>
-              <p class="mt-1 text-sm text-sky-700">Centang kelas yang ingin dibackup</p>
-              <div id="class-checkboxes" class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 max-h-60 overflow-auto">
-                <p class="text-sm text-sky-600 col-span-full text-center py-4">Memuat daftar kelas...</p>
+              <div id="class-checkboxes" class="mt-3 grid max-h-60 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
+                <p class="col-span-full py-4 text-center text-sm text-slate-500">Memuat daftar kelas...</p>
               </div>
             </div>
-            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <h4 class="font-bold text-amber-800">Pilih Jenis Data</h4>
-              <p class="mt-1 text-sm text-amber-700">Centang data yang ingin dimasukkan ke berkas Excel. Semakin sedikit yang dicentang, semakin ringan pemakaian database.</p>
+            <div class="rounded-xl border border-slate-200 p-3.5">
+              <h4 class="text-sm font-semibold text-slate-900">Jenis data</h4>
               <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2" id="data-type-checkboxes">
                 ${Object.values(BACKUP_DATA_TYPES).map((dt) => `
-                  <label class="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50 cursor-pointer">
+                  <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 transition hover:bg-slate-50">
                     <input type="checkbox" name="dataType" value="${dt.key}" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
                     <span class="min-w-0">
-                      <span class="block font-medium text-slate-900">${dt.icon} ${escapeHtml(dt.label)}</span>
+                      <span class="block text-sm font-medium text-slate-900">${escapeHtml(dt.label)}</span>
                       <span class="mt-0.5 block text-xs leading-4 text-slate-500">${escapeHtml(dt.description || '')}</span>
                     </span>
                   </label>
@@ -328,177 +213,124 @@ export async function renderGuruBackupPage(container) {
             </div>
           </section>
 
-          <!-- Destination Selection -->
-          <section class="mb-6">
-            <div class="mb-3 flex items-center gap-2">
-              <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">1</span>
-              <h3 class="text-base font-bold text-slate-900">Pilih Tujuan Backup</h3>
-            </div>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3" id="destination-options">
-              <label class="dest-opt group relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 transition">
-                <span class="dest-check absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white opacity-100 transition"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+          <section class="mt-5">
+            <h3 class="text-sm font-semibold text-slate-900">Tujuan berkas</h3>
+            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3" id="destination-options">
+              <label class="dest-opt relative cursor-pointer rounded-xl border border-emerald-300 bg-emerald-50 p-3.5 transition">
+                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="local" class="sr-only" checked>
-                <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
-                <div>
-                  <p class="font-bold text-slate-900">Lokal</p>
-                  <p class="mt-0.5 text-xs text-slate-600">Unduh berkas ke perangkat ini.</p>
-                </div>
+                <p class="pr-6 text-sm font-semibold text-slate-900">Perangkat ini</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Berkas Excel langsung diunduh.</p>
               </label>
-              <label class="dest-opt group relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
-                <span class="dest-check absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <label class="dest-opt relative cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-slate-300">
+                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="drive" class="sr-only">
-                <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-sky-100 text-sky-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 16V4M12 4l-4 4M12 4l4 4"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 16.5A3.5 3.5 0 0016.5 13H16a5 5 0 10-9.9 1.2A3 3 0 006 20h12a3 3 0 002-3.5z"/></svg></div>
-                <div>
-                  <p class="font-bold text-slate-900">Online (Drive)</p>
-                  <p class="mt-0.5 text-xs text-slate-600">Unggah ke Drive sekolah, tanpa unduh.</p>
-                </div>
+                <p class="pr-6 text-sm font-semibold text-slate-900">Google Drive</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Diunggah ke Drive sekolah.</p>
               </label>
-              <label class="dest-opt group relative flex cursor-pointer items-start gap-3 rounded-2xl border-2 border-slate-200 bg-white p-4 transition hover:border-slate-300">
-                <span class="dest-check absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <label class="dest-opt relative cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-slate-300">
+                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="both" class="sr-only">
-                <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-indigo-100 text-indigo-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 19h14"/></svg></div>
-                <div>
-                  <p class="font-bold text-slate-900">Keduanya</p>
-                  <p class="mt-0.5 text-xs text-slate-600">Unduh & unggah sekaligus.</p>
-                </div>
+                <p class="pr-6 text-sm font-semibold text-slate-900">Keduanya</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500">Diunduh sekaligus diunggah.</p>
               </label>
             </div>
-            <div id="drive-inline-status" class="mt-3 hidden items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-xs text-sky-800"></div>
-            <p id="destination-hint" class="mt-2 text-xs text-slate-500"></p>
+            <div id="drive-inline-status" class="mt-3 hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"></div>
+            <p id="destination-hint" class="sr-only"></p>
           </section>
 
-          <!-- Action Buttons -->
-          <section>
-            <div class="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 shadow-sm sm:p-6">
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 class="text-lg font-bold text-slate-900" id="backup-action-title">Mulai Backup Sekarang</h3>
-                  <p class="mt-1 text-sm text-slate-500" id="backup-action-desc">Pilih tujuan backup di atas, lalu klik tombol backup.</p>
-                </div>
-                <div class="flex flex-col gap-3 sm:flex-row">
-                  <button id="btn-start-backup" type="button" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-500/30 transition hover:-translate-y-0.5 hover:shadow-xl active:scale-95">
-                    <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-                    <span id="btn-start-backup-label">Backup Sekarang</span>
-                  </button>
-                </div>
-              </div>
-
-              <div id="backup-progress-box" class="hidden mt-5 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
-                <div class="flex items-center gap-3">
-                  <svg class="h-5 w-5 animate-spin text-emerald-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
-                  <p id="backup-progress-text" class="text-sm font-medium text-slate-600">Memulai backup...</p>
-                </div>
-                <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                  <div id="backup-progress-bar" class="h-full w-0 bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-300"></div>
-                </div>
-              </div>
-
-              <!-- Panel sukses dengan tombol ke folder Drive -->
-              <div id="backup-success-box" class="hidden mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <div class="flex items-start gap-3">
-                  <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-emerald-100 text-emerald-600"><svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-bold text-emerald-900">Backup Berhasil</p>
-                    <p id="backup-success-text" class="mt-0.5 text-xs text-emerald-700"></p>
-                    <div class="mt-3 flex flex-wrap gap-2">
-                      <a id="backup-success-drive" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-700">
-                        <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/></svg>
-                        Buka Folder Google Drive
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <!-- TAB: HISTORY -->
-        <div id="tab-history" class="tab-panel hidden p-5 sm:p-6">
-          <section class="mb-5">
+          <section class="mt-5 border-t border-slate-100 pt-5">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 class="text-lg font-bold text-slate-900">Riwayat Backup</h3>
-                <p class="mt-1 text-sm text-slate-500">${history.length} riwayat tersimpan (maksimal 50). Berkas yang diunggah punya tautan langsung ke Google Drive.</p>
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-900" id="backup-action-title">Siap diekspor</p>
+                <p class="mt-1 text-xs leading-5 text-slate-500" id="backup-action-desc">Tersedia ${policy.limit} ekspor per minggu.</p>
               </div>
-              <div class="flex items-center gap-2">
-                <button id="btn-open-drive-folder" type="button" class="hidden inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100" title="Buka folder Google Drive">
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                  Buka Folder Drive
-                </button>
-                <button id="btn-clear-history" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 transition hover:bg-rose-50">
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18L18 6M6 6l12 12"/></svg>
-                  Hapus Semua
-                </button>
+              <button id="btn-start-backup" type="button" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200">
+                <span id="btn-start-backup-label">Ekspor Sekarang</span>
+              </button>
+            </div>
+
+            <div id="backup-progress-box" class="mt-4 hidden rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div class="flex items-center gap-3">
+                <svg class="h-4 w-4 animate-spin text-emerald-600" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+                <p id="backup-progress-text" class="text-sm text-slate-600">Memulai ekspor...</p>
+              </div>
+              <div class="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                <div id="backup-progress-bar" class="h-full w-0 bg-emerald-600 transition-all duration-300"></div>
               </div>
             </div>
-          </section>
-          <section>
-            <div id="history-grid" class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-              ${historyCards}
+
+            <div id="backup-success-box" class="mt-4 hidden rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <p class="text-sm font-semibold text-emerald-900">Ekspor selesai</p>
+              <p id="backup-success-text" class="mt-1 text-xs leading-5 text-emerald-800"></p>
+              <a id="backup-success-drive" href="#" target="_blank" rel="noopener" class="mt-3 hidden inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                Buka folder Google Drive
+              </a>
             </div>
-            ${history.length > 20 ? `
-              <div class="mt-4 text-center">
-                <button id="btn-load-more-history" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-50">Tampilkan ${history.length - 20} lebih...</button>
-              </div>
-            ` : ''}
           </section>
         </div>
 
-        <!-- TAB: SETTINGS -->
-        <div id="tab-settings" class="tab-panel hidden p-5 sm:p-6 space-y-6">
-          <section>
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h3 class="text-lg font-bold text-slate-900">Google Drive</h3>
-              <span id="drive-state-badge" class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500">Memeriksa...</span>
+        <!-- TAB: RIWAYAT -->
+        <div id="tab-history" class="tab-panel hidden p-4 sm:p-5" role="tabpanel">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 class="text-sm font-semibold text-slate-900">Riwayat ekspor</h3>
+              <p class="mt-1 text-xs text-slate-500">${history.length} dari maksimal 50 entri, tersimpan di perangkat ini.</p>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
-              <label class="flex items-center justify-between gap-4">
-                <div>
-                  <p class="font-medium text-slate-900">Unggah Backup ke Google Drive</p>
-                  <p class="text-sm text-slate-500">Jadikan Google Drive sebagai tujuan default (opsi "Keduanya") saat backup.</p>
+            <div class="flex items-center gap-2">
+              <button id="btn-open-drive-folder" type="button" class="hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Folder Drive</button>
+              <button id="btn-clear-history" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50">Hapus semua</button>
+            </div>
+          </div>
+          <div id="history-grid" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            ${historyCards}
+          </div>
+          ${history.length > 20 ? `
+            <div class="mt-4 text-center">
+              <button id="btn-load-more-history" type="button" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Tampilkan ${history.length - 20} lainnya</button>
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- TAB: PENGATURAN -->
+        <div id="tab-settings" class="tab-panel hidden space-y-6 p-4 sm:p-5" role="tabpanel">
+          <section>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h3 class="text-sm font-semibold text-slate-900">Google Drive</h3>
+              <span id="drive-state-badge" class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">Memeriksa...</span>
+            </div>
+            <div class="mt-3 space-y-3 rounded-xl border border-slate-200 p-3.5">
+              <label class="flex items-start justify-between gap-4">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-slate-900">Jadikan Drive tujuan default</p>
+                  <p class="mt-1 text-xs leading-5 text-slate-500">Pilihan "Keduanya" akan terpilih otomatis saat ekspor.</p>
                 </div>
-                <input type="checkbox" id="drive-upload-toggle" class="h-5 w-5 flex-none rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                <input type="checkbox" id="drive-upload-toggle" class="mt-0.5 h-5 w-5 flex-none rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
               </label>
-              <p id="drive-state-detail" class="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">Memeriksa koneksi Google Drive...</p>
-              <a id="drive-open-folder" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-700 transition hover:bg-sky-100">
-                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-                Buka Folder Google Drive
+              <p id="drive-state-detail" class="border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">Memeriksa koneksi Google Drive...</p>
+              <a id="drive-open-folder" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+                Buka folder Drive
               </a>
             </div>
           </section>
           <section>
-            <h3 class="mb-4 text-lg font-bold text-slate-900">Backup Otomatis Sekolah</h3>
-            <div class="rounded-xl border border-slate-200 bg-white p-4">
-              <div class="flex items-start gap-3">
-                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
-                  <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M2 12h4M18 12h4M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9"/></svg>
-                </div>
-                <div class="min-w-0 text-sm leading-relaxed text-slate-600">
-                  <p class="font-medium text-slate-900">Dijalankan sistem setiap Minggu dini hari</p>
-                  <p class="mt-1">Cadangan lengkap seluruh data sekolah dibuat otomatis oleh server, bukan oleh perangkat Bapak/Ibu. Karena itu tidak ada pengaturan jadwal yang perlu diatur di sini.</p>
-                  <p class="mt-1">Ekspor Excel di halaman ini bersifat pelengkap: gunanya agar Bapak/Ibu memegang salinan sendiri yang dapat dibuka dan dilanjutkan tanpa aplikasi.</p>
-                </div>
-              </div>
-            </div>
+            <h3 class="text-sm font-semibold text-slate-900">Cadangan otomatis sekolah</h3>
+            <p class="mt-2 text-xs leading-5 text-slate-500">Server membuat cadangan seluruh data sekolah setiap Minggu dini hari, jadi tidak ada jadwal yang perlu diatur di sini. Ekspor di halaman ini hanya untuk salinan pribadi Anda.</p>
           </section>
           <section>
-            <h3 class="mb-4 text-lg font-bold text-slate-900">Kelola Data Lokal</h3>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <button id="btn-export-history" class="rounded-xl border border-slate-200 bg-white p-4 text-left hover:bg-slate-50 transition">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
-                <p class="mt-3 font-bold text-slate-900">Ekspor Riwayat</p>
-                <p class="mt-1 text-sm text-slate-500">Unduh riwayat backup sebagai JSON</p>
+            <h3 class="text-sm font-semibold text-slate-900">Data lokal</h3>
+            <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <button id="btn-export-history" type="button" class="rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:bg-slate-50">
+                <p class="text-sm font-medium text-slate-900">Ekspor riwayat</p>
+                <p class="mt-1 text-xs text-slate-500">Unduh sebagai JSON</p>
               </button>
-              <button id="btn-import-history" class="rounded-xl border border-slate-200 bg-white p-4 text-left hover:bg-slate-50 transition">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg></div>
-                <p class="mt-3 font-bold text-slate-900">Impor Riwayat</p>
-                <p class="mt-1 text-sm text-slate-500">Pulihkan riwayat dari file JSON</p>
+              <button id="btn-import-history" type="button" class="rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:bg-slate-50">
+                <p class="text-sm font-medium text-slate-900">Impor riwayat</p>
+                <p class="mt-1 text-xs text-slate-500">Pulihkan dari JSON</p>
               </button>
-              <button id="btn-clear-all-data" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-left hover:bg-rose-100 transition">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-600"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></div>
-                <p class="mt-3 font-bold text-rose-900">Hapus Semua Data Lokal</p>
-                <p class="mt-1 text-sm text-rose-700">Riwayat, timestamp, pengaturan</p>
+              <button id="btn-clear-all-data" type="button" class="rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:bg-rose-50">
+                <p class="text-sm font-medium text-rose-700">Hapus data lokal</p>
+                <p class="mt-1 text-xs text-slate-500">Riwayat & penanda ekspor</p>
               </button>
             </div>
           </section>
@@ -542,6 +374,7 @@ async function loadAssignmentsForSelectiveBackup() {
     console.warn('Gagal memuat pengajaran:', e);
     assignmentsCache = [];
   } finally {
+    assignmentsLoaded = true;
     isLoadingAssignments = false;
   }
 }
@@ -550,34 +383,27 @@ function renderClassCheckboxes(container) {
   const checkboxesContainer = container.querySelector('#class-checkboxes');
   if (!checkboxesContainer) return;
 
-  if (!assignmentsCache.length && !isLoadingAssignments) {
-    checkboxesContainer.innerHTML = `
-      <div class="col-span-full flex flex-col items-center gap-2 py-6 text-center">
-        <svg class="animate-spin h-6 w-6 text-slate-400" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-        <p class="text-sm text-slate-500">Memuat data pengajaran...</p>
-      </div>`;
-    // Trigger reload
-    loadAssignmentsForSelectiveBackup().then(() => renderClassCheckboxes(container));
-    return;
-  }
-
-  if (!assignmentsCache.length && isLoadingAssignments) {
-    // Already loading, show spinner but don't trigger another load
-    checkboxesContainer.innerHTML = `
-      <div class="col-span-full flex flex-col items-center gap-2 py-6 text-center">
-        <svg class="animate-spin h-6 w-6 text-slate-400" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-        <p class="text-sm text-slate-500">Memuat data pengajaran...</p>
-      </div>`;
+  if (!assignmentsCache.length) {
+    // Penanda "sudah pernah dicoba" mencegah pemuatan berulang tanpa henti bila
+    // guru memang tidak punya kelas: sebelumnya setiap render memicu query baru.
+    if (!assignmentsLoaded && !isLoadingAssignments) {
+      checkboxesContainer.innerHTML = '<p class="col-span-full py-6 text-center text-sm text-slate-500">Memuat daftar kelas...</p>';
+      loadAssignmentsForSelectiveBackup().then(() => renderClassCheckboxes(container));
+      return;
+    }
+    checkboxesContainer.innerHTML = isLoadingAssignments
+      ? '<p class="col-span-full py-6 text-center text-sm text-slate-500">Memuat daftar kelas...</p>'
+      : '<p class="col-span-full py-6 text-center text-sm text-slate-500">Tidak ada kelas yang dapat diekspor.</p>';
     return;
   }
 
   checkboxesContainer.innerHTML = assignmentsCache.map((a) => `
-    <label class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 hover:bg-slate-50 cursor-pointer">
-      <input type="checkbox" name="assignment" value="${a.id}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
-      <div class="flex-1 min-w-0">
-        <p class="font-medium text-slate-900 truncate">${a.kelas_nama || a.kelas_id}</p>
-        <p class="text-xs text-slate-500 truncate">${a.mapel_nama || 'Mapel'}</p>
-      </div>
+    <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 transition hover:bg-slate-50">
+      <input type="checkbox" name="assignment" value="${escapeHtml(a.id)}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate text-sm font-medium text-slate-900">${escapeHtml(a.kelas_nama || a.kelas_id)}</span>
+        <span class="block truncate text-xs text-slate-500">${escapeHtml(a.mapel_nama || 'Mapel')}</span>
+      </span>
     </label>
   `).join('');
 }
@@ -590,11 +416,13 @@ function initTabNavigation(container) {
     tab.addEventListener('click', () => {
       const tabName = tab.dataset.tab;
       tabs.forEach((t) => {
-        t.classList.remove('bg-slate-900', 'text-white', 'shadow-sm');
-        t.classList.add('text-slate-500');
+        const active = t === tab;
+        t.classList.toggle('border-slate-900', active);
+        t.classList.toggle('text-slate-900', active);
+        t.classList.toggle('border-transparent', !active);
+        t.classList.toggle('text-slate-500', !active);
+        t.setAttribute('aria-selected', active ? 'true' : 'false');
       });
-      tab.classList.add('bg-slate-900', 'text-white', 'shadow-sm');
-      tab.classList.remove('text-slate-500');
 
       panels.forEach((p) => {
         if (p.id === `tab-${tabName}`) {
@@ -603,8 +431,6 @@ function initTabNavigation(container) {
           p.classList.add('hidden');
         }
       });
-
-      currentTab = tabName;
     });
   });
 }
@@ -637,9 +463,10 @@ function initBackupModeToggle(container) {
     });
   });
 
-  // Tombol muat ulang daftar kelas untuk backup selektif.
+  // Tombol muat ulang daftar kelas untuk ekspor pilihan sendiri.
   container.querySelector('#btn-refresh-classes')?.addEventListener('click', () => {
     assignmentsCache = [];
+    assignmentsLoaded = false;
     loadAssignmentsForSelectiveBackup().then(() => renderClassCheckboxes(container));
   });
 }
@@ -648,27 +475,26 @@ function updateBackupActionText(container, mode) {
   const titleEl = container.querySelector('#backup-action-title');
   const descEl = container.querySelector('#backup-action-desc');
 
-  if (mode === 'selective') {
-    titleEl.textContent = 'Backup Selektif';
-    descEl.textContent = 'Pilih kelas dan tipe data di atas, lalu tentukan tujuan backup (lokal / Drive / keduanya).';
-  } else {
-    titleEl.textContent = 'Mulai Backup Sekarang';
-    descEl.textContent = 'Pilih tujuan backup (lokal / Drive / keduanya), lalu klik tombol backup.';
+  if (titleEl) titleEl.textContent = mode === 'selective' ? 'Ekspor pilihan Anda' : 'Ekspor semua kelas';
+  if (descEl) {
+    descEl.textContent = mode === 'selective'
+      ? 'Pastikan kelas dan jenis data sudah dicentang.'
+      : 'Seluruh kelas yang Anda ampu ikut diekspor.';
   }
 }
 
-// Pilihan tujuan backup: highlight kartu terpilih + teks bantuan + label tombol.
+// Pilihan tujuan berkas: sorot kartu terpilih, label tombol, dan status Drive.
 function initDestinationToggle(container) {
   const destOpts = Array.from(container.querySelectorAll('.dest-opt'));
   const hint = container.querySelector('#destination-hint');
   const startLabel = container.querySelector('#btn-start-backup-label');
 
   const HINTS = {
-    local: 'Berkas backup akan diunduh ke perangkat ini saja.',
-    drive: 'Berkas backup akan diunggah langsung ke Google Drive sekolah (tidak diunduh ke perangkat).',
-    both: 'Berkas backup diunduh ke perangkat sekaligus diunggah ke Google Drive.',
+    local: 'Berkas diunduh ke perangkat ini.',
+    drive: 'Berkas diunggah ke Google Drive sekolah.',
+    both: 'Berkas diunduh sekaligus diunggah ke Google Drive.',
   };
-  const LABELS = { local: 'Unduh ke Perangkat', drive: 'Unggah ke Drive', both: 'Unduh + Unggah' };
+  const LABELS = { local: 'Unduh Excel', drive: 'Unggah ke Drive', both: 'Unduh + Unggah' };
   const inlineStatus = container.querySelector('#drive-inline-status');
 
   const apply = (value) => {
@@ -691,16 +517,16 @@ function initDestinationToggle(container) {
       if (value === 'drive' || value === 'both') {
         inlineStatus.classList.remove('hidden');
         inlineStatus.classList.add('flex');
-        inlineStatus.innerHTML = `<svg class="h-3.5 w-3.5 animate-spin text-sky-500" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span>Memeriksa koneksi Google Drive...</span>`;
+        inlineStatus.innerHTML = '<span>Memeriksa koneksi Google Drive...</span>';
         checkDriveStatus().then((status) => {
           if (status.available) {
-            const akun = status.accountEmail ? ` • ${status.accountEmail}` : '';
+            const akun = status.accountEmail ? ` · ${escapeHtml(status.accountEmail)}` : '';
             const folderBtn = status.folderLink
-              ? ` <a href="${status.folderLink}" target="_blank" rel="noopener" class="ml-1 inline-flex items-center gap-1 font-bold text-sky-700 underline decoration-sky-300 underline-offset-2">Buka folder</a>`
+              ? ` <a href="${escapeHtml(status.folderLink)}" target="_blank" rel="noopener" class="font-semibold text-emerald-700 underline underline-offset-2">Buka folder</a>`
               : '';
-            inlineStatus.innerHTML = `<svg class="h-3.5 w-3.5 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span>Terhubung ke folder <strong>${status.folderName || 'backup'}</strong>${akun}.${folderBtn}</span>`;
+            inlineStatus.innerHTML = `<span>Drive terhubung ke folder <strong>${escapeHtml(status.folderName || 'backup')}</strong>${akun}.${folderBtn}</span>`;
           } else {
-            inlineStatus.innerHTML = `<svg class="h-3.5 w-3.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg><span>${status.reason || 'Google Drive belum siap.'} Admin dapat mengaturnya di Pengaturan → Google Drive.</span>`;
+            inlineStatus.innerHTML = `<span class="text-amber-700">${escapeHtml(status.reason || 'Google Drive belum siap.')} Hubungi admin untuk mengaturnya.</span>`;
           }
         });
       } else {
@@ -725,8 +551,8 @@ function initBackupActions(container) {
   const successText = container.querySelector('#backup-success-text');
   const successDrive = container.querySelector('#backup-success-drive');
 
-  // Keadaan tombol ekspor mengikuti sisa kuota. Guru perlu tahu SISA kuotanya,
-  // bukan hanya tahu bahwa tombolnya terkunci.
+  // Keadaan tombol ekspor mengikuti sisa kuota: guru perlu tahu sisanya, bukan
+  // hanya tahu bahwa tombolnya terkunci.
   const policy = getExportStatus();
   const labelEl = container.querySelector('#btn-start-backup-label');
   const titleEl = container.querySelector('#backup-action-title');
@@ -734,19 +560,15 @@ function initBackupActions(container) {
 
   if (!policy.allowed && startBtn) {
     startBtn.disabled = true;
-    startBtn.classList.remove('bg-gradient-to-r', 'from-emerald-500', 'to-teal-500', 'text-white', 'shadow-lg', 'shadow-emerald-500/30', 'hover:-translate-y-0.5', 'hover:shadow-xl', 'active:scale-95');
-    startBtn.classList.add('bg-slate-200', 'text-slate-500', 'cursor-not-allowed');
-    if (labelEl) labelEl.textContent = `Kuota minggu ini penuh (${policy.quotaText})`;
+    startBtn.classList.remove('bg-emerald-600', 'text-white', 'hover:bg-emerald-700');
+    startBtn.classList.add('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
+    if (labelEl) labelEl.textContent = 'Kuota penuh';
     startBtn.title = `Kuota terisi kembali pada ${policy.nextAvailableText}.`;
-    if (titleEl) titleEl.textContent = `Kuota ekspor minggu ini sudah terpakai (${policy.quotaText})`;
-    if (descEl) {
-      descEl.textContent = `Berkas Excel Anda sudah tersimpan dan tetap dapat dibuka kapan saja dari tab Riwayat. Kuota ${policy.limit} kali ekspor akan terisi kembali pada ${policy.nextAvailableText}.`;
-    }
-  } else if (policy.remaining < policy.limit && descEl) {
-    // Masih ada sisa kuota: tampilkan sisanya supaya guru tidak ragu memakainya
-    // saat ada data yang baru diperbaiki.
+    if (titleEl) titleEl.textContent = `Kuota minggu ini penuh (${policy.quotaText})`;
+    if (descEl) descEl.textContent = `Terisi kembali pada ${policy.nextAvailableText}. Berkas lama tetap tersedia di tab Riwayat.`;
+  } else if (policy.used > 0) {
     if (titleEl) titleEl.textContent = `Ekspor ke-${policy.used + 1} dari ${policy.limit} minggu ini`;
-    descEl.textContent = `Anda sudah memakai ${policy.quotaText} kuota ekspor minggu ini, tersisa ${policy.remaining} kali. Gunakan bila ada absensi atau nilai yang baru diperbaiki.`;
+    if (descEl) descEl.textContent = `Sisa ${policy.remaining} ekspor untuk minggu ini.`;
   }
 
   const updateProgress = (text, percent) => {
@@ -776,12 +598,7 @@ function initBackupActions(container) {
     // kuota habis, tapi halaman bisa terbuka lama sehingga statusnya berubah.
     const current = getExportStatus();
     if (!current.allowed) {
-      alert(
-        `Kuota ekspor minggu ini sudah terpakai (${current.quotaText}).\n\n`
-        + `${current.detail}\n\n`
-        + `Batas ${current.limit} kali per minggu ini menjaga agar kuota database sekolah `
-        + 'tidak habis, karena kuota tersebut dipakai bersama oleh semua guru dan siswa.'
-      );
+      alert(`Kuota ekspor minggu ini sudah terpakai (${current.quotaText}).\n\n${current.detail}`);
       return;
     }
 
@@ -826,26 +643,20 @@ function initBackupActions(container) {
         }
       }
 
-      // Konfirmasi sekali, dengan biayanya dinyatakan terbuka. Ini satu-satunya
-      // kesempatan ekspor untuk minggu ini, jadi guru perlu tahu sebelum menekan.
+      // Konfirmasi sekali, dengan cakupan dan sisa kuota dinyatakan terbuka.
       const jumlahKelas = mode === 'selective' ? selectedAssignments.length : assignmentsCache.length;
       const biaya = describeReadCost(jumlahKelas);
       const tujuanTeks = destination === 'local'
         ? 'diunduh ke perangkat ini'
         : destination === 'drive'
           ? 'diunggah ke Google Drive sekolah'
-          : 'diunduh ke perangkat dan diunggah ke Google Drive';
+          : 'diunduh dan diunggah ke Google Drive';
       const konfirmasi = [
         'Jalankan ekspor Excel sekarang?',
         '',
-        `Mode      : ${mode === 'selective' ? 'Selektif (kelas terpilih)' : 'Penuh (semua kelas Anda)'}`,
-        `Hasil     : ${tujuanTeks}`,
-        biaya ? `Cakupan   : ${biaya}` : '',
-        '',
-        `Ini ekspor ${current.limit - current.remaining + 1} dari ${current.limit} untuk minggu ini.`,
-        current.remaining > 1
-          ? `Setelah ini masih tersisa ${current.remaining - 1} kali ekspor.`
-          : 'Setelah ini kuota minggu ini penuh, dan terisi lagi hari Senin.',
+        `Cakupan : ${mode === 'selective' ? 'kelas terpilih' : 'semua kelas Anda'}${biaya ? ` (${biaya})` : ''}`,
+        `Hasil   : ${tujuanTeks}`,
+        `Kuota   : ekspor ke-${current.used + 1} dari ${current.limit} minggu ini`,
       ].filter(Boolean).join('\n');
       if (!confirm(konfirmasi)) return;
 
@@ -856,7 +667,7 @@ function initBackupActions(container) {
         const status = await checkDriveStatus();
         if (!status.available) {
           if (progressBox) progressBox.classList.add('hidden');
-          alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}\n\nKuota database tidak terpakai, jadi Anda masih bisa mencoba lagi setelah admin mengatur Drive, atau pilih tujuan "Lokal".`);
+          alert(`Google Drive belum siap: ${status.reason || 'belum dikonfigurasi admin.'}\n\nKuota ekspor Anda belum terpakai. Coba lagi nanti atau pilih tujuan "Perangkat ini".`);
           return;
         }
       }
@@ -872,17 +683,17 @@ function initBackupActions(container) {
         ? await exportGuruBackupExcel(progress, { destination })
         : await exportSelectiveBackupExcel(context, userId, userName, selectedAssignments, dataTypes, progress, { destination });
 
-      updateProgress('Selesai!', 100);
+      updateProgress('Selesai', 100);
 
       const drive = result?.drive || {};
       const driveFolderLink = drive.folderLink || drive.webViewLink || '';
       let doneMsg = '';
-      if (destination === 'local') doneMsg = 'Berkas Excel sudah diunduh ke perangkat Anda. Buka sheet "Petunjuk" di dalamnya untuk cara melanjutkan pekerjaan.';
+      if (destination === 'local') doneMsg = 'Berkas Excel sudah diunduh. Sheet "Petunjuk" di dalamnya menjelaskan cara melanjutkan pekerjaan.';
       else if (destination === 'drive') {
-        doneMsg = drive.uploaded ? 'Berkas Excel berhasil diunggah ke Google Drive sekolah.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
+        doneMsg = drive.uploaded ? 'Berkas Excel tersimpan di Google Drive sekolah.' : `Gagal unggah ke Drive: ${drive.reason || 'terjadi kesalahan.'}`;
       } else {
         doneMsg = drive.uploaded
-          ? 'Berkas Excel diunduh ke perangkat dan diunggah ke Google Drive.'
+          ? 'Berkas Excel diunduh ke perangkat dan tersimpan di Google Drive.'
           : `Berkas diunduh ke perangkat. Unggah Drive gagal: ${drive.reason || 'terjadi kesalahan.'}`;
       }
 
@@ -939,19 +750,13 @@ function initHistoryActions(container) {
       const entry = getBackupHistoryById(id);
       if (entry) {
         const dest = getDestinationMeta(entry.destination || 'local', entry.driveUploaded).label;
-        alert(`Detail Backup\n\nBerkas: ${entry.fileName}\nTipe: ${getBackupTypeLabel(entry.backupType)}\nTujuan: ${dest}\nKelas: ${entry.assignmentsCount || 0}\nUkuran: ${formatFileSize(entry.fileSize)}\nWaktu: ${formatDateShort(entry.timestamp)}${entry.driveUploaded ? '\nStatus Drive: Tersimpan' : ''}`);
+        alert(`Detail ekspor\n\nBerkas: ${entry.fileName}\nJenis: ${getBackupTypeLabel(entry.backupType)}\nTujuan: ${dest}\nKelas: ${entry.assignmentsCount || 0}\nUkuran: ${formatFileSize(entry.fileSize)}\nWaktu: ${formatDateShort(entry.timestamp)}`);
       }
     } else if (btn.classList.contains('btn-delete')) {
       if (confirm('Hapus riwayat ini?')) {
         deleteBackupHistory(id);
         btn.closest('[data-id]')?.remove();
-        if (grid && !grid.querySelector('[data-id]')) {
-          grid.innerHTML = `
-            <div class="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-14 text-center">
-              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
-              <div><p class="text-sm font-bold text-slate-700">Belum ada riwayat backup</p><p class="mt-1 text-xs text-slate-500">Riwayat backup Anda akan muncul di sini setelah backup pertama.</p></div>
-            </div>`;
-        }
+        if (grid && !grid.querySelector('[data-id]')) grid.innerHTML = EMPTY_HISTORY_HTML;
       }
     }
   });
@@ -964,15 +769,9 @@ function initHistoryActions(container) {
   });
 
   clearBtn?.addEventListener('click', () => {
-    if (confirm('Hapus SEMUA riwayat backup? Tindakan ini tidak bisa dibatalkan.')) {
+    if (confirm('Hapus seluruh riwayat ekspor di perangkat ini? Tindakan ini tidak bisa dibatalkan.')) {
       clearBackupHistory();
-      if (grid) {
-        grid.innerHTML = `
-          <div class="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-6 py-14 text-center">
-            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
-            <div><p class="text-sm font-bold text-slate-700">Belum ada riwayat backup</p><p class="mt-1 text-xs text-slate-500">Riwayat backup Anda akan muncul di sini setelah backup pertama.</p></div>
-          </div>`;
-      }
+      if (grid) grid.innerHTML = EMPTY_HISTORY_HTML;
       loadMoreBtn?.remove();
     }
   });
@@ -991,10 +790,11 @@ function initSettingsActions(container) {
 
   const setBadge = (text, tone) => {
     if (!driveBadge) return;
+    const base = 'rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1';
     const tones = {
-      ok: 'rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700',
-      warn: 'rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-700',
-      off: 'rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500',
+      ok: `${base} bg-emerald-50 text-emerald-700 ring-emerald-100`,
+      warn: `${base} bg-amber-50 text-amber-700 ring-amber-100`,
+      off: `${base} bg-slate-100 text-slate-500 ring-slate-200`,
     };
     driveBadge.textContent = text;
     driveBadge.className = tones[tone] || tones.off;
@@ -1005,7 +805,7 @@ function initSettingsActions(container) {
     if (openFolder) openFolder.classList.add('hidden');
     if (!driveToggle?.checked) {
       setBadge('Nonaktif', 'off');
-      if (driveDetail) driveDetail.textContent = 'Google Drive tidak dijadikan tujuan default. Anda tetap bisa memilih tujuan "Online" atau "Keduanya" saat backup.';
+      if (driveDetail) driveDetail.textContent = 'Drive tidak dijadikan tujuan default. Anda tetap bisa memilihnya saat ekspor.';
       return;
     }
     setBadge('Memeriksa...', 'off');
@@ -1014,14 +814,14 @@ function initSettingsActions(container) {
     if (status.available) {
       setBadge('Terhubung', 'ok');
       const akun = status.accountEmail ? ` (${status.accountEmail})` : '';
-      if (driveDetail) driveDetail.textContent = `Aktif. Backup akan diunggah ke folder "${status.folderName || 'backup'}"${akun}.`;
+      if (driveDetail) driveDetail.textContent = `Berkas diunggah ke folder "${status.folderName || 'backup'}"${akun}.`;
       if (openFolder && status.folderLink) {
         openFolder.href = status.folderLink;
         openFolder.classList.remove('hidden');
       }
     } else {
       setBadge('Belum siap', 'warn');
-      if (driveDetail) driveDetail.textContent = `${status.reason || 'Google Drive belum dikonfigurasi.'} Admin dapat mengatur di Pengaturan → Google Drive.`;
+      if (driveDetail) driveDetail.textContent = `${status.reason || 'Google Drive belum dikonfigurasi.'} Hubungi admin untuk mengaturnya.`;
     }
   }
 
@@ -1067,13 +867,12 @@ function initSettingsActions(container) {
   });
 
   container.querySelector('#btn-clear-all-data')?.addEventListener('click', () => {
-    if (confirm('HAPUS SEMUA DATA LOKAL?\n\nIni akan menghapus:\n- Riwayat backup\n- Timestamp backup terakhir\n- Pengaturan backup otomatis\n- Snooze reminder\n\nTindakan ini TIDAK DAPAT DIBATALKAN.')) {
+    if (confirm('Hapus data lokal backup?\n\nRiwayat ekspor, penanda ekspor terakhir, dan penundaan pengingat akan dihapus dari perangkat ini. Tidak dapat dibatalkan.')) {
       localStorage.removeItem('simguru_backup_history');
       localStorage.removeItem('simguru_backup_last_run');
       localStorage.removeItem('simguru_backup_snooze');
       localStorage.removeItem('simguru_backup_reminder_seen');
       localStorage.removeItem('auto_backup_friday');
-      alert('Semua data lokal backup telah dihapus.');
       renderGuruBackupPage(container);
     }
   });
