@@ -132,6 +132,20 @@ function getStyles() {
     .mai-chart-cap { margin:8px 2px 0; font-size:.78rem; color:var(--mai-muted); text-align:center; }
     .mai-chart-fallback { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.82rem; color:var(--mai-muted); text-align:center; padding:12px; }
     @media (max-width:640px){ .mai-chart-box { height:260px; } }
+    .mai-viz-box { position:relative; width:100%; height:360px; background:#fff; border:1px solid var(--mai-line); border-radius:14px; overflow:hidden; }
+    .mai-jxg { width:100%; height:100%; }
+    .mai-nl-box { background:#fff; border:1px solid var(--mai-line); border-radius:14px; padding:6px 8px; }
+    .mai-longdiv { }
+    .mai-ld-head { font-size:.9rem; margin:2px 0; }
+    .mai-ld-lbl { color:var(--mai-muted); }
+    .mai-ld-eq { font-size:.82rem; color:var(--mai-muted); margin:2px 0 8px; }
+    .mai-ld-grid { display:flex; flex-direction:column; gap:2px; background:#fff; border:1px solid var(--mai-line); border-radius:12px; padding:10px 12px; font-family:ui-monospace,Menlo,monospace; overflow-x:auto; }
+    .mai-ld-row { display:grid; gap:0 6px; }
+    .mai-ld-c { text-align:center; font-size:.9rem; padding:2px 4px; }
+    .mai-ld-dividend { border-bottom:2px solid var(--mai-ink); padding-bottom:2px; }
+    .mai-ld-sub { color:var(--mai-rose); }
+    .mai-ld-rem { border-top:1px solid var(--mai-line); }
+    @media (max-width:640px){ .mai-viz-box { height:300px; } }
     .mai-highlight { display:flex; gap:10px; border-radius:14px; padding:12px 14px; margin:10px 0; font-size:.9rem; align-items:flex-start; }
     .mai-highlight-ic { flex:none; font-size:16px; line-height:1.4; }
     .mai-hl-penting { background:rgba(255,214,10,.14); border:1px solid rgba(255,214,10,.4); }
@@ -218,6 +232,7 @@ function renderConcept(concept, index) {
     ${renderBlocks(concept.content)}
     ${tableHtml}
     ${renderChart(concept.chart)}
+    ${renderVisual(concept.visual)}
   </div>`;
 }
 
@@ -246,6 +261,161 @@ function renderChart(chart) {
 /** Apakah materi mengandung minimal satu grafik? (untuk memuat Chart.js secara kondisional) */
 function materialHasChart(material) {
   return Array.isArray(material?.concepts) && material.concepts.some((c) => c && c.chart && typeof c.chart === 'object');
+}
+
+/** Apakah ada visual yang butuh JSXGraph (graph/geometry)? */
+function materialNeedsJsxgraph(material) {
+  return Array.isArray(material?.concepts) && material.concepts.some((c) => {
+    const k = c && c.visual && c.visual.kind;
+    return k === 'graph' || k === 'geometry';
+  });
+}
+
+/** Dispatch visual matematika lanjutan. */
+function renderVisual(visual) {
+  if (!visual || typeof visual !== 'object') return '';
+  const kind = String(visual.kind || '').toLowerCase();
+  if (kind === 'longdiv') return renderLongDiv(visual);
+  if (kind === 'numberline') return renderNumberline(visual);
+  if (kind === 'graph' || kind === 'geometry') {
+    const spec = escapeHtml(JSON.stringify(visual));
+    const cid = uid('viz');
+    const cap = visual.title ? `<figcaption class="mai-chart-cap">${renderInline(visual.title)}</figcaption>` : '';
+    return `<figure class="mai-chart">
+      <div class="mai-viz-box"><div id="${cid}" class="mai-jxg" data-mai-viz="${spec}" role="img" aria-label="${escapeHtml(visual.title || 'Visual matematika')}"></div>
+      <div class="mai-chart-fallback" data-mai-viz-fallback hidden>Visual tidak dapat dimuat.</div></div>
+      ${cap}
+    </figure>`;
+  }
+  return '';
+}
+
+/** Format satu suku polinomial dari koefisien & derajat (untuk longdiv). */
+function fmtPolyTerm(coef, degree, variable, first) {
+  if (coef === 0) return '';
+  const sign = coef < 0 ? '−' : (first ? '' : '+');
+  let mag = Math.abs(coef);
+  let magStr = (Math.round(mag * 1000) / 1000).toString();
+  let varStr = '';
+  if (degree === 1) varStr = variable;
+  else if (degree > 1) varStr = `${variable}^${degree}`;
+  if (varStr && mag === 1) magStr = '';
+  const body = magStr && varStr ? `${magStr}${varStr}` : (varStr || magStr || '0');
+  return `${sign}${sign ? ' ' : ''}${body}`;
+}
+
+/** Ubah array koefisien (tinggi→rendah) menjadi string polinomial. */
+function polyToString(coeffs, variable) {
+  const deg = coeffs.length - 1;
+  const parts = [];
+  coeffs.forEach((c, i) => {
+    const term = fmtPolyTerm(c, deg - i, variable, parts.length === 0);
+    if (term) parts.push(term);
+  });
+  return parts.length ? parts.join(' ') : '0';
+}
+
+/**
+ * Pembagian polinomial cara susun — DIHITUNG di sini (deterministik) agar tidak
+ * bergantung pada aritmetika AI. Menghasilkan tabel bertingkat yang selaras
+ * per-derajat memakai CSS grid.
+ */
+function renderLongDiv(visual) {
+  const dividend = Array.isArray(visual.dividend) ? visual.dividend.slice() : [];
+  const divisor = Array.isArray(visual.divisor) ? visual.divisor.slice() : [];
+  const v = visual.variable || 'x';
+  if (dividend.length < divisor.length || !divisor.length || divisor[0] === 0) return '';
+
+  const nCols = dividend.length; // kolom = derajat tertinggi..0
+  const work = dividend.slice();
+  const quotient = [];
+  const rows = []; // tiap langkah: { product: number[]|null, remainder: number[] } sejajar kolom penuh
+  const steps = dividend.length - divisor.length + 1;
+
+  for (let i = 0; i < steps; i += 1) {
+    const coef = work[i] / divisor[0];
+    quotient.push(coef);
+    // baris hasil kali (coef * divisor) diletakkan mulai kolom i
+    const product = new Array(nCols).fill(null);
+    for (let j = 0; j < divisor.length; j += 1) product[i + j] = coef * divisor[j];
+    // kurangi
+    for (let j = 0; j < divisor.length; j += 1) work[i + j] -= coef * divisor[j];
+    const remainder = new Array(nCols).fill(null);
+    for (let k = i + 1; k < nCols; k += 1) remainder[k] = work[k];
+    rows.push({ product, remainder, startCol: i });
+  }
+
+  const quotientStr = polyToString(quotient, v);
+  const divisorStr = polyToString(divisor, v);
+  const remainderCoeffs = work.slice(steps);
+  const remainderStr = polyToString(remainderCoeffs.length ? remainderCoeffs : [0], v);
+
+  const cell = (val) => (val == null ? '' : (Math.round(val * 1000) / 1000).toString());
+  const gridRow = (arr, cls) => `<div class="mai-ld-row ${cls || ''}" style="grid-template-columns:repeat(${nCols},minmax(2.2em,1fr))">${arr.map((val) => `<span class="mai-ld-c">${cell(val)}</span>`).join('')}</div>`;
+
+  const stepRows = rows.map((r) => {
+    const prod = r.product.map((val) => (val == null ? null : -val)); // ditampilkan sebagai pengurangan
+    return `${gridRow(prod, 'mai-ld-sub')}${gridRow(r.remainder, 'mai-ld-rem')}`;
+  }).join('');
+
+  const cap = visual.title ? `<figcaption class="mai-chart-cap">${renderInline(visual.title)}</figcaption>` : '';
+  return `<figure class="mai-chart mai-longdiv">
+    <div class="mai-ld-head"><span class="mai-ld-lbl">Hasil bagi</span> <strong>${escapeHtml(quotientStr)}</strong> <span class="mai-ld-lbl">, sisa</span> <strong>${escapeHtml(remainderStr)}</strong></div>
+    <div class="mai-ld-eq">( ${escapeHtml(polyToString(dividend, v))} ) ÷ ( ${escapeHtml(divisorStr)} )</div>
+    <div class="mai-ld-grid">
+      ${gridRow(dividend, 'mai-ld-dividend')}
+      ${stepRows}
+    </div>
+    ${cap}
+  </figure>`;
+}
+
+/** Garis bilangan — SVG statis (tanpa library). */
+function renderNumberline(visual) {
+  const min = Number(visual.min);
+  const max = Number(visual.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return '';
+  const step = Number(visual.step) > 0 ? Number(visual.step) : 1;
+  const W = 640; const H = 96; const padX = 30; const axisY = 56;
+  const span = max - min;
+  const xPix = (val) => padX + ((val - min) / span) * (W - 2 * padX);
+
+  const ticks = [];
+  // Batasi jumlah tick agar tidak terlalu rapat.
+  const maxTicks = 40;
+  const drawStep = (span / step > maxTicks) ? span / maxTicks : step;
+  for (let t = min; t <= max + 1e-9; t += drawStep) {
+    const x = xPix(t);
+    const label = (Math.round(t * 1000) / 1000).toString();
+    ticks.push(`<line x1="${x.toFixed(1)}" y1="${axisY - 5}" x2="${x.toFixed(1)}" y2="${axisY + 5}" stroke="#8a8a8e" stroke-width="1"/>`
+      + `<text x="${x.toFixed(1)}" y="${axisY + 22}" font-size="11" text-anchor="middle" fill="#6e6e73">${escapeHtml(label)}</text>`);
+  }
+
+  const intervals = (visual.intervals || []).map((it) => {
+    const x1 = xPix(Math.max(min, it.from)); const x2 = xPix(Math.min(max, it.to));
+    const bar = `<line x1="${x1.toFixed(1)}" y1="${axisY}" x2="${x2.toFixed(1)}" y2="${axisY}" stroke="#0a84ff" stroke-width="5" stroke-linecap="round" opacity="0.85"/>`;
+    const end = (x, closed) => `<circle cx="${x.toFixed(1)}" cy="${axisY}" r="5" fill="${closed ? '#0a84ff' : '#ffffff'}" stroke="#0a84ff" stroke-width="2"/>`;
+    const lbl = it.label ? `<text x="${((x1 + x2) / 2).toFixed(1)}" y="${axisY - 12}" font-size="11" text-anchor="middle" fill="#0a84ff">${escapeHtml(it.label)}</text>` : '';
+    return bar + end(x1, it.fromClosed) + end(x2, it.toClosed) + lbl;
+  }).join('');
+
+  const points = (visual.points || []).map((p) => {
+    const x = xPix(p.x);
+    const dot = `<circle cx="${x.toFixed(1)}" cy="${axisY}" r="5" fill="${p.closed ? '#5e5ce6' : '#ffffff'}" stroke="#5e5ce6" stroke-width="2"/>`;
+    const lbl = p.label ? `<text x="${x.toFixed(1)}" y="${axisY - 12}" font-size="11" text-anchor="middle" fill="#5e5ce6">${escapeHtml(p.label)}</text>` : '';
+    return dot + lbl;
+  }).join('');
+
+  const axis = `<line x1="${padX}" y1="${axisY}" x2="${W - padX + 12}" y2="${axisY}" stroke="#3a3a3c" stroke-width="1.5"/>`
+    + `<polygon points="${W - padX + 12},${axisY} ${W - padX + 4},${axisY - 4} ${W - padX + 4},${axisY + 4}" fill="#3a3a3c"/>`;
+
+  const cap = visual.title ? `<figcaption class="mai-chart-cap">${renderInline(visual.title)}</figcaption>` : '';
+  return `<figure class="mai-chart">
+    <div class="mai-nl-box"><svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(visual.title || 'Garis bilangan')}">
+      ${axis}${ticks.join('')}${intervals}${points}
+    </svg></div>
+    ${cap}
+  </figure>`;
 }
 
 function renderHighlights(material) {
@@ -546,8 +716,12 @@ export function buildMaterialHtml(material, meta = {}, options = {}) {
   const editable = options.editable === true;
   const body = buildMaterialBody(material, meta, { editable });
   const hasChart = materialHasChart(material);
+  const needsJsxgraph = materialNeedsJsxgraph(material);
   const chartHead = hasChart
     ? '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>'
+    : '';
+  const jxgHead = needsJsxgraph
+    ? '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsxgraph@1.10.1/distrib/jsxgraph.css">\n<script src="https://cdn.jsdelivr.net/npm/jsxgraph@1.10.1/distrib/jsxgraphcore.js"></script>'
     : '';
   return `<!DOCTYPE html>
 <html lang="id">
@@ -557,12 +731,14 @@ export function buildMaterialHtml(material, meta = {}, options = {}) {
 <title>${escapeHtml(material?.title || 'Materi Pembelajaran')}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
 ${chartHead}
+${jxgHead}
 <style>.mai-dd-placed{display:inline-block;background:rgba(10,132,255,.1);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--mai-brand);}.mai-dd-sel{opacity:.6;}</style>
 </head>
 <body>
 ${body}
 ${getInteractionScript()}
 ${hasChart ? getChartScript() : ''}
+${needsJsxgraph ? getVisualScript() : ''}
 ${editable ? getEditBridgeScript() : ''}
 </body>
 </html>`;
@@ -669,6 +845,101 @@ function getChartScript() {
       var spec;try{spec=JSON.parse(canvas.getAttribute('data-mai-chart'));}catch(_){if(fb)fb.hidden=false;return;}
       try{new window.Chart(canvas.getContext('2d'),buildConfig(spec));}
       catch(err){if(fb){fb.hidden=false;fb.textContent='Grafik gagal dimuat.';}}
+    });
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',draw);else draw();
+})();
+<\/script>`;
+}
+
+/**
+ * Script penggambar visual matematika lanjutan (graph & geometry) via JSXGraph.
+ * Membaca DATA dari atribut data-mai-viz. Ekspresi fungsi dievaluasi parser aman
+ * berparameter (bukan eval), sehingga AI tak pernah mengeksekusi kode.
+ */
+function getVisualScript() {
+  return `<script>
+(function(){
+  var PAL=['#0a84ff','#5e5ce6','#30d158','#ff9f0a','#ff453a','#bf5af2'];
+
+  // Evaluator aman berparameter: resolve(name) memberi nilai x / parameter slider.
+  function evalExpr(expr, resolve){
+    var s=String(expr||''), i=0;
+    var FUNCS={sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,
+      sqrt:Math.sqrt,abs:Math.abs,exp:Math.exp,ln:Math.log,log:function(v){return Math.log(v)/Math.LN10;},
+      floor:Math.floor,ceil:Math.ceil,round:Math.round};
+    var CONSTS={pi:Math.PI,e:Math.E};
+    function ws(){while(i<s.length&&/\\s/.test(s[i]))i++;}
+    function peek(){ws();return s[i];}
+    function pExpr(){var v=pTerm();for(;;){var c=peek();if(c==='+'){i++;v+=pTerm();}else if(c==='-'){i++;v-=pTerm();}else return v;}}
+    function pTerm(){var v=pUnary();for(;;){var c=peek();if(c==='*'){i++;v*=pUnary();}else if(c==='/'){i++;v/=pUnary();}else return v;}}
+    function pUnary(){var c=peek();if(c==='-'){i++;return -pUnary();}if(c==='+'){i++;return pUnary();}return pPow();}
+    function pPow(){var v=pBase();var c=peek();if(c==='^'){i++;v=Math.pow(v,pUnary());}return v;}
+    function pBase(){ws();var c=s[i];
+      if(c==='('){i++;var v=pExpr();ws();if(s[i]===')')i++;return v;}
+      if(/[0-9.]/.test(c)){var st=i;while(i<s.length&&/[0-9.]/.test(s[i]))i++;return parseFloat(s.slice(st,i));}
+      if(/[a-zA-Z]/.test(c)){var a=i;while(i<s.length&&/[a-zA-Z0-9_]/.test(s[i]))i++;var name=s.slice(a,i).toLowerCase();
+        ws();
+        if(s[i]==='('){i++;var arg=pExpr();ws();if(s[i]===')')i++;var fn=FUNCS[name];return fn?fn(arg):NaN;}
+        if(CONSTS[name]!=null)return CONSTS[name];
+        var r=resolve(name);return (r==null||isNaN(r))?NaN:r;}
+      i++;return NaN;
+    }
+    try{var res=pExpr();return (typeof res==='number'&&isFinite(res))?res:null;}catch(_){return null;}
+  }
+  function makeFn(expr,sliders){return function(x){return evalExpr(expr,function(n){
+    if(n==='x')return x;for(var k=0;k<sliders.length;k++){if(sliders[k].name===n)return sliders[k].obj.Value();}return null;});};}
+
+  function drawGraph(el,spec){
+    var xMin=Number(spec.xMin),xMax=Number(spec.xMax);
+    if(!(xMax>xMin)){xMin=-10;xMax=10;}
+    var params=spec.params||[];
+    var initResolve=function(n){if(n==='x')return 0;for(var k=0;k<params.length;k++){if(params[k].name===n)return params[k].value;}return null;};
+    var yMin=spec.yMin,yMax=spec.yMax;
+    if(yMin==null||yMax==null){
+      var lo=Infinity,hi=-Infinity,N=60;
+      for(var q=0;q<=N;q++){var xx=xMin+(xMax-xMin)*q/N;
+        for(var fi=0;fi<spec.functions.length;fi++){var yy=evalExpr(spec.functions[fi].expr,function(n){return n==='x'?xx:initResolve(n);});
+          if(yy!=null){if(yy<lo)lo=yy;if(yy>hi)hi=yy;}}}
+      if(!isFinite(lo)||!isFinite(hi)){lo=-10;hi=10;}
+      if(hi-lo<1){hi+=1;lo-=1;}
+      var pad=(hi-lo)*0.15;yMin=lo-pad;yMax=hi+pad;
+      if(yMin<-1000)yMin=-1000;if(yMax>1000)yMax=1000;
+    }
+    var board=JXG.JSXGraph.initBoard(el.id,{boundingbox:[xMin,yMax,xMax,yMin],axis:true,showCopyright:false,showNavigation:false,keepAspectRatio:false,pan:{enabled:false}});
+    var sliders=[];
+    for(var p=0;p<params.length;p++){var pr=params[p];
+      var xa=xMin+(xMax-xMin)*0.06, xb=xMin+(xMax-xMin)*0.44, yy=yMax-(p+1)*(yMax-yMin)*0.09;
+      var sl=board.create('slider',[[xa,yy],[xb,yy],[pr.min,pr.value,pr.max]],{name:pr.name,snapWidth:pr.step||null,strokeColor:PAL[p%PAL.length],fillColor:PAL[p%PAL.length]});
+      sliders.push({name:pr.name,obj:sl});
+    }
+    for(var f=0;f<spec.functions.length;f++){(function(fn,idx){
+      board.create('functiongraph',[makeFn(fn.expr,sliders),xMin,xMax],{strokeColor:PAL[idx%PAL.length],strokeWidth:2.5,name:fn.label||'',withLabel:!!fn.label});
+    })(spec.functions[f],f);}
+  }
+
+  function drawGeometry(el,spec){
+    var xs=spec.points.map(function(p){return p.x;}),ys=spec.points.map(function(p){return p.y;});
+    var minx=Math.min.apply(null,xs),maxx=Math.max.apply(null,xs),miny=Math.min.apply(null,ys),maxy=Math.max.apply(null,ys);
+    var padX=Math.max(1,(maxx-minx)*0.25),padY=Math.max(1,(maxy-miny)*0.25);
+    var board=JXG.JSXGraph.initBoard(el.id,{boundingbox:[minx-padX,maxy+padY,maxx+padX,miny-padY],axis:false,showCopyright:false,showNavigation:false,keepAspectRatio:true});
+    var P={};
+    spec.points.forEach(function(pt){P[pt.name]=board.create('point',[pt.x,pt.y],{name:pt.label||pt.name,fixed:true,size:2,strokeColor:'#1d1d1f',fillColor:'#1d1d1f',label:{offset:[6,6]}});});
+    (spec.polygons||[]).forEach(function(pg){var verts=pg.map(function(n){return P[n];});if(verts.every(Boolean))board.create('polygon',verts,{fillColor:'#0a84ff',fillOpacity:0.08,borders:{strokeColor:'#0a84ff',strokeWidth:2}});});
+    (spec.segments||[]).forEach(function(sg){if(P[sg[0]]&&P[sg[1]])board.create('segment',[P[sg[0]],P[sg[1]]],{strokeColor:'#0a84ff',strokeWidth:2});});
+    (spec.circles||[]).forEach(function(c){if(!P[c.center])return;if(c.radius!=null)board.create('circle',[P[c.center],c.radius],{strokeColor:'#5e5ce6'});else if(P[c.through])board.create('circle',[P[c.center],P[c.through]],{strokeColor:'#5e5ce6'});});
+    (spec.rightAngles||[]).forEach(function(a){if(P[a[0]]&&P[a[1]]&&P[a[2]])board.create('angle',[P[a[0]],P[a[1]],P[a[2]]],{type:'square',radius:Math.max(0.4,(maxx-minx)*0.08),fillColor:'#ff9f0a',fillOpacity:0.4});});
+  }
+
+  function draw(){
+    var nodes=document.querySelectorAll('[data-mai-viz]');
+    if(!nodes.length)return;
+    nodes.forEach(function(el){
+      var box=el.parentNode;var fb=box?box.querySelector('[data-mai-viz-fallback]'):null;
+      if(typeof window.JXG==='undefined'){if(fb)fb.hidden=false;return;}
+      var spec;try{spec=JSON.parse(el.getAttribute('data-mai-viz'));}catch(_){if(fb)fb.hidden=false;return;}
+      try{if(spec.kind==='graph')drawGraph(el,spec);else if(spec.kind==='geometry')drawGeometry(el,spec);}
+      catch(err){if(fb){fb.hidden=false;fb.textContent='Visual gagal dimuat.';}}
     });
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',draw);else draw();

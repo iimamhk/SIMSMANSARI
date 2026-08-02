@@ -28,6 +28,8 @@ const HIGHLIGHT_KINDS = ['penting', 'miskonsepsi', 'info', 'perhatian'];
 const EXERCISE_KINDS = ['fill_blank', 'multiple_choice', 'drag_drop', 'essay'];
 // Tipe grafik/visualisasi yang didukung (lintas mapel, bukan hanya matematika).
 const CHART_TYPES = ['line', 'bar', 'pie', 'scatter', 'function'];
+// Visual matematika lanjutan (dirender oleh mesin khusus di renderer).
+const VISUAL_KINDS = ['graph', 'geometry', 'numberline', 'longdiv'];
 
 const KEDALAMAN_GUIDE = {
   pengenalan: 'Fokus pemahaman konsep dasar. Bahasa paling sederhana, banyak contoh konkret, hindari istilah teknis berat tanpa penjelasan.',
@@ -50,7 +52,7 @@ const FEATURE_LABEL = {
   kuis: 'mini kuis pilihan ganda',
   tugas_kelompok: 'tugas kelompok',
   aktivitas: 'aktivitas diskusi / proyek bersama',
-  grafik: 'grafik / visualisasi data (bila relevan)',
+  grafik: 'grafik & visual matematika (bila relevan)',
 };
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,22 @@ function schemaDescription() {
     '        "points": [ [number, number] ],  // KHUSUS scatter: pasangan [x, y]',
     '        "expr": string,                  // KHUSUS function: rumus dalam variabel x, mis. "x^2 - 4*x + 3"',
     '        "xMin": number, "xMax": number   // KHUSUS function: rentang x',
+    '      },',
+    '      "visual": null | {                 // OPSIONAL: visual matematika lanjutan (pilih SATU kind)',
+    '        "kind": "graph|geometry|numberline|longdiv", "title": string,',
+    '        // graph  → grafik fungsi interaktif dengan slider parameter:',
+    '        "functions": [ { "expr": string, "label": string } ],  // rumus boleh pakai x dan nama parameter',
+    '        "params": [ { "name": string, "min": number, "max": number, "value": number, "step": number } ],',
+    '        "xMin": number, "xMax": number, "yMin": number, "yMax": number,',
+    '        // geometry → bangun datar:',
+    '        "points": [ { "name": string, "x": number, "y": number, "label": string } ],',
+    '        "segments": [ [ "A", "B" ] ], "polygons": [ [ "A", "B", "C" ] ],',
+    '        "circles": [ { "center": "O", "radius": number } ], "rightAngles": [ [ "A", "B", "C" ] ],',
+    '        // numberline → garis bilangan (pakai "points" bentuk {x,label,closed} dan/atau "intervals"):',
+    '        "min": number, "max": number, "step": number,',
+    '        "intervals": [ { "from": number, "to": number, "fromClosed": boolean, "toClosed": boolean, "label": string } ],',
+    '        // longdiv → pembagian polinomial cara susun (server yang menghitung, cukup beri koefisien):',
+    '        "dividend": number[], "divisor": number[], "variable": string    // koefisien derajat tinggi → rendah',
     '      }',
     '    }',
     '  ],',
@@ -163,12 +181,15 @@ function buildUserPrompt(input) {
   }
   if (has('grafik')) {
     lines.push([
-      'Grafik/visualisasi (DIMINTA): sisipkan "chart" pada 1-2 bagian concept yang PALING terbantu oleh visual (biarkan concept lain "chart": null).',
-      'Satu-satunya cara menampilkan grafik adalah lewat field "chart" terstruktur berisi ANGKA/rumus — JANGAN PERNAH menggambarnya dengan teks, ASCII, garis /\\|_, atau code fence.',
-      'Pilih tipe paling tepat sesuai konteks materi (berlaku untuk SEMUA mapel, bukan hanya matematika):',
-      'fungsi matematika → "function" (isi "expr", "xMin", "xMax"); perbandingan antar kategori → "bar"; tren/perubahan terhadap waktu → "line"; proporsi/persentase → "pie"; hubungan dua variabel → "scatter" (isi "points").',
-      'Gunakan angka realistis dan relevan dengan topik. Tetap jelaskan maksud grafik itu di dalam "content".',
-      'Contoh field chart fungsi: "chart": { "type": "function", "title": "y = x^2 - 4x + 3", "expr": "x^2 - 4*x + 3", "xMin": -2, "xMax": 6, "xLabel": "x", "yLabel": "y" }.',
+      'Visual & grafik (DIMINTA): pada bagian concept yang PALING terbantu oleh visual, sisipkan SATU field visual — pakai "chart" ATAU "visual" (bukan keduanya) — dan biarkan concept lain tanpa visual.',
+      'JANGAN PERNAH menggambar dengan teks/ASCII/garis /\\|_ atau code fence. Isi hanya ANGKA/rumus/koordinat terstruktur.',
+      'Pilih yang paling sesuai dengan jenis materi (berlaku SEMUA mapel):',
+      '• Data statistik/perbandingan/tren/proporsi/korelasi → "chart" (bar|line|pie|scatter).',
+      '• Grafik fungsi yang bisa dimainkan siswa (slider parameter) → "visual" kind "graph": isi "functions":[{"expr":"a*x^2+b*x+c"}] dan "params":[{"name":"a","min":-5,"max":5,"value":1,"step":0.5}], plus "xMin","xMax".',
+      '• Bangun datar (segitiga, persegi, lingkaran, sudut) → "visual" kind "geometry": daftar "points":[{"name":"A","x":0,"y":0}], lalu "polygons"/"segments"/"circles"/"rightAngles" merujuk nama titik.',
+      '• Garis bilangan / pertidaksamaan / interval → "visual" kind "numberline": "min","max","step", "points":[{"x":2,"closed":true}], "intervals":[{"from":-1,"to":3,"fromClosed":false,"toClosed":true}].',
+      '• Pembagian polinomial cara susun → "visual" kind "longdiv": cukup beri "dividend" dan "divisor" sebagai koefisien derajat TINGGI→RENDAH (mis. x^3-2x+1 → [1,0,-2,1]); server yang menghitung langkahnya.',
+      'Gunakan angka realistis dan relevan dengan topik, dan tetap jelaskan maksud visual itu di dalam "content".',
     ].join(' '));
   }
   if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
@@ -268,7 +289,7 @@ function buildPatchSystemPrompt() {
     '  ]',
     '}',
     'Aturan item harus sesuai skema materi:',
-    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null, "chart": null|{type:"line|bar|pie|scatter|function", title, xLabel, yLabel, labels:string[], series:[{name,data:number[]}], points:[[x,y]], expr, xMin, yMax} }',
+    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null, "chart": null|{...}, "visual": null|{kind:"graph|geometry|numberline|longdiv", ...} }',
     '- highlights item: { "kind": "penting|miskonsepsi|info|perhatian", "content": string }',
     '- examples item: { "number": number, "question": string, "steps": string[], "answer": string }',
     '- exercises item: salah satu dari { kind:"fill_blank", prompt, answer, hint } | { kind:"multiple_choice", question, options[], answerIndex, explanation } | { kind:"drag_drop", instruction, pairs[{left,right}] } | { kind:"essay", question, guide }',
@@ -520,17 +541,120 @@ function normalizeChart(chart) {
   return out;
 }
 
+/** Angka aman dengan nilai default. */
+function num(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// Karakter yang diizinkan pada ekspresi matematika (dievaluasi parser aman di
+// renderer). Mengizinkan huruf untuk nama fungsi & parameter, bukan hanya x.
+const EXPR_ALLOWED = /^[0-9a-zA-Z_+\-*/^().,\s]+$/;
+
+/** Normalisasi satu spesifikasi visual matematika. Kembalikan null bila invalid. */
+function normalizeVisual(v) {
+  if (!v || typeof v !== 'object') return null;
+  const kind = String(v.kind || '').toLowerCase();
+  if (!VISUAL_KINDS.includes(kind)) return null;
+  const out = { kind };
+  if (v.title != null) out.title = String(v.title);
+
+  if (kind === 'graph') {
+    const rawFns = Array.isArray(v.functions) ? v.functions : (v.expr ? [{ expr: v.expr }] : []);
+    out.functions = rawFns.map((f) => {
+      const expr = String((f && f.expr) || '').trim();
+      if (!expr || !EXPR_ALLOWED.test(expr)) return null;
+      const o = { expr };
+      if (f && f.label != null) o.label = String(f.label);
+      return o;
+    }).filter(Boolean);
+    if (!out.functions.length) return null;
+    out.params = (Array.isArray(v.params) ? v.params : []).map((p) => {
+      const name = String((p && p.name) || '').trim();
+      if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name) || name === 'x') return null;
+      return { name, min: num(p.min, -5), max: num(p.max, 5), value: num(p.value, 1), step: num(p.step, 0.1) };
+    }).filter(Boolean);
+    out.xMin = num(v.xMin, -10);
+    out.xMax = num(v.xMax, 10);
+    if (out.xMax <= out.xMin) out.xMax = out.xMin + 1;
+    if (Number.isFinite(Number(v.yMin)) && Number.isFinite(Number(v.yMax)) && Number(v.yMax) > Number(v.yMin)) {
+      out.yMin = Number(v.yMin); out.yMax = Number(v.yMax);
+    }
+    return out;
+  }
+
+  if (kind === 'numberline') {
+    out.min = num(v.min, -10);
+    out.max = num(v.max, 10);
+    if (out.max <= out.min) out.max = out.min + 1;
+    out.step = num(v.step, 1) > 0 ? num(v.step, 1) : 1;
+    out.points = (Array.isArray(v.points) ? v.points : []).map((p) => {
+      const x = Number(p && p.x);
+      if (!Number.isFinite(x)) return null;
+      return { x, label: p && p.label != null ? String(p.label) : '', closed: !(p && p.closed === false) };
+    }).filter(Boolean);
+    out.intervals = (Array.isArray(v.intervals) ? v.intervals : []).map((it) => {
+      const from = Number(it && it.from); const to = Number(it && it.to);
+      if (!Number.isFinite(from) || !Number.isFinite(to)) return null;
+      return {
+        from, to,
+        fromClosed: !(it && it.fromClosed === false),
+        toClosed: !(it && it.toClosed === false),
+        label: it && it.label != null ? String(it.label) : '',
+      };
+    }).filter(Boolean);
+    if (!out.points.length && !out.intervals.length) return null;
+    return out;
+  }
+
+  if (kind === 'geometry') {
+    const pts = (Array.isArray(v.points) ? v.points : []).map((p) => {
+      const x = Number(p && p.x); const y = Number(p && p.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+      const name = String((p && p.name) || '').trim();
+      if (!name) return null;
+      return { name, x, y, label: p && p.label != null ? String(p.label) : '' };
+    }).filter(Boolean);
+    if (!pts.length) return null;
+    const names = new Set(pts.map((p) => p.name));
+    out.points = pts;
+    out.segments = (Array.isArray(v.segments) ? v.segments : []).map((s) => (Array.isArray(s) && s.length === 2 && names.has(String(s[0])) && names.has(String(s[1])) ? [String(s[0]), String(s[1])] : null)).filter(Boolean);
+    out.polygons = (Array.isArray(v.polygons) ? v.polygons : []).map((pg) => (Array.isArray(pg) && pg.length >= 3 && pg.every((n) => names.has(String(n))) ? pg.map(String) : null)).filter(Boolean);
+    out.circles = (Array.isArray(v.circles) ? v.circles : []).map((c) => {
+      if (!c || typeof c !== 'object') return null;
+      const center = String(c.center || '');
+      if (!names.has(center)) return null;
+      if (Number.isFinite(Number(c.radius))) return { center, radius: Number(c.radius) };
+      if (c.through && names.has(String(c.through))) return { center, through: String(c.through) };
+      return null;
+    }).filter(Boolean);
+    out.rightAngles = (Array.isArray(v.rightAngles) ? v.rightAngles : []).map((a) => (Array.isArray(a) && a.length === 3 && a.every((n) => names.has(String(n))) ? a.map(String) : null)).filter(Boolean);
+    return out;
+  }
+
+  if (kind === 'longdiv') {
+    const dividend = toNumberArray(v.dividend);
+    const divisor = toNumberArray(v.divisor);
+    if (dividend.length < 1 || divisor.length < 1 || divisor[0] === 0) return null;
+    if (dividend.length < divisor.length) return null;
+    out.dividend = dividend;
+    out.divisor = divisor;
+    out.variable = /^[a-zA-Z]$/.test(String(v.variable || '')) ? String(v.variable) : 'x';
+    return out;
+  }
+
+  return null;
+}
+
 /** Normalisasi satu concept, termasuk grafik opsional. */
 function normalizeConcept(concept) {
   if (!concept || typeof concept !== 'object') return concept;
-  const chart = normalizeChart(concept.chart);
-  if (chart) return { ...concept, chart };
-  if ('chart' in concept) {
-    const clone = { ...concept };
-    delete clone.chart;
-    return clone;
-  }
-  return concept;
+  const clone = { ...concept };
+  const chart = normalizeChart(clone.chart);
+  if (chart) clone.chart = chart; else delete clone.chart;
+  const visual = normalizeVisual(clone.visual);
+  if (visual) clone.visual = visual; else delete clone.visual;
+  return clone;
 }
 
 /** Normalisasi struktur: pastikan field wajib ada dan bertipe benar. */
@@ -588,6 +712,7 @@ module.exports = {
   CONCEPT_VARIANTS,
   EXERCISE_KINDS,
   CHART_TYPES,
+  VISUAL_KINDS,
   FEATURE_LABEL,
   GAYA_GUIDE,
   HIGHLIGHT_KINDS,
@@ -605,6 +730,7 @@ module.exports = {
   extractJson,
   extractPatch,
   normalizeChart,
+  normalizeVisual,
   normalizeMaterial,
   validateMaterial,
   validateLatexBalance,
