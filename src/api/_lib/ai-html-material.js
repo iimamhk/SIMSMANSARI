@@ -65,7 +65,7 @@ function buildHtmlSystemPrompt() {
     '- Keluarkan HANYA kode HTML. Tanpa penjelasan, tanpa komentar pembuka, TANPA code fence (```).',
     '- Mulai tepat dengan <!DOCTYPE html> dan akhiri tepat dengan </html>.',
     '- Dokumen harus lengkap: <head> (meta charset, viewport, title) dan <body>.',
-    '- Bahasa Indonesia sepenuhnya, termasuk label tombol dan umpan balik.',
+    '- Bahasa default Bahasa Indonesia sepenuhnya, termasuk label tombol dan umpan balik. Pengecualian: mata pelajaran bahasa asing (mis. Bahasa Inggris) ditulis dalam bahasa pengajaran tersebut; padanan istilah kunci boleh disertakan dalam Bahasa Indonesia di dalam tanda kurung.',
     '',
     'PRIORITAS PENYELESAIAN (WAJIB, lebih penting dari kelengkapan isi):',
     '- Dokumen HARUS selesai utuh dan ditutup dengan </html>. Materi terpotong lebih buruk daripada materi yang lebih ringkas tetapi lengkap.',
@@ -151,7 +151,10 @@ function buildHtmlUserPrompt(input) {
   if (has('fill_blank') || has('kuis') || has('drag_drop')) {
     lines.push('Latihan interaktif harus benar-benar berfungsi: tombol periksa memberi tahu benar/salah, menyorot jawaban tepat, dan menjelaskan alasannya.');
   }
-  if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
+  if (input.lainLain) {
+    lines.push(`Instruksi khusus dari guru (OTORITAS TERTINGGI untuk penyajian): ${input.lainLain}`);
+    lines.push('Instruksi di atas WAJIB dipatuhi dan boleh mengubah pilihan visual, gaya, atau struktur penyajian di atas, selama dokumen tetap HTML lengkap dan aman (hanya sumber dari allowlist CDN).');
+  }
 
   lines.push('');
   lines.push('Keluarkan sekarang HANYA dokumen HTML utuh, mulai dari <!DOCTYPE html> sampai </html>.');

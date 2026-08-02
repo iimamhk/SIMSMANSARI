@@ -152,8 +152,19 @@ function getStyles() {
     .mai-ld-row { display:grid; gap:0 6px; }
     .mai-ld-c { text-align:center; font-size:.9rem; padding:2px 4px; }
     .mai-ld-dividend { border-bottom:2px solid var(--mai-ink); padding-bottom:2px; }
+    .mai-ld-lead { display:inline-flex; align-items:center; justify-content:flex-end; gap:1px; padding-right:4px; color:var(--mai-muted); }
+    .mai-ld-grid .mai-nd-quot .mai-ld-c { font-weight:700; color:var(--mai-brand); border-bottom:2px solid var(--mai-ink); }
     .mai-ld-sub { color:var(--mai-rose); }
     .mai-ld-rem { border-top:1px solid var(--mai-line); }
+    .mai-nd-grid { font-family:ui-monospace,Menlo,monospace; }
+    .mai-nd-row { display:grid; gap:0 2px; }
+    .mai-nd-lead { display:inline-flex; align-items:center; justify-content:flex-end; gap:1px; color:var(--mai-muted); font-weight:600; }
+    .mai-nd-paren { font-size:1.1em; color:var(--mai-ink); }
+    .mai-nd-c { text-align:center; font-size:.9rem; padding:2px 2px; }
+    .mai-nd-quot .mai-nd-c { font-weight:700; color:var(--mai-brand); border-bottom:2px solid var(--mai-ink); }
+    .mai-nd-dividend .mai-nd-c { font-weight:700; }
+    .mai-nd-sub .mai-nd-c { color:var(--mai-rose); }
+    .mai-nd-rem .mai-nd-c { border-top:1px solid var(--mai-line); }
     @media (max-width:640px){ .mai-viz-box { height:300px; } }
     .mai-highlight { display:flex; gap:10px; border-radius:14px; padding:12px 14px; margin:10px 0; font-size:.9rem; align-items:flex-start; }
     .mai-highlight-ic { flex:none; font-size:16px; line-height:1.4; }
@@ -315,6 +326,7 @@ function renderVisual(visual) {
   if (!visual || typeof visual !== 'object') return '';
   const kind = String(visual.kind || '').toLowerCase();
   if (kind === 'longdiv') return renderLongDiv(visual);
+  if (kind === 'numberdiv') return renderNumberDiv(visual);
   if (kind === 'numberline') return renderNumberline(visual);
   if (kind === 'graph' || kind === 'geometry') {
     const spec = escapeHtml(JSON.stringify(visual));
@@ -355,6 +367,71 @@ function polyToString(coeffs, variable) {
 }
 
 /**
+ * Porogapit bilangan bulat (long division klasik) — DIHITUNG di sini
+ * (deterministik) agar tidak bergantung pada aritmetika AI. Menyusun tableau
+ * berkolom: hasil bagi di atas, penyebut di kiri dengan ")", dividen di kanan,
+ * baris pengurangan + sisa bertingkat mengikuti posisi digit.
+ */
+function renderNumberDiv(visual) {
+  const dividend = Number(visual.dividend);
+  const divisor = Number(visual.divisor);
+  if (!Number.isFinite(dividend) || !Number.isFinite(divisor) || divisor === 0) return '';
+  if (dividend < 0 || divisor < 0 || !Number.isInteger(dividend) || !Number.isInteger(divisor)) return '';
+
+  const quotient = Math.floor(dividend / divisor);
+  const remainder = dividend % divisor;
+  const dStr = String(dividend);
+  const qStr = String(quotient);
+  const L = dStr.length;
+
+  // Simulasi langkah porogapit: tiap digit dividen dibawa turun, dibagi penyebut.
+  const steps = [];
+  let cur = 0;
+  for (let i = 0; i < dStr.length; i += 1) {
+    cur = cur * 10 + Number(dStr[i]);
+    const qd = Math.floor(cur / divisor);
+    steps.push({ qd, cur, prod: qd * divisor, rem: cur - qd * divisor });
+    cur = cur - qd * divisor;
+  }
+
+  // Helper: susun string angka menjadi sel grid sepanjang L kolom, rata kanan
+  // berakhir di kolom endCol (0-index dari kiri).
+  const toCells = (numStr, endCol, opts = {}) => {
+    const s = String(numStr);
+    const cells = new Array(L).fill('');
+    let start = endCol - s.length + 1;
+    if (start < 0) start = 0;
+    for (let k = 0; k < s.length; k += 1) {
+      if (start + k < L) cells[start + k] = s[k];
+    }
+    if (opts.minus && start >= 0 && start < L) cells[start] = '−' + cells[start];
+    return cells;
+  };
+  const rowHtml = (cells, cls = '') => `<div class="mai-nd-row ${cls}" style="grid-template-columns:repeat(${L + 1},minmax(1.6em,1fr))"><span class="mai-nd-lead"></span>${cells.map((c) => `<span class="mai-nd-c">${c ? escapeHtml(c) : '&nbsp;'}</span>`).join('')}</div>`;
+
+  const rows = [];
+  // Baris hasil bagi (di atas, dengan garis bawah).
+  rows.push(`<div class="mai-nd-row mai-nd-quot" style="grid-template-columns:repeat(${L + 1},minmax(1.6em,1fr))"><span class="mai-nd-lead">${escapeHtml(String(divisor))}<span class="mai-nd-paren">)</span></span>${toCells(qStr, L - 1).map((c) => `<span class="mai-nd-c">${c ? escapeHtml(c) : '&nbsp;'}</span>`).join('')}</div>`);
+  // Baris dividen (dengan garis bawah menandai pembagian).
+  rows.push(`<div class="mai-nd-row mai-nd-dividend" style="grid-template-columns:repeat(${L + 1},minmax(1.6em,1fr))"><span class="mai-nd-lead"></span>${dStr.split('').map((c) => `<span class="mai-nd-c">${escapeHtml(c)}</span>`).join('')}</div>`);
+  // Langkah pengurangan + sisa bertingkat.
+  steps.forEach((st, i) => {
+    if (st.prod > 0 || i === steps.length - 1) {
+      rows.push(rowHtml(toCells(st.prod, i, { minus: st.prod > 0 }), 'mai-nd-sub'));
+      rows.push(rowHtml(toCells(st.rem, i), 'mai-nd-rem'));
+    }
+  });
+
+  const cap = visual.title ? `<figcaption class="mai-chart-cap">${renderInline(visual.title)}</figcaption>` : '';
+  return `<figure class="mai-chart mai-numberdiv">
+    <div class="mai-nd-head"><span class="mai-ld-lbl">Hasil bagi</span> <strong>${escapeHtml(qStr)}</strong> <span class="mai-ld-lbl">, sisa</span> <strong>${escapeHtml(String(remainder))}</strong></div>
+    <div class="mai-ld-eq">${escapeHtml(String(dividend))} ÷ ${escapeHtml(String(divisor))} = ${escapeHtml(qStr)}${remainder ? ' sisa ' + escapeHtml(String(remainder)) : ''}</div>
+    <div class="mai-ld-grid mai-nd-grid">${rows.join('')}</div>
+    ${cap}
+  </figure>`;
+}
+
+/**
  * Pembagian polinomial cara susun — DIHITUNG di sini (deterministik) agar tidak
  * bergantung pada aritmetika AI. Menghasilkan tabel bertingkat yang selaras
  * per-derajat memakai CSS grid.
@@ -390,8 +467,14 @@ function renderLongDiv(visual) {
   const remainderStr = polyToString(remainderCoeffs.length ? remainderCoeffs : [0], v);
 
   const cell = (val) => (val == null ? '' : (Math.round(val * 1000) / 1000).toString());
-  const gridRow = (arr, cls) => `<div class="mai-ld-row ${cls || ''}" style="grid-template-columns:repeat(${nCols},minmax(2.2em,1fr))">${arr.map((val) => `<span class="mai-ld-c">${cell(val)}</span>`).join('')}</div>`;
+  // Tiap baris kini punya kolom utama (penyebut/dividen) di kiri + grid koefisien.
+  const leadCol = `<span class="mai-ld-lead"></span>`;
+  const leadDivisor = `<span class="mai-ld-lead"><strong>${escapeHtml(divisorStr)}</strong><span class="mai-nd-paren">)</span></span>`;
+  const gridRow = (arr, cls, lead = leadCol) => `<div class="mai-ld-row ${cls || ''}" style="grid-template-columns:auto repeat(${nCols},minmax(2.2em,1fr))">${lead}${arr.map((val) => `<span class="mai-ld-c">${cell(val) || '&nbsp;'}</span>`).join('')}</div>`;
 
+  // Baris hasil bagi (di atas) + baris dividen dengan penyebut di kiri.
+  const quotientCells = new Array(nCols).fill(null);
+  quotient.forEach((c, idx) => { quotientCells[idx] = c; });
   const stepRows = rows.map((r) => {
     const prod = r.product.map((val) => (val == null ? null : -val)); // ditampilkan sebagai pengurangan
     return `${gridRow(prod, 'mai-ld-sub')}${gridRow(r.remainder, 'mai-ld-rem')}`;
@@ -401,8 +484,9 @@ function renderLongDiv(visual) {
   return `<figure class="mai-chart mai-longdiv">
     <div class="mai-ld-head"><span class="mai-ld-lbl">Hasil bagi</span> <strong>${escapeHtml(quotientStr)}</strong> <span class="mai-ld-lbl">, sisa</span> <strong>${escapeHtml(remainderStr)}</strong></div>
     <div class="mai-ld-eq">( ${escapeHtml(polyToString(dividend, v))} ) ÷ ( ${escapeHtml(divisorStr)} )</div>
-    <div class="mai-ld-grid">
-      ${gridRow(dividend, 'mai-ld-dividend')}
+    <div class="mai-ld-grid mai-nd-grid">
+      ${gridRow(quotientCells, 'mai-nd-quot')}
+      ${gridRow(dividend, 'mai-ld-dividend', leadDivisor)}
       ${stepRows}
     </div>
     ${cap}
@@ -964,11 +1048,44 @@ function getVisualScript() {
     var padX=Math.max(1,(maxx-minx)*0.25),padY=Math.max(1,(maxy-miny)*0.25);
     var board=JXG.JSXGraph.initBoard(el.id,{boundingbox:[minx-padX,maxy+padY,maxx+padX,miny-padY],axis:false,showCopyright:false,showNavigation:false,keepAspectRatio:true});
     var P={};
-    spec.points.forEach(function(pt){P[pt.name]=board.create('point',[pt.x,pt.y],{name:pt.label||pt.name,fixed:true,size:2,strokeColor:'#1d1d1f',fillColor:'#1d1d1f',label:{offset:[6,6]}});});
+    var C={};
+    spec.points.forEach(function(pt){C[pt.name]={x:pt.x,y:pt.y};P[pt.name]=board.create('point',[pt.x,pt.y],{name:pt.label||pt.name,fixed:true,size:2,strokeColor:'#1d1d1f',fillColor:'#1d1d1f',label:{offset:[6,6]}});});
     (spec.polygons||[]).forEach(function(pg){var verts=pg.map(function(n){return P[n];});if(verts.every(Boolean))board.create('polygon',verts,{fillColor:'#0a84ff',fillOpacity:0.08,borders:{strokeColor:'#0a84ff',strokeWidth:2}});});
     (spec.segments||[]).forEach(function(sg){if(P[sg[0]]&&P[sg[1]])board.create('segment',[P[sg[0]],P[sg[1]]],{strokeColor:'#0a84ff',strokeWidth:2});});
     (spec.circles||[]).forEach(function(c){if(!P[c.center])return;if(c.radius!=null)board.create('circle',[P[c.center],c.radius],{strokeColor:'#5e5ce6'});else if(P[c.through])board.create('circle',[P[c.center],P[c.through]],{strokeColor:'#5e5ce6'});});
     (spec.rightAngles||[]).forEach(function(a){if(P[a[0]]&&P[a[1]]&&P[a[2]])board.create('angle',[P[a[0]],P[a[1]],P[a[2]]],{type:'square',radius:Math.max(0.4,(maxx-minx)*0.08),fillColor:'#ff9f0a',fillOpacity:0.4});});
+    // arrows: segmen berarah (vektor) dengan kepala panah + label besaran.
+    (spec.arrows||[]).forEach(function(ar){
+      if(!P[ar.from]||!P[ar.to])return;
+      board.create('arrow',[P[ar.from],P[ar.to]],{strokeColor:PAL[3%PAL.length],strokeWidth:2.5,lastArrow:{type:2,size:8}});
+      if(ar.label){var midX=(C[ar.from].x+C[ar.to].x)/2,midY=(C[ar.from].y+C[ar.to].y)/2;
+        board.create('text',[midX,midY+0.3*(maxy-miny+1),' '+ar.label+' '],{fontSize:13,color:PAL[3%PAL.length],anchorX:'middle',cssStyle:'font-weight:700'});}
+    });
+    // edge_labels: teks di tengah sisi (panjang/nilai).
+    (spec.edge_labels||[]).forEach(function(e){
+      if(!C[e.a]||!C[e.b])return;
+      var mx=(C[e.a].x+C[e.b].x)/2,my=(C[e.a].y+C[e.b].y)/2;
+      board.create('text',[mx,my+0.12*(maxy-miny+1),e.label],{fontSize:12,color:'#1d1d1f',anchorX:'middle',cssStyle:'font-weight:600'});
+    });
+    // arcs: busur sudut dengan label (vertex = titik sudut).
+    (spec.arcs||[]).forEach(function(a){
+      if(!P[a.a]||!P[a.vertex]||!P[a.b])return;
+      var opts={type:'sector',radius:Math.max(0.4,(maxx-minx)*0.12),fillColor:PAL[5%PAL.length],fillOpacity:0.25,strokeColor:PAL[5%PAL.length],strokeWidth:1.5,withLabel:false};
+      if(a.label){opts.withLabel=true;opts.name=a.label;opts.label={fontSize:12,color:PAL[5%PAL.length],cssStyle:'font-weight:700'};}
+      board.create('angle',[P[a.a],P[a.vertex],P[a.b]],opts);
+    });
+    // tangents: garis singgung lingkaran di titik P (tegak lurus jari-jari OP).
+    (spec.tangents||[]).forEach(function(t){
+      if(!C[t.center]||!C[t.point])return;
+      var oc=C[t.center],pc=C[t.point];
+      var dx=pc.x-oc.x,dy=pc.y-oc.y,len=Math.sqrt(dx*dx+dy*dy)||1;
+      var ux=-dy/len,uy=dx/len; // arah tegak lurus
+      var L=Math.max(1,(maxx-minx)*0.4); // panjang segmen singgung
+      var ax=pc.x-ux*L,ay=pc.y-uy*L,bx=pc.x+ux*L,by=pc.y+uy*L;
+      var A=board.create('point',[ax,ay],{visible:false}),B=board.create('point',[bx,by],{visible:false});
+      board.create('segment',[A,B],{strokeColor:PAL[1%PAL.length],strokeWidth:2,dash:2});
+      if(t.label)board.create('text',[pc.x,pc.y+0.18*(maxy-miny+1),t.label],{fontSize:12,color:PAL[1%PAL.length],anchorX:'middle',cssStyle:'font-style:italic'});
+    });
   }
 
   function draw(){

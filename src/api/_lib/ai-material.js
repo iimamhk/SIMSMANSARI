@@ -29,7 +29,7 @@ const EXERCISE_KINDS = ['fill_blank', 'multiple_choice', 'drag_drop', 'essay'];
 // Tipe grafik/visualisasi yang didukung (lintas mapel, bukan hanya matematika).
 const CHART_TYPES = ['line', 'bar', 'pie', 'scatter', 'function'];
 // Visual matematika lanjutan (dirender oleh mesin khusus di renderer).
-const VISUAL_KINDS = ['graph', 'geometry', 'numberline', 'longdiv'];
+const VISUAL_KINDS = ['graph', 'geometry', 'numberline', 'longdiv', 'numberdiv'];
 
 const KEDALAMAN_GUIDE = {
   pengenalan: 'Fokus pemahaman konsep dasar. Bahasa paling sederhana, banyak contoh konkret, hindari istilah teknis berat tanpa penjelasan.',
@@ -83,7 +83,7 @@ function schemaDescription() {
     '        "xMin": number, "xMax": number   // KHUSUS function: rentang x',
     '      },',
     '      "visual": null | {                 // OPSIONAL: visual matematika lanjutan (pilih SATU kind)',
-    '        "kind": "graph|geometry|numberline|longdiv", "title": string,',
+    '        "kind": "graph|geometry|numberline|longdiv|numberdiv", "title": string,',
     '        // graph  → grafik fungsi interaktif dengan slider parameter:',
     '        "functions": [ { "expr": string, "label": string } ],  // rumus boleh pakai x dan nama parameter',
     '        "params": [ { "name": string, "min": number, "max": number, "value": number, "step": number } ],',
@@ -92,11 +92,17 @@ function schemaDescription() {
     '        "points": [ { "name": string, "x": number, "y": number, "label": string } ],',
     '        "segments": [ [ "A", "B" ] ], "polygons": [ [ "A", "B", "C" ] ],',
     '        "circles": [ { "center": "O", "radius": number } ], "rightAngles": [ [ "A", "B", "C" ] ],',
+    '        "arrows": [ { "from": "A", "to": "B", "label": string } ],        // segmen berarah (vektor), label = besaran',
+    '        "edge_labels": [ { "a": "A", "b": "B", "label": string } ],        // teks di tengah sisi (mis. panjang/nilai)',
+    '        "arcs": [ { "a": "A", "vertex": "B", "b": "C", "label": string } ],// busur sudut (vertex = titik sudut)',
+    '        "tangents": [ { "center": "O", "point": "P", "label": string } ],  // garis singgung lingkaran di titik P',
     '        // numberline → garis bilangan (pakai "points" bentuk {x,label,closed} dan/atau "intervals"):',
     '        "min": number, "max": number, "step": number,',
     '        "intervals": [ { "from": number, "to": number, "fromClosed": boolean, "toClosed": boolean, "label": string } ],',
     '        // longdiv → pembagian polinomial cara susun (server yang menghitung, cukup beri koefisien):',
     '        "dividend": number[], "divisor": number[], "variable": string    // koefisien derajat tinggi → rendah',
+    '        // numberdiv → porogapit bilangan bulat (server menghitung langkah susun):',
+    '        "dividend": number, "divisor": number    // bilangan bulat positif; mis. 1234 dan 12',
     '      }',
     '    }',
     '  ],',
@@ -126,7 +132,8 @@ function schemaDescription() {
 function buildSystemPrompt() {
   return [
     'Kamu adalah penulis materi digital pembelajaran SMA berpengalaman 15 tahun sekaligus pedagog senior Kurikulum Merdeka Indonesia.',
-    'Tugasmu menyusun materi pembelajaran yang kaya, terstruktur, modern, dan tidak membosankan dalam Bahasa Indonesia.',
+    'Tugasmu menyusun materi pembelajaran yang kaya, terstruktur, modern, dan tidak membosankan.',
+    'Bahasa default: Bahasa Indonesia. Pengecualian: mata pelajaran bahasa asing (mis. Bahasa Inggris) ditulis dalam bahasa pengajaran tersebut; padanan istilah kunci boleh disertakan dalam Bahasa Indonesia di dalam tanda kurung bila membantu siswa.',
     'Materi harus terasa seperti buku digital premium: substantif, bervariasi, dan mengalir, BUKAN template kaku yang itu-itu saja.',
     'Panjang: materi harus lengkap dan mendalam, bukan ringkasan singkat. Setiap bagian konsep minimal 2 paragraf substantif atau setara.',
     schemaDescription(),
@@ -135,6 +142,71 @@ function buildSystemPrompt() {
     'DILARANG KERAS menggambar grafik, diagram, atau kurva dengan seni ASCII / karakter teks (seperti / \\ | _ - * atau code fence ```). Ini terlihat rusak di layar. Untuk menampilkan grafik gunakan HANYA field "chart" terstruktur; untuk data tabular gunakan "table"; selebihnya jelaskan dengan kata-kata dan rumus LaTeX.',
     'Selalu sertakan contoh numerik konkret bila materi eksakta.',
   ].join(' ');
+}
+
+/**
+ * Lapis 2: panduan adaptif berdasarkan mapel/topik. Deteksi otomatis lalu
+ * suntik instruksi yang relevan (visual matematika per sub-topik, bahasa untuk
+ * mapel bahasa asing, gaya penyajian untuk sains/sosial). Tidak menggantikan
+ * fondasi (lapis 1) — hanya menambah arahan kontekstual.
+ */
+function detectTopicGuide(input) {
+  const mapel = String(input.mapel || '').toLowerCase();
+  const topik = String(input.topik || '').toLowerCase();
+  const bab = String(input.bab || '').toLowerCase();
+  const hay = `${mapel} ${topik} ${bab}`;
+  const out = [];
+
+  // Bahasa asing: tulis dalam bahasa pengajaran, boleh padanan istilah kunci.
+  if (/\b(bahasa inggris|b\.?\s?inggris|english)\b/.test(hay)) {
+    out.push('Mata pelajaran bahasa asing: tulis seluruh isi materi dalam Bahasa Inggris. Boleh menyertakan padanan istilah kunci dalam Bahasa Indonesia di dalam tanda kurung bila membantu siswa. Label tombol, opsi kuis, dan umpan balik interaktif juga dalam Bahasa Inggris.');
+  }
+
+  // Matematika (mapel atau sub-topik matematis).
+  const isMath = /\bmatematik|matematika|\bmath\b|aljabar|geometri|trigono|kalkulus|statistik|peluang|vektor|matrik|lingkaran|logika/.test(hay);
+  if (isMath) {
+    out.push('Materi matematika: rumus WAJIB LaTeX valid. Untuk matriks dan operasinya gunakan \\begin{bmatrix}...\\end{bmatrix}. Untuk operasi bersusun (penjumlahan/perkalian susun, skema Horner) gunakan LaTeX \\begin{array} bila membantu keterbacaan.');
+    if (/\btrigono|sinus|cosinus|tangen|sudut|segitiga|perbandingan trigonometri/.test(hay)) {
+      out.push('Trigonometri: bila visual layak, ilustrasikan segitiga dengan "visual" kind "geometry" (points + polygons; gunakan nama titik sebagai label sudut), sertakan "edge_labels" untuk menandai panjang sisi dan "arcs" untuk menandai sudut. Untuk fungsi trigonometri gunakan "visual" kind "graph" dengan expr seperti sin(x), cos(x), tan(x). Jelaskan hubungan sisi-sudut dengan contoh numerik.');
+    }
+    if (/\bvektor\b/.test(hay)) {
+      out.push('Vektor: bila visual layak, gunakan "visual" kind "geometry" dengan "arrows" (from→to + label besaran) untuk menggambarkan arah dan besar vektor; jelaskan operasi (penjumlahan, selisih, perkalian titik/silang) dengan koordinat dan rumus LaTeX. Sertakan contoh numerik konkret.');
+    }
+    if (/\blingkaran|jari-jari|jari jari|diameter|garis singgung|tali busur|irisan/.test(hay)) {
+      out.push('Persamaan/lingkaran: bila visual layak, gunakan "visual" kind "geometry" dengan circles (center + radius) dan segments untuk jari-jari/diameter/tali busur, serta "tangents" (center + point) untuk garis singgung di suatu titik. Sertakan persamaan lingkaran dalam LaTeX dan contoh penentuan pusat/jari-jari.');
+    }
+    if (/\bmatrik|matriks|determinan|invers|transpose|operasi elementer/.test(hay)) {
+      out.push('Matriks: tulis matriks dan hasil operasinya dengan LaTeX \\begin{bmatrix}. Jelaskan langkah operasi baris elementer bila relevan, langkah demi langkah.');
+    }
+    if (/\bpembagian|polinomial|porogapit|sintetik|horner/.test(hay)) {
+      out.push('Pembagian polinomial: gunakan "visual" kind "longdiv" dengan "dividend" dan "divisor" sebagai koefisien derajat TINGGI→RENDAH (koefisien nol tetap ditulis, mis. x^3-2x+1 → [1,0,-2,1]); server menghitung langkah susunnya. Jelaskan tujuan tiap langkah di "content".');
+    }
+    if (/\bgaris bilangan|pertidaksamaan|interval|inequality/.test(hay)) {
+      out.push('Garis bilangan/pertidaksamaan: gunakan "visual" kind "numberline" dengan "min","max","step", "points", dan "intervals" (titik ujung tertutup/terbuka). Sertakan himpunan penyelesaian dalam LaTeX.');
+    }
+  }
+
+  // Fisika: vektor, diagram benda bebas, grafik gerak.
+  if (/\bfisika|physics|\bglb\b|gerak|gaya|dinamika|kinematika/.test(hay)) {
+    out.push('Fisika: gunakan grafik/visual untuk gerak, gaya, dan vektor bila layak. Sertakan satuan SI dan contoh numerik. Rumus fisika dalam LaTeX.');
+  }
+
+  // Sains (biologi/kimia): diagram alur/siklus/tabel.
+  if (/\bbiolog|kimia|chemistry|ekosist|\bsel\b|reaksi|metabolisme|genet/.test(hay)) {
+    out.push('Sains: perjelas konsep dengan tabel, deskripsi diagram alur/siklus (dalam "content"), dan contoh kontekstual. Gunakan "table" untuk perbandingan struktur/proses.');
+  }
+
+  // Ilmu sosial: kasus, kronologi, konteks nyata.
+  if (/\bsejar|geograf|geografi|sosi|ekonom|politik|sosiologi/.test(hay)) {
+    out.push('Ilmu sosial: perkuat dengan studi kasus, kronologi, atau contoh nyata. Variasikan penyajian narasi/kasus/perbandingan; gunakan "table" untuk perbandingan/kronologi bila membantu.');
+  }
+
+  // Bahasa/sastra (non-asing): analogi, narasi kaya, tanpa visual matematis.
+  if (!/\b(bahasa inggris|b\.?\s?inggris|english)\b/.test(hay) && /\bbahasa indonesia|sastra|teks|menulis|membaca|wacana|puisi|prosa/.test(hay)) {
+    out.push('Bahasa/sastra: hindari visual matematis; perkuat dengan analogi, kutipan teks, dan latihan menelaah. Gunakan "table" untuk perbandingan jenis teks bila relevan.');
+  }
+
+  return out;
 }
 
 function buildUserPrompt(input) {
@@ -151,6 +223,9 @@ function buildUserPrompt(input) {
     `Tingkat kedalaman: ${input.kedalaman || 'menengah'} — ${kedalaman}`,
     `Gaya bahasa: ${input.gaya || 'hangat'} — ${gaya}`,
   ];
+
+  // Lapis 2 — panduan adaptif sesuai mapel/topik (deteksi otomatis).
+  detectTopicGuide(input).forEach((g) => lines.push(g));
 
   const fitur = Array.isArray(input.fitur) ? input.fitur : [];
   const has = (f) => fitur.includes(f);
@@ -191,17 +266,25 @@ function buildUserPrompt(input) {
       'Pilih yang paling sesuai dengan jenis materi (berlaku SEMUA mapel):',
       '• Data statistik/perbandingan/tren/proporsi/korelasi → "chart" (bar|line|pie|scatter).',
       '• Grafik fungsi yang bisa dimainkan siswa (slider parameter) → "visual" kind "graph": isi "functions":[{"expr":"a*x^2+b*x+c"}] dan "params":[{"name":"a","min":-5,"max":5,"value":1,"step":0.5}], plus "xMin","xMax".',
-      '• Bangun datar (segitiga, persegi, lingkaran, sudut) → "visual" kind "geometry": daftar "points":[{"name":"A","x":0,"y":0}], lalu "polygons"/"segments"/"circles"/"rightAngles" merujuk nama titik.',
+      '• Bangun datar (segitiga, persegi, lingkaran, sudut) → "visual" kind "geometry": daftar "points":[{"name":"A","x":0,"y":0}], lalu "polygons"/"segments"/"circles"/"rightAngles" merujuk nama titik. Untuk vektor tambah "arrows":[{"from":"A","to":"B","label":"F"}], untuk panjang sisi "edge_labels", untuk sudut "arcs", untuk garis singgung lingkaran "tangents".',
       '• Garis bilangan / pertidaksamaan / interval → "visual" kind "numberline": "min","max","step", "points":[{"x":2,"closed":true}], "intervals":[{"from":-1,"to":3,"fromClosed":false,"toClosed":true}].',
       '• Pembagian polinomial cara susun → "visual" kind "longdiv": cukup beri "dividend" dan "divisor" sebagai koefisien derajat TINGGI→RENDAH (mis. x^3-2x+1 → [1,0,-2,1]); server yang menghitung langkahnya.',
+      '• Porogapit bilangan bulat → "visual" kind "numberdiv": beri "dividend" dan "divisor" sebagai bilangan bulat positif (mis. 1234 dan 12); server menghitung langkah susunnya.',
       'Gunakan angka realistis dan relevan dengan topik, dan tetap jelaskan maksud visual itu di dalam "content".',
     ].join(' '));
   } else {
-    // Simetris dengan mode HTML: bila grafik tidak diminta, larang tegas agar
-    // AI tidak menyisipkan chart/visual atas inisiatif sendiri.
-    lines.push('Guru TIDAK meminta grafik/visual. Set "chart": null DAN "visual": null pada SEMUA concept. Jangan menyisipkan chart, grafik fungsi, bangun datar, garis bilangan, atau visual apa pun; cukup jelaskan dengan kata-kata, tabel, dan rumus LaTeX.');
+    // Toggle grafik mati: larang "chart" (grafik data) & "graph" (grafik fungsi
+    // interaktif) atas inisiatif sendiri. Namun "geometry"/"numberline"/"longdiv"
+    // adalah ILUSTRASI/NOTASI inti (segitiga sudut, garis bilangan, porogapit),
+    // bukan hiasan — tetap BOLEH dipakai bila menunjang penjelasan. Instruksi
+    // khusus guru (lapis 4) dapat menambah visual lain.
+    lines.push('Guru tidak meminta grafik data/fungsi interaktif. JANGAN sisipkan "chart" atau "visual" kind "graph" atas inisiatif sendiri. Namun "visual" kind "geometry" (bangun datar), "numberline" (garis bilangan), dan "longdiv" (pembagian susun) BOLEH dipakai bila benar-benar menunjang penjelasan konsep, karena merupakan ilustrasi/notasi inti, bukan hiasan. Tetap jangan memaksakan visual yang tidak perlu.');
   }
-  if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
+  // Lapis 4 — instruksi opsional guru: otoritas tertinggi untuk penyajian.
+  if (input.lainLain) {
+    lines.push(`Instruksi khusus dari guru (OTORITAS TERTINGGI untuk penyajian): ${input.lainLain}`);
+    lines.push('Instruksi di atas WAJIB dipatuhi dan BOLEH menambah/mengubah pilihan visual, gaya, atau struktur penyajian di atas, selama output tetap JSON valid sesuai skema dan tidak melanggar aturan keamanan. Jika instruksi meminta visual tertentu (mis. "pakai diagram vektor"), gunakan kind visual yang sesuai meski toggle grafik mati.');
+  }
 
   lines.push('Hasilkan JSON valid sesuai skema. Bagian INTI (title, hook, objectives, minimal 3 concepts, summary, reflection) WAJIB terisi kaya. Bagian fitur hanya diisi jika diminta di atas; selebihnya gunakan array kosong [] atau null.');
   return lines.filter(Boolean).join('\n');
@@ -298,7 +381,7 @@ function buildPatchSystemPrompt() {
     '  ]',
     '}',
     'Aturan item harus sesuai skema materi:',
-    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null, "chart": null|{...}, "visual": null|{kind:"graph|geometry|numberline|longdiv", ...} }',
+    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null, "chart": null|{...}, "visual": null|{kind:"graph|geometry|numberline|longdiv|numberdiv", ...} }',
     '- highlights item: { "kind": "penting|miskonsepsi|info|perhatian", "content": string }',
     '- examples item: { "number": number, "question": string, "steps": string[], "answer": string }',
     '- exercises item: salah satu dari { kind:"fill_blank", prompt, answer, hint } | { kind:"multiple_choice", question, options[], answerIndex, explanation } | { kind:"drag_drop", instruction, pairs[{left,right}] } | { kind:"essay", question, guide }',
@@ -638,6 +721,23 @@ function normalizeVisual(v) {
       return null;
     }).filter(Boolean);
     out.rightAngles = (Array.isArray(v.rightAngles) ? v.rightAngles : []).map((a) => (Array.isArray(a) && a.length === 3 && a.every((n) => names.has(String(n))) ? a.map(String) : null)).filter(Boolean);
+    // Primitif tambahan untuk diagram matematika lanjutan.
+    // arrows: segmen berarah (vektor) dari titik ke titik, opsional label besaran.
+    out.arrows = (Array.isArray(v.arrows) ? v.arrows : []).map((a) => (a && typeof a === 'object' && names.has(String(a.from)) && names.has(String(a.to))
+      ? { from: String(a.from), to: String(a.to), label: a.label != null ? String(a.label) : '' } : null)).filter(Boolean);
+    // edge_labels: teks (angka/rumus) di tengah sisi yang menghubungkan dua titik.
+    out.edge_labels = (Array.isArray(v.edge_labels) ? v.edge_labels : []).map((e) => (e && typeof e === 'object' && names.has(String(e.a)) && names.has(String(e.b))
+      ? { a: String(e.a), b: String(e.b), label: e.label != null ? String(e.label) : '' } : null)).filter(Boolean);
+    // arcs: busur sudut dengan titik sudut (vertex) + dua kaki; label opsional (mis. derajat).
+    out.arcs = (Array.isArray(v.arcs) ? v.arcs : []).map((a) => (a && typeof a === 'object' && names.has(String(a.a)) && names.has(String(a.vertex)) && names.has(String(a.b))
+      ? { a: String(a.a), vertex: String(a.vertex), b: String(a.b), label: a.label != null ? String(a.label) : '' } : null)).filter(Boolean);
+    // tangents: garis singgung lingkaran (center) di sebuah titik (point) pada lingkaran.
+    out.tangents = (Array.isArray(v.tangents) ? v.tangents : []).map((t) => {
+      if (!t || typeof t !== 'object') return null;
+      const center = String(t.center || ''); const point = String(t.point || '');
+      if (!names.has(center) || !names.has(point) || center === point) return null;
+      return { center, point, label: t.label != null ? String(t.label) : '' };
+    }).filter(Boolean);
     return out;
   }
 
@@ -649,6 +749,20 @@ function normalizeVisual(v) {
     out.dividend = dividend;
     out.divisor = divisor;
     out.variable = /^[a-zA-Z]$/.test(String(v.variable || '')) ? String(v.variable) : 'x';
+    return out;
+  }
+
+  if (kind === 'numberdiv') {
+    // Porogapit numerik: bilangan bulat dibagi bilangan bulat. Renderer
+    // menghitung langkah bersusunnya secara deterministik.
+    const dividend = Number(v.dividend);
+    const divisor = Number(v.divisor);
+    if (!Number.isFinite(dividend) || !Number.isFinite(divisor)) return null;
+    if (!Number.isInteger(dividend) || !Number.isInteger(divisor)) return null;
+    if (divisor === 0) return null;
+    if (dividend < 0 || divisor < 0) return null; // batasi positif agar tableau bersih
+    out.dividend = dividend;
+    out.divisor = divisor;
     return out;
   }
 
