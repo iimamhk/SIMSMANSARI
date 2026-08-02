@@ -247,6 +247,20 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
     if (!res.writableEnded) abortController.abort(new Error('client closed'));
   });
 
+  // Anggaran waktu "wall-clock" yang sengaja LEBIH PENDEK dari batas fungsi
+  // Vercel (maxDuration 300s di vercel.json). Saat anggaran habis, kita
+  // menghentikan generate secara terkendali lalu mengirim frame SSE 'error'.
+  // Tanpa ini, Vercel membunuh fungsi tepat di 300s SEBELUM ada frame apa pun
+  // terkirim, sehingga klien menerima "empty_material" (tidak dapat apa-apa).
+  const HTML_BUDGET_MS = 270000;
+  const startedAt = Date.now();
+  let budgetHit = false;
+  const budgetTimer = setTimeout(() => {
+    budgetHit = true;
+    if (!abortController.signal.aborted) abortController.abort(new Error('html wall-clock budget'));
+  }, HTML_BUDGET_MS);
+  const timeLeftMs = () => HTML_BUDGET_MS - (Date.now() - startedAt);
+
   try {
     const profile = await resolveEffectiveProfile('');
     let activeModel = profile.model;
@@ -258,8 +272,11 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
         resolvedProfile: profile,
         model: profile.model,
         temperature: options.temperature ?? 0.7,
-        // Dokumen HTML utuh butuh ruang jauh lebih besar dari mode JSON.
-        maxTokens: options.maxTokens ?? 28000,
+        // Dokumen HTML utuh butuh ruang lebih besar dari mode JSON, tetapi
+        // 28000 token hampir mustahil selesai dalam batas 300s dan justru
+        // memicu timeout tanpa hasil. 16000 lebih realistis untuk selesai
+        // dalam anggaran waktu; kekurangan panjang ditangani oleh continuation.
+        maxTokens: options.maxTokens ?? 16000,
         includeReasoning: false,
         signal: abortController.signal,
         onModelSelected: (selected) => { activeModel = selected; },
@@ -288,8 +305,10 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
 
     let validation = validateGeneratedHtml(fullText);
 
-    // Satu kali percobaan penyambungan bila dokumen belum ditutup.
-    if (validation.truncated && validation.html.length > 500) {
+    // Satu kali percobaan penyambungan bila dokumen belum ditutup. Dilewati bila
+    // anggaran waktu sudah habis / hampir habis: menyambung saat sisa waktu
+    // sedikit hanya akan berujung dibunuh Vercel tanpa hasil.
+    if (validation.truncated && validation.html.length > 500 && !budgetHit && timeLeftMs() > 45000) {
       try {
         sendSseComment(res, 'melanjutkan dokumen yang terpotong');
         const rest = await collect(
@@ -304,12 +323,14 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
     }
 
     if (!validation.html || validation.issues.length > 0) {
-      const hint = validation.truncated
-        ? 'Dokumen materi belum selesai ditulis (terpotong). Coba generate ulang, atau kurangi cakupan materi.'
-        : `AI tidak menghasilkan dokumen HTML yang valid${validation.issues.length ? ` (${validation.issues[0]})` : ''}. Coba generate ulang.`;
+      const hint = budgetHit
+        ? 'Materi HTML terlalu besar untuk diselesaikan dalam batas waktu server (300 detik). Kurangi cakupan atau komponen materi lalu coba lagi, atau gunakan mode Terstruktur yang lebih cepat.'
+        : validation.truncated
+          ? 'Dokumen materi belum selesai ditulis (terpotong). Coba generate ulang, atau kurangi cakupan materi.'
+          : `AI tidak menghasilkan dokumen HTML yang valid${validation.issues.length ? ` (${validation.issues[0]})` : ''}. Coba generate ulang.`;
       sendSseEvent(res, 'error', {
         error: hint,
-        code: validation.truncated ? 'html_truncated' : 'invalid_html',
+        code: budgetHit ? 'html_time_budget' : (validation.truncated ? 'html_truncated' : 'invalid_html'),
       });
       res.end();
       return;
@@ -332,14 +353,21 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
   } catch (error) {
     let message = 'Gagal menghasilkan materi HTML. Periksa koneksi ke layanan AI.';
     let code = 'generation_failed';
-    if (error instanceof AiServiceError) {
+    if (budgetHit) {
+      message = 'Materi HTML terlalu besar untuk diselesaikan dalam batas waktu server (300 detik). Kurangi cakupan atau komponen materi lalu coba lagi, atau gunakan mode Terstruktur yang lebih cepat.';
+      code = 'html_time_budget';
+    } else if (error instanceof AiServiceError) {
       message = error.message;
       code = error.code;
     } else {
       console.warn('[AI generate-html error]', error?.name, '|', error?.message);
     }
-    sendSseEvent(res, 'error', { error: message, code });
-    res.end();
+    if (!res.writableEnded) {
+      sendSseEvent(res, 'error', { error: message, code });
+      res.end();
+    }
+  } finally {
+    clearTimeout(budgetTimer);
   }
 }
 

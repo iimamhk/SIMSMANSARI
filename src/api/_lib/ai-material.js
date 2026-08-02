@@ -158,11 +158,13 @@ function buildUserPrompt(input) {
   else lines.push('Guru tidak meminta fitur interaktif tambahan. Fokus pada penjelasan konsep yang kaya.');
 
   // Eksklusi tegas: bagian yang TIDAK dicentang guru wajib dikosongkan.
+  // Pemetaan fitur → field dibuat satu-lawan-satu agar tidak ambigu:
+  //   tugas_kelompok → group_activity   |   aktivitas → assignment
   const exclude = [];
   if (!has('contoh')) exclude.push('"examples": []');
   if (!has('highlight')) exclude.push('"highlights": []');
   if (!wantExercise) exclude.push('"exercises": []');
-  if (!has('tugas_kelompok') && !has('aktivitas')) exclude.push('"group_activity": null');
+  if (!has('tugas_kelompok')) exclude.push('"group_activity": null');
   if (!has('aktivitas')) exclude.push('"assignment": null');
   if (exclude.length) lines.push(`Bagian yang TIDAK diminta WAJIB dikosongkan (JANGAN diisi/dikarang): ${exclude.join(', ')}.`);
 
@@ -174,10 +176,10 @@ function buildUserPrompt(input) {
     lines.push(`Untuk "exercises", gunakan HANYA kind: ${kinds.join(', ')}. Jangan pakai kind lain.`);
   }
   if (has('tugas_kelompok')) {
-    lines.push('Isi "group_activity": aktivitas 3-4 siswa dengan langkah jelas, pembagian peran, dan produk/hasil akhir yang terukur.');
+    lines.push('Isi "group_activity": tugas kelompok 3-4 siswa dengan langkah jelas, pembagian peran, dan produk/hasil akhir yang terukur.');
   }
   if (has('aktivitas')) {
-    lines.push('Sertakan aktivitas bersama (diskusi terpimpin / mini proyek) yang melibatkan seluruh kelas, pada group_activity atau assignment.');
+    lines.push('Isi "assignment": aktivitas/proyek bersama (diskusi terpimpin atau mini proyek) sebagai daftar tugas yang bisa langsung dikerjakan siswa, lengkapi dengan catatan pelaksanaan pada "note".');
   }
   if (has('grafik')) {
     lines.push([
@@ -191,6 +193,10 @@ function buildUserPrompt(input) {
       '• Pembagian polinomial cara susun → "visual" kind "longdiv": cukup beri "dividend" dan "divisor" sebagai koefisien derajat TINGGI→RENDAH (mis. x^3-2x+1 → [1,0,-2,1]); server yang menghitung langkahnya.',
       'Gunakan angka realistis dan relevan dengan topik, dan tetap jelaskan maksud visual itu di dalam "content".',
     ].join(' '));
+  } else {
+    // Simetris dengan mode HTML: bila grafik tidak diminta, larang tegas agar
+    // AI tidak menyisipkan chart/visual atas inisiatif sendiri.
+    lines.push('Guru TIDAK meminta grafik/visual. Set "chart": null DAN "visual": null pada SEMUA concept. Jangan menyisipkan chart, grafik fungsi, bangun datar, garis bilangan, atau visual apa pun; cukup jelaskan dengan kata-kata, tabel, dan rumus LaTeX.');
   }
   if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
 

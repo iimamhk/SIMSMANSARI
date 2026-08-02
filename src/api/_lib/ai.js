@@ -2,7 +2,11 @@ const DEFAULT_BASE_URL = 'https://api.iamhc.cn/v1';
 const DEFAULT_MODEL = 'gpt-4o-mini';
 const DEFAULT_RATE_LIMIT_MAX = 20;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 900000;
-const DEFAULT_TIMEOUT_MS = 120000;
+// Batas waktu INAKTIVITAS ke layanan AI (di-reset tiap chunk token diterima),
+// bukan batas total generate. Dinaikkan 3x dari 120s karena model "thinking"
+// bisa berpikir lama sebelum token pertama muncul, terutama pada materi mode
+// HTML yang menulis satu dokumen utuh.
+const DEFAULT_TIMEOUT_MS = 360000;
 // Materi mode HTML premium membutuhkan output panjang (satu dokumen utuh),
 // jauh di atas kebutuhan mode JSON terstruktur.
 const MAX_TOKENS_CAP = 32000;

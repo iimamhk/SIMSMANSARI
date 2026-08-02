@@ -64,6 +64,11 @@ function buildHtmlSystemPrompt() {
     '- Dokumen harus lengkap: <head> (meta charset, viewport, title) dan <body>.',
     '- Bahasa Indonesia sepenuhnya, termasuk label tombol dan umpan balik.',
     '',
+    'PRIORITAS PENYELESAIAN (WAJIB, lebih penting dari kelengkapan isi):',
+    '- Dokumen HARUS selesai utuh dan ditutup dengan </html>. Materi terpotong lebih buruk daripada materi yang lebih ringkas tetapi lengkap.',
+    '- Kelola panjang tulisan agar muat dalam satu keluaran. Jika ruang mulai menipis, ringkas dulu bagian non-inti (refleksi, hiasan, panjang paragraf, jumlah contoh) dan SVG yang paling rumit — JANGAN pernah berhenti sebelum semua tag ditutup hingga </html>.',
+    '- Jangan menyisakan tag, <style>, atau <script> yang terbuka di akhir dokumen.',
+    '',
     'SUMBER EKSTERNAL (WAJIB dipatuhi, selain ini akan dibuang otomatis):',
     '- CSS: boleh Tailwind via <script src="https://cdn.tailwindcss.com"></script>, atau CSS sendiri di <style>.',
     '- Matematika: gunakan KaTeX (https://cdn.jsdelivr.net/npm/katex@0.16.8/...) ATAU MathJax (https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js).',
@@ -160,16 +165,21 @@ function buildHtmlMessages(input) {
 /** Minta AI melanjutkan dokumen yang terpotong, tanpa mengulang dari awal. */
 function buildHtmlContinuationMessages(input, partialHtml) {
   const tail = String(partialHtml || '').slice(-4000);
+  // Sengaja TIDAK menyertakan seluruh partialHtml sebagai pesan assistant:
+  // dokumen bisa puluhan ribu karakter dan menyalinnya kembali menggandakan
+  // biaya token input pada percobaan penyambungan (memperbesar risiko timeout).
+  // Cukup beri potongan akhir sebagai jangkar sambungan.
   return [
     { role: 'system', content: buildHtmlSystemPrompt() },
     { role: 'user', content: buildHtmlUserPrompt(input) },
-    { role: 'assistant', content: String(partialHtml || '') },
     {
       role: 'user',
       content: [
-        'Dokumen di atas TERPOTONG sebelum selesai. Lanjutkan tepat dari karakter terakhir sampai dokumen lengkap dan diakhiri </html>.',
-        'JANGAN mengulang bagian yang sudah ada, jangan menulis ulang dari <!DOCTYPE html>, jangan memberi penjelasan, jangan memakai code fence.',
-        'Potongan akhir yang sudah ada (untuk menyambung):',
+        'Dokumen HTML materi yang diminta di atas sudah mulai kamu tulis, tetapi TERPOTONG sebelum ditutup </html>.',
+        'Lanjutkan MENYAMBUNG tepat dari karakter terakhir potongan di bawah sampai dokumen lengkap dan diakhiri </html>.',
+        'Keluarkan HANYA teks lanjutannya (sambungan) — BUKAN seluruh dokumen.',
+        'JANGAN mengulang bagian yang sudah ada, JANGAN menulis ulang dari <!DOCTYPE html>, JANGAN memberi penjelasan, JANGAN memakai code fence.',
+        'Potongan AKHIR dokumen yang sudah ada (sambung persis setelah ini):',
         '---',
         tail,
         '---',
