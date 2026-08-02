@@ -3,7 +3,9 @@ const DEFAULT_MODEL = 'gpt-4o-mini';
 const DEFAULT_RATE_LIMIT_MAX = 20;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 900000;
 const DEFAULT_TIMEOUT_MS = 120000;
-const MAX_TOKENS_CAP = 12000;
+// Materi mode HTML premium membutuhkan output panjang (satu dokumen utuh),
+// jauh di atas kebutuhan mode JSON terstruktur.
+const MAX_TOKENS_CAP = 32000;
 
 let aiConfigModule = null;
 function loadAiConfigModule() {

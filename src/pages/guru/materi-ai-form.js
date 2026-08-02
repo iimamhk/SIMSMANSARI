@@ -27,6 +27,18 @@ export const FITUR_OPTIONS = [
   { value: 'aktivitas', label: 'Aktivitas / proyek bersama' },
   { value: 'grafik', label: 'Grafik & visual matematika' },
 ];
+export const MODE_OPTIONS = [
+  {
+    value: 'structured',
+    label: 'Terstruktur',
+    desc: 'Tampilan konsisten, bisa disunting per-bagian lewat chat AI',
+  },
+  {
+    value: 'html',
+    label: 'Premium HTML',
+    desc: 'Visual & notasi matematika maksimal (SVG, pembagian bersusun). Tidak bisa disunting per-bagian',
+  },
+];
 export const REVISI_CEPAT = [
   { value: 'ringkas', label: 'Lebih ringkas', instruction: 'Buat materi lebih ringkas dan padat tanpa menghilangkan isi inti. Pangkas kalimat berulang.' },
   { value: 'contoh', label: 'Perbanyak contoh', instruction: 'Tambahkan contoh soal baru yang relevan dengan pembahasan langkah demi langkah. Pertahankan contoh yang sudah ada.' },
@@ -182,10 +194,14 @@ export function blok2Html() {
   const gayaChips = GAYA_OPTIONS.map((o, i) => `
       <label class="maip-chip"><input type="radio" name="gaya" value="${o.value}" ${i === 0 ? 'checked' : ''}>
         <span class="maip-chip-card">${o.label}</span></label>`).join('');
+  const modeRadios = MODE_OPTIONS.map((o, i) => `
+      <label class="maip-radio"><input type="radio" name="docMode" value="${o.value}" ${i === 0 ? 'checked' : ''}>
+        <span class="maip-radio-card"><strong>${o.label}</strong><span>${o.desc}</span></span></label>`).join('');
   return `
     <div class="maip-block">
       <div class="maip-step"><span class="maip-step-n">2</span><div><h3>Karakter Materi</h3><p>Seberapa dalam dan bagaimana gaya bahasanya</p></div></div>
-      <div class="maip-field"><label>Tingkat Kedalaman</label><div class="maip-radio-row">${kedalamanRadios}</div></div>
+      <div class="maip-field"><label>Mode Materi</label><div class="maip-radio-row">${modeRadios}</div></div>
+      <div class="maip-field" style="margin-top:12px"><label>Tingkat Kedalaman</label><div class="maip-radio-row">${kedalamanRadios}</div></div>
       <div class="maip-field" style="margin-top:12px"><label>Gaya Bahasa</label><div class="maip-chip-row">${gayaChips}</div></div>
     </div>`;
 }
@@ -229,7 +245,7 @@ export function resultHtml() {
           <div class="maip-empty-icon">&#128214;</div>
           <p style="margin:0; font-size:.84rem">Belum ada materi. Isi form lalu klik <strong>Generate Materi</strong>.</p>
         </div>
-        <iframe id="maip-preview" class="maip-preview-frame" title="Pratinjau materi" hidden></iframe>
+        <iframe id="maip-preview" class="maip-preview-frame" title="Pratinjau materi" sandbox="allow-scripts allow-modals allow-popups" hidden></iframe>
       </div>
       <div id="maip-revisi-wrap" hidden style="margin-top:14px; border-top:1px solid var(--mai-line); padding-top:12px;">
         <div class="maip-chat-head">

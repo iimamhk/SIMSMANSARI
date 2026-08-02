@@ -225,7 +225,7 @@ export async function renderGuruMateriImportPage(container) {
         <div class="mi-panel-body">
           <div class="mi-preview-wrap" id="mi-preview-wrap">
             <div class="mi-empty" id="mi-preview-empty"><span>📄</span><p>Pratinjau muncul di sini setelah HTML ditempel.</p></div>
-            <iframe id="mi-preview-frame" class="mi-preview-frame" hidden sandbox="allow-scripts allow-same-origin" title="Pratinjau materi"></iframe>
+            <iframe id="mi-preview-frame" class="mi-preview-frame" hidden sandbox="allow-scripts allow-modals allow-popups" title="Pratinjau materi"></iframe>
             <pre id="mi-preview-source" hidden style="margin:0;white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.6;color:#475569"></pre>
           </div>
         </div>

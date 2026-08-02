@@ -2,8 +2,11 @@
   "cleanUrls": false,
   "trailingSlash": false,
   "functions": {
+    "api/ai/generate-material-json.js": {
+      "maxDuration": 300
+    },
     "api/ai/generate-material.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/ai/generate-rpm.js": {
       "maxDuration": 60

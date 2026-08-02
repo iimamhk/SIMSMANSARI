@@ -34,6 +34,12 @@ const {
   normalizeMaterial,
   validateMaterial,
 } = require('../_lib/ai-material');
+const {
+  buildHtmlContinuationMessages,
+  buildHtmlMessages,
+  buildHtmlRevisionMessages,
+  validateGeneratedHtml,
+} = require('../_lib/ai-html-material');
 
 function asString(value, max) {
   if (typeof value !== 'string') return '';
@@ -224,6 +230,119 @@ async function runFullRevisionFallback(res, { baseMaterial, editInstruction, pro
   res.end();
 }
 
+/**
+ * MODE PREMIUM HTML: AI menulis satu dokumen HTML utuh.
+ *
+ * Berbeda dari mode terstruktur, tidak ada skema JSON untuk divalidasi. Yang
+ * dijaga di sini: dokumen benar-benar lengkap (tidak terpotong) dan sumber
+ * eksternalnya dibatasi allowlist. Bila stream terputus di tengah, dokumen
+ * dilanjutkan satu kali (continuation) alih-alih ditulis ulang dari awal.
+ */
+async function handleHtmlMode(req, res, { input, options, currentHtml, revisionInstruction }) {
+  writeSseHeaders(req, res);
+  sendSseComment(res, 'mulai-html');
+
+  const abortController = new AbortController();
+  req.on('close', () => {
+    if (!res.writableEnded) abortController.abort(new Error('client closed'));
+  });
+
+  try {
+    const profile = await resolveEffectiveProfile('');
+    let activeModel = profile.model;
+
+    const collect = async (messages, onDelta) => {
+      let output = '';
+      for await (const delta of streamChatCompletions(messages, {
+        profileId: profile.id,
+        resolvedProfile: profile,
+        model: profile.model,
+        temperature: options.temperature ?? 0.7,
+        // Dokumen HTML utuh butuh ruang jauh lebih besar dari mode JSON.
+        maxTokens: options.maxTokens ?? 28000,
+        includeReasoning: false,
+        signal: abortController.signal,
+        onModelSelected: (selected) => { activeModel = selected; },
+      })) {
+        if (!delta) continue;
+        output += delta;
+        onDelta?.(delta);
+      }
+      return output;
+    };
+
+    const isRevision = Boolean(revisionInstruction && currentHtml);
+    const messages = isRevision
+      ? buildHtmlRevisionMessages(input, currentHtml, revisionInstruction)
+      : buildHtmlMessages(input);
+
+    let fullText = '';
+    let streamError = null;
+    try {
+      fullText = await collect(messages, (delta) => sendSseEvent(res, 'delta', { content: delta }));
+    } catch (error) {
+      streamError = error;
+      // Simpan hasil parsial bila sudah cukup panjang; jika belum, gagal saja.
+      if (fullText.length < 200) throw error;
+    }
+
+    let validation = validateGeneratedHtml(fullText);
+
+    // Satu kali percobaan penyambungan bila dokumen belum ditutup.
+    if (validation.truncated && validation.html.length > 500) {
+      try {
+        sendSseComment(res, 'melanjutkan dokumen yang terpotong');
+        const rest = await collect(
+          buildHtmlContinuationMessages(input, validation.html),
+          (delta) => sendSseEvent(res, 'delta', { content: delta }),
+        );
+        const merged = validateGeneratedHtml(`${validation.html}\n${String(rest || '').replace(/^```(?:html)?/i, '')}`);
+        if (merged.html.length > validation.html.length) validation = merged;
+      } catch (continueError) {
+        console.warn('[AI HTML continuation failed]', continueError?.message || continueError);
+      }
+    }
+
+    if (!validation.html || validation.issues.length > 0) {
+      const hint = validation.truncated
+        ? 'Dokumen materi belum selesai ditulis (terpotong). Coba generate ulang, atau kurangi cakupan materi.'
+        : `AI tidak menghasilkan dokumen HTML yang valid${validation.issues.length ? ` (${validation.issues[0]})` : ''}. Coba generate ulang.`;
+      sendSseEvent(res, 'error', {
+        error: hint,
+        code: validation.truncated ? 'html_truncated' : 'invalid_html',
+      });
+      res.end();
+      return;
+    }
+
+    if (validation.removed.length) {
+      console.warn('[AI HTML sanitized]', validation.removed.join(' | ').slice(0, 500));
+    }
+
+    sendSseEvent(res, 'html', {
+      html: validation.html,
+      title: validation.title,
+      removed: validation.removed,
+      model: activeModel,
+      profileId: profile.id,
+      partial: Boolean(streamError),
+    });
+    sendSseEvent(res, 'done', { model: activeModel, profileId: profile.id });
+    res.end();
+  } catch (error) {
+    let message = 'Gagal menghasilkan materi HTML. Periksa koneksi ke layanan AI.';
+    let code = 'generation_failed';
+    if (error instanceof AiServiceError) {
+      message = error.message;
+      code = error.code;
+    } else {
+      console.warn('[AI generate-html error]', error?.name, '|', error?.message);
+    }
+    sendSseEvent(res, 'error', { error: message, code });
+    res.end();
+  }
+}
+
 module.exports = async (req, res) => {
   if (handleOptions(req, res)) return;
   if (req.method !== 'POST') {
@@ -249,6 +368,8 @@ module.exports = async (req, res) => {
   let revisionInstruction = '';
   let currentJson = '';
   let editInstruction = '';
+  let docMode = 'structured';
+  let currentHtml = '';
 
   try {
     applyRateLimit(req, res);
@@ -258,6 +379,8 @@ module.exports = async (req, res) => {
     revisionInstruction = asString(body.revisionInstruction, 2000);
     editInstruction = asString(body.editInstruction, 2000);
     currentJson = typeof body.currentJson === 'string' ? body.currentJson.slice(0, 80000).trim() : '';
+    docMode = asString(body.docMode, 20).toLowerCase() === 'html' ? 'html' : 'structured';
+    currentHtml = typeof body.currentHtml === 'string' ? body.currentHtml.slice(0, 200000).trim() : '';
   } catch (error) {
     if (error instanceof AiServiceError) {
       sendJson(req, res, error.statusCode, { error: error.message, code: error.code });
@@ -269,6 +392,19 @@ module.exports = async (req, res) => {
 
   if (!options.stream) {
     sendJson(req, res, 400, { error: 'Hanya mode streaming yang didukung.', code: 'stream_required' });
+    return;
+  }
+
+  // --- MODE PREMIUM HTML ---
+  // AI menulis satu dokumen HTML utuh. Revisi memakai instruksi mana pun yang
+  // tersedia (chat/tombol) karena mode ini tidak mendukung patch bertarget.
+  if (docMode === 'html') {
+    await handleHtmlMode(req, res, {
+      input,
+      options,
+      currentHtml,
+      revisionInstruction: revisionInstruction || editInstruction,
+    });
     return;
   }
 

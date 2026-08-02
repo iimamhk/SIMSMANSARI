@@ -6,7 +6,7 @@
 
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { streamGenerateMaterialJson, MaterialGenerationError } from '../../utils/ai-material-client.js';
+import { streamGenerateMaterialJson, streamGenerateMaterialHtml, MaterialGenerationError } from '../../utils/ai-material-client.js';
 import { getApiBase } from '../../utils/ai-client.js';
 import { buildMaterialHtml } from '../../utils/materi-renderer.js';
 import { ensureKaTeXReady } from '../../utils/markdown-export.js';
@@ -23,6 +23,18 @@ import {
 } from './materi-ai-form.js';
 
 const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
+
+/**
+ * Materi mode "Premium HTML" disimpan dalam pembungkus bertanda agar seluruh
+ * alur yang sudah ada (history/undo, simpan, publish, guard "belum ada materi")
+ * tetap bekerja tanpa dicabang di banyak tempat.
+ */
+function isHtmlDoc(material) {
+  return Boolean(material && typeof material === 'object' && material.__htmlDoc === true);
+}
+function makeHtmlDoc(html, title) {
+  return { __htmlDoc: true, title: String(title || 'Materi'), html: String(html || '') };
+}
 
 function getSession() {
   try { return JSON.parse(localStorage.getItem('simguru_session') || '{}'); } catch { return {}; }
@@ -112,8 +124,12 @@ export async function renderGuruMateriAiPage(container, params = {}) {
 
 /**
  * Muat materi tersimpan (draft atau materi terbit) milik guru untuk disunting.
- * Mengembalikan { material, meta, draftId, source, title } atau null bila tidak
- * ada JSON terstruktur (materi lama hanya-HTML tidak dapat disunting per-bagian).
+ * Mengembalikan { material, meta, draftId, source, title }.
+ *
+ * Materi mode "Premium HTML" (document_json null tetapi doc_mode 'html') dimuat
+ * sebagai dokumen HTML sehingga tetap bisa direvisi lewat chat, meski tidak
+ * dapat disunting per-bagian. Materi lama hanya-HTML tanpa penanda mode
+ * dikembalikan sebagai unsupported.
  */
 async function loadSavedMaterial({ userId, draftId, publishedId }) {
   if (draftId) {
@@ -121,12 +137,33 @@ async function loadSavedMaterial({ userId, draftId, publishedId }) {
     const draft = (drafts || []).find((d) => String(d.id) === draftId);
     if (!draft) return null;
     if (!draft.document_json || typeof draft.document_json !== 'object') {
+      if (draft.doc_mode === 'html' && typeof draft.html_source === 'string' && draft.html_source.trim()) {
+        return {
+          material: makeHtmlDoc(draft.html_source, draft.title || 'Materi'),
+          draftId: draft.id,
+          source: 'draft',
+          docMode: 'html',
+          title: draft.title || 'Materi',
+          meta: {
+            subject: draft.subject || '',
+            className: draft.class_name || '',
+            chapter: draft.chapter || '',
+            meetings: draft.duration || '',
+          },
+          form: {
+            mapel: draft.subject || '',
+            bab: draft.chapter || '',
+            alokasiWaktu: draft.duration || '',
+          },
+        };
+      }
       return { unsupported: true, title: draft.title || 'Materi' };
     }
     return {
       material: draft.document_json,
       draftId: draft.id,
       source: 'draft',
+      docMode: 'structured',
       title: draft.title || draft.document_json.title || 'Materi',
       meta: {
         subject: draft.subject || '',
@@ -146,12 +183,33 @@ async function loadSavedMaterial({ userId, draftId, publishedId }) {
     const doc = (list || []).find((m) => String(m.source_id || m.id) === publishedId || String(m.id) === publishedId);
     if (!doc) return null;
     if (!doc.document_json || typeof doc.document_json !== 'object') {
+      if (doc.doc_mode === 'html' && typeof doc.html_source === 'string' && doc.html_source.trim()) {
+        return {
+          material: makeHtmlDoc(doc.html_source, doc.title || 'Materi'),
+          draftId: String(doc.source_id || doc.id),
+          source: 'published',
+          docMode: 'html',
+          title: doc.title || 'Materi',
+          meta: {
+            subject: doc.mapel_nama || doc.mapel_id || '',
+            className: doc.kelas_nama || '',
+            chapter: doc.chapter || '',
+            meetings: doc.meetings || '',
+          },
+          form: {
+            mapel: doc.mapel_nama || doc.mapel_id || '',
+            bab: doc.chapter || '',
+            alokasiWaktu: doc.meetings || '',
+          },
+        };
+      }
       return { unsupported: true, title: doc.title || 'Materi' };
     }
     return {
       material: doc.document_json,
       draftId: String(doc.source_id || doc.id),
       source: 'published',
+      docMode: 'structured',
       title: doc.title || doc.document_json.title || 'Materi',
       meta: {
         subject: doc.mapel_nama || doc.mapel_id || '',
@@ -263,7 +321,9 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
 
   // --- Panel chat editor AI (Tahap 1) ---
   function clearChatEmpty() {
-    if (chatEmpty && chatEmpty.parentNode) chatEmpty.remove();
+    // Query ulang: resetChatLog menulis ulang isi chat, jadi referensi awal bisa basi.
+    const placeholder = chatLog?.querySelector('#maip-chat-empty') || chatEmpty;
+    if (placeholder && placeholder.parentNode) placeholder.remove();
   }
   function addChatMessage(role, text) {
     if (!chatLog) return null;
@@ -361,6 +421,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
       jumlahContoh: String(data.get('jumlahContoh') || ''),
       lainLain: String(data.get('lainLain') || '').trim(),
       fitur: data.getAll('fitur').map(String),
+      docMode: String(data.get('docMode') || 'structured') === 'html' ? 'html' : 'structured',
     };
   }
 
@@ -374,6 +435,15 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
   }
 
   async function renderPreview(material, meta) {
+    // Mode Premium HTML: dokumen sudah utuh dari AI, tampilkan apa adanya.
+    // Iframe pratinjau ber-sandbox tanpa same-origin, jadi skrip di dalam
+    // dokumen tidak dapat menyentuh aplikasi induk.
+    if (isHtmlDoc(material)) {
+      previewEl.srcdoc = material.html || '';
+      previewEl.hidden = false;
+      emptyEl.hidden = true;
+      return;
+    }
     await ensureKaTeXReady();
     // Mode editable aktif → tiap bagian punya tombol "Edit bagian ini".
     previewEl.srcdoc = buildMaterialHtml(material, meta, { editable: true });
@@ -449,6 +519,75 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
     const currentJson = isRevision ? JSON.stringify(previousMaterial) : undefined;
     let gotMaterial = false;
     let patchSummary = '';
+
+    // --- MODE PREMIUM HTML ---
+    // AI menulis dokumen utuh; tidak ada patch bertarget, jadi revisi = tulis ulang.
+    if (input.docMode === 'html') {
+      try {
+        await streamGenerateMaterialHtml({
+          input,
+          revisionInstruction: isRevision ? revisionInstruction : undefined,
+          currentHtml: isRevision && isHtmlDoc(previousMaterial) ? previousMaterial.html : undefined,
+          signal: abortController.signal,
+          onDelta: (chunk) => {
+            if (viaChat) return;
+            progressEl.textContent = (progressEl.textContent + chunk).slice(-4000);
+            progressEl.scrollTop = progressEl.scrollHeight;
+          },
+          onHtml: (html, meta) => {
+            gotMaterial = true;
+            const doc = makeHtmlDoc(html, meta?.title || input.topik || 'Materi');
+            currentMaterial = doc;
+            renderPreview(doc, currentMeta);
+            pushHistory(doc);
+            progressWrap.hidden = true;
+            revisiWrap.hidden = false;
+            simpanBtn.disabled = false;
+            publishBtn.disabled = false;
+            const dropped = Array.isArray(meta?.removed) ? meta.removed.length : 0;
+            setStatus(`Selesai · mode HTML · model ${meta?.model || ''}${dropped ? ` · ${dropped} sumber luar diblokir` : ''}`);
+            resultSub.textContent = doc.title || 'Materi siap';
+            if (viaChat && thinkingBubble) {
+              thinkingBubble.classList.remove('thinking');
+              thinkingBubble.textContent = `Materi ditulis ulang sesuai permintaan: "${doc.title}".`;
+              chatLog.scrollTop = chatLog.scrollHeight;
+            }
+          },
+          onError: (err) => {
+            if (viaChat && thinkingBubble) {
+              thinkingBubble.classList.remove('thinking');
+              thinkingBubble.textContent = `Maaf, gagal menerapkan perubahan: ${err.message || 'terjadi kesalahan.'}`;
+            } else {
+              showError(err.message || 'Gagal menghasilkan materi.');
+            }
+            progressWrap.hidden = true;
+          },
+        });
+      } catch (err) {
+        if (!(err instanceof MaterialGenerationError && err.code === 'aborted')) {
+          if (viaChat && thinkingBubble) {
+            thinkingBubble.classList.remove('thinking');
+            thinkingBubble.textContent = `Maaf, gagal menerapkan perubahan: ${err?.message || 'terjadi kesalahan.'}`;
+          } else {
+            showError(err?.message || 'Gagal menghasilkan materi.');
+          }
+        } else if (viaChat && thinkingBubble) {
+          thinkingBubble.classList.remove('thinking');
+          thinkingBubble.textContent = 'Perubahan dibatalkan.';
+        }
+        progressWrap.hidden = true;
+      } finally {
+        clearInterval(elapsedTimer);
+        if (isRevision && !gotMaterial && previousMaterial) {
+          currentMaterial = previousMaterial;
+          renderPreview(previousMaterial, currentMeta);
+        }
+        setGenerating(false);
+        if (!errorWrap.hidden) retryBtn.hidden = false;
+        abortController = null;
+      }
+      return;
+    }
 
     try {
       await streamGenerateMaterialJson({
@@ -554,7 +693,10 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
 
   function resetChatLog() {
     if (!chatLog) return;
-    chatLog.innerHTML = '<div class="maip-chat-empty" id="maip-chat-empty">Mulai percakapan untuk menyempurnakan materi. Contoh: "perbanyak contoh soal", "ubah gaya jadi lebih santai", "tambah mini kuis 5 soal". Anda juga bisa klik <strong>Edit bagian ini</strong> pada pratinjau.</div>';
+    const htmlMode = String(new FormData(form).get('docMode') || '') === 'html';
+    chatLog.innerHTML = htmlMode
+      ? '<div class="maip-chat-empty" id="maip-chat-empty">Mode HTML: ketik permintaan perubahan, materi akan <strong>ditulis ulang utuh</strong> oleh AI. Contoh: "perbanyak contoh soal", "tambah grafik fungsi", "buat pembagian bersusun lebih jelas".</div>'
+      : '<div class="maip-chat-empty" id="maip-chat-empty">Mulai percakapan untuk menyempurnakan materi. Contoh: "perbanyak contoh soal", "ubah gaya jadi lebih santai", "tambah mini kuis 5 soal". Anda juga bisa klik <strong>Edit bagian ini</strong> pada pratinjau.</div>';
   }
 
   form.addEventListener('submit', (e) => {
@@ -658,10 +800,11 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
     simpanBtn.disabled = true;
     simpanBtn.textContent = 'Menyimpan...';
     try {
-      await ensureKaTeXReady();
+      const htmlMode = isHtmlDoc(currentMaterial);
+      if (!htmlMode) await ensureKaTeXReady();
       const input = readForm();
       const meta = buildMeta(input);
-      const htmlSource = buildMaterialHtml(currentMaterial, meta);
+      const htmlSource = htmlMode ? currentMaterial.html : buildMaterialHtml(currentMaterial, meta);
       const id = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
       const draft = {
@@ -675,9 +818,11 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
         chapter: safeString(meta.chapter),
         note: `Materi dari AI - ${input.topik || ''}`,
         source: 'ai',
+        doc_mode: htmlMode ? 'html' : 'structured',
         html_source: htmlSource,
         // Simpan JSON terstruktur agar materi bisa disunting ulang di Studio (Tahap 5).
-        document_json: cloneMaterial(currentMaterial),
+        // Mode HTML tidak punya struktur per-bagian, jadi null.
+        document_json: htmlMode ? null : cloneMaterial(currentMaterial),
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
         updated_at: now,
@@ -730,7 +875,8 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
       const meta = buildMeta(input);
       const sourceId = currentDraftId || `maai_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
-      const htmlSource = buildMaterialHtml(currentMaterial, meta);
+      const htmlMode = isHtmlDoc(currentMaterial);
+      const htmlSource = htmlMode ? currentMaterial.html : buildMaterialHtml(currentMaterial, meta);
       // Satu dokumen untuk semua kelas — html_source tidak diduplikasi.
       await savePublishedMaterialForClasses({
         id: sourceId,
@@ -747,8 +893,10 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
         html_source: htmlSource,
         visible_to_students: true,
         source: 'materi_ai',
+        doc_mode: htmlMode ? 'html' : 'structured',
         // Simpan JSON agar materi terbit bisa disunting ulang di Studio.
-        document_json: cloneMaterial(currentMaterial),
+        // Mode HTML tidak memiliki struktur per-bagian.
+        document_json: htmlMode ? null : cloneMaterial(currentMaterial),
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
         published_at: now,
@@ -797,6 +945,11 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
       setFormField('bab', data.form.bab);
       setFormField('alokasiWaktu', data.form.alokasiWaktu);
     }
+    // Selaraskan pilihan Mode Materi dengan materi yang dimuat, supaya revisi
+    // memakai jalur generate yang sama dengan cara materi ini dibuat.
+    const loadedMode = data.docMode || (isHtmlDoc(data.material) ? 'html' : 'structured');
+    const modeInput = form.querySelector(`[name="docMode"][value="${loadedMode}"]`);
+    if (modeInput) modeInput.checked = true;
     currentMaterial = data.material;
     currentDraftId = data.draftId || null;
     currentMeta = data.meta || buildMeta(readForm());
@@ -808,7 +961,9 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
     simpanBtn.disabled = false;
     publishBtn.disabled = false;
     resultSub.textContent = currentMaterial.title || data.title || 'Materi siap disunting';
-    addChatMessage('ai', `Materi "${currentMaterial.title || data.title || ''}" dimuat untuk disunting. Ketik perubahan yang diinginkan, atau klik "Edit bagian ini" pada pratinjau.`);
+    addChatMessage('ai', loadedMode === 'html'
+      ? `Materi "${currentMaterial.title || data.title || ''}" (mode HTML) dimuat. Ketik perubahan yang diinginkan — materi akan ditulis ulang utuh karena mode ini tidak mendukung edit per-bagian.`
+      : `Materi "${currentMaterial.title || data.title || ''}" dimuat untuk disunting. Ketik perubahan yang diinginkan, atau klik "Edit bagian ini" pada pratinjau.`);
     setStatus('Materi tersimpan dimuat. Perubahan dapat disimpan sebagai draft atau diterbitkan.');
   }
 
