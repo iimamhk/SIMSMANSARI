@@ -1480,6 +1480,7 @@ export async function saveMaterialWorkspaceDraft(draft) {
     class_name: String(draft.class_name || '').slice(0, 80),
     duration: String(draft.duration || '2 JP').slice(0, 20),
     chapter: String(draft.chapter || '').slice(0, 200),
+    gaya: String(draft.gaya || '').slice(0, 32),
     note: String(draft.note || '').slice(0, 500),
     // Penanda asal draft: manual (editor blok), ai (generate), import (paste HTML).
     source,

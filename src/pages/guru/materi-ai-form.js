@@ -16,6 +16,9 @@ export const GAYA_OPTIONS = [
   { value: 'formal', label: 'Formal' },
   { value: 'santai', label: 'Santai' },
   { value: 'memotivasi', label: 'Memotivasi' },
+  { value: 'menarik', label: 'Menarik' },
+  { value: 'ceria', label: 'Ceria' },
+  { value: 'fokus', label: 'Fokus' },
 ];
 export const FITUR_OPTIONS = [
   { value: 'contoh', label: 'Contoh soal bertahap' },
@@ -30,13 +33,13 @@ export const FITUR_OPTIONS = [
 export const MODE_OPTIONS = [
   {
     value: 'structured',
-    label: 'Terstruktur',
-    desc: 'Tampilan konsisten, bisa disunting per-bagian lewat chat AI',
+    label: 'Editable',
+    desc: 'Dapat di edit per-bagian lewat chat AI',
   },
   {
     value: 'html',
-    label: 'Premium HTML',
-    desc: 'Visual & notasi matematika maksimal (SVG, pembagian bersusun). Tidak bisa disunting per-bagian',
+    label: 'HTML Final',
+    desc: 'Dikemas langsung oleh AI',
   },
 ];
 export const REVISI_CEPAT = [

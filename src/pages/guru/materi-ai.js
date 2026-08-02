@@ -149,6 +149,7 @@ async function loadSavedMaterial({ userId, draftId, publishedId }) {
             className: draft.class_name || '',
             chapter: draft.chapter || '',
             meetings: draft.duration || '',
+            gaya: draft.gaya || '',
           },
           form: {
             mapel: draft.subject || '',
@@ -170,6 +171,7 @@ async function loadSavedMaterial({ userId, draftId, publishedId }) {
         className: draft.class_name || '',
         chapter: draft.chapter || '',
         meetings: draft.duration || '',
+        gaya: draft.gaya || '',
       },
       form: {
         mapel: draft.subject || '',
@@ -195,6 +197,7 @@ async function loadSavedMaterial({ userId, draftId, publishedId }) {
             className: doc.kelas_nama || '',
             chapter: doc.chapter || '',
             meetings: doc.meetings || '',
+            gaya: doc.gaya || '',
           },
           form: {
             mapel: doc.mapel_nama || doc.mapel_id || '',
@@ -216,6 +219,7 @@ async function loadSavedMaterial({ userId, draftId, publishedId }) {
         className: doc.kelas_nama || '',
         chapter: doc.chapter || '',
         meetings: doc.meetings || '',
+        gaya: doc.gaya || '',
       },
       form: {
         mapel: doc.mapel_nama || doc.mapel_id || '',
@@ -431,6 +435,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
       className: [input.kelas, input.rombel].filter(Boolean).join('.'),
       chapter: input.bab || input.topik,
       meetings: input.alokasiWaktu,
+      gaya: input.gaya,
     };
   }
 
@@ -816,6 +821,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
         class_name: safeString(meta.className || input.kelas),
         duration: safeString(input.alokasiWaktu || '2 JP'),
         chapter: safeString(meta.chapter),
+        gaya: safeString(input.gaya),
         note: `Materi dari AI - ${input.topik || ''}`,
         source: 'ai',
         doc_mode: htmlMode ? 'html' : 'structured',
@@ -890,6 +896,7 @@ function initMateriAi(root, { userId, userName, context, teachingAssignments, pr
         level: safeString(input.fase),
         chapter: safeString(input.bab || input.topik),
         meetings: safeString(input.alokasiWaktu),
+        gaya: safeString(input.gaya),
         html_source: htmlSource,
         visible_to_students: true,
         source: 'materi_ai',

@@ -99,20 +99,29 @@ function renderBlocks(text) {
 // CSS premium iOS
 // ---------------------------------------------------------------------------
 
+// Pemetaan gaya bahasa → tema warna. Tema menentukan aksen, hero, latar, dan
+// tabel agar nuansa visual mengikuti gaya yang dipilih guru (bukan mapel).
+// Default 'hangat' bila gaya tidak dikenal (mis. materi lama tanpa field gaya).
+function resolveTheme(gaya) {
+  const g = String(gaya || '').toLowerCase();
+  const known = ['hangat', 'formal', 'santai', 'memotivasi', 'menarik', 'ceria', 'fokus'];
+  return known.includes(g) ? g : 'hangat';
+}
+
 function getStyles() {
   return `
-    :root { color-scheme: light; --mai-bg:#f5f5f7; --mai-card:#ffffff; --mai-ink:#1d1d1f; --mai-muted:#6e6e73; --mai-line:rgba(0,0,0,.06); --mai-brand:#0a84ff; --mai-brand2:#5e5ce6; --mai-green:#30d158; --mai-amber:#ffd60a; --mai-rose:#ff453a; --mai-radius:20px; --mai-shadow:0 10px 30px -18px rgba(0,0,0,.25); }
+    :root { color-scheme: light; --mai-bg:rgba(var(--mai-brand-rgb),.035); --mai-surface:rgba(var(--mai-brand-rgb),.06); --mai-card:#ffffff; --mai-ink:#1d1d1f; --mai-muted:#6e6e73; --mai-line:rgba(0,0,0,.06); --mai-brand:#0a84ff; --mai-brand2:#5e5ce6; --mai-brand-rgb:10,132,255; --mai-brand2-rgb:94,92,230; --mai-hero-1:#0a84ff; --mai-hero-2:#5e5ce6; --mai-green:#30d158; --mai-amber:#ffd60a; --mai-rose:#ff453a; --mai-radius:20px; --mai-shadow:0 10px 30px -18px rgba(0,0,0,.25); }
     .mai-page { max-width:820px; margin:0 auto; padding:16px 14px 44px; font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Inter,Arial,sans-serif; background:var(--mai-bg); color:var(--mai-ink); -webkit-font-smoothing:antialiased; line-height:1.6; }
     .mai-card { background:var(--mai-card); border-radius:var(--mai-radius); box-shadow:var(--mai-shadow); border:1px solid var(--mai-line); padding:18px 18px; margin-bottom:14px; }
-    .mai-hero { background:linear-gradient(135deg,#0a84ff,#5e5ce6); color:#fff; border:none; }
+    .mai-hero { background:linear-gradient(135deg,var(--mai-hero-1),var(--mai-hero-2)); color:#fff; border:none; }
     .mai-eyebrow { margin:0 0 4px; font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; opacity:.78; }
     .mai-hero h1 { margin:0; font-size:clamp(1.45rem,4.4vw,2rem); line-height:1.15; font-weight:700; letter-spacing:-.02em; }
     .mai-sub { margin:8px 0 0; font-size:.85rem; opacity:.85; }
     .mai-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
     .mai-chip { background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.22); border-radius:999px; padding:4px 10px; font-size:11px; font-weight:600; }
-    .mai-hook { font-size:.98rem; line-height:1.65; border-left:4px solid var(--mai-brand); background:linear-gradient(90deg,rgba(10,132,255,.06),transparent 60%); }
+    .mai-hook { font-size:.98rem; line-height:1.65; border-left:4px solid var(--mai-brand); background:linear-gradient(90deg,rgba(var(--mai-brand-rgb),.06),transparent 60%); }
     .mai-h { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
-    .mai-h-ic { flex:none; width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(135deg,rgba(10,132,255,.14),rgba(94,92,230,.14)); color:var(--mai-brand); font-size:15px; }
+    .mai-h-ic { flex:none; width:30px; height:30px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(135deg,rgba(var(--mai-brand-rgb),.14),rgba(var(--mai-brand2-rgb),.14)); color:var(--mai-brand); font-size:15px; }
     .mai-h h2 { margin:0; font-size:1.12rem; font-weight:700; letter-spacing:-.01em; }
     .mai-h-sub { font-size:.74rem; color:var(--mai-muted); margin:2px 0 0; font-weight:500; }
     .mai-list { margin:.5em 0; padding-left:1.2rem; }
@@ -120,11 +129,11 @@ function getStyles() {
     .mai-concept-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
     .mai-badge { flex:none; min-width:26px; height:26px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; background:var(--mai-ink); color:#fff; font-size:.78rem; font-weight:700; padding:0 6px; }
     .mai-concept-head h3 { margin:0; font-size:1.02rem; font-weight:700; }
-    .mai-variant { font-size:.66rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--mai-brand); background:rgba(10,132,255,.1); border-radius:999px; padding:2px 8px; margin-left:auto; }
+    .mai-variant { font-size:.66rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--mai-brand); background:rgba(var(--mai-brand-rgb),.1); border-radius:999px; padding:2px 8px; margin-left:auto; }
     .mai-table-wrap { overflow-x:auto; margin:10px 0; border-radius:12px; border:1px solid var(--mai-line); }
     .mai-table { width:100%; border-collapse:collapse; font-size:.86rem; }
     .mai-table th, .mai-table td { padding:9px 12px; text-align:left; border-bottom:1px solid var(--mai-line); }
-    .mai-table th { background:#f5f5f7; font-weight:700; }
+    .mai-table th { background:var(--mai-surface); font-weight:700; }
     .mai-table tr:last-child td { border-bottom:none; }
     .mai-chart { margin:12px 0; }
     .mai-chart-box { position:relative; width:100%; height:320px; background:#fff; border:1px solid var(--mai-line); border-radius:14px; padding:10px 12px; }
@@ -151,15 +160,15 @@ function getStyles() {
     .mai-hl-penting { background:rgba(255,214,10,.14); border:1px solid rgba(255,214,10,.4); }
     .mai-hl-miskonsepsi { background:rgba(255,69,58,.1); border:1px solid rgba(255,69,58,.3); }
     .mai-hl-perhatian { background:rgba(255,159,10,.12); border:1px solid rgba(255,159,10,.35); }
-    .mai-hl-info { background:rgba(10,132,255,.1); border:1px solid rgba(10,132,255,.28); }
+    .mai-hl-info { background:rgba(var(--mai-brand-rgb),.1); border:1px solid rgba(var(--mai-brand-rgb),.28); }
     .mai-example { border:1px solid var(--mai-line); border-radius:16px; padding:14px; margin:10px 0; background:#fcfcfd; }
     .mai-example-q { font-weight:600; margin:0 0 10px; }
     .mai-steps-toggle { border:none; background:linear-gradient(135deg,var(--mai-brand),var(--mai-brand2)); color:#fff; font-weight:600; font-size:.8rem; border-radius:999px; padding:8px 14px; cursor:pointer; }
     .mai-steps { margin-top:12px; border-top:1px dashed var(--mai-line); padding-top:12px; }
     .mai-step { display:flex; gap:10px; margin:8px 0; }
-    .mai-step-n { flex:none; width:22px; height:22px; border-radius:999px; background:rgba(10,132,255,.12); color:var(--mai-brand); font-size:.72rem; font-weight:700; display:inline-flex; align-items:center; justify-content:center; }
+    .mai-step-n { flex:none; width:22px; height:22px; border-radius:999px; background:rgba(var(--mai-brand-rgb),.12); color:var(--mai-brand); font-size:.72rem; font-weight:700; display:inline-flex; align-items:center; justify-content:center; }
     .mai-answer { margin-top:10px; background:rgba(48,209,88,.12); border:1px solid rgba(48,209,88,.3); border-radius:12px; padding:10px 12px; font-size:.9rem; }
-    .mai-fill { display:inline-block; min-width:72px; border:none; border-bottom:2px solid var(--mai-brand); background:rgba(10,132,255,.06); border-radius:6px 6px 0 0; padding:2px 8px; font-size:.9em; text-align:center; }
+    .mai-fill { display:inline-block; min-width:72px; border:none; border-bottom:2px solid var(--mai-brand); background:rgba(var(--mai-brand-rgb),.06); border-radius:6px 6px 0 0; padding:2px 8px; font-size:.9em; text-align:center; }
     .mai-quiz-opt { display:block; width:100%; text-align:left; border:1px solid var(--mai-line); background:#fff; border-radius:12px; padding:10px 12px; margin:6px 0; cursor:pointer; font-size:.9rem; transition:.15s ease; }
     .mai-quiz-opt:hover { border-color:var(--mai-brand); }
     .mai-quiz-opt.correct { background:rgba(48,209,88,.12); border-color:var(--mai-green); }
@@ -168,15 +177,37 @@ function getStyles() {
     .mai-dd { display:grid; gap:8px; margin:8px 0; }
     .mai-dd-row { display:flex; gap:8px; align-items:center; }
     .mai-dd-item { flex:1; border:1px solid var(--mai-line); background:#fff; border-radius:12px; padding:10px 12px; font-size:.88rem; }
-    .mai-dd-target { flex:1; border:1.5px dashed rgba(10,132,255,.4); background:rgba(10,132,255,.05); border-radius:12px; min-height:42px; padding:10px 12px; font-size:.88rem; color:var(--mai-muted); }
-    .mai-math-display { overflow-x:auto; margin:10px 0; padding:12px 14px; background:#f5f5f7; border:1px solid var(--mai-line); border-radius:12px; }
+    .mai-dd-target { flex:1; border:1.5px dashed rgba(var(--mai-brand-rgb),.4); background:rgba(var(--mai-brand-rgb),.05); border-radius:12px; min-height:42px; padding:10px 12px; font-size:.88rem; color:var(--mai-muted); }
+    .mai-math-display { overflow-x:auto; margin:10px 0; padding:12px 14px; background:var(--mai-surface); border:1px solid var(--mai-line); border-radius:12px; }
     .mai-math-inline { display:inline-flex; max-width:100%; overflow-x:auto; vertical-align:middle; }
-    .mai-code { background:#f5f5f7; padding:2px 6px; border-radius:6px; font-size:.88em; font-family:ui-monospace,Menlo,monospace; }
+    .mai-code { background:var(--mai-surface); padding:2px 6px; border-radius:6px; font-size:.88em; font-family:ui-monospace,Menlo,monospace; }
     .mai-roles { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
-    .mai-role { background:rgba(94,92,230,.1); color:var(--mai-brand2); border-radius:999px; padding:4px 10px; font-size:.74rem; font-weight:600; }
+    .mai-role { background:rgba(var(--mai-brand2-rgb),.1); color:var(--mai-brand2); border-radius:999px; padding:4px 10px; font-size:.74rem; font-weight:600; }
     .mai-divider { height:1px; background:var(--mai-line); margin:14px 0; }
     @media (max-width:640px){ .mai-page{padding:12px 10px 32px;} .mai-card{padding:15px 14px; border-radius:16px;} .mai-dd-row{flex-direction:column;} .mai-dd-item,.mai-dd-target{width:100%;} }
-    @media print { .mai-page{background:#fff; padding:0;} .mai-card{box-shadow:none; border:1px solid #ddd; page-break-inside:avoid;} .mai-hero{background:#0a84ff !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;} .mai-steps-toggle{display:none;} .mai-steps{display:block !important;} }
+    @media print { .mai-page{background:#fff; padding:0;} .mai-card{box-shadow:none; border:1px solid #ddd; page-break-inside:avoid;} .mai-hero{background:var(--mai-hero-1) !important; -webkit-print-color-adjust:exact; print-color-adjust:exact;} .mai-steps-toggle{display:none;} .mai-steps{display:block !important;} }
+
+    /* Tema warna per gaya bahasa (override variabel pada .mai-page).
+       Latar & tabel ikut via --mai-bg/--mai-surface yang memakai --mai-brand-rgb,
+       jadi sekali brand diubah, seluruh nuansa ikut bergeser. */
+    .mai-page.mai-theme-hangat { --mai-brand:#e0552b; --mai-brand2:#f4a261; --mai-brand-rgb:224,85,43; --mai-brand2-rgb:244,162,97; --mai-hero-1:#e0552b; --mai-hero-2:#f4a261; }
+    .mai-page.mai-theme-formal { --mai-brand:#2c5282; --mai-brand2:#4a5568; --mai-brand-rgb:44,82,130; --mai-brand2-rgb:74,85,104; --mai-hero-1:#1e3a5f; --mai-hero-2:#2c5282; }
+    .mai-page.mai-theme-santai { --mai-brand:#0e9488; --mai-brand2:#0ea5e9; --mai-brand-rgb:14,148,136; --mai-brand2-rgb:14,165,233; --mai-hero-1:#0e9488; --mai-hero-2:#0ea5e9; }
+    .mai-page.mai-theme-memotivasi { --mai-brand:#dc2626; --mai-brand2:#f59e0b; --mai-brand-rgb:220,38,38; --mai-brand2-rgb:245,158,11; --mai-hero-1:#dc2626; --mai-hero-2:#f59e0b; }
+    .mai-page.mai-theme-menarik { --mai-brand:#7c3aed; --mai-brand2:#db2777; --mai-brand-rgb:124,58,237; --mai-brand2-rgb:219,39,119; --mai-hero-1:#7c3aed; --mai-hero-2:#db2777; }
+    .mai-page.mai-theme-ceria { --mai-brand:#16a34a; --mai-brand2:#ca8a04; --mai-brand-rgb:22,163,74; --mai-brand2-rgb:202,138,4; --mai-hero-1:#16a34a; --mai-hero-2:#ca8a04; }
+    .mai-page.mai-theme-fokus { --mai-brand:#475569; --mai-brand2:#64748b; --mai-brand-rgb:71,85,105; --mai-brand2-rgb:100,116,139; --mai-hero-1:#334155; --mai-hero-2:#475569; }
+
+    /* Tata letak per variant konsep — supaya penyajian benar-benar berbeda. */
+    .mai-cv-definisi .mai-def { background:rgba(var(--mai-brand-rgb),.06); border-left:4px solid var(--mai-brand); border-radius:12px; padding:12px 14px; margin:8px 0; }
+    .mai-cv-definisi .mai-def p:first-child { margin-top:0; }
+    .mai-cv-kasus .mai-case { margin:0; padding:14px 16px; border-left:4px solid var(--mai-brand2); background:#fcfcfd; border-radius:12px; }
+    .mai-cv-kasus .mai-case p:first-child { margin-top:0; }
+    .mai-cv-langkah .mai-steps-v .mai-list { counter-reset:maistep; list-style:none; padding-left:0; }
+    .mai-cv-langkah .mai-steps-v .mai-list li { position:relative; padding:10px 12px 10px 46px; margin:8px 0; background:rgba(var(--mai-brand-rgb),.05); border-radius:12px; counter-increment:maistep; }
+    .mai-cv-langkah .mai-steps-v .mai-list li::before { content:counter(maistep); position:absolute; left:10px; top:10px; width:26px; height:26px; border-radius:8px; background:var(--mai-brand); color:#fff; font-weight:700; display:inline-flex; align-items:center; justify-content:center; font-size:.82rem; }
+    .mai-cv-perbandingan .mai-compare { background:#fcfcfd; border:1px solid var(--mai-line); border-radius:14px; padding:14px 16px; }
+    .mai-cv-perbandingan .mai-compare .mai-table-wrap { margin-top:8px; }
   `;
 }
 
@@ -227,9 +258,17 @@ function renderConcept(concept, index) {
   const tableHtml = concept.table && Array.isArray(concept.table.headers)
     ? `<div class="mai-table-wrap"><table class="mai-table"><thead><tr>${concept.table.headers.map((h) => `<th>${renderInline(h)}</th>`).join('')}</tr></thead><tbody>${(concept.table.rows || []).map((row) => `<tr>${(row || []).map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
     : '';
-  return `<div class="mai-card">
+  // Bungkus isi sesuai variant agar penyajian benar-benar berbeda visual,
+  // bukan hanya berbeda label. Variant tak dikenal → narasi (kartu biasa).
+  let body;
+  if (variant === 'definisi') body = `<div class="mai-def">${renderBlocks(concept.content)}</div>`;
+  else if (variant === 'kasus') body = `<blockquote class="mai-case">${renderBlocks(concept.content)}</blockquote>`;
+  else if (variant === 'langkah') body = `<div class="mai-steps-v">${renderBlocks(concept.content)}</div>`;
+  else if (variant === 'perbandingan') body = `<div class="mai-compare">${renderBlocks(concept.content)}</div>`;
+  else body = renderBlocks(concept.content);
+  return `<div class="mai-card mai-cv-${variant}">
     <div class="mai-concept-head"><span class="mai-badge">${index + 1}</span><h3>${escapeHtml(concept.heading || `Konsep ${index + 1}`)}</h3><span class="mai-variant">${escapeHtml(variant)}</span></div>
-    ${renderBlocks(concept.content)}
+    ${body}
     ${tableHtml}
     ${renderChart(concept.chart)}
     ${renderVisual(concept.visual)}
@@ -542,6 +581,7 @@ function editWrap(targetLabel, humanLabel, html, editable) {
 export function buildMaterialBody(material, meta = {}, options = {}) {
   if (!material || typeof material !== 'object') return '';
   const editable = options.editable === true;
+  const theme = resolveTheme(meta?.gaya);
   const concepts = (material.concepts || []).map((c, i) =>
     editWrap(`concepts[${i}]`, `Konsep ${i + 1}: ${c.heading || ''}`.trim(), renderConcept(c, i), editable)
   ).join('');
@@ -559,16 +599,16 @@ export function buildMaterialBody(material, meta = {}, options = {}) {
     editWrap('reflection', 'Refleksi', renderReflection(material), editable),
   ];
   const editStyles = editable ? getEditableStyles() : '';
-  return `<style>${getStyles()}${editStyles}</style><div class="mai-page${editable ? ' mai-editable' : ''}">${parts.join('')}</div>`;
+  return `<style>${getStyles()}${editStyles}</style><div class="mai-page mai-theme-${theme}${editable ? ' mai-editable' : ''}">${parts.join('')}</div>`;
 }
 
 /** CSS tambahan untuk mode editable (klik-untuk-perbaiki). */
 function getEditableStyles() {
   return `
     .mai-editsec { position:relative; }
-    .mai-editsec > .mai-editbtn { position:absolute; top:6px; right:6px; z-index:5; opacity:0; transform:translateY(-4px); transition:opacity .18s ease, transform .18s ease; border:none; border-radius:999px; padding:6px 12px; font-size:.72rem; font-weight:700; color:#fff; background:linear-gradient(135deg,#0a84ff,#5e5ce6); box-shadow:0 8px 20px -8px rgba(10,132,255,.7); cursor:pointer; }
+    .mai-editsec > .mai-editbtn { position:absolute; top:6px; right:6px; z-index:5; opacity:0; transform:translateY(-4px); transition:opacity .18s ease, transform .18s ease; border:none; border-radius:999px; padding:6px 12px; font-size:.72rem; font-weight:700; color:#fff; background:linear-gradient(135deg,var(--mai-brand),var(--mai-brand2)); box-shadow:0 8px 20px -8px rgba(var(--mai-brand-rgb),.7); cursor:pointer; }
     .mai-editsec:hover > .mai-editbtn, .mai-editsec:focus-within > .mai-editbtn { opacity:1; transform:translateY(0); }
-    .mai-editsec:hover > .mai-card, .mai-editsec.mai-editsec-active > .mai-card { outline:2px solid rgba(10,132,255,.45); outline-offset:2px; }
+    .mai-editsec:hover > .mai-card, .mai-editsec.mai-editsec-active > .mai-card { outline:2px solid rgba(var(--mai-brand-rgb),.45); outline-offset:2px; }
     @media (max-width:640px){ .mai-editsec > .mai-editbtn { opacity:1; transform:none; padding:5px 10px; font-size:.68rem; } }
   `;
 }
@@ -732,7 +772,7 @@ export function buildMaterialHtml(material, meta = {}, options = {}) {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
 ${chartHead}
 ${jxgHead}
-<style>.mai-dd-placed{display:inline-block;background:rgba(10,132,255,.1);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--mai-brand);}.mai-dd-sel{opacity:.6;}</style>
+<style>.mai-dd-placed{display:inline-block;background:rgba(var(--mai-brand-rgb),.1);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--mai-brand);}.mai-dd-sel{opacity:.6;}</style>
 </head>
 <body>
 ${body}

@@ -40,6 +40,9 @@ const GAYA_GUIDE = {
   formal: 'Bahasa formal, akademik, presisi.',
   santai: 'Bahasa santai seperti mentor yang ngobrol, tetap informatif.',
   memotivasi: 'Bahasa memotivasi dan energik.',
+  menarik: 'Bahasa menarik, memancing rasa ingin tahu, analogi tak terduga dan sudut pandang segar.',
+  ceria: 'Bahasa ceria, ringan, penuh semangat positif, sedikit humor ringan yang menyenangkan.',
+  fokus: 'Bahasa fokus, ringkas, presisi, langsung ke inti dan mudah dipindai.',
 };
 
 const FEATURE_LABEL = {

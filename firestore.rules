@@ -30,6 +30,9 @@ service cloud.firestore {
         'html_source',
         'markdown_source',
         'source',
+        'doc_mode',
+        'document_json',
+        'gaya',
         'created_at',
         'updated_at',
         'tahun_ajaran_id',
@@ -69,8 +72,11 @@ service cloud.firestore {
       && (!('markdown_source' in request.resource.data) || request.resource.data.markdown_source is string)
       && (!('source_id' in request.resource.data) || request.resource.data.source_id is string)
       && (!('source' in request.resource.data) || request.resource.data.source is string)
-      && (!('published_at' in request.resource.data) || request.resource.data.published_at is string)
-      && request.resource.data.visible_to_students is bool;
+        && (!('published_at' in request.resource.data) || request.resource.data.published_at is string)
+        && (!('doc_mode' in request.resource.data) || request.resource.data.doc_mode is string)
+        && (!('document_json' in request.resource.data) || request.resource.data.document_json == null || request.resource.data.document_json is map)
+        && (!('gaya' in request.resource.data) || request.resource.data.gaya is string)
+        && request.resource.data.visible_to_students is bool;
 
       allow delete: if request.auth != null && resource.data.guru_id == request.auth.token.username;
     }
@@ -84,7 +90,7 @@ service cloud.firestore {
         && request.resource.data.id == draftId
         && request.resource.data.keys().hasOnly([
           'id', 'guru_id', 'guru_nama', 'title', 'subject', 'class_name', 'duration',
-          'chapter', 'note', 'source', 'schema_version', 'document_json', 'html_source',
+          'chapter', 'gaya', 'note', 'source', 'schema_version', 'document_json', 'html_source',
           'tahun_ajaran_id', 'semester_id', 'updated_at', 'created_at'
         ])
         && request.resource.data.id is string
@@ -101,6 +107,7 @@ service cloud.firestore {
         && (!('source' in request.resource.data) || request.resource.data.source in ['manual', 'ai', 'import'])
         && (!('guru_nama' in request.resource.data) || request.resource.data.guru_nama is string)
         && (!('chapter' in request.resource.data) || request.resource.data.chapter is string)
+        && (!('gaya' in request.resource.data) || request.resource.data.gaya is string)
         && (!('note' in request.resource.data) || request.resource.data.note is string)
         && (!('tahun_ajaran_id' in request.resource.data) || request.resource.data.tahun_ajaran_id is string)
         && (!('semester_id' in request.resource.data) || request.resource.data.semester_id is string)

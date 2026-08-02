@@ -324,7 +324,7 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
 
     if (!validation.html || validation.issues.length > 0) {
       const hint = budgetHit
-        ? 'Materi HTML terlalu besar untuk diselesaikan dalam batas waktu server (300 detik). Kurangi cakupan atau komponen materi lalu coba lagi, atau gunakan mode Terstruktur yang lebih cepat.'
+        ? 'Materi HTML terlalu besar untuk diselesaikan dalam batas waktu server (300 detik). Kurangi cakupan atau komponen materi lalu coba lagi, atau gunakan mode Editable yang lebih cepat.'
         : validation.truncated
           ? 'Dokumen materi belum selesai ditulis (terpotong). Coba generate ulang, atau kurangi cakupan materi.'
           : `AI tidak menghasilkan dokumen HTML yang valid${validation.issues.length ? ` (${validation.issues[0]})` : ''}. Coba generate ulang.`;
@@ -354,7 +354,7 @@ async function handleHtmlMode(req, res, { input, options, currentHtml, revisionI
     let message = 'Gagal menghasilkan materi HTML. Periksa koneksi ke layanan AI.';
     let code = 'generation_failed';
     if (budgetHit) {
-      message = 'Materi HTML terlalu besar untuk diselesaikan dalam batas waktu server (300 detik). Kurangi cakupan atau komponen materi lalu coba lagi, atau gunakan mode Terstruktur yang lebih cepat.';
+      message = 'Materi HTML terlalu besar untuk diselesaikan dalam batas waktu server (300 detik). Kurangi cakupan atau komponen materi lalu coba lagi, atau gunakan mode Editable yang lebih cepat.';
       code = 'html_time_budget';
     } else if (error instanceof AiServiceError) {
       message = error.message;
