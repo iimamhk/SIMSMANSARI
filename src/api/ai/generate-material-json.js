@@ -333,13 +333,19 @@ module.exports = async (req, res) => {
       }
     }
 
-    let validation = validateMaterial(fullText);
+    // Contoh & latihan hanya divalidasi wajib bila guru memintanya lewat "fitur".
+    const fiturSel = Array.isArray(input.fitur) ? input.fitur : [];
+    const validateOpts = {
+      requireExamples: fiturSel.includes('contoh'),
+      requireExercises: fiturSel.some((f) => ['fill_blank', 'drag_drop', 'kuis'].includes(f)),
+    };
+    let validation = validateMaterial(fullText, validateOpts);
     const shouldRepair = !validation.material || validation.issues.length > 0 || streamInterrupted;
     if (shouldRepair && fullText.length > 80) {
       try {
         sendSseComment(res, 'memperbaiki struktur JSON');
         const repairedText = await collectMaterialText(buildRepairMessages(input, fullText));
-        const repairedValidation = validateMaterial(repairedText);
+        const repairedValidation = validateMaterial(repairedText, validateOpts);
         if (repairedValidation.material && repairedValidation.issues.length === 0) {
           validation = repairedValidation;
           streamInterrupted = false;

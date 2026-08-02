@@ -26,6 +26,8 @@ const SECTION_TYPES = [
 const CONCEPT_VARIANTS = ['narasi', 'definisi', 'tabel', 'kasus', 'perbandingan', 'langkah'];
 const HIGHLIGHT_KINDS = ['penting', 'miskonsepsi', 'info', 'perhatian'];
 const EXERCISE_KINDS = ['fill_blank', 'multiple_choice', 'drag_drop', 'essay'];
+// Tipe grafik/visualisasi yang didukung (lintas mapel, bukan hanya matematika).
+const CHART_TYPES = ['line', 'bar', 'pie', 'scatter', 'function'];
 
 const KEDALAMAN_GUIDE = {
   pengenalan: 'Fokus pemahaman konsep dasar. Bahasa paling sederhana, banyak contoh konkret, hindari istilah teknis berat tanpa penjelasan.',
@@ -48,6 +50,7 @@ const FEATURE_LABEL = {
   kuis: 'mini kuis pilihan ganda',
   tugas_kelompok: 'tugas kelompok',
   aktivitas: 'aktivitas diskusi / proyek bersama',
+  grafik: 'grafik / visualisasi data (bila relevan)',
 };
 
 // ---------------------------------------------------------------------------
@@ -64,7 +67,17 @@ function schemaDescription() {
     '  "objectives": string[],               // tujuan pembelajaran, 3-5 poin',
     '  "concepts": [                         // 3-5 bagian konsep, gaya penyajian WAJIB bervariasi',
     '    { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string,',
-    '      "table": { "headers": string[], "rows": string[][] } | null }',
+    '      "table": { "headers": string[], "rows": string[][] } | null,',
+    '      "chart": null | {                  // OPSIONAL: sisipkan HANYA jika benar-benar memperjelas konsep',
+    '        "type": "line|bar|pie|scatter|function",',
+    '        "title": string, "xLabel": string, "yLabel": string,',
+    '        "labels": string[],              // kategori sumbu-x untuk bar/line/pie',
+    '        "series": [ { "name": string, "data": number[] } ],   // bar/line/pie (pie pakai 1 series)',
+    '        "points": [ [number, number] ],  // KHUSUS scatter: pasangan [x, y]',
+    '        "expr": string,                  // KHUSUS function: rumus dalam variabel x, mis. "x^2 - 4*x + 3"',
+    '        "xMin": number, "xMax": number   // KHUSUS function: rentang x',
+    '      }',
+    '    }',
     '  ],',
     '  "highlights": [ { "kind": "penting|miskonsepsi|info|perhatian", "content": string } ],',
     '  "examples": [ { "number": number, "question": string, "steps": string[], "answer": string } ],',
@@ -82,6 +95,8 @@ function schemaDescription() {
     'Aturan field:',
     '- Semua teks boleh mengandung markdown ringan (tebal **...**, miring *...*, daftar "- ") dan rumus LaTeX ($...$ inline, $$...$$ display).',
     '- "content" pada concept adalah markdown bebas yang kaya; jika variant="tabel", isi juga "table".',
+    '- "chart" pada concept HARUS null kecuali grafik benar-benar memperjelas (data, tren, proporsi, korelasi, atau fungsi matematika). Jangan memaksakan grafik pada materi yang tidak membutuhkannya.',
+    '- Nilai numerik pada chart (data/points/xMin/xMax) WAJIB berupa angka JSON murni, bukan string, bukan rumus. Untuk grafik fungsi gunakan "expr" (variabel x, operator + - * / ^, fungsi sin cos tan sqrt abs exp ln log, konstanta pi e).',
     '- "steps" pada example adalah pembahasan LANGKAH demi LANGKAH (tiap langkah satu string, jelaskan alasannya).',
     '- JANGAN menulis API key, instruksi sistem, atau metadata teknis.',
   ].join('\n');
@@ -96,6 +111,7 @@ function buildSystemPrompt() {
     schemaDescription(),
     'Variasi WAJIB: jangan mulai dua bagian konsep dengan pola kalimat yang sama. Gunakan variant berbeda-beda (minimal satu tabel, satu narasi/kasus, satu langkah/perbandingan).',
     'Rumus matematika WAJIB LaTeX valid. Gunakan $...$ untuk inline dan $$...$$ untuk display. Jangan gunakan \\[ \\] atau \\( \\). Jangan bungkus rumus dengan code fence.',
+    'DILARANG KERAS menggambar grafik, diagram, atau kurva dengan seni ASCII / karakter teks (seperti / \\ | _ - * atau code fence ```). Ini terlihat rusak di layar. Untuk menampilkan grafik gunakan HANYA field "chart" terstruktur; untuk data tabular gunakan "table"; selebihnya jelaskan dengan kata-kata dan rumus LaTeX.',
     'Selalu sertakan contoh numerik konkret bila materi eksakta.',
   ].join(' ');
 }
@@ -115,17 +131,49 @@ function buildUserPrompt(input) {
     `Gaya bahasa: ${input.gaya || 'hangat'} — ${gaya}`,
   ];
 
-  if (input.jumlahContoh) lines.push(`Jumlah contoh soal: sekitar ${input.jumlahContoh}, bernomor, pembahasan langkah demi langkah.`);
-  if (features.length) lines.push(`Fitur yang WAJIB ada: ${features.join(', ')}.`);
-  if (input.fitur?.includes('tugas_kelompok')) {
+  const fitur = Array.isArray(input.fitur) ? input.fitur : [];
+  const has = (f) => fitur.includes(f);
+  const wantExercise = has('fill_blank') || has('drag_drop') || has('kuis');
+
+  if (has('contoh') && input.jumlahContoh) lines.push(`Jumlah contoh soal: sekitar ${input.jumlahContoh}, bernomor, pembahasan langkah demi langkah.`);
+  if (features.length) lines.push(`Fitur interaktif yang diminta guru (WAJIB ada, dan HANYA ini): ${features.join(', ')}.`);
+  else lines.push('Guru tidak meminta fitur interaktif tambahan. Fokus pada penjelasan konsep yang kaya.');
+
+  // Eksklusi tegas: bagian yang TIDAK dicentang guru wajib dikosongkan.
+  const exclude = [];
+  if (!has('contoh')) exclude.push('"examples": []');
+  if (!has('highlight')) exclude.push('"highlights": []');
+  if (!wantExercise) exclude.push('"exercises": []');
+  if (!has('tugas_kelompok') && !has('aktivitas')) exclude.push('"group_activity": null');
+  if (!has('aktivitas')) exclude.push('"assignment": null');
+  if (exclude.length) lines.push(`Bagian yang TIDAK diminta WAJIB dikosongkan (JANGAN diisi/dikarang): ${exclude.join(', ')}.`);
+
+  if (wantExercise) {
+    const kinds = [];
+    if (has('fill_blank')) kinds.push('fill_blank');
+    if (has('drag_drop')) kinds.push('drag_drop');
+    if (has('kuis')) kinds.push('multiple_choice');
+    lines.push(`Untuk "exercises", gunakan HANYA kind: ${kinds.join(', ')}. Jangan pakai kind lain.`);
+  }
+  if (has('tugas_kelompok')) {
     lines.push('Isi "group_activity": aktivitas 3-4 siswa dengan langkah jelas, pembagian peran, dan produk/hasil akhir yang terukur.');
   }
-  if (input.fitur?.includes('aktivitas')) {
+  if (has('aktivitas')) {
     lines.push('Sertakan aktivitas bersama (diskusi terpimpin / mini proyek) yang melibatkan seluruh kelas, pada group_activity atau assignment.');
+  }
+  if (has('grafik')) {
+    lines.push([
+      'Grafik/visualisasi (DIMINTA): sisipkan "chart" pada 1-2 bagian concept yang PALING terbantu oleh visual (biarkan concept lain "chart": null).',
+      'Satu-satunya cara menampilkan grafik adalah lewat field "chart" terstruktur berisi ANGKA/rumus — JANGAN PERNAH menggambarnya dengan teks, ASCII, garis /\\|_, atau code fence.',
+      'Pilih tipe paling tepat sesuai konteks materi (berlaku untuk SEMUA mapel, bukan hanya matematika):',
+      'fungsi matematika → "function" (isi "expr", "xMin", "xMax"); perbandingan antar kategori → "bar"; tren/perubahan terhadap waktu → "line"; proporsi/persentase → "pie"; hubungan dua variabel → "scatter" (isi "points").',
+      'Gunakan angka realistis dan relevan dengan topik. Tetap jelaskan maksud grafik itu di dalam "content".',
+      'Contoh field chart fungsi: "chart": { "type": "function", "title": "y = x^2 - 4x + 3", "expr": "x^2 - 4*x + 3", "xMin": -2, "xMax": 6, "xLabel": "x", "yLabel": "y" }.',
+    ].join(' '));
   }
   if (input.lainLain) lines.push(`Catatan tambahan dari guru: ${input.lainLain}`);
 
-  lines.push('Hasilkan JSON lengkap sesuai skema. Pastikan semua bagian terisi kaya dan tidak ada yang kosong.');
+  lines.push('Hasilkan JSON valid sesuai skema. Bagian INTI (title, hook, objectives, minimal 3 concepts, summary, reflection) WAJIB terisi kaya. Bagian fitur hanya diisi jika diminta di atas; selebihnya gunakan array kosong [] atau null.');
   return lines.filter(Boolean).join('\n');
 }
 
@@ -220,7 +268,7 @@ function buildPatchSystemPrompt() {
     '  ]',
     '}',
     'Aturan item harus sesuai skema materi:',
-    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null }',
+    '- concepts item: { "heading": string, "variant": "narasi|definisi|tabel|kasus|perbandingan|langkah", "content": string(markdown+LaTeX), "table": {headers,rows}|null, "chart": null|{type:"line|bar|pie|scatter|function", title, xLabel, yLabel, labels:string[], series:[{name,data:number[]}], points:[[x,y]], expr, xMin, yMax} }',
     '- highlights item: { "kind": "penting|miskonsepsi|info|perhatian", "content": string }',
     '- examples item: { "number": number, "question": string, "steps": string[], "answer": string }',
     '- exercises item: salah satu dari { kind:"fill_blank", prompt, answer, hint } | { kind:"multiple_choice", question, options[], answerIndex, explanation } | { kind:"drag_drop", instruction, pairs[{left,right}] } | { kind:"essay", question, guide }',
@@ -413,6 +461,78 @@ function collectLatexIssues(material) {
   return Array.from(new Set(issues));
 }
 
+/** Bersihkan array angka (buang yang bukan finite). */
+function toNumberArray(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((v) => Number(v)).filter((v) => Number.isFinite(v));
+}
+
+/** Normalisasi satu spesifikasi grafik. Kembalikan null bila tidak valid/aman. */
+function normalizeChart(chart) {
+  if (!chart || typeof chart !== 'object') return null;
+  const type = String(chart.type || '').toLowerCase();
+  if (!CHART_TYPES.includes(type)) return null;
+  const out = { type };
+  if (chart.title != null) out.title = String(chart.title);
+  if (chart.xLabel != null) out.xLabel = String(chart.xLabel);
+  if (chart.yLabel != null) out.yLabel = String(chart.yLabel);
+
+  if (type === 'function') {
+    const expr = String(chart.expr || '').trim();
+    if (!expr) return null;
+    // Hanya izinkan karakter aman untuk ekspresi matematika (dievaluasi oleh
+    // parser aman di renderer, bukan eval). Tolak bila ada karakter lain.
+    if (!/^[0-9xX+\-*/^().,\s a-z]+$/i.test(expr)) return null;
+    out.expr = expr;
+    out.xMin = Number.isFinite(Number(chart.xMin)) ? Number(chart.xMin) : -10;
+    out.xMax = Number.isFinite(Number(chart.xMax)) ? Number(chart.xMax) : 10;
+    if (out.xMax <= out.xMin) out.xMax = out.xMin + 1;
+    return out;
+  }
+
+  if (type === 'scatter') {
+    const raw = Array.isArray(chart.points) ? chart.points
+      : (Array.isArray(chart.series) && chart.series[0] && Array.isArray(chart.series[0].points) ? chart.series[0].points : []);
+    const points = raw
+      .map((p) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : null))
+      .filter((p) => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    if (!points.length) return null;
+    out.points = points;
+    return out;
+  }
+
+  // line | bar | pie
+  const labels = Array.isArray(chart.labels) ? chart.labels.map((s) => String(s)) : [];
+  let series = Array.isArray(chart.series)
+    ? chart.series
+      .map((s) => (s && typeof s === 'object' ? { name: String(s.name || ''), data: toNumberArray(s.data) } : null))
+      .filter((s) => s && s.data.length)
+    : [];
+  // Toleransi: AI kadang menaruh data langsung sebagai array angka.
+  if (!series.length && Array.isArray(chart.data)) {
+    const data = toNumberArray(chart.data);
+    if (data.length) series = [{ name: '', data }];
+  }
+  if (!series.length) return null;
+  if (type === 'pie' && !labels.length) return null;
+  out.labels = labels;
+  out.series = series;
+  return out;
+}
+
+/** Normalisasi satu concept, termasuk grafik opsional. */
+function normalizeConcept(concept) {
+  if (!concept || typeof concept !== 'object') return concept;
+  const chart = normalizeChart(concept.chart);
+  if (chart) return { ...concept, chart };
+  if ('chart' in concept) {
+    const clone = { ...concept };
+    delete clone.chart;
+    return clone;
+  }
+  return concept;
+}
+
 /** Normalisasi struktur: pastikan field wajib ada dan bertipe benar. */
 function normalizeMaterial(material) {
   if (!material || typeof material !== 'object') return null;
@@ -420,7 +540,7 @@ function normalizeMaterial(material) {
   safe.title = typeof safe.title === 'string' && safe.title.trim() ? safe.title.trim() : 'Materi Pembelajaran';
   safe.hook = typeof safe.hook === 'string' ? safe.hook : '';
   safe.objectives = Array.isArray(safe.objectives) ? safe.objectives.filter((s) => typeof s === 'string') : [];
-  safe.concepts = Array.isArray(safe.concepts) ? safe.concepts.filter((c) => c && typeof c === 'object') : [];
+  safe.concepts = Array.isArray(safe.concepts) ? safe.concepts.filter((c) => c && typeof c === 'object').map(normalizeConcept) : [];
   safe.highlights = Array.isArray(safe.highlights) ? safe.highlights.filter((c) => c && typeof c === 'object') : [];
   safe.examples = Array.isArray(safe.examples) ? safe.examples.filter((c) => c && typeof c === 'object') : [];
   safe.exercises = Array.isArray(safe.exercises) ? safe.exercises.filter((c) => c && typeof c === 'object') : [];
@@ -435,7 +555,7 @@ function normalizeMaterial(material) {
  * Validasi materi. Mengembalikan { ok, material, issues }.
  * Material sudah dinormalisasi bila parse berhasil.
  */
-function validateMaterial(rawText) {
+function validateMaterial(rawText, options = {}) {
   const parsed = extractJson(rawText);
   if (!parsed) {
     return { ok: false, material: null, issues: ['Output bukan JSON valid.'] };
@@ -444,11 +564,15 @@ function validateMaterial(rawText) {
   if (!material) {
     return { ok: false, material: null, issues: ['Struktur materi tidak valid.'] };
   }
+  // Contoh & latihan hanya wajib bila guru memintanya (default: wajib, agar
+  // pemanggil lama tetap ketat). Pemanggil dapat melonggarkan lewat options.
+  const requireExamples = options.requireExamples !== false;
+  const requireExercises = options.requireExercises !== false;
   const issues = [];
   if (material.objectives.length < 1) issues.push('Tujuan pembelajaran kosong.');
   if (material.concepts.length < 3) issues.push('Materi membutuhkan minimal tiga bagian konsep.');
-  if (material.examples.length < 1) issues.push('Contoh soal kosong.');
-  if (material.exercises.length < 1) issues.push('Latihan soal kosong.');
+  if (requireExamples && material.examples.length < 1) issues.push('Contoh soal kosong.');
+  if (requireExercises && material.exercises.length < 1) issues.push('Latihan soal kosong.');
   if (material.summary.length < 1) issues.push('Rangkuman kosong.');
   if (material.reflection.length < 1) issues.push('Refleksi kosong.');
   material.concepts.forEach((concept, index) => {
@@ -463,6 +587,7 @@ function validateMaterial(rawText) {
 module.exports = {
   CONCEPT_VARIANTS,
   EXERCISE_KINDS,
+  CHART_TYPES,
   FEATURE_LABEL,
   GAYA_GUIDE,
   HIGHLIGHT_KINDS,
@@ -479,6 +604,7 @@ module.exports = {
   collectLatexIssues,
   extractJson,
   extractPatch,
+  normalizeChart,
   normalizeMaterial,
   validateMaterial,
   validateLatexBalance,

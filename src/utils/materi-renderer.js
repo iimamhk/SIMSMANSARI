@@ -126,6 +126,12 @@ function getStyles() {
     .mai-table th, .mai-table td { padding:9px 12px; text-align:left; border-bottom:1px solid var(--mai-line); }
     .mai-table th { background:#f5f5f7; font-weight:700; }
     .mai-table tr:last-child td { border-bottom:none; }
+    .mai-chart { margin:12px 0; }
+    .mai-chart-box { position:relative; width:100%; height:320px; background:#fff; border:1px solid var(--mai-line); border-radius:14px; padding:10px 12px; }
+    .mai-chart-box canvas { width:100% !important; height:100% !important; }
+    .mai-chart-cap { margin:8px 2px 0; font-size:.78rem; color:var(--mai-muted); text-align:center; }
+    .mai-chart-fallback { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:.82rem; color:var(--mai-muted); text-align:center; padding:12px; }
+    @media (max-width:640px){ .mai-chart-box { height:260px; } }
     .mai-highlight { display:flex; gap:10px; border-radius:14px; padding:12px 14px; margin:10px 0; font-size:.9rem; align-items:flex-start; }
     .mai-highlight-ic { flex:none; font-size:16px; line-height:1.4; }
     .mai-hl-penting { background:rgba(255,214,10,.14); border:1px solid rgba(255,214,10,.4); }
@@ -211,7 +217,35 @@ function renderConcept(concept, index) {
     <div class="mai-concept-head"><span class="mai-badge">${index + 1}</span><h3>${escapeHtml(concept.heading || `Konsep ${index + 1}`)}</h3><span class="mai-variant">${escapeHtml(variant)}</span></div>
     ${renderBlocks(concept.content)}
     ${tableHtml}
+    ${renderChart(concept.chart)}
   </div>`;
+}
+
+/** Tipe grafik yang dikenali renderer. */
+const CHART_TYPES = ['line', 'bar', 'pie', 'scatter', 'function'];
+
+/**
+ * Render satu grafik sebagai <canvas> pembawa DATA (bukan HTML/JS mentah).
+ * Spesifikasi disematkan pada atribut data-mai-chart dan digambar saat runtime
+ * oleh getChartScript() memakai Chart.js. Aman: tidak ada script dari AI.
+ */
+function renderChart(chart) {
+  if (!chart || typeof chart !== 'object') return '';
+  const type = String(chart.type || '').toLowerCase();
+  if (!CHART_TYPES.includes(type)) return '';
+  const spec = escapeHtml(JSON.stringify(chart));
+  const cid = uid('chart');
+  const title = chart.title ? `<figcaption class="mai-chart-cap">${renderInline(chart.title)}</figcaption>` : '';
+  return `<figure class="mai-chart">
+    <div class="mai-chart-box"><canvas id="${cid}" data-mai-chart="${spec}" role="img" aria-label="${escapeHtml(chart.title || 'Grafik')}"></canvas>
+    <div class="mai-chart-fallback" data-mai-chart-fallback hidden>Grafik tidak dapat dimuat.</div></div>
+    ${title}
+  </figure>`;
+}
+
+/** Apakah materi mengandung minimal satu grafik? (untuk memuat Chart.js secara kondisional) */
+function materialHasChart(material) {
+  return Array.isArray(material?.concepts) && material.concepts.some((c) => c && c.chart && typeof c.chart === 'object');
 }
 
 function renderHighlights(material) {
@@ -511,6 +545,10 @@ function getInteractionScript() {
 export function buildMaterialHtml(material, meta = {}, options = {}) {
   const editable = options.editable === true;
   const body = buildMaterialBody(material, meta, { editable });
+  const hasChart = materialHasChart(material);
+  const chartHead = hasChart
+    ? '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>'
+    : '';
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
@@ -518,14 +556,124 @@ export function buildMaterialHtml(material, meta = {}, options = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(material?.title || 'Materi Pembelajaran')}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+${chartHead}
 <style>.mai-dd-placed{display:inline-block;background:rgba(10,132,255,.1);border-radius:8px;padding:2px 8px;font-weight:600;color:var(--mai-brand);}.mai-dd-sel{opacity:.6;}</style>
 </head>
 <body>
 ${body}
 ${getInteractionScript()}
+${hasChart ? getChartScript() : ''}
 ${editable ? getEditBridgeScript() : ''}
 </body>
 </html>`;
+}
+
+/**
+ * Script penggambar grafik (self-contained, dijalankan di dalam iframe materi).
+ * Membaca DATA dari atribut data-mai-chart lalu menggambar via Chart.js.
+ * Ekspresi grafik "function" dievaluasi oleh parser aman (bukan eval/Function),
+ * sehingga AI tidak pernah dapat menyuntikkan kode yang dieksekusi.
+ */
+function getChartScript() {
+  return `<script>
+(function(){
+  var PALETTE=['#0a84ff','#5e5ce6','#30d158','#ff9f0a','#ff453a','#64d2ff','#bf5af2','#ffd60a'];
+  function withAlpha(hex,a){var n=parseInt(hex.slice(1),16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+
+  // ---- Parser ekspresi matematika aman (recursive descent) ----
+  function makeEvaluator(expr){
+    var s=String(expr||''), i=0;
+    var FUNCS={sin:Math.sin,cos:Math.cos,tan:Math.tan,asin:Math.asin,acos:Math.acos,atan:Math.atan,
+      sqrt:Math.sqrt,abs:Math.abs,exp:Math.exp,ln:Math.log,log:function(v){return Math.log(v)/Math.LN10;},
+      log10:function(v){return Math.log(v)/Math.LN10;},floor:Math.floor,ceil:Math.ceil,round:Math.round};
+    var CONSTS={pi:Math.PI,e:Math.E};
+    function ws(){while(i<s.length&&/\\s/.test(s[i]))i++;}
+    function peek(){ws();return s[i];}
+    function parseExpr(){var v=parseTerm();for(;;){var c=peek();if(c==='+'){i++;v+=parseTerm();}else if(c==='-'){i++;v-=parseTerm();}else return v;}}
+    function parseTerm(){var v=parseUnary();for(;;){var c=peek();if(c==='*'){i++;v*=parseUnary();}else if(c==='/'){i++;v/=parseUnary();}else return v;}}
+    function parseUnary(){var c=peek();if(c==='-'){i++;return -parseUnary();}if(c==='+'){i++;return parseUnary();}return parsePower();}
+    function parsePower(){var v=parseBase();var c=peek();if(c==='^'){i++;v=Math.pow(v,parseUnary());}return v;}
+    function parseBase(x){
+      ws();var c=s[i];
+      if(c==='('){i++;var v=parseExpr();ws();if(s[i]===')')i++;return v;}
+      if(/[0-9.]/.test(c)){var start=i;while(i<s.length&&/[0-9.]/.test(s[i]))i++;
+        if(s[i]==='e'||s[i]==='E'){/* biar identifier 'e' ditangani terpisah bila bukan eksponen angka */}
+        return parseFloat(s.slice(start,i));}
+      if(/[a-zA-Z]/.test(c)){var st=i;while(i<s.length&&/[a-zA-Z0-9_]/.test(s[i]))i++;var name=s.slice(st,i).toLowerCase();
+        ws();
+        if(s[i]==='('){i++;var arg=parseExpr();ws();if(s[i]===')')i++;var fn=FUNCS[name];return fn?fn(arg):NaN;}
+        if(name==='x')return CURRENT_X;
+        if(CONSTS[name]!=null)return CONSTS[name];
+        return NaN;}
+      // token tak dikenal
+      i++;return NaN;
+    }
+    var CURRENT_X=0;
+    return function(xVal){CURRENT_X=xVal;i=0;try{var r=parseExpr();return (typeof r==='number'&&isFinite(r))?r:null;}catch(_){return null;}};
+  }
+
+  function sampleFunction(spec){
+    var f=makeEvaluator(spec.expr);
+    var xMin=Number(spec.xMin),xMax=Number(spec.xMax);
+    if(!isFinite(xMin)||!isFinite(xMax)||xMax<=xMin){xMin=-10;xMax=10;}
+    var N=200,pts=[],step=(xMax-xMin)/N;
+    for(var k=0;k<=N;k++){var x=xMin+step*k;var y=f(x);if(y!=null)pts.push({x:Number(x.toFixed(6)),y:Number(y.toFixed(6))});}
+    return pts;
+  }
+
+  function baseOpts(spec,showLegend){
+    var o={responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'nearest'},
+      plugins:{legend:{display:!!showLegend,labels:{font:{size:11}}},tooltip:{enabled:true}},scales:{}};
+    return o;
+  }
+  function axisScales(spec,linearX){
+    var sc={x:{title:{display:!!spec.xLabel,text:spec.xLabel||''},ticks:{font:{size:10}}},
+      y:{title:{display:!!spec.yLabel,text:spec.yLabel||''},ticks:{font:{size:10}},beginAtZero:true}};
+    if(linearX)sc.x.type='linear';
+    return sc;
+  }
+
+  function buildConfig(spec){
+    var type=String(spec.type||'').toLowerCase();
+    if(type==='function'){
+      var pts=sampleFunction(spec);
+      var o=baseOpts(spec,false);o.scales=axisScales(spec,true);o.scales.y.beginAtZero=false;o.elements={point:{radius:0}};
+      return {type:'line',data:{datasets:[{label:spec.title||'f(x)',data:pts,borderColor:PALETTE[0],backgroundColor:withAlpha(PALETTE[0],.12),borderWidth:2,tension:.25,fill:false}]},options:o};
+    }
+    if(type==='scatter'){
+      var pts2=(spec.points||[]).map(function(p){return {x:p[0],y:p[1]};});
+      var o2=baseOpts(spec,false);o2.scales=axisScales(spec,true);o2.scales.y.beginAtZero=false;
+      return {type:'scatter',data:{datasets:[{label:spec.title||'Data',data:pts2,borderColor:PALETTE[0],backgroundColor:withAlpha(PALETTE[0],.6)}]},options:o2};
+    }
+    if(type==='pie'){
+      var data=(spec.series&&spec.series[0]&&spec.series[0].data)||[];
+      var colors=data.map(function(_,idx){return PALETTE[idx%PALETTE.length];});
+      var o3=baseOpts(spec,true);
+      return {type:'pie',data:{labels:spec.labels||[],datasets:[{data:data,backgroundColor:colors,borderColor:'#fff',borderWidth:1}]},options:o3};
+    }
+    // line | bar
+    var series=spec.series||[];
+    var ds=series.map(function(sr,idx){var col=PALETTE[idx%PALETTE.length];
+      return {label:sr.name||('Seri '+(idx+1)),data:sr.data||[],borderColor:col,backgroundColor:type==='bar'?withAlpha(col,.75):withAlpha(col,.14),borderWidth:2,tension:.25,fill:type==='line'?false:true};});
+    var o4=baseOpts(spec,series.length>1);o4.scales=axisScales(spec,false);
+    return {type:type==='bar'?'bar':'line',data:{labels:spec.labels||[],datasets:ds},options:o4};
+  }
+
+  function draw(){
+    var nodes=document.querySelectorAll('[data-mai-chart]');
+    if(!nodes.length)return;
+    nodes.forEach(function(canvas){
+      var box=canvas.parentNode;
+      var fb=box?box.querySelector('[data-mai-chart-fallback]'):null;
+      if(typeof window.Chart==='undefined'){if(fb)fb.hidden=false;return;}
+      var spec;try{spec=JSON.parse(canvas.getAttribute('data-mai-chart'));}catch(_){if(fb)fb.hidden=false;return;}
+      try{new window.Chart(canvas.getContext('2d'),buildConfig(spec));}
+      catch(err){if(fb){fb.hidden=false;fb.textContent='Grafik gagal dimuat.';}}
+    });
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',draw);else draw();
+})();
+<\/script>`;
 }
 
 /**

@@ -25,6 +25,7 @@ export const FITUR_OPTIONS = [
   { value: 'kuis', label: 'Mini kuis pilihan ganda' },
   { value: 'tugas_kelompok', label: 'Tugas kelompok' },
   { value: 'aktivitas', label: 'Aktivitas / proyek bersama' },
+  { value: 'grafik', label: 'Grafik & visualisasi' },
 ];
 export const REVISI_CEPAT = [
   { value: 'ringkas', label: 'Lebih ringkas', instruction: 'Buat materi lebih ringkas dan padat tanpa menghilangkan isi inti. Pangkas kalimat berulang.' },
