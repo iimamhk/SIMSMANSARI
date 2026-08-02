@@ -11,26 +11,20 @@
     "api/ai/generate-rpm.js": {
       "maxDuration": 60
     },
-    "api/ai/model-options.js": {
-      "maxDuration": 10
-    },
     "api/ai/config.js": {
       "maxDuration": 30
     },
     "api/admin/backup-config.js": {
       "maxDuration": 30
     },
-    "api/ai/test-connection.js": {
+    "api/ai/info.js": {
       "maxDuration": 30
-    },
-    "api/health.js": {
-      "maxDuration": 10
     }
   },
   "rewrites": [
     {
       "source": "/api/health",
-      "destination": "/api/health.js"
+      "destination": "/api/ai/info.js?type=health"
     },
     {
       "source": "/api/auth/login",
@@ -50,7 +44,7 @@
     },
     {
       "source": "/api/ai/test-connection",
-      "destination": "/api/ai/test-connection.js"
+      "destination": "/api/ai/info.js?type=test"
     },
     {
       "source": "/api/ai/config",
@@ -62,7 +56,7 @@
     },
     {
       "source": "/api/ai/model-options",
-      "destination": "/api/ai/model-options.js"
+      "destination": "/api/ai/info.js?type=models"
     },
     {
       "source": "/api/ai/generate-material",

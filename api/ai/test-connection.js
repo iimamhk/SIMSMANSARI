@@ -1,1 +1,0 @@
-module.exports = require('../../src/api/ai/test-connection.js');

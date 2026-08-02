@@ -477,7 +477,7 @@ function buildRevisionMessages(input, currentContent, revisionInstruction, revis
 
 function withTimeout(signal, ms) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(new Error('AI upstream timeout')), ms);
+  let timer = setTimeout(() => controller.abort(new Error('AI upstream timeout')), ms);
 
   if (signal) {
     if (signal.aborted) controller.abort(signal.reason);
@@ -487,6 +487,13 @@ function withTimeout(signal, ms) {
   return {
     signal: controller.signal,
     clear: () => clearTimeout(timer),
+    // Reset timer inaktivitas: dipanggil tiap chunk token diterima agar generasi
+    // yang lambat tetapi masih mengalir tidak dibunuh oleh batas waktu tetap.
+    reset: () => {
+      if (controller.signal.aborted) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(new Error('AI upstream timeout')), ms);
+    },
   };
 }
 
@@ -506,7 +513,7 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
     : 0.7;
   const maxTokens = clampTokens(options.maxTokens);
   const url = `${profile.baseUrl}/chat/completions`;
-  const { signal, clear } = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
+  const { signal, clear, reset } = withTimeout(options.signal, DEFAULT_TIMEOUT_MS);
 
   let response;
   try {
@@ -574,6 +581,9 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
         }
         const { done, value } = chunk;
         if (done) break;
+        // Token diterima → reset timer inaktivitas agar batas 120s hanya berlaku
+        // saat stream benar-benar macet, bukan saat generasi hanya lambat.
+        reset();
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
@@ -601,6 +611,7 @@ async function* streamSingleChatCompletion(profile, model, messages, options = {
     let fullBody = '';
     let chunk = await reader.read();
     while (!chunk.done) {
+      reset();
       fullBody += new TextDecoder().decode(chunk.value);
       chunk = await reader.read();
     }

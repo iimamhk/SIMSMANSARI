@@ -8,14 +8,8 @@
     "api/ai/generate-rpm.js": {
       "maxDuration": 60
     },
-    "api/ai/model-options.js": {
-      "maxDuration": 10
-    },
-    "api/ai/test-connection.js": {
+    "api/ai/info.js": {
       "maxDuration": 30
-    },
-    "api/health.js": {
-      "maxDuration": 10
     }
   },
   "headers": [
