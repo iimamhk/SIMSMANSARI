@@ -351,7 +351,21 @@ function pageStyles() {
     .mw-publish-target-meta { font-size:11px; color:#64748b; }
     .mw-modal-foot { display:flex; gap:8px; justify-content:flex-end; padding:14px 20px; border-top:1px solid #e2e8f0; }
     .mw-reader-content { width:min(1120px,94vw); max-width:none; height:min(86vh,900px); display:flex; flex-direction:column; overflow:hidden; }
-    .mw-reader-frame { width:100%; flex:1; min-height:0; border:0; background:#f8fafc; }
+    .mw-reader-modal { z-index:120; display:block; padding:0; }
+    .mw-reader-shell { display:flex; flex-direction:column; width:100vw; height:100vh; height:100dvh; background:#fff; }
+    .mw-reader-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; padding-top:calc(12px + env(safe-area-inset-top)); border-bottom:1px solid #e2e8f0; background:#fff; box-shadow:0 6px 18px -14px rgba(15,23,42,.4); }
+    .mw-reader-bar-left { display:flex; align-items:center; gap:12px; min-width:0; }
+    .mw-reader-home { flex:none; display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border:1px solid #e2e8f0; border-radius:13px; background:#f8fafc; color:#2563eb; cursor:pointer; transition:background .15s,transform .15s,box-shadow .15s; }
+    .mw-reader-home:hover { background:#eff6ff; transform:translateY(-1px); box-shadow:0 10px 22px -14px rgba(37,99,235,.6); }
+    .mw-reader-home:focus-visible { outline:3px solid rgba(37,99,235,.35); outline-offset:2px; }
+    .mw-reader-heading { min-width:0; }
+    .mw-reader-heading .mw-eyebrow { margin:0; }
+    .mw-reader-heading h3 { margin:2px 0 0; font-size:16px; font-weight:750; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .mw-reader-back-btn { flex:none; display:inline-flex; align-items:center; gap:7px; padding:9px 16px; border:1px solid #e2e8f0; border-radius:999px; background:#fff; color:#334155; font-size:13px; font-weight:650; cursor:pointer; transition:background .15s; }
+    .mw-reader-back-btn:hover { background:#f1f5f9; }
+    .mw-reader-back-btn:focus-visible { outline:3px solid rgba(37,99,235,.35); outline-offset:2px; }
+    .mw-reader-frame { width:100%; flex:1; min-height:0; border:0; background:#f8fafc; padding-bottom:env(safe-area-inset-bottom); }
+    @media (max-width:520px) { .mw-reader-bar { padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top)); } .mw-reader-back-btn span { display:none; } .mw-reader-back-btn { padding:9px 11px; } }
     .mw-publish-result { margin-top:10px; padding:10px; border-radius:10px; font-size:12px; }
     .mw-publish-result.success { background:#f0fdf4; color:#14532d; border:1px solid #bbf7d0; }
     .mw-publish-result.partial { background:#fef9c3; color:#854d0e; border:1px solid #fde047; }
@@ -445,7 +459,7 @@ export async function renderGuruMateriPage(container) {
     <div id="mw-editor" class="mw-layout"><aside class="mw-panel library-panel"><div class="mw-panel-head">Block Library</div><div class="mw-panel-sub">Dasar</div><div class="mw-library">${BLOCKS.map((b) => `<button class="mw-library-item" draggable="true" data-block-type="${b.type}"><span class="mw-library-icon">${b.icon}</span><span><span class="mw-library-label">${b.label}</span><span class="mw-library-hint">${b.hint}</span></span></button>`).join('')}</div></aside><main class="mw-canvas-wrap"><div id="mw-canvas" class="mw-canvas" data-viewport="desktop"></div><p class="mw-status" id="mw-status" aria-live="polite"></p></main><aside class="mw-panel properties-panel"><div class="mw-panel-head">Properties</div><div id="mw-properties" class="mw-properties"></div></aside></div>
     <div id="mw-toast" class="mw-toast" hidden></div>
     <div id="mw-publish-modal" class="mw-modal" hidden><div class="mw-modal-backdrop"></div><div class="mw-modal-content"><div class="mw-modal-head"><h3>Publikasikan ke Kelas</h3><button class="mw-icon-btn" id="mw-publish-close" aria-label="Tutup">×</button></div><div class="mw-modal-body"><p class="mw-modal-desc">Pilih kelas tujuan untuk mempublikasikan materi ini.</p><div id="mw-publish-targets" class="mw-publish-targets"></div><p id="mw-publish-status" class="mw-status"></p></div><div class="mw-modal-foot"><button class="mw-action-btn" id="mw-publish-cancel">Batal</button><button class="mw-action-btn primary" id="mw-publish-confirm">Publikasikan</button></div></div></div>
-    <div id="mw-reader-modal" class="mw-modal" hidden><div class="mw-modal-backdrop"></div><div class="mw-modal-content mw-reader-content"><div class="mw-modal-head"><div><p class="mw-eyebrow">Pratinjau E-Book</p><h3 id="mw-reader-title">Materi</h3></div><button class="mw-icon-btn" id="mw-reader-close" aria-label="Tutup pratinjau">×</button></div><iframe id="mw-reader-frame" class="mw-reader-frame" title="Pratinjau materi" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe></div></div>
+    <div id="mw-reader-modal" class="mw-modal mw-reader-modal" hidden><div class="mw-reader-shell"><header class="mw-reader-bar"><div class="mw-reader-bar-left"><button class="mw-reader-home" id="mw-reader-close" type="button" aria-label="Kembali ke daftar materi" title="Kembali ke daftar materi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg></button><div class="mw-reader-heading"><p class="mw-eyebrow">Pratinjau E-Book</p><h3 id="mw-reader-title">Materi</h3></div></div><button class="mw-reader-back-btn" id="mw-reader-back" type="button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg><span>Kembali</span></button></header><iframe id="mw-reader-frame" class="mw-reader-frame" title="Pratinjau materi layar penuh" sandbox="allow-scripts allow-forms allow-modals allow-popups"></iframe></div></div>
     <div id="mw-pub-action-modal" class="mw-modal" hidden><div class="mw-modal-backdrop"></div><div class="mw-modal-content"><div class="mw-modal-head"><div><p class="mw-eyebrow">Distribusi Materi</p><h3 id="mw-pub-action-title">Kelola Materi</h3></div><button class="mw-icon-btn" id="mw-pub-action-close" aria-label="Tutup">×</button></div><div class="mw-modal-body" id="mw-pub-action-body"></div><div class="mw-modal-foot"><button class="mw-action-btn" id="mw-pub-action-cancel">Batal</button><button class="mw-action-btn primary" id="mw-pub-action-confirm">Simpan</button></div></div></div>`);
   container.innerHTML = html;
 
@@ -477,6 +491,7 @@ export async function renderGuruMateriPage(container) {
     const frame = container.querySelector('#mw-reader-frame');
     if (modal) modal.hidden = true;
     if (frame) frame.srcdoc = '';
+    document.body.classList.remove('overflow-hidden');
   };
   const openPublishedPreview = (groupId) => {
     const group = publishedGroups().find((item) => String(item.id) === String(groupId));
@@ -488,6 +503,7 @@ export async function renderGuruMateriPage(container) {
     title.textContent = group.representative.title || 'Materi';
     frame.srcdoc = buildPublishedPreview(group.representative);
     modal.hidden = false;
+    document.body.classList.add('overflow-hidden');
   };
   const closePubActionModal = () => { const modal = container.querySelector('#mw-pub-action-modal'); if (modal) modal.hidden = true; };
   const refreshPublishedMaterials = async () => { publishedMaterials = guruId ? await getPublishedMaterialsForTeacher(guruId) : []; renderOverview(); };
@@ -865,6 +881,7 @@ export async function renderGuruMateriPage(container) {
     title.textContent = draft.title || 'Materi';
     frame.srcdoc = buildPublishedPreview({ ...draft, html_source: html });
     modal.hidden = false;
+    document.body.classList.add('overflow-hidden');
   };
   const cloneDraft = async (id) => {
     const draft = findDraft(id);
@@ -1018,7 +1035,9 @@ export async function renderGuruMateriPage(container) {
   container.querySelector('#mw-publish-targets')?.addEventListener('change', updateTargetCount);
   container.querySelector('#mw-publish-modal .mw-modal-backdrop')?.addEventListener('click', closePublishModal);
   container.querySelector('#mw-reader-close')?.addEventListener('click', closePublishedPreview);
+  container.querySelector('#mw-reader-back')?.addEventListener('click', closePublishedPreview);
   container.querySelector('#mw-reader-modal .mw-modal-backdrop')?.addEventListener('click', closePublishedPreview);
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !container.querySelector('#mw-reader-modal')?.hidden) closePublishedPreview(); });
   container.querySelector('#mw-pub-action-close')?.addEventListener('click', closePubActionModal);
   container.querySelector('#mw-pub-action-cancel')?.addEventListener('click', closePubActionModal);
   container.querySelector('#mw-pub-action-modal .mw-modal-backdrop')?.addEventListener('click', closePubActionModal);
