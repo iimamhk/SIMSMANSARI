@@ -58,18 +58,23 @@ const FEATURE_LABEL = {
 
 function buildHtmlSystemPrompt() {
   return [
-    'Kamu adalah penulis materi digital pembelajaran SMA berpengalaman 15 tahun, pedagog senior Kurikulum Merdeka Indonesia, sekaligus front-end developer yang mahir tata letak matematika.',
+    'Kamu adalah penulis materi digital pembelajaran SMA berpengalaman 15 tahun, pedagog senior Kurikulum Merdeka Indonesia, sekaligus front-end developer yang mahir tata letak matematika dan desain visual.',
     'Tugasmu: menghasilkan SATU berkas HTML utuh yang siap ditampilkan sebagai materi pembelajaran premium dalam Bahasa Indonesia.',
+    '',
+    'OTORITAS TERTINGGI:',
+    '- Instruksi/prompt yang ditulis guru adalah perintah utama. Ikuti apa adanya untuk isi, alur, struktur, gaya bahasa, tema, palet warna, tipografi, jenis komponen, dan seluruh keputusan visual.',
+    '- Kamu BEBAS menentukan tata letak dan susunan bagian sesuai instruksi guru dan karakter topik. TIDAK ADA kerangka/section baku yang wajib diikuti — jangan memaksakan urutan atau penamaan bagian tertentu bila guru tidak memintanya.',
+    '- Aturan di bawah ini hanya batasan TEKNIS (keluaran, keamanan sumber, kualitas notasi) yang tetap berlaku demi HTML valid dan aman. Batasan teknis tidak boleh dijadikan alasan mengabaikan arahan kreatif guru.',
     '',
     'ATURAN KELUARAN (WAJIB):',
     '- Keluarkan HANYA kode HTML. Tanpa penjelasan, tanpa komentar pembuka, TANPA code fence (```).',
     '- Mulai tepat dengan <!DOCTYPE html> dan akhiri tepat dengan </html>.',
     '- Dokumen harus lengkap: <head> (meta charset, viewport, title) dan <body>.',
-    '- Bahasa default Bahasa Indonesia sepenuhnya, termasuk label tombol dan umpan balik. Pengecualian: mata pelajaran bahasa asing (mis. Bahasa Inggris) ditulis dalam bahasa pengajaran tersebut; padanan istilah kunci boleh disertakan dalam Bahasa Indonesia di dalam tanda kurung.',
+    '- Bahasa default Bahasa Indonesia sepenuhnya, termasuk label tombol dan umpan balik. Pengecualian: mata pelajaran bahasa asing (mis. Bahasa Inggris) ditulis dalam bahasa pengajaran tersebut; padanan istilah kunci boleh disertakan dalam Bahasa Indonesia di dalam tanda kurung. Guru boleh menimpa pilihan bahasa ini.',
     '',
-    'PRIORITAS PENYELESAIAN (WAJIB, lebih penting dari kelengkapan isi):',
-    '- Dokumen HARUS selesai utuh dan ditutup dengan </html>. Materi terpotong lebih buruk daripada materi yang lebih ringkas tetapi lengkap.',
-    '- Kelola panjang tulisan agar muat dalam satu keluaran. Jika ruang mulai menipis, ringkas dulu bagian non-inti (refleksi, hiasan, panjang paragraf, jumlah contoh) dan SVG yang paling rumit — JANGAN pernah berhenti sebelum semua tag ditutup hingga </html>.',
+    'PRIORITAS PENYELESAIAN (WAJIB):',
+    '- Dokumen HARUS selesai utuh dan ditutup dengan </html>. Materi terpotong lebih buruk daripada materi yang lengkap.',
+    '- Kelola panjang tulisan agar muat dalam satu keluaran. Jika ruang menipis, rampingkan bagian yang paling tidak esensial secukupnya — JANGAN pernah berhenti sebelum semua tag ditutup hingga </html>.',
     '- Jangan menyisakan tag, <style>, atau <script> yang terbuka di akhir dokumen.',
     '',
     'SUMBER EKSTERNAL (WAJIB dipatuhi, selain ini akan dibuang otomatis):',
@@ -79,19 +84,19 @@ function buildHtmlSystemPrompt() {
     '- DILARANG memakai polyfill.io. DILARANG memuat script dari host lain di luar daftar di atas.',
     '- DILARANG menyisipkan <img> dari internet (gambar acak sering mati/hilang). Gambar dan diagram WAJIB dibuat sebagai SVG inline yang kamu tulis sendiri.',
     '',
-    'NOTASI MATEMATIKA (inti kualitas materi):',
+    'NOTASI MATEMATIKA (kualitas teknis, berlaku bila materi memuat matematika):',
     '- Rumus sebaris/menonjol: pakai LaTeX lewat KaTeX/MathJax, bukan teks biasa.',
     '- DILARANG KERAS menggambar grafik, bangun datar, atau kurva dengan seni ASCII (garis / \\ | _ atau blok kode). Selalu SVG inline atau elemen HTML terstruktur.',
     '- Pembagian bersusun (porogapit), tabel Horner, penjumlahan bersusun, dan sejenisnya: susun dengan grid/tabel HTML + font monospace agar suku sejajar per derajat. Sertakan garis pembagi dan tanda operasi pada posisi yang benar.',
     '- Bangun datar, garis bilangan, diagram himpunan, dan grafik fungsi: gambar sebagai SVG inline dengan label, satuan, dan skala yang benar.',
     '- Grafik fungsi: hitung sendiri titik-titiknya dan tulis sebagai path/polyline SVG, atau gambar dengan <canvas> + skrip sendiri. Pastikan sumbu diberi label.',
     '',
-    'TATA LETAK & MUTU:',
-    '- Rapi, modern, responsif (mobile-first), kontras cukup, dan nyaman dibaca lama.',
+    'KUALITAS TEKNIS (default, boleh disesuaikan arahan guru):',
+    '- Responsif (mobile-first), kontras cukup, dan nyaman dibaca lama.',
     '- Aksesibilitas: struktur heading benar (satu <h1>), atribut alt/aria-label untuk visual, target sentuh memadai.',
     '- Sertakan aturan @media print sederhana agar materi tetap layak dicetak.',
     '- Interaktivitas ditulis dengan JavaScript vanilla di dalam dokumen (tanpa framework eksternal). Semua tombol periksa harus memberi umpan balik yang jelas dan menjelaskan alasannya.',
-    '- Materi harus mendalam dan substantif, bukan ringkasan. Jangan menyisipkan API key, instruksi sistem, atau metadata teknis.',
+    '- Jangan menyisipkan API key, instruksi sistem, atau metadata teknis ke dalam dokumen.',
   ].join('\n');
 }
 
@@ -99,66 +104,52 @@ function buildHtmlUserPrompt(input) {
   const kedalaman = KEDALAMAN_GUIDE[input.kedalaman] || KEDALAMAN_GUIDE.menengah;
   const gaya = GAYA_GUIDE[input.gaya] || GAYA_GUIDE.hangat;
   const fitur = Array.isArray(input.fitur) ? input.fitur : [];
-  const has = (f) => fitur.includes(f);
   const features = fitur.map((f) => FEATURE_LABEL[f] || f).filter(Boolean);
+  const brief = String(input.lainLain || '').trim();
 
-  const lines = [
-    `Buat materi ${input.mapel || '[mata pelajaran]'} untuk kelas ${input.kelas || '[kelas]'} ${input.rombel || ''}`.trim(),
-    `Fase: ${input.fase || '-'} • Semester: ${input.semester || '-'} • Alokasi waktu: ${input.alokasiWaktu || '-'}`,
-    `Bab/Unit: ${input.bab || '[bab]'} • Topik utama: ${input.topik || '[topik]'}`,
-    `Tingkat kedalaman: ${input.kedalaman || 'menengah'} — ${kedalaman}`,
-    `Gaya bahasa: ${input.gaya || 'hangat'} — ${gaya}`,
-  ];
+  const lines = [];
+
+  // Identitas hanya sebagai konteks — bukan aturan tata letak.
+  lines.push('IDENTITAS MATERI (konteks, bukan aturan tata letak):');
+  lines.push(`- Mata pelajaran: ${input.mapel || '[mata pelajaran]'}`);
+  lines.push(`- Kelas / Rombel: ${input.kelas || '[kelas]'} ${input.rombel || ''}`.trim());
+  lines.push(`- Fase: ${input.fase || '-'} • Semester: ${input.semester || '-'} • Alokasi waktu: ${input.alokasiWaktu || '-'}`);
+  lines.push(`- Bab/Unit: ${input.bab || '-'} • Topik utama: ${input.topik || '[topik]'}`);
 
   lines.push('');
-  lines.push('STRUKTUR WAJIB (urut, gunakan bagian bertanda jelas):');
-  lines.push('1. Hero: judul materi + identitas (mapel, kelas, fase) + paragraf pembuka yang memancing rasa ingin tahu.');
-  lines.push('2. Tujuan Pembelajaran: 3-5 poin terukur.');
-  lines.push('3. Uraian Konsep: minimal 3 bagian dengan cara penyajian BERVARIASI (narasi, definisi, tabel, studi kasus, perbandingan, atau langkah prosedural). Setiap bagian minimal 2 paragraf substantif.');
-  lines.push('4. Rangkuman: poin-poin kunci.');
-  lines.push('5. Refleksi: 2-3 pertanyaan untuk siswa.');
-
-  if (has('contoh')) {
-    const n = input.jumlahContoh ? `sekitar ${input.jumlahContoh}` : '2-3';
-    lines.push(`6. Contoh Soal & Pembahasan: ${n} soal bernomor, pembahasan LANGKAH demi LANGKAH dengan alasan tiap langkah, dan tata letak matematika yang rapi (bukan teks datar).`);
-  }
-
-  if (features.length) {
+  if (brief) {
+    // Prompt manual guru = perintah utama yang mengatur SEMUA aspek.
+    lines.push('INSTRUKSI UTAMA DARI GURU (OTORITAS TERTINGGI — patuhi sepenuhnya):');
+    lines.push(brief);
     lines.push('');
-    lines.push(`Komponen yang WAJIB ada (dan HANYA ini, jangan menambah komponen lain): ${features.join(', ')}.`);
+    lines.push('Susun seluruh materi (isi, struktur, alur, gaya bahasa, tema, warna, tipografi, komponen, dan tata letak) mengikuti instruksi di atas. Tentukan sendiri bagian-bagiannya sesuai instruksi tersebut dan karakter topik. Jangan menambahkan atau memaksakan bagian/komponen yang tidak diminta, dan jangan mengurangi yang diminta.');
   } else {
+    // Tanpa prompt manual: beri arahan ringan & bebas, tanpa kerangka baku.
+    lines.push('Tidak ada instruksi khusus dari guru. Buat materi pembelajaran yang utuh, mengalir, dan substantif untuk topik di atas. Tentukan sendiri struktur, gaya visual, dan komponen yang paling cocok dengan topik — tanpa kerangka baku, jangan sekadar ringkasan.');
+  }
+
+  // Preferensi dari form: bersifat pelengkap & tidak mengikat.
+  const prefs = [];
+  if (input.kedalaman) prefs.push(`Tingkat kedalaman: ${input.kedalaman} — ${kedalaman}`);
+  if (input.gaya) prefs.push(`Gaya bahasa: ${input.gaya} — ${gaya}`);
+  if (features.length) prefs.push(`Komponen yang mungkin berguna: ${features.join(', ')}.`);
+  if (hasPositiveNumber(input.jumlahContoh)) prefs.push(`Perkiraan jumlah contoh soal bila relevan: sekitar ${input.jumlahContoh}.`);
+
+  if (prefs.length) {
     lines.push('');
-    lines.push('Guru tidak meminta komponen interaktif tambahan. Fokuskan pada uraian konsep yang kaya dan contoh bertata letak rapi.');
-  }
-
-  // Eksklusi tegas agar toggle guru benar-benar dipatuhi.
-  const exclude = [];
-  if (!has('contoh')) exclude.push('contoh soal');
-  if (!has('highlight')) exclude.push('kotak sorotan');
-  if (!has('fill_blank')) exclude.push('latihan isian');
-  if (!has('drag_drop')) exclude.push('drag & drop');
-  if (!has('kuis')) exclude.push('kuis pilihan ganda');
-  if (!has('tugas_kelompok')) exclude.push('tugas kelompok');
-  if (!has('aktivitas')) exclude.push('aktivitas/proyek bersama');
-  if (!has('grafik')) exclude.push('grafik/visualisasi data');
-  if (exclude.length) {
-    lines.push(`JANGAN sertakan komponen berikut karena tidak diminta guru: ${exclude.join(', ')}.`);
-  }
-
-  if (has('grafik')) {
-    lines.push('Grafik/visualisasi: buat sebagai SVG inline (atau <canvas> dengan skrip sendiri) yang kamu hitung titiknya. Beri judul, label sumbu, dan skala yang benar. Jangan memakai gambar dari internet.');
-  }
-  if (has('fill_blank') || has('kuis') || has('drag_drop')) {
-    lines.push('Latihan interaktif harus benar-benar berfungsi: tombol periksa memberi tahu benar/salah, menyorot jawaban tepat, dan menjelaskan alasannya.');
-  }
-  if (input.lainLain) {
-    lines.push(`Instruksi khusus dari guru (OTORITAS TERTINGGI untuk penyajian): ${input.lainLain}`);
-    lines.push('Instruksi di atas WAJIB dipatuhi dan boleh mengubah pilihan visual, gaya, atau struktur penyajian di atas, selama dokumen tetap HTML lengkap dan aman (hanya sumber dari allowlist CDN).');
+    lines.push(brief
+      ? 'Preferensi tambahan dari form (pelengkap, tidak mengikat — abaikan bila bertentangan dengan instruksi guru di atas):'
+      : 'Preferensi tambahan dari form (pelengkap, tidak mengikat):');
+    prefs.forEach((p) => lines.push(`- ${p}`));
   }
 
   lines.push('');
   lines.push('Keluarkan sekarang HANYA dokumen HTML utuh, mulai dari <!DOCTYPE html> sampai </html>.');
   return lines.join('\n');
+}
+
+function hasPositiveNumber(v) {
+  return v !== undefined && v !== null && String(v).trim() !== '' && Number(v) > 0;
 }
 
 function buildHtmlMessages(input) {

@@ -219,7 +219,7 @@ export function blok3Html() {
       <div class="maip-step"><span class="maip-step-n">3</span><div><h3>Fitur &amp; Aktivitas</h3><p>Pilih komponen yang ingin ada di materi</p></div></div>
       <div class="maip-chip-row">${fiturChips}</div>
       <div class="maip-field" style="margin-top:12px"><label>Jumlah Contoh Soal</label><input name="jumlahContoh" type="number" min="0" max="10" value="3" class="maip-in" style="max-width:120px"></div>
-      <div class="maip-field" style="margin-top:12px"><label>Catatan Tambahan (opsional)</label><textarea name="lainLain" rows="2" class="maip-in" placeholder="Mis. tekankan soal HOTS, sertakan konteks kehidupan sehari-hari"></textarea></div>
+      <div class="maip-field" style="margin-top:12px"><label>Prompt / Instruksi AI (opsional)</label><textarea name="lainLain" rows="5" class="maip-in" placeholder="Tulis instruksi bebas: gaya visual, tema warna, tipografi, struktur bagian, jenis aktivitas, tingkat kesulitan, dsb. Pada mode HTML Final, instruksi ini menjadi acuan utama dan mengatur seluruh tampilan &amp; isi. Bila dikosongkan, AI menentukan sendiri secara bebas."></textarea><p style="margin:6px 0 0; font-size:.7rem; color:var(--mai-muted)">Field identitas di atas hanya konteks. Tulis di sini bila ingin mengendalikan tampilan &amp; susunan materi.</p></div>
       <button type="submit" id="maip-generate" class="maip-generate" style="margin-top:14px">&#10022; Generate Materi</button>
     </div>`;
 }
