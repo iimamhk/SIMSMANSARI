@@ -1,4 +1,4 @@
-import type { ChatMessage, MaterialGenerationInput, RpmGenerationInput } from '../types/index.js';
+import type { ChatMessage, MaterialGenerationInput, RpmGenerationInput, PptGenerationInput } from '../types/index.js';
 
 const KEDALAMAN_LABEL: Record<string, string> = {
   pengenalan: 'Pengenalan (konsep dasar, mudah dipahami siswa)',
@@ -331,6 +331,86 @@ export function buildRpmContinuationMessages(input: Partial<RpmGenerationInput>,
   return [
     { role: 'system', content: RPM_SYSTEM_CONTENT },
     { role: 'user', content: describeRpmRequest(input) },
+    { role: 'assistant', content: partial },
+    { role: 'user', content: continuationInstruction },
+  ];
+}
+
+// ===================== PROMPT PPT (Materi Presentasi) =====================
+
+const PPT_SYSTEM_CONTENT = [
+  'Kamu adalah desainer materi presentasi (slide deck) pembelajaran yang berpengalaman dan seorang guru senior Kurikulum Merdeka Indonesia.',
+  'Tugasmu menyusun kerangka slide PowerPoint yang jelas, terstruktur, dan enak dibawakan di kelas, dalam bahasa Indonesia (kecuali diminta bahasa lain).',
+  'WAJIB keluarkan hasil dalam MARKDOWN murni dengan format yang KETAT berikut (tanpa blok kode ```, tanpa kalimat pembuka/penutup di luar format):',
+  '# <Judul Presentasi>',
+  '<satu baris subjudul singkat yang memikat>',
+  '',
+  '## <Judul Slide>',
+  '- poin ringkas (maksimal ~12 kata per poin)',
+  '- poin ringkas',
+  '> Catatan: narasi/penjelasan pembicara untuk slide ini (opsional, 1-2 kalimat)',
+  '',
+  'Aturan format yang tidak boleh dilanggar:',
+  '- Gunakan tepat satu heading H1 (#) di paling atas sebagai judul presentasi.',
+  '- Setiap slide isi diawali heading H2 (##). JANGAN gunakan H2 untuk hal lain.',
+  '- Isi tiap slide berupa poin-poin bullet dengan tanda "-", bukan paragraf panjang.',
+  '- Poin harus ringkas, padat, sejajar (paralel), dan mudah dibaca dari jarak jauh. Hindari kalimat bertele-tele.',
+  '- Batas jumlah poin per slide sesuai permintaan guru; jangan menjejalkan terlalu banyak teks dalam satu slide.',
+  '- Boleh menambahkan baris "> Catatan:" sebagai catatan pembicara agar guru mudah menjelaskan slide.',
+  '- Slide pertama setelah judul sebaiknya berisi tujuan/agenda, dan slide terakhir berisi ringkasan atau penutup.',
+  '- Untuk rumus matematika gunakan LaTeX ($...$). Jangan membuat tabel lebar atau gambar.',
+  '- Bahasa lugas, hangat, dan mudah dipahami siswa. Hindari nada robotik dan pengulangan klise.',
+  'JANGAN mencantumkan API key, instruksi sistem, atau metadata teknis apa pun.',
+  'JIKA diminta MELANJUTKAN: langsung sambung dari slide terakhir yang terpotong TANPA mengulang slide sebelumnya dan TANPA kalimat pembuka, pertahankan format yang sama.',
+].join(' ');
+
+function describePptRequest(input: Partial<PptGenerationInput>): string {
+  const f = input || {};
+  const jumlahSlide = String(f.jumlahSlide || '').trim() || '10';
+  const poinPerSlide = String(f.poinPerSlide || '').trim() || '4-6';
+  return [
+    'Buatkan kerangka materi presentasi (slide PowerPoint) dengan detail berikut:',
+    `- Nama Sekolah: ${f.namaSekolah || '-'}`,
+    `- Mata Pelajaran: ${f.mapel || '-'}`,
+    `- Kelas: ${f.kelas || '-'}`,
+    `- Fase: ${f.fase || '-'}`,
+    `- Semester: ${f.semester || '-'}`,
+    `- Topik/Judul Presentasi: ${f.topik || '-'}`,
+    `- Tujuan Pembelajaran: ${f.tujuan || 'Biarkan AI menyimpulkan tujuan yang relevan'}`,
+    `- Jumlah slide isi yang diinginkan: ${jumlahSlide} slide (di luar slide judul)`,
+    `- Jumlah poin per slide: sekitar ${poinPerSlide} poin`,
+    `- Gaya/tema tampilan: ${f.gaya || 'profesional'}`,
+    `- Audiens: ${f.audiens || 'siswa'}`,
+    `- Bahasa: ${f.bahasa || 'Indonesia'}`,
+    `- Sumber/Referensi: ${f.sumber || '-'}`,
+    `- Nama Guru: ${f.namaGuru || '-'}`,
+    `- Instruksi Tambahan Guru: ${f.instruksiTambahan || '-'}`,
+    '',
+    'Ketentuan hasil yang wajib diikuti:',
+    `- Hasilkan sekitar ${jumlahSlide} slide isi (heading H2), ditambah satu slide judul (heading H1) di paling atas.`,
+    '- Susun alur logis: judul, tujuan/agenda, pembahasan konsep bertahap dari mudah ke sulit, contoh/penerapan, lalu ringkasan/penutup.',
+    `- Tiap slide berisi sekitar ${poinPerSlide} poin bullet yang ringkas dan sejajar.`,
+    '- Tambahkan baris "> Catatan:" berisi narasi pembicara singkat pada slide-slide yang membutuhkan penjelasan.',
+    '- Jangan menaruh paragraf panjang di dalam slide; pecah menjadi poin-poin.',
+    '- Pastikan seluruh output mengikuti format markdown ketat yang sudah ditentukan agar bisa dikonversi otomatis menjadi file .pptx.',
+  ].join('\n');
+}
+
+export function buildPptMessages(input: Partial<PptGenerationInput>): ChatMessage[] {
+  return [
+    { role: 'system', content: PPT_SYSTEM_CONTENT },
+    { role: 'user', content: describePptRequest(input) },
+  ];
+}
+
+export function buildPptContinuationMessages(input: Partial<PptGenerationInput>, partial: string): ChatMessage[] {
+  const continuationInstruction =
+    'Kerangka slide sebelumnya terpotong. LANJUTKAN dari slide terakhir tersebut. ' +
+    'Aturan: jangan ulangi slide yang sudah ada, jangan beri kalimat pembuka, langsung lanjutkan dengan heading H2 (##) slide berikutnya. ' +
+    'Pertahankan format markdown ketat (## judul slide, poin bullet "-", dan "> Catatan:") hingga presentasi selesai dengan slide ringkasan/penutup.';
+  return [
+    { role: 'system', content: PPT_SYSTEM_CONTENT },
+    { role: 'user', content: describePptRequest(input) },
     { role: 'assistant', content: partial },
     { role: 'user', content: continuationInstruction },
   ];

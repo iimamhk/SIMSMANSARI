@@ -11,6 +11,9 @@
     "api/ai/generate-rpm.js": {
       "maxDuration": 60
     },
+    "api/ai/generate-ppt.js": {
+      "maxDuration": 60
+    },
     "api/ai/info.js": {
       "maxDuration": 30
     }

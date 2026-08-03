@@ -1,4 +1,4 @@
-import type { MaterialGenerationInput, RpmGenerationInput } from '../types/index.js';
+import type { MaterialGenerationInput, RpmGenerationInput, PptGenerationInput } from '../types/index.js';
 import { AiServiceError } from '../types/index.js';
 
 const MAX_FIELD_LENGTH = 2000;
@@ -127,6 +127,40 @@ export function sanitizeRpmInput(raw: unknown): RpmGenerationInput {
     namaKepala: asRpmString(data.namaKepala, RPM_TEXT),
     nipKepala: asRpmString(data.nipKepala, 64),
     karakteristik: asRpmString(data.karakteristik, RPM_LONG),
+    instruksiTambahan: asRpmString(data.instruksiTambahan, RPM_LONG),
+  };
+
+  if (!input.mapel && !input.topik) {
+    throw new AiServiceError('Minimal isi Mata Pelajaran atau Topik.', 400, 'missing_required');
+  }
+
+  return input;
+}
+
+/**
+ * Memvalidasi dan membersihkan payload PPT (materi presentasi) dari frontend.
+ */
+export function sanitizePptInput(raw: unknown): PptGenerationInput {
+  if (!raw || typeof raw !== 'object') {
+    throw new AiServiceError('Payload tidak valid.', 400, 'invalid_payload');
+  }
+  const data = raw as Record<string, unknown>;
+
+  const input: PptGenerationInput = {
+    namaSekolah: asRpmString(data.namaSekolah, RPM_TEXT),
+    mapel: asRpmString(data.mapel, RPM_TEXT),
+    kelas: asRpmString(data.kelas, 16),
+    fase: asRpmString(data.fase, 8),
+    semester: asRpmString(data.semester, 16),
+    topik: asRpmString(data.topik, RPM_TEXT),
+    tujuan: asRpmString(data.tujuan, RPM_LONG),
+    jumlahSlide: asRpmString(data.jumlahSlide, 8),
+    poinPerSlide: asRpmString(data.poinPerSlide, 16),
+    gaya: asRpmString(data.gaya, 32),
+    audiens: asRpmString(data.audiens, 120),
+    bahasa: asRpmString(data.bahasa, 32),
+    sumber: asRpmString(data.sumber, RPM_LONG),
+    namaGuru: asRpmString(data.namaGuru, RPM_TEXT),
     instruksiTambahan: asRpmString(data.instruksiTambahan, RPM_LONG),
   };
 

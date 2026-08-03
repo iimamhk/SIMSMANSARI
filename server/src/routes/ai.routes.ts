@@ -1,9 +1,9 @@
 import { Router, type Request, type Response } from 'express';
 import { env, getAiFallbackProfiles, getPublicAiProfiles, resolveAiProfile } from '../config/env.js';
 import { AiServiceError } from '../types/index.js';
-import { buildMessages, buildContinuationMessages, buildRevisionMessages, buildRpmMessages, buildRpmContinuationMessages, buildRpmSectionMessages } from '../services/prompt.js';
+import { buildMessages, buildContinuationMessages, buildRevisionMessages, buildRpmMessages, buildRpmContinuationMessages, buildRpmSectionMessages, buildPptMessages, buildPptContinuationMessages } from '../services/prompt.js';
 import { streamChatCompletions, testUpstreamConnection } from '../services/openai-compatible-client.js';
-import { sanitizeMaterialInput, sanitizeRpmInput, parseGenerationOptions } from '../middleware/validate.js';
+import { sanitizeMaterialInput, sanitizeRpmInput, sanitizePptInput, parseGenerationOptions } from '../middleware/validate.js';
 
 export const aiRouter = Router();
 
@@ -194,6 +194,47 @@ aiRouter.post('/generate-rpm', async (req: Request, res: Response) => {
     : partial
       ? buildRpmContinuationMessages(input, partial)
       : buildRpmMessages(input);
+
+  if (!stream) {
+    res.status(400).json({
+      error: 'Hanya mode streaming yang didukung pada endpoint ini.',
+      code: 'stream_required',
+    });
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  sendSseComment(res, 'mulai');
+  await streamChatToSse(messages, res, { temperature, maxTokens, profileId, model });
+});
+
+aiRouter.post('/generate-ppt', async (req: Request, res: Response) => {
+  let input;
+  try {
+    input = sanitizePptInput(req.body?.input ?? req.body);
+  } catch (error) {
+    if (error instanceof AiServiceError) {
+      res.status(error.statusCode).json({ error: error.message, code: error.code });
+      return;
+    }
+    res.status(400).json({ error: 'Payload tidak valid.', code: 'invalid_payload' });
+    return;
+  }
+
+  const { stream, temperature, maxTokens: reqMaxTokens } = parseGenerationOptions(req.body);
+  const profileId = typeof req.body?.profileId === 'string' ? req.body.profileId.slice(0, 100).trim() : '';
+  const model = typeof req.body?.model === 'string' ? req.body.model.slice(0, 200).trim() : '';
+  const partial = typeof req.body?.partial === 'string' ? req.body.partial.slice(0, 20000).trim() : '';
+  const maxTokens = Math.min(reqMaxTokens || 6000, 8000);
+
+  const messages = partial
+    ? buildPptContinuationMessages(input, partial)
+    : buildPptMessages(input);
 
   if (!stream) {
     res.status(400).json({

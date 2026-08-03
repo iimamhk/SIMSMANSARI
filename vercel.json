@@ -11,6 +11,9 @@
     "api/ai/generate-rpm.js": {
       "maxDuration": 60
     },
+    "api/ai/generate-ppt.js": {
+      "maxDuration": 60
+    },
     "api/ai/config.js": {
       "maxDuration": 30
     },
@@ -69,6 +72,10 @@
     {
       "source": "/api/ai/generate-rpm",
       "destination": "/api/ai/generate-rpm.js"
+    },
+    {
+      "source": "/api/ai/generate-ppt",
+      "destination": "/api/ai/generate-ppt.js"
     },
     {
       "source": "/firebase/(.*)",

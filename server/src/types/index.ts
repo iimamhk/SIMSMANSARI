@@ -67,6 +67,34 @@ export interface GenerateRpmRequest {
   partial?: string;
 }
 
+export interface PptGenerationInput {
+  namaSekolah: string;
+  mapel: string;
+  kelas: string;
+  fase: string;
+  semester: string;
+  topik: string;
+  tujuan: string;
+  jumlahSlide: string;
+  poinPerSlide: string;
+  gaya: string;
+  audiens: string;
+  bahasa: string;
+  sumber: string;
+  namaGuru: string;
+  instruksiTambahan: string;
+}
+
+export interface GeneratePptRequest {
+  input: Partial<PptGenerationInput>;
+  stream?: boolean;
+  temperature?: number;
+  maxTokens?: number;
+  profileId?: string;
+  model?: string;
+  partial?: string;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;

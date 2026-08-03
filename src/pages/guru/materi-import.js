@@ -189,6 +189,7 @@ export async function renderGuruMateriImportPage(container) {
       <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">＋</span><span class="mwnav-label">Buat Materi</span></a>
       <a class="mwnav-btn" href="#guru/materi-ai"><span class="mwnav-ico">✦</span><span class="mwnav-label">Materi AI</span></a>
       <a class="mwnav-btn active" href="#guru/materi-import"><span class="mwnav-ico">📥</span><span class="mwnav-label">Import Materi</span></a>
+      <a class="mwnav-btn" href="#guru/ppt-ai"><span class="mwnav-ico">📊</span><span class="mwnav-label">Materi PPT</span></a>
     </nav>
     <div class="mi">
     <section class="mi-hero"><div class="mi-hero-copy"><p class="mi-kicker"><span>📥</span> Import Materi</p><h1>Tempel HTML dari AI eksternal.</h1><p class="mi-sub">Salin hasil dari ChatGPT, Claude, atau penyedia lain — tempel di sini, lihat pratinjau, lalu simpan atau publikasikan ke kelas.</p></div></section>
