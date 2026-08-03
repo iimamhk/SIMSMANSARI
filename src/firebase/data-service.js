@@ -1484,6 +1484,11 @@ export async function saveMaterialWorkspaceDraft(draft) {
     note: String(draft.note || '').slice(0, 500),
     // Penanda asal draft: manual (editor blok), ai (generate), import (paste HTML).
     source,
+    // Mode dokumen: 'html' (dokumen utuh) atau 'structured' (blok JSON). Disimpan
+    // agar draft HTML dapat dibuka kembali sebagai HTML, bukan dianggap "unsupported".
+    doc_mode: ['html', 'structured'].includes(String(draft.doc_mode || '').trim())
+      ? String(draft.doc_mode).trim()
+      : ((draft.document_json && typeof draft.document_json === 'object') ? 'structured' : 'html'),
     schema_version: Number(draft.schema_version || 1),
     // Draft manual menyimpan struktur blok; draft AI/import menyimpan HTML jadi.
     document_json: draft.document_json ?? null,

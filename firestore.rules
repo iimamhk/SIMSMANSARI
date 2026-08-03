@@ -90,7 +90,7 @@ service cloud.firestore {
         && request.resource.data.id == draftId
         && request.resource.data.keys().hasOnly([
           'id', 'guru_id', 'guru_nama', 'title', 'subject', 'class_name', 'duration',
-          'chapter', 'gaya', 'note', 'source', 'schema_version', 'document_json', 'html_source',
+          'chapter', 'gaya', 'note', 'source', 'doc_mode', 'schema_version', 'document_json', 'html_source',
           'tahun_ajaran_id', 'semester_id', 'updated_at', 'created_at'
         ])
         && request.resource.data.id is string
@@ -105,6 +105,7 @@ service cloud.firestore {
         && (request.resource.data.document_json == null || request.resource.data.document_json is map)
         && (!('html_source' in request.resource.data) || request.resource.data.html_source is string)
         && (!('source' in request.resource.data) || request.resource.data.source in ['manual', 'ai', 'import'])
+        && (!('doc_mode' in request.resource.data) || request.resource.data.doc_mode in ['manual', 'ai', 'import', 'html', 'structured'])
         && (!('guru_nama' in request.resource.data) || request.resource.data.guru_nama is string)
         && (!('chapter' in request.resource.data) || request.resource.data.chapter is string)
         && (!('gaya' in request.resource.data) || request.resource.data.gaya is string)
