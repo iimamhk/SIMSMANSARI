@@ -6,7 +6,8 @@
 
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, savePublishedMaterialForClasses, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, savePublishedMaterialForClasses, saveMaterialWorkspaceDraft, deleteMaterialWorkspaceDraft, savePublishedMaterial, getPublishedMaterialsForTeacher } from '../../firebase/data-service.js';
+import { sanitizeMaterialHtml, buildRevisionPrompt } from '../../utils/html-sanitizer.js';
 
 const MATERIAL_DRAFTS_KEY = 'simguru_material_html_drafts';
 
@@ -27,26 +28,11 @@ const ALLOWED_TAGS = new Set(['h1','h2','h3','h4','h5','h6','p','br','hr','ul','
 const ALLOWED_ATTRS = new Set(['href','src','alt','title','width','height','style','class','colspan','rowspan','target','rel','lang','dir','align','valign','bgcolor','color','data-latex','data-display','type','name','value','id','min','max','step','placeholder','draggable','data-answer','for']);
 const DANGEROUS_ATTR_PREFIXES = ['on'];
 
-/**
- * Sanitasi OPSIONAL: hapus <script> + event handler (onclick, onerror, dll).
- * Pertahankan <style>, <link>, <form>, <input>, <button>, Tailwind, MathJax.
- * Mode Mentah default TIDAK memanggil ini — guru pilih via tombol Sanitasi.
- */
-function sanitizeHtml(raw) {
-  if (!raw || typeof raw !== 'string') return '';
-  const doc = new DOMParser().parseFromString(raw, 'text/html');
-  doc.querySelectorAll('script').forEach((el) => el.remove());
-  doc.querySelectorAll('*').forEach((el) => {
-    [...el.attributes].forEach((attr) => {
-      const name = attr.name.toLowerCase();
-      const value = String(attr.value || '');
-      if (DANGEROUS_ATTR_PREFIXES.some((p) => name.startsWith(p))) { el.removeAttribute(attr.name); return; }
-      if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(value)) { el.removeAttribute(attr.name); }
-    });
-  });
-  const isFullDoc = /^\s*<!doctype|^\s*<html/i.test(raw.trim());
-  return isFullDoc ? `<!doctype html>${doc.documentElement.outerHTML}` : (doc.body ? doc.body.innerHTML : '');
-}
+// Sanitasi materi memakai allowlist CDN bersama di utils/html-sanitizer.js
+// (dipakai juga oleh jalur AI), sehingga aturan keamanan konsisten di semua
+// jalur: script/link/img/iframe ke host luar allowlist dibuang, polyfill.io
+// diblokir. Konstanta tag/atribut di atas dipertahankan sebagai referensi.
+void ALLOWED_TAGS; void ALLOWED_ATTRS; void DANGEROUS_ATTR_PREFIXES;
 
 /** Ekstrak judul dari <h1>, <title>, atau baris pertama teks. */
 function extractTitle(html) {
@@ -148,7 +134,9 @@ function pageStyles() {
   `;
 }
 
-export async function renderGuruMateriImportPage(container) {
+export async function renderGuruMateriImportPage(container, options = {}) {
+  const editId = String(options?.editId || '').trim();
+  const editMode = Boolean(editId);
   const storedContext = getStoredContext();
   const context = {
     ...storedContext,
@@ -170,6 +158,7 @@ export async function renderGuruMateriImportPage(container) {
   let autoTitle = '';
   let currentDraftId = '';
   let previewMode = 'rendered';
+  let editingDoc = null;
 
   const html = renderLayout('Import Materi', `<style>${pageStyles()}</style>
     <style>
@@ -192,7 +181,7 @@ export async function renderGuruMateriImportPage(container) {
       <a class="mwnav-btn" href="#guru/ppt-ai"><span class="mwnav-ico">📊</span><span class="mwnav-label">Materi PPT</span></a>
     </nav>
     <div class="mi">
-    <section class="mi-hero"><div class="mi-hero-copy"><p class="mi-kicker"><span>📥</span> Import Materi</p><h1>Tempel HTML dari AI eksternal.</h1><p class="mi-sub">Salin hasil dari ChatGPT, Claude, atau penyedia lain — tempel di sini, lihat pratinjau, lalu simpan atau publikasikan ke kelas.</p></div></section>
+    <section class="mi-hero"><div class="mi-hero-copy"><p class="mi-kicker"><span>${editMode ? '✏️' : '📥'}</span> <span id="mi-hero-kicker">${editMode ? 'Edit Materi' : 'Import Materi'}</span></p><h1 id="mi-hero-title">${editMode ? 'Edit kode HTML materi terbit.' : 'Tempel HTML dari AI eksternal.'}</h1><p class="mi-sub" id="mi-hero-sub">${editMode ? 'Ubah HTML langsung atau tempel hasil revisi dari Kilo/Cline. Simpan untuk memperbarui materi yang sudah dilihat siswa.' : 'Salin hasil dari ChatGPT, Claude, atau penyedia lain — tempel di sini, lihat pratinjau, lalu simpan atau publikasikan ke kelas.'}</p></div></section>
 
     <div class="mi-info-card">
       <strong>Cara pakai:</strong>
@@ -239,11 +228,13 @@ export async function renderGuruMateriImportPage(container) {
         <button data-mode="clear" id="mi-clear-btn">Bersihkan</button>
       </div>
       <button class="mi-btn icon" id="mi-paste-btn" title="Tempel dari clipboard">📋 Tempel</button>
+      <button class="mi-btn" id="mi-copy-html-btn" disabled title="Salin HTML saat ini untuk direvisi di Kilo/Cline">📄 Salin HTML</button>
+      <button class="mi-btn" id="mi-copy-prompt-btn" disabled title="Salin HTML + instruksi revisi siap tempel ke Kilo/Cline">✨ Salin Prompt Revisi</button>
       <button class="mi-btn" id="mi-sanitize-btn" disabled>🛡️ Sanitasi</button>
       <button class="mi-btn danger" id="mi-reset-btn">Reset</button>
       <span style="flex:1"></span>
-      <button class="mi-btn" id="mi-save-btn" disabled>💾 Simpan Draft</button>
-      <button class="mi-btn primary" id="mi-publish-btn" disabled>📤 Publish</button>
+      <button class="mi-btn" id="mi-save-btn" disabled>${editMode ? '💾 Simpan Perubahan' : '💾 Simpan Draft'}</button>
+      <button class="mi-btn primary" id="mi-publish-btn" disabled>${editMode ? '📤 Ubah Kelas' : '📤 Publish'}</button>
     </div>
     <p class="mi-status" id="mi-status" aria-live="polite"></p>
 
@@ -277,6 +268,8 @@ export async function renderGuruMateriImportPage(container) {
   const statusEl = container.querySelector('#mi-status');
   const toastEl = container.querySelector('#mi-toast');
   const sanitizeBtn = container.querySelector('#mi-sanitize-btn');
+  const copyHtmlBtn = container.querySelector('#mi-copy-html-btn');
+  const copyPromptBtn = container.querySelector('#mi-copy-prompt-btn');
   const saveBtn = container.querySelector('#mi-save-btn');
   const publishBtn = container.querySelector('#mi-publish-btn');
   const resetBtn = container.querySelector('#mi-reset-btn');
@@ -297,12 +290,16 @@ export async function renderGuruMateriImportPage(container) {
       previewSource.hidden = true;
       previewEmpty.hidden = false;
       sanitizeBtn.disabled = true;
+      copyHtmlBtn.disabled = true;
+      copyPromptBtn.disabled = true;
       saveBtn.disabled = true;
       publishBtn.disabled = true;
       return;
     }
     sanitizedHtml = rawHtml;
     sanitizeBtn.disabled = false;
+    copyHtmlBtn.disabled = false;
+    copyPromptBtn.disabled = false;
     saveBtn.disabled = false;
     publishBtn.disabled = false;
     if (!titleInput.value.trim()) {
@@ -333,11 +330,35 @@ export async function renderGuruMateriImportPage(container) {
 
   sanitizeBtn.addEventListener('click', () => {
     if (!rawHtml) return;
-    const cleaned = sanitizeHtml(rawHtml);
+    const { html: cleaned, removed } = sanitizeMaterialHtml(rawHtml);
     ta.value = cleaned;
     updatePreview();
-    const removed = rawHtml.length - cleaned.length;
-    showToast(removed > 0 ? `Sanitasi selesai · ${removed} karakter dihapus (script & event handler)` : 'Tidak ada script/event handler terdeteksi');
+    showToast(removed.length
+      ? `Sanitasi selesai · ${removed.length} sumber luar allowlist dibuang`
+      : 'Aman · tidak ada sumber luar allowlist');
+    if (removed.length) setStatus(`Dibuang: ${removed.join(' | ')}`);
+  });
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  copyHtmlBtn.addEventListener('click', async () => {
+    if (!rawHtml) return;
+    const ok = await copyToClipboard(rawHtml);
+    showToast(ok ? 'HTML disalin — tempel ke Kilo/Cline untuk direvisi' : 'Gagal menyalin — pilih teks di editor lalu Ctrl+C');
+  });
+
+  copyPromptBtn.addEventListener('click', async () => {
+    if (!rawHtml) return;
+    const prompt = buildRevisionPrompt(rawHtml, { title: titleInput.value || autoTitle || 'Materi' });
+    const ok = await copyToClipboard(prompt);
+    showToast(ok ? 'Prompt revisi disalin — tempel ke Kilo/Cline' : 'Gagal menyalin prompt');
   });
 
   pasteBtn.addEventListener('click', async () => {
@@ -363,10 +384,36 @@ export async function renderGuruMateriImportPage(container) {
 
   const saveDraft = async () => {
     if (!sanitizedHtml) return;
-    saveBtn.disabled = true; saveBtn.textContent = 'Menyimpan...';
+    const { html: safeHtml, removed } = sanitizeMaterialHtml(sanitizedHtml);
+    if (removed.length) {
+      ta.value = safeHtml;
+      updatePreview();
+    }
+    saveBtn.disabled = true;
+    const savingLabel = editMode ? 'Menyimpan...' : 'Menyimpan...';
+    saveBtn.textContent = savingLabel;
     try {
-      const id = currentDraftId || `mimp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
+
+      // Mode edit: perbarui materi TERBIT di tempat (id yang sama), sehingga
+      // versi yang dilihat siswa ikut ter-update tanpa menduplikasi dokumen.
+      if (editMode && editingDoc) {
+        const payload = {
+          ...editingDoc,
+          title: safeString(titleInput.value || editingDoc.title || autoTitle || 'Materi'),
+          html_source: safeHtml,
+          doc_mode: 'html',
+          document_json: null,
+          updated_at: now,
+        };
+        await savePublishedMaterial(payload);
+        editingDoc = payload;
+        setStatus(`Perubahan tersimpan${removed.length ? ` · ${removed.length} sumber luar allowlist dibuang` : ''}. Siswa melihat versi baru.`);
+        showToast('Perubahan tersimpan');
+        return;
+      }
+
+      const id = currentDraftId || `mimp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const draft = {
         id,
         guru_id: safeString(userId),
@@ -378,7 +425,8 @@ export async function renderGuruMateriImportPage(container) {
         chapter: '',
         note: 'Materi dari Import HTML',
         source: 'import',
-        html_source: sanitizedHtml,
+        doc_mode: 'html',
+        html_source: safeHtml,
         document_json: null,
         tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
         semester_id: safeString(context?.semester_aktif),
@@ -392,14 +440,14 @@ export async function renderGuruMateriImportPage(container) {
       writeDrafts(drafts);
       await saveMaterialWorkspaceDraft(draft);
       currentDraftId = id;
-      setStatus('Tersimpan sebagai draft. Buka menu Materi > Materi Saya > Draft untuk menerbitkan.');
+      setStatus(`Tersimpan sebagai draft${removed.length ? ` · ${removed.length} sumber luar allowlist dibuang` : ''}. Buka menu Materi > Materi Saya > Draft untuk menerbitkan.`);
       showToast('Draft tersimpan');
     } catch (error) {
-      showToast(error?.message || 'Gagal menyimpan draft');
+      showToast(error?.message || 'Gagal menyimpan');
       setStatus(error?.message || 'Gagal menyimpan.');
     } finally {
       saveBtn.disabled = !sanitizedHtml;
-      saveBtn.textContent = '💾 Simpan Draft';
+      saveBtn.textContent = editMode ? '💾 Simpan Perubahan' : '💾 Simpan Draft';
     }
   };
   saveBtn.addEventListener('click', saveDraft);
@@ -407,7 +455,11 @@ export async function renderGuruMateriImportPage(container) {
   const openPublishModal = () => {
     if (!sanitizedHtml) return;
     if (!teachingAssignments.length) { showToast('Relasi mengajar belum diatur'); return; }
-    targetsWrap.innerHTML = teachingAssignments.map((item) => `<label class="mi-target"><input type="checkbox" value="${escapeHtml(String(item.id))}"><div class="mi-target-info"><span class="mi-target-name">${escapeHtml(item.kelas_nama || item.kelas_id || 'Tanpa kelas')}</span><span class="mi-target-meta">${escapeHtml(item.mapel_nama || item.mapel_id || 'Tanpa mapel')}</span></div></label>`).join('');
+    const preselected = new Set([
+      ...((editingDoc?.pengajaran_ids) || []),
+      editingDoc?.pengajaran_id,
+    ].filter(Boolean).map(String));
+    targetsWrap.innerHTML = teachingAssignments.map((item) => `<label class="mi-target"><input type="checkbox" value="${escapeHtml(String(item.id))}"${preselected.has(String(item.id)) ? ' checked' : ''}><div class="mi-target-info"><span class="mi-target-name">${escapeHtml(item.kelas_nama || item.kelas_id || 'Tanpa kelas')}</span><span class="mi-target-meta">${escapeHtml(item.mapel_nama || item.mapel_id || 'Tanpa mapel')}</span></div></label>`).join('');
     targetsWrap.querySelectorAll('input').forEach((input) => input.addEventListener('change', updateTargetCount));
     publishStatusEl.textContent = ''; publishStatusEl.className = 'mi-status';
     updateTargetCount();
@@ -434,11 +486,14 @@ export async function renderGuruMateriImportPage(container) {
     });
     if (!targets.length) return;
     publishConfirmBtn.disabled = true; publishConfirmBtn.textContent = 'Memublikasikan...';
-    const sourceId = currentDraftId || `mimp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sourceId = (editMode && editingDoc)
+      ? String(editingDoc.source_id || editingDoc.id || currentDraftId)
+      : (currentDraftId || `mimp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
     const now = new Date().toISOString();
     const title = safeString(titleInput.value || autoTitle || 'Materi Import');
-    const mapel = safeString(mapelInput.value);
+    const mapel = safeString(mapelInput.value || editingDoc?.mapel_nama || editingDoc?.mapel_id);
     const kelas = safeString(kelasInput.value);
+    const { html: safeHtml } = sanitizeMaterialHtml(sanitizedHtml);
     try {
       // Satu dokumen untuk semua kelas — html_source tidak diduplikasi.
       await savePublishedMaterialForClasses({
@@ -449,17 +504,19 @@ export async function renderGuruMateriImportPage(container) {
         mapel_id: safeString(mapel),
         mapel_nama: safeString(mapel || 'Mata Pelajaran'),
         title,
-        note: 'Materi dari Import HTML',
-        level: '',
-        chapter: '',
-        meetings: '',
-        html_source: sanitizedHtml,
+        note: editingDoc?.note || 'Materi dari Import HTML',
+        level: editingDoc?.level || '',
+        chapter: editingDoc?.chapter || '',
+        meetings: editingDoc?.meetings || '',
+        doc_mode: 'html',
+        html_source: safeHtml,
+        document_json: null,
         visible_to_students: true,
-        source: 'materi_import',
-        tahun_ajaran_id: safeString(context?.tahun_ajaran_aktif),
-        semester_id: safeString(context?.semester_aktif),
-        published_at: now,
-        created_at: now,
+        source: editingDoc?.source || 'materi_import',
+        tahun_ajaran_id: safeString(editingDoc?.tahun_ajaran_id || context?.tahun_ajaran_aktif),
+        semester_id: safeString(editingDoc?.semester_id || context?.semester_aktif),
+        published_at: editingDoc?.published_at || now,
+        created_at: editingDoc?.created_at || now,
       }, targets.map((target) => ({
         id: safeString(target.id),
         kelas_id: safeString(target.kelas_id || target.kelas_nama || kelas),
@@ -482,6 +539,37 @@ export async function renderGuruMateriImportPage(container) {
       updateTargetCount();
     }
   });
+
+  // Mode edit: muat materi terbit ber-mode HTML lalu isi editor.
+  if (editMode) {
+    setStatus('Memuat materi untuk diedit...');
+    saveBtn.disabled = true;
+    publishBtn.disabled = true;
+    try {
+      const list = userId ? await getPublishedMaterialsForTeacher(userId) : [];
+      const doc = (list || []).find((m) => String(m.source_id || m.id) === editId || String(m.id) === editId);
+      if (!doc) {
+        setStatus('Materi tidak ditemukan atau bukan milik Anda.');
+        showToast('Materi tidak ditemukan');
+      } else if (!(typeof doc.html_source === 'string' && doc.html_source.trim()) || (doc.document_json && typeof doc.document_json === 'object')) {
+        setStatus('Materi ini bukan mode HTML sehingga tidak bisa diedit di sini. Gunakan "Sunting AI".');
+        showToast('Bukan materi HTML');
+      } else {
+        editingDoc = doc;
+        currentDraftId = String(doc.source_id || doc.id);
+        titleInput.value = doc.title || '';
+        mapelInput.value = doc.mapel_nama || doc.mapel_id || '';
+        kelasInput.value = doc.kelas_nama_csv || doc.kelas_nama || '';
+        ta.value = doc.html_source || '';
+        updatePreview();
+        setStatus('Materi dimuat. Edit HTML atau tempel hasil revisi, lalu Simpan Perubahan.');
+      }
+    } catch (error) {
+      setStatus(error?.message || 'Gagal memuat materi.');
+      showToast('Gagal memuat materi');
+    }
+    return;
+  }
 
   updatePreview();
 }

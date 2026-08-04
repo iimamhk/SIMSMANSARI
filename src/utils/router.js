@@ -375,8 +375,11 @@ async function renderRoute() {
     return;
   }
 
-  if (route === '#guru/materi-import') {
-    await renderAndFinalize(renderGuruMateriImportPage, container);
+  if (route === '#guru/materi-import' || route.startsWith('#guru/materi-import?')) {
+    const params = parseRouteQuery(route);
+    await renderAndFinalize(renderGuruMateriImportPage, container, {
+      editId: params.get('edit') || '',
+    });
     return;
   }
 

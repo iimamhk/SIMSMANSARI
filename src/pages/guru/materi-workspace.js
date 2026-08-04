@@ -685,7 +685,15 @@ export async function renderGuruMateriPage(container) {
     const aiEditBtn = entry.source === 'ai'
       ? `<button class="mw-pub-btn" data-ai-edit-pub="${id}">Sunting AI</button>`
       : '';
-    return `<button class="mw-pub-btn" data-pub-preview="${id}">Pratinjau</button><button class="mw-pub-btn" data-pub-edit="${id}">Edit</button>${aiEditBtn}<button class="mw-pub-btn primary" data-pub-distribute="${id}">Kelas</button><button class="mw-pub-btn ${entry.isVisible ? 'warning' : 'primary'}" data-pub-toggle="${id}">${entry.isVisible ? 'Tarik' : 'Terbitkan'}</button><button class="mw-pub-btn danger" data-pub-delete="${id}">Hapus</button>`;
+    // Materi mode HTML (AI Premium HTML atau Import): sediakan "Edit HTML"
+    // untuk menyunting kode langsung / menempel hasil revisi Kilo/Cline.
+    // Termasuk materi import lama yang belum menyimpan doc_mode.
+    const isHtmlDocEntry = entry.raw?.doc_mode === 'html'
+      || (typeof entry.raw?.html_source === 'string' && entry.raw.html_source.trim() && !entry.raw?.document_json);
+    const htmlEditBtn = isHtmlDocEntry
+      ? `<button class="mw-pub-btn" data-html-edit-pub="${id}">Edit HTML</button>`
+      : '';
+    return `<button class="mw-pub-btn" data-pub-preview="${id}">Pratinjau</button><button class="mw-pub-btn" data-pub-edit="${id}">Edit</button>${aiEditBtn}${htmlEditBtn}<button class="mw-pub-btn primary" data-pub-distribute="${id}">Kelas</button><button class="mw-pub-btn ${entry.isVisible ? 'warning' : 'primary'}" data-pub-toggle="${id}">${entry.isVisible ? 'Tarik' : 'Terbitkan'}</button><button class="mw-pub-btn danger" data-pub-delete="${id}">Hapus</button>`;
   };
 
   const entryMetaLine = (entry) => {
@@ -801,6 +809,7 @@ export async function renderGuruMateriPage(container) {
     // Sunting dengan Studio Materi AI (membuka halaman Materi AI dengan JSON tersimpan).
     overview.querySelectorAll('[data-ai-edit-draft]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); window.location.hash = `#guru/materi-ai?draft=${encodeURIComponent(button.dataset.aiEditDraft)}`; }));
     overview.querySelectorAll('[data-ai-edit-pub]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); window.location.hash = `#guru/materi-ai?published=${encodeURIComponent(button.dataset.aiEditPub)}`; }));
+    overview.querySelectorAll('[data-html-edit-pub]').forEach((button) => button.addEventListener('click', (event) => { event.stopPropagation(); window.location.hash = `#guru/materi-import?edit=${encodeURIComponent(button.dataset.htmlEditPub)}`; }));
   };
   const renderOverview = () => { renderLibrary(); };
 
