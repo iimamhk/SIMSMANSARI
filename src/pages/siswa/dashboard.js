@@ -66,10 +66,10 @@ const quickCard = (href, title, desc, icon, tone = 'blue', options = {}) => {
 };
 
 const NILAI_STATUS_STYLE = {
-  aman: { score: 'text-emerald-600', ring: 'ring-emerald-100', chip: 'bg-emerald-50' },
-  waspada: { score: 'text-amber-600', ring: 'ring-amber-100', chip: 'bg-amber-50' },
-  kurang: { score: 'text-rose-600', ring: 'ring-rose-100', chip: 'bg-rose-50' },
-  kosong: { score: 'text-slate-400', ring: 'ring-slate-100', chip: 'bg-slate-50' },
+  aman: { grad: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/30', label: 'Tuntas' },
+  waspada: { grad: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/30', label: 'Waspada' },
+  kurang: { grad: 'from-rose-500 to-red-600', shadow: 'shadow-rose-500/30', label: 'Perlu naik' },
+  kosong: { grad: 'from-slate-400 to-slate-500', shadow: 'shadow-slate-400/30', label: 'Belum ada' },
 };
 
 function formatNilai(value) {
@@ -78,24 +78,26 @@ function formatNilai(value) {
   return Number.isInteger(num) ? String(num) : num.toFixed(1);
 }
 
-// Chip mapel: ringkas, mobile-first, bisa digeser horizontal. Angka besar =
-// nilai akhir (warna mengikuti KKM). Titik amber = ada tugas belum dikerjakan.
+// Chip mapel: kartu gradien kontras tinggi, mobile-first, bisa digeser horizontal.
+// Angka besar = nilai akhir (warna mengikuti KKM). Titik amber = ada tugas belum.
 function nilaiChipHtml(m, index, kkm) {
   const status = scoreStatus(m.nilai_akhir, kkm);
   const style = NILAI_STATUS_STYLE[status] || NILAI_STATUS_STYLE.kosong;
   const belum = Number(m.tugas_belum || 0);
   const belumDot = belum > 0
-    ? `<span class="absolute right-2 top-2 inline-flex h-2 w-2 rounded-full bg-amber-500" aria-hidden="true"></span>`
+    ? `<span class="absolute right-2.5 top-2.5 inline-flex h-2.5 w-2.5 rounded-full bg-amber-300 ring-2 ring-white/70" aria-hidden="true"></span>`
     : '';
   const belumLine = belum > 0
-    ? `<span class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600">${belum} tugas belum</span>`
-    : `<span class="mt-0.5 text-[10px] font-medium text-slate-400">Lengkap</span>`;
+    ? `<span class="relative mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-black/15 px-2 py-0.5 text-[10px] font-semibold text-white">${belum} tugas belum</span>`
+    : `<span class="relative mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold text-white/90">Lengkap</span>`;
   return `
     <button type="button" data-nilai-chip="${index}"
-      class="relative flex min-w-[132px] snap-start flex-col rounded-2xl border border-slate-100 ${style.chip} px-4 py-3 text-left shadow-sm ring-1 ${style.ring} transition active:scale-[0.98]">
+      class="group relative flex min-w-[144px] snap-start flex-col overflow-hidden rounded-2xl bg-gradient-to-br ${style.grad} px-4 py-3.5 text-left text-white shadow-lg ${style.shadow} transition duration-200 hover:-translate-y-0.5 active:scale-[0.97]">
+      <span class="pointer-events-none absolute -right-5 -top-6 h-16 w-16 rounded-full bg-white/20 blur-xl" aria-hidden="true"></span>
+      <span class="pointer-events-none absolute -bottom-6 -left-4 h-14 w-14 rounded-full bg-black/10 blur-lg" aria-hidden="true"></span>
       ${belumDot}
-      <span class="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
-      <span class="mt-1 text-2xl font-bold leading-none ${style.score}">${formatNilai(m.nilai_akhir)}</span>
+      <span class="relative truncate text-[11px] font-semibold uppercase tracking-wide text-white/85">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
+      <span class="relative mt-1.5 text-[34px] font-black leading-none tracking-tight drop-shadow-sm">${formatNilai(m.nilai_akhir)}</span>
       ${belumLine}
     </button>`;
 }
@@ -125,26 +127,28 @@ function nilaiDetailHtml(m) {
 }
 
 const TIER_STYLE = {
-  kosong: { ring: 'ring-slate-100', chip: 'bg-slate-50', text: 'text-slate-400' },
-  kurang: { ring: 'ring-rose-100', chip: 'bg-rose-50', text: 'text-rose-600' },
-  waspada: { ring: 'ring-amber-100', chip: 'bg-amber-50', text: 'text-amber-600' },
-  aman: { ring: 'ring-emerald-100', chip: 'bg-emerald-50', text: 'text-emerald-600' },
-  hebat: { ring: 'ring-violet-100', chip: 'bg-violet-50', text: 'text-violet-600' },
+  kosong: { grad: 'from-slate-400 to-slate-500', shadow: 'shadow-slate-400/30' },
+  kurang: { grad: 'from-rose-500 to-red-600', shadow: 'shadow-rose-500/30' },
+  waspada: { grad: 'from-amber-500 to-orange-600', shadow: 'shadow-amber-500/30' },
+  aman: { grad: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-500/30' },
+  hebat: { grad: 'from-violet-500 to-fuchsia-600', shadow: 'shadow-violet-500/30' },
 };
 
-// Chip keaktifan per mapel: predikat (kategori total poin) + total poin + catatan.
+// Chip keaktifan per mapel: kartu gradien predikat + total poin + catatan.
 function keaktifanChipHtml(m, index) {
   const total = Number(m.total_poin || 0);
   const jumlah = Number(m.jumlah_catatan || 0);
   const tier = activityTier(total);
   const style = TIER_STYLE[tier.style] || TIER_STYLE.kosong;
   return `
-    <button type="button" data-keaktifan-chip="${index}"
-      class="relative flex min-w-[132px] snap-start flex-col rounded-2xl border border-slate-100 ${style.chip} px-4 py-3 text-left shadow-sm ring-1 ${style.ring} transition active:scale-[0.98]">
-      <span class="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
-      <span class="mt-1 text-[13px] font-bold leading-tight ${style.text}">${escapeHtml(tier.predikat)}</span>
-      <span class="mt-0.5 text-[10px] font-medium text-slate-400">${jumlah > 0 ? `${total} poin · ${jumlah} catatan` : 'Belum ada catatan'}</span>
-    </button>`;
+    <div data-keaktifan-chip="${index}"
+      class="relative flex min-w-[144px] snap-start flex-col overflow-hidden rounded-2xl bg-gradient-to-br ${style.grad} px-4 py-3.5 text-left text-white shadow-lg ${style.shadow}">
+      <span class="pointer-events-none absolute -right-5 -top-6 h-16 w-16 rounded-full bg-white/20 blur-xl" aria-hidden="true"></span>
+      <span class="pointer-events-none absolute -bottom-6 -left-4 h-14 w-14 rounded-full bg-black/10 blur-lg" aria-hidden="true"></span>
+      <span class="relative truncate text-[11px] font-semibold uppercase tracking-wide text-white/85">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
+      <span class="relative mt-1.5 text-base font-black leading-tight tracking-tight drop-shadow-sm">${escapeHtml(tier.predikat)}</span>
+      <span class="relative mt-1.5 inline-flex w-fit items-center gap-1 rounded-full ${jumlah > 0 ? 'bg-white/20 text-white' : 'bg-black/15 text-white/90'} px-2 py-0.5 text-[10px] font-semibold">${jumlah > 0 ? `${total} poin · ${jumlah} catatan` : 'Belum ada catatan'}</span>
+    </div>`;
 }
 
 export async function renderSiswaDashboardPage(container) {
@@ -361,55 +365,84 @@ export async function renderSiswaDashboardPage(container) {
         </div>
       </section>
 
-      <section>
-        <div class="mb-3 flex items-center justify-between">
-          <div>
-            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600">Rapor ringkas</p>
-            <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Nilai per mata pelajaran</h2>
+      <section class="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-fuchsia-50 p-4 shadow-sm sm:p-5">
+        <div class="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-indigo-400/10 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-fuchsia-400/10 blur-3xl" aria-hidden="true"></div>
+        <div class="relative">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30">
+                <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19V10M12 19V5M19 19v-6"/></svg>
+              </span>
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-500">Rapor ringkas</p>
+                <h2 class="mt-0.5 text-xl font-bold tracking-tight text-slate-900">Nilai per mata pelajaran</h2>
+              </div>
+            </div>
+            <a href="#siswa/nilai" class="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-indigo-600 shadow-sm ring-1 ring-indigo-100 backdrop-blur transition hover:bg-white">
+              Detail
+              <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </a>
           </div>
-          <a href="#siswa/nilai" class="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:underline">
-            Detail
-            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
-          </a>
+          ${totalTugasBelum > 0 ? `
+          <div class="mb-3 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+            <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+            ${totalTugasBelum} tugas belum dikerjakan
+          </div>` : ''}
+          ${nilaiMapelList.length ? `
+          <div id="dash-nilai-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
+            ${nilaiMapelList.map((m, i) => nilaiChipHtml(m, i, KKM)).join('')}
+          </div>
+          <p class="mt-2 text-[11px] text-slate-500">Ketuk mata pelajaran untuk melihat rincian tugas, UH, PTS, dan PAS.</p>
+          <div id="dash-nilai-detail"></div>
+          ` : `
+          <div class="rounded-2xl border border-dashed border-indigo-200 bg-white/70 p-6 text-center">
+            <p class="text-sm font-semibold text-slate-600">Ringkasan nilai belum tersedia</p>
+            <a href="#siswa/nilai" class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-500/30">Buka Nilai</a>
+          </div>
+          `}
         </div>
-        ${totalTugasBelum > 0 ? `
-        <div class="mb-3 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-          <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-          ${totalTugasBelum} tugas belum dikerjakan
-        </div>` : ''}
-        ${nilaiMapelList.length ? `
-        <div id="dash-nilai-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
-          ${nilaiMapelList.map((m, i) => nilaiChipHtml(m, i, KKM)).join('')}
-        </div>
-        <p class="mt-1 text-[11px] text-slate-400">Ketuk mata pelajaran untuk melihat rincian tugas, UH, PTS, dan PAS.</p>
-        <div id="dash-nilai-detail"></div>
-        ` : `
-        <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-          <p class="text-sm font-semibold text-slate-600">Ringkasan nilai belum tersedia</p>
-          <p class="mx-auto mt-1 max-w-xs text-xs text-slate-400">Nilai akan muncul di sini setelah guru menyimpan penilaian. Kamu juga bisa membukanya langsung di halaman Nilai.</p>
-          <a href="#siswa/nilai" class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white">Buka Nilai</a>
-        </div>
-        `}
       </section>
 
-      <section>
-        <div class="mb-3 flex items-center justify-between">
-          <div>
-            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-600">Keaktifan belajar</p>
-            <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Partisipasi per mapel</h2>
+      <section class="relative overflow-hidden rounded-3xl border border-cyan-100 bg-gradient-to-br from-cyan-50 via-white to-teal-50 p-4 shadow-sm sm:p-5">
+        <div class="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" aria-hidden="true"></div>
+        <div class="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-teal-400/10 blur-3xl" aria-hidden="true"></div>
+        <div class="relative">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 to-teal-600 text-white shadow-lg shadow-cyan-500/30">
+                <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+              </span>
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-600">Keaktifan belajar</p>
+                <h2 class="mt-0.5 text-xl font-bold tracking-tight text-slate-900">Partisipasi per mapel</h2>
+              </div>
+            </div>
+            ${totalCatatanKeaktifan > 0 ? `<span class="shrink-0 rounded-full bg-gradient-to-br from-cyan-500 to-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm">${escapeHtml(overallTierKeaktifan.predikat)} · ${overallTotalPoinKeaktifan} poin</span>` : ''}
           </div>
-          ${totalCatatanKeaktifan > 0 ? `<span class="shrink-0 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700">${overallTierKeaktifan.predikat} · ${overallTotalPoinKeaktifan} poin</span>` : ''}
+          ${keaktifanMapelList.length ? `
+          <div id="dash-keaktifan-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
+            ${keaktifanMapelList.map((m, i) => keaktifanChipHtml(m, i)).join('')}
+          </div>
+          ${totalCatatanKeaktifan > 0 ? `
+          <div class="relative mt-3 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-600 to-teal-600 p-4 text-white shadow-lg shadow-cyan-500/30">
+            <span class="pointer-events-none absolute -right-6 -top-8 h-24 w-24 rounded-full bg-white/15 blur-2xl" aria-hidden="true"></span>
+            <div class="relative flex items-start gap-3">
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 3.8L18 8l-3 3 .7 4.2L12 13.8 8.3 15.2 9 11 6 8l4.1-1.2z"/></svg>
+              </span>
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">Semangat belajar</p>
+                <p class="mt-0.5 text-sm font-semibold leading-snug">${escapeHtml(overallTierKeaktifan.motivasi)}</p>
+              </div>
+            </div>
+          </div>` : ''}
+          ` : `
+          <div class="rounded-2xl border border-dashed border-cyan-200 bg-white/70 p-6 text-center">
+            <p class="text-sm font-semibold text-slate-600">Keaktifan belum tercatat</p>
+          </div>
+          `}
         </div>
-        ${keaktifanMapelList.length ? `
-        <div id="dash-keaktifan-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
-          ${keaktifanMapelList.map((m, i) => keaktifanChipHtml(m, i)).join('')}
-        </div>
-        ${totalCatatanKeaktifan > 0 ? `<p class="mt-1.5 text-[11px] italic text-slate-500">${escapeHtml(overallTierKeaktifan.motivasi)}</p>` : ''}
-        ` : `
-        <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
-          <p class="text-sm font-semibold text-slate-600">Keaktifan belum tercatat</p>
-        </div>
-        `}
       </section>
 
       <section>
@@ -439,7 +472,7 @@ export async function renderSiswaDashboardPage(container) {
   if (nilaiChipsWrap && nilaiDetailWrap) {
     let activeNilaiChip = -1;
     const chips = Array.from(nilaiChipsWrap.querySelectorAll('[data-nilai-chip]'));
-    const clearActive = () => chips.forEach((el) => el.classList.remove('ring-2', 'ring-indigo-300'));
+    const clearActive = () => chips.forEach((el) => el.classList.remove('ring-2', 'ring-slate-800', 'ring-offset-2'));
     chips.forEach((btn) => {
       btn.addEventListener('click', () => {
         const idx = Number(btn.getAttribute('data-nilai-chip'));
@@ -453,7 +486,7 @@ export async function renderSiswaDashboardPage(container) {
         const mapel = nilaiMapelList[idx];
         nilaiDetailWrap.innerHTML = mapel ? nilaiDetailHtml(mapel) : '';
         clearActive();
-        btn.classList.add('ring-2', 'ring-indigo-300');
+        btn.classList.add('ring-2', 'ring-slate-800', 'ring-offset-2');
       });
     });
   }
