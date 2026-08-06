@@ -1,5 +1,6 @@
 ﻿import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
+import { activityTier } from '../../utils/nilai-summary.js';
 import {
   getTeachingAssignmentsForUser,
   getActiveTeachingAssignments,
@@ -345,6 +346,16 @@ function gradeBadgeClass(grade) {
   if (grade === 'A') return 'bg-emerald-100 text-emerald-700';
   if (grade === 'B') return 'bg-amber-100 text-amber-700';
   return 'bg-rose-100 text-rose-700';
+}
+
+function tierBadgeClass(style) {
+  switch (style) {
+    case 'hebat': return 'bg-purple-100 text-purple-700';
+    case 'aman': return 'bg-emerald-100 text-emerald-700';
+    case 'waspada': return 'bg-amber-100 text-amber-700';
+    case 'kurang': return 'bg-rose-100 text-rose-700';
+    default: return 'bg-slate-100 text-slate-600';
+  }
 }
 
 function getDefaultSchoolDate() {
@@ -1884,49 +1895,41 @@ async function renderTabPTSPAS(context, assignment, members, container) {
 
             <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-[1.2fr_0.8fr_1fr_1fr]">
               <div class="rounded-xl border border-slate-200 bg-white p-3">
-                <p class="font-semibold text-slate-700">Skor 1-4</p>
-                <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
-              </div>
-              <div class="rounded-xl border border-slate-200 bg-white p-3">
-                <p class="font-semibold text-slate-700">Predikat Otomatis</p>
-                <p class="mt-1">A (&gt;=3.5), B (&gt;=2.5), C (&lt;2.5).</p>
-              </div>
-              <div class="rounded-xl border border-slate-200 bg-white p-3">
                 <p class="font-semibold text-slate-700">Poin Indikator</p>
                 <p class="mt-1">Setiap checklist bernilai +1, maksimal 5 poin.</p>
               </div>
-              <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                <label for="activity-date" class="font-semibold text-emerald-700">Tanggal Penilaian</label>
-                <input id="activity-date" type="date" value="${selectedDate}" class="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+            <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+              <label for="activity-date" class="font-semibold text-emerald-700">Tanggal Penilaian</label>
+              <input id="activity-date" type="date" value="${selectedDate}" class="mt-2 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100" />
+            </div>
+          </div>
+
+          <div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div class="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
+                <select id="activity-student-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                  ${sortedMembers.length ? sortedMembers.map((member) => {
+                    const id = member.siswa_id || member.id;
+                    const name = member.siswa_nama || member.nama || '-';
+                    return `<option value="${id}">${name}</option>`;
+                  }).join('') : '<option value="">Belum ada siswa</option>'}
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Skor</label>
+                <select id="activity-score-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3" selected>3</option>
+                  <option value="4">4</option>
+                </select>
+              </div>
+              <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <p>Poin indikator: <span id="activity-point-preview" class="font-semibold text-emerald-700">0/5</span></p>
+                <p class="mt-1">Predikat: <span id="activity-grade-preview" class="font-semibold text-slate-900">B</span></p>
               </div>
             </div>
-
-            <div class="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div class="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
-                <div>
-                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Pilih Siswa</label>
-                  <select id="activity-student-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
-                    ${sortedMembers.length ? sortedMembers.map((member) => {
-                      const id = member.siswa_id || member.id;
-                      const name = member.siswa_nama || member.nama || '-';
-                      return `<option value="${id}">${name}</option>`;
-                    }).join('') : '<option value="">Belum ada siswa</option>'}
-                  </select>
-                </div>
-                <div>
-                  <label class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Skor</label>
-                  <select id="activity-score-select" class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3" selected>3</option>
-                    <option value="4">4</option>
-                  </select>
-                </div>
-                <div class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                  <p>Poin indikator: <span id="activity-point-preview" class="font-semibold text-emerald-700">0/5</span></p>
-                  <p class="mt-1">Predikat: <span id="activity-grade-preview" class="font-semibold text-slate-900">B</span></p>
-                </div>
-              </div>
 
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 ${activityIndicators.map((item) => `
@@ -2091,15 +2094,21 @@ async function renderTabPTSPAS(context, assignment, members, container) {
       const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
       activityTopLimitInput.value = String(displayLimit);
       activityTopList.innerHTML = totals.length
-        ? totals.slice(0, displayLimit).map((item, index) => `
+        ? totals.slice(0, displayLimit).map((item, index) => {
+            const tier = activityTier(item.totalPoints);
+            return `
             <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
-                <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="rounded-full px-2 py-1 text-xs font-semibold ${tierBadgeClass(tier.style)}">${tier.predikat}</span>
+                  <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+                </div>
               </div>
               <p class="mt-1 text-xs text-slate-500">${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
             </div>
-          `).join('')
+          `;
+          }).join('')
         : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
 
       const needsFollowUp = Object.entries(groupedByStudent)
@@ -2522,14 +2531,10 @@ async function renderTabKeaktifanWorkspace(context, assignment, members, contain
           </div>
 
           <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-[1.2fr_0.8fr_1fr_1fr]">
-            <div class="rounded-xl border border-slate-200 bg-white p-3">
-              <p class="font-semibold text-slate-700">Skor 1-4</p>
-              <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
-            </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-3">
-              <p class="font-semibold text-slate-700">Predikat Otomatis</p>
-              <p class="mt-1">A (&gt;=3.5), B (&gt;=2.5), C (&lt;2.5).</p>
-            </div>
+              <div class="rounded-xl border border-slate-200 bg-white p-3">
+                <p class="font-semibold text-slate-700">Predikat Rekap</p>
+                <p class="mt-1">Berdasarkan total poin: 0=Belum Mulai, 1-5=Pemula, 6-10=Berkembang, 11-15=Aktif, 16-20=Sangat Aktif, 21+=Hebat.</p>
+              </div>
             <div class="rounded-xl border border-slate-200 bg-white p-3">
               <p class="font-semibold text-slate-700">Poin Indikator</p>
               <p class="mt-1">Setiap checklist bernilai +1, maksimal 5 poin.</p>
@@ -2730,15 +2735,21 @@ async function renderTabKeaktifanWorkspace(context, assignment, members, contain
     const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
     activityTopLimitInput.value = String(displayLimit);
     activityTopList.innerHTML = totals.length
-      ? totals.slice(0, displayLimit).map((item, index) => `
+      ? totals.slice(0, displayLimit).map((item, index) => {
+          const tier = activityTier(item.totalPoints);
+          return `
           <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
             <div class="flex items-center justify-between gap-2">
               <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
-              <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+              <div class="flex items-center gap-1.5">
+                <span class="rounded-full px-2 py-1 text-xs font-semibold ${tierBadgeClass(tier.style)}">${tier.predikat}</span>
+                <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+              </div>
             </div>
             <p class="mt-1 text-xs text-slate-500">${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
           </div>
-        `).join('')
+        `;
+        }).join('')
       : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
 
     const needsFollowUp = Object.entries(groupedByStudent)
@@ -2897,8 +2908,8 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
 
             <div class="mb-4 grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 md:grid-cols-[1.2fr_0.8fr_1fr_1fr]">
               <div class="rounded-xl border border-slate-200 bg-white p-3">
-                <p class="font-semibold text-slate-700">Skor 1-4</p>
-                <p class="mt-1">1 = Pasif, 2 = Mulai terlibat, 3 = Aktif, 4 = Sangat aktif.</p>
+                <p class="font-semibold text-slate-700">Predikat Rekap</p>
+                <p class="mt-1">Berdasarkan total poin: 0=Belum Mulai, 1-5=Pemula, 6-10=Berkembang, 11-15=Aktif, 16-20=Sangat Aktif, 21+=Hebat.</p>
               </div>
               <div class="rounded-xl border border-slate-200 bg-white p-3">
                 <p class="font-semibold text-slate-700">Predikat Otomatis</p>
@@ -3104,15 +3115,21 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
       const displayLimit = Math.max(3, Math.min(50, Number(activityTopLimitInput.value || 10)));
       activityTopLimitInput.value = String(displayLimit);
       activityTopList.innerHTML = totals.length
-        ? totals.slice(0, displayLimit).map((item, index) => `
+        ? totals.slice(0, displayLimit).map((item, index) => {
+            const tier = activityTier(item.totalPoints);
+            return `
             <div class="rounded-xl border border-slate-200 bg-white px-3 py-2">
               <div class="flex items-center justify-between gap-2">
                 <p class="text-sm font-semibold text-slate-800">${index + 1}. ${item.studentName}</p>
-                <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+                <div class="flex items-center gap-1.5">
+                  <span class="rounded-full px-2 py-1 text-xs font-semibold ${tierBadgeClass(tier.style)}">${tier.predikat}</span>
+                  <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">${item.totalPoints} poin</span>
+                </div>
               </div>
               <p class="mt-1 text-xs text-slate-500">${item.totalMeetings} pertemuan • Rata skor ${item.avgScore.toFixed(2)}</p>
             </div>
-          `).join('')
+          `;
+          }).join('')
         : '<p class="text-sm text-slate-500">Belum ada data keaktifan tersimpan.</p>';
 
       const needsFollowUp = Object.entries(groupedByStudent)

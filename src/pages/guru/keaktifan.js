@@ -8,6 +8,7 @@ import {
   saveDocument,
   deleteDocument,
 } from '../../firebase/data-service.js';
+import { activityTier } from '../../utils/nilai-summary.js';
 
 const ACTIVITY_INDICATORS = [
   { key: 'bertanya', label: 'Bertanya' },
@@ -89,6 +90,16 @@ function scoreGrade(score) {
   return 'C';
 }
 
+function tierBadgeClass(style) {
+  switch (style) {
+    case 'hebat': return 'bg-purple-100 text-purple-700';
+    case 'aman': return 'bg-emerald-100 text-emerald-700';
+    case 'waspada': return 'bg-amber-100 text-amber-700';
+    case 'kurang': return 'bg-rose-100 text-rose-700';
+    default: return 'bg-slate-100 text-slate-600';
+  }
+}
+
 function clampScore(value) {
   return Math.max(1, Math.min(4, Number(value) || 1));
 }
@@ -148,7 +159,8 @@ function aggregateStudents(members, records, classMeetingCount = 0) {
       activityTypeLabels: activityTypes.map((item) => item.label),
       pointsPerClassMeeting: classMeetingCount ? totalPoints / classMeetingCount : 0,
       indicatorRate,
-      grade: studentRecords.length ? scoreGrade(averagePoints) : '-',
+      grade: studentRecords.length ? activityTier(totalPoints).predikat : '-',
+      gradeStyle: studentRecords.length ? activityTier(totalPoints).style : 'kosong',
     };
   });
 }
@@ -277,7 +289,7 @@ export async function renderGuruKeaktifanPage(container) {
         <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><h2 class="font-bold text-slate-900">Statistik Jenis Aktivitas</h2><p class="mt-1 text-xs text-slate-500">Jumlah transaksi yang memuat setiap jenis keaktifan.</p></div><p id="activity-rarest-type" class="text-xs font-semibold text-amber-700"></p></div><div id="activity-type-stats" class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"></div></div>
         <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div class="border-b border-slate-100 p-4"><h2 class="font-bold text-slate-900">Rekap per Siswa</h2><p class="mt-1 text-xs text-slate-500">Perbandingan memakai rata-rata agar adil untuk jumlah observasi berbeda.</p></div>
-          <div class="overflow-x-auto"><table class="min-w-[850px] w-full text-xs"><thead class="bg-slate-50 text-slate-600"><tr><th class="px-3 py-3 text-left">No</th><th class="px-3 py-3 text-left">Siswa</th><th class="px-3 py-3 text-center">Aktivitas</th><th class="px-3 py-3 text-center">Total Poin</th><th class="px-3 py-3 text-center">Rata Poin</th><th class="px-3 py-3 text-center">Pertemuan Aktif</th><th class="px-3 py-3 text-center">Variasi</th><th class="px-3 py-3 text-center">Poin/Pertemuan</th></tr></thead><tbody id="activity-recap-body"></tbody></table></div>
+          <div class="overflow-x-auto"><table class="min-w-[920px] w-full text-xs"><thead class="bg-slate-50 text-slate-600"><tr><th class="px-3 py-3 text-left">No</th><th class="px-3 py-3 text-left">Siswa</th><th class="px-3 py-3 text-center">Aktivitas</th><th class="px-3 py-3 text-center">Total Poin</th><th class="px-3 py-3 text-center">Rata Poin</th><th class="px-3 py-3 text-center">Pertemuan Aktif</th><th class="px-3 py-3 text-center">Variasi</th><th class="px-3 py-3 text-center">Poin/Pertemuan</th><th class="px-3 py-3 text-center">Predikat</th></tr></thead><tbody id="activity-recap-body"></tbody></table></div>
         </div>
       </section>
 
@@ -424,7 +436,7 @@ export async function renderGuruKeaktifanPage(container) {
     const rarestTypes = typeStats.filter((item) => item.count === minimumCount).map((item) => item.label);
     container.querySelector('#activity-type-stats').innerHTML = typeStats.map((item) => `<div class="rounded-xl border border-slate-200 bg-slate-50 p-3"><p class="text-[11px] font-semibold text-slate-500">${escapeHtml(item.label)}</p><p class="mt-1 text-xl font-bold text-slate-900">${item.count}</p></div>`).join('');
     container.querySelector('#activity-rarest-type').textContent = records.length ? `Paling jarang: ${rarestTypes.join(', ')} (${minimumCount})` : 'Belum ada transaksi';
-    container.querySelector('#activity-recap-body').innerHTML = aggregates.map((item, index) => `<tr class="border-t border-slate-100"><td class="px-3 py-3">${index + 1}</td><td class="px-3 py-3 font-semibold text-slate-900">${escapeHtml(item.studentName)}</td><td class="px-3 py-3 text-center">${item.activityCount}</td><td class="px-3 py-3 text-center font-bold text-cyan-700">${item.totalPoints}</td><td class="px-3 py-3 text-center font-bold text-emerald-700">${item.activityCount ? item.averagePoints.toFixed(2) : '-'}</td><td class="px-3 py-3 text-center">${item.activeMeetingCount}/${classMeetingCount || 0}</td><td class="px-3 py-3 text-center" title="${escapeHtml(item.activityTypeLabels.join(', ') || 'Belum ada')}">${item.activityTypeCount}/${ACTIVITY_INDICATORS.length}</td><td class="px-3 py-3 text-center font-bold text-indigo-700">${classMeetingCount ? item.pointsPerClassMeeting.toFixed(2) : '-'}</td></tr>`).join('');
+    container.querySelector('#activity-recap-body').innerHTML = aggregates.map((item, index) => `<tr class="border-t border-slate-100"><td class="px-3 py-3">${index + 1}</td><td class="px-3 py-3 font-semibold text-slate-900">${escapeHtml(item.studentName)}</td><td class="px-3 py-3 text-center">${item.activityCount}</td><td class="px-3 py-3 text-center font-bold text-cyan-700">${item.totalPoints}</td><td class="px-3 py-3 text-center font-bold text-emerald-700">${item.activityCount ? item.averagePoints.toFixed(2) : '-'}</td><td class="px-3 py-3 text-center">${item.activeMeetingCount}/${classMeetingCount || 0}</td><td class="px-3 py-3 text-center" title="${escapeHtml(item.activityTypeLabels.join(', ') || 'Belum ada')}">${item.activityTypeCount}/${ACTIVITY_INDICATORS.length}</td><td class="px-3 py-3 text-center font-bold text-indigo-700">${classMeetingCount ? item.pointsPerClassMeeting.toFixed(2) : '-'}</td><td class="px-3 py-3 text-center"><span class="rounded-full px-2 py-1 text-[11px] font-bold ${tierBadgeClass(item.gradeStyle)}">${escapeHtml(item.grade)}</span></td></tr>`).join('');
   };
 
   const renderTodayHistory = () => {

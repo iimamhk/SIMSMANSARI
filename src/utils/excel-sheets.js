@@ -1005,7 +1005,7 @@ function addGuideSheet(workbook, meta = {}) {
   addNoteRow('2. Bila nanti aplikasi kembali normal, data yang sudah ditambahkan di Excel perlu dimasukkan kembali ke aplikasi secara manual. Berkas Excel tidak dapat diunggah balik ke sistem.');
   addNoteRow('3. Simpanlah berkas ini dengan nama baru setiap kali diubah (misalnya diberi tambahan tanggal), agar versi aslinya tetap utuh sebagai bukti cadangan.');
   addNoteRow('4. "Nilai Akhir" dihitung sebagai rata-rata sederhana dari semua nilai yang terisi; setiap tugas, UH, PTS, dan PAS berbobot sama.');
-  addNoteRow('5. Predikat keaktifan mengikuti aturan aplikasi: rata-rata poin 3,5 atau lebih = A, 2,5 sampai di bawah 3,5 = B, di bawah 2,5 = C.');
+  addNoteRow('5. Predikat keaktifan mengikuti aturan aplikasi: kategori berdasarkan TOTAL poin akumulasi — 0=Belum Mulai, 1-5=Pemula, 6-10=Berkembang, 11-15=Aktif, 16-20=Sangat Aktif, 21+=Hebat.');
   addNoteRow('6. Jangan menghapus baris header berwarna biru atau baris total di bagian bawah, karena rumus mengacu ke baris-baris tersebut.');
 
   return sheet;
@@ -1041,6 +1041,33 @@ function isIndicatorActive(indicators, item) {
 function recordPoints(record) {
   const raw = Number(record?.poin_indikator ?? record?.skor ?? 1) || 1;
   return Math.max(1, Math.min(4, raw));
+}
+
+// Kategori keaktifan berbasis TOTAL poin — disalin dari src/utils/nilai-summary.js
+// karena berkas ini tidak boleh memakai import/require.
+const ACTIVITY_TIERS = [
+  { min: 0, max: 0, predikat: 'Belum Mulai', style: 'kosong' },
+  { min: 1, max: 5, predikat: 'Pemula', style: 'kurang' },
+  { min: 6, max: 10, predikat: 'Berkembang', style: 'waspada' },
+  { min: 11, max: 15, predikat: 'Aktif', style: 'aman' },
+  { min: 16, max: 20, predikat: 'Sangat Aktif', style: 'aman' },
+  { min: 21, max: Infinity, predikat: 'Hebat', style: 'hebat' },
+];
+
+function activityTier(totalPoin) {
+  const total = Math.max(0, Math.floor(Number(totalPoin || 0)));
+  return ACTIVITY_TIERS.find((t) => total >= t.min && total <= t.max) || ACTIVITY_TIERS[ACTIVITY_TIERS.length - 1];
+}
+
+/** Warna sel predikat keaktifan sesuai tier style. */
+function tierFillStyle(style) {
+  switch (style) {
+    case 'hebat': return { fill: COLOR.hadir, font: COLOR.hadirFont };
+    case 'aman': return { fill: COLOR.hadir, font: COLOR.hadirFont };
+    case 'waspada': return { fill: COLOR.izin, font: COLOR.izinFont };
+    case 'kurang': return { fill: COLOR.sakit, font: COLOR.sakitFont };
+    default: return { fill: null, font: COLOR.hadirFont };
+  }
 }
 
 /**
@@ -1150,19 +1177,17 @@ function buildKeaktifanSheet(workbook, assignment, members, records, context, us
     );
     cRerata.numFmt = '0.00';
 
-    const predikat = typeof rerata === 'number'
-      ? (rerata >= 3.5 ? 'A' : rerata >= 2.5 ? 'B' : 'C')
-      : '';
-    const fill = predikat === 'A' ? COLOR.hadir : predikat === 'B' ? COLOR.izin : predikat === 'C' ? COLOR.sakit : null;
-    const font = predikat === 'A' ? COLOR.hadirFont : predikat === 'C' ? COLOR.sakitFont : COLOR.izinFont;
+    // Predikat dihitung dari TOTAL poin (sistem baru), bukan rata-rata.
+    const tier = activityTier(d.poin);
+    const predikat = d.jumlah > 0 ? tier.predikat : '';
+    const styleInfo = tierFillStyle(tier.style);
+    const fill = predikat ? styleInfo.fill : null;
+    const font = predikat ? styleInfo.font : COLOR.hadirFont;
     applyDataCell(cRerata, dataRowNum, { bold: true, fill, fontColor: fill ? font : null });
 
-    const refRerata = `${colLetter(idxRerata)}${dataRowNum}`;
     const cPredikat = row.getCell(idxPredikat);
-    cPredikat.value = formulaCell(
-      `IF(${refRerata}="","",IF(${refRerata}>=3.5,"A",IF(${refRerata}>=2.5,"B","C")))`,
-      predikat
-    );
+    // Tulis nilai statis dari activityTier (lebih bersih daripada rumus IF berlapis).
+    cPredikat.value = predikat;
     applyDataCell(cPredikat, dataRowNum, { align: 'center', bold: true, fill, fontColor: fill ? font : null });
 
     dataRowNum += 1;
@@ -1210,14 +1235,12 @@ function buildKeaktifanSheet(workbook, assignment, members, records, context, us
   );
   cRerataKelas.numFmt = '0.00';
   const refRerataKelas = `${colLetter(idxRerata)}${dataRowNum}`;
+  // Predikat total kelas berdasar total poin kelas (bukan rata-rata).
+  const tierKelas = activityTier(totals.poin);
+  const predikatKelas = totals.jumlah > 0 ? tierKelas.predikat : '';
   applyTotalCell(
     totalRow.getCell(idxPredikat),
-    hasData
-      ? formulaCell(
-        `IF(${refRerataKelas}="","",IF(${refRerataKelas}>=3.5,"A",IF(${refRerataKelas}>=2.5,"B","C")))`,
-        typeof rerataKelas === 'number' ? (rerataKelas >= 3.5 ? 'A' : rerataKelas >= 2.5 ? 'B' : 'C') : ''
-      )
-      : '',
+    predikatKelas,
     'center'
   );
 
