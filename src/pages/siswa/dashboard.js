@@ -7,7 +7,7 @@ import {
   getPengumumanReadMap,
   getStudentGradeSummary,
 } from '../../firebase/data-service.js';
-import { scoreStatus, KKM_DEFAULT, activityPredikat } from '../../utils/nilai-summary.js';
+import { scoreStatus, KKM_DEFAULT, activityTier } from '../../utils/nilai-summary.js';
 
 const ALPA_ALERT_THRESHOLD = 3;
 
@@ -124,25 +124,26 @@ function nilaiDetailHtml(m) {
     </div>`;
 }
 
-const PREDIKAT_STYLE = {
-  A: { ring: 'ring-emerald-100', chip: 'bg-emerald-50', text: 'text-emerald-700' },
-  B: { ring: 'ring-amber-100', chip: 'bg-amber-50', text: 'text-amber-700' },
-  C: { ring: 'ring-rose-100', chip: 'bg-rose-50', text: 'text-rose-700' },
+const TIER_STYLE = {
+  kosong: { ring: 'ring-slate-100', chip: 'bg-slate-50', text: 'text-slate-400' },
+  kurang: { ring: 'ring-rose-100', chip: 'bg-rose-50', text: 'text-rose-600' },
+  waspada: { ring: 'ring-amber-100', chip: 'bg-amber-50', text: 'text-amber-600' },
+  aman: { ring: 'ring-emerald-100', chip: 'bg-emerald-50', text: 'text-emerald-600' },
+  hebat: { ring: 'ring-violet-100', chip: 'bg-violet-50', text: 'text-violet-600' },
 };
 
-// Chip keaktifan per mapel: predikat (A/B/C) + rata poin + jumlah catatan.
+// Chip keaktifan per mapel: predikat (kategori total poin) + total poin + catatan.
 function keaktifanChipHtml(m, index) {
+  const total = Number(m.total_poin || 0);
   const jumlah = Number(m.jumlah_catatan || 0);
-  const rata = Number(m.rata_poin || 0);
-  const predikat = jumlah > 0 ? (m.predikat || activityPredikat(rata)) : '-';
-  const style = jumlah > 0 ? (PREDIKAT_STYLE[predikat] || PREDIKAT_STYLE.B) : PREDIKAT_STYLE.B;
-  const predikatText = jumlah > 0 ? predikat : '–';
+  const tier = activityTier(total);
+  const style = TIER_STYLE[tier.style] || TIER_STYLE.kosong;
   return `
     <button type="button" data-keaktifan-chip="${index}"
       class="relative flex min-w-[132px] snap-start flex-col rounded-2xl border border-slate-100 ${style.chip} px-4 py-3 text-left shadow-sm ring-1 ${style.ring} transition active:scale-[0.98]">
       <span class="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
-      <span class="mt-1 text-2xl font-bold leading-none ${style.text}">${predikatText}</span>
-      <span class="mt-0.5 text-[10px] font-medium text-slate-400">${jumlah > 0 ? `Rata ${rata.toFixed(2)} · ${jumlah} catatan` : 'Belum ada'}</span>
+      <span class="mt-1 text-[13px] font-bold leading-tight ${style.text}">${escapeHtml(tier.predikat)}</span>
+      <span class="mt-0.5 text-[10px] font-medium text-slate-400">${jumlah > 0 ? `${total} poin · ${jumlah} catatan` : 'Belum ada catatan'}</span>
     </button>`;
 }
 
@@ -183,11 +184,8 @@ export async function renderSiswaDashboardPage(container) {
         .sort((a, b) => String(a.mapel_nama || '').localeCompare(String(b.mapel_nama || ''), 'id'))
     : [];
   const totalCatatanKeaktifan = keaktifanMapelList.reduce((sum, m) => sum + Number(m.jumlah_catatan || 0), 0);
-  const overallRataKeaktifan = (() => {
-    const withData = keaktifanMapelList.filter((m) => Number(m.jumlah_catatan || 0) > 0);
-    if (!withData.length) return 0;
-    return withData.reduce((sum, m) => sum + Number(m.rata_poin || 0), 0) / withData.length;
-  })();
+  const overallTotalPoinKeaktifan = keaktifanMapelList.reduce((sum, m) => sum + Number(m.total_poin || 0), 0);
+  const overallTierKeaktifan = activityTier(overallTotalPoinKeaktifan);
 
   let semuaPengumuman = [];
   let readMap = new Map();
@@ -400,13 +398,14 @@ export async function renderSiswaDashboardPage(container) {
             <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-600">Keaktifan belajar</p>
             <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Partisipasi per mapel</h2>
           </div>
-          ${totalCatatanKeaktifan > 0 ? `<span class="shrink-0 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700">Rata ${overallRataKeaktifan.toFixed(2)} · ${totalCatatanKeaktifan} catatan</span>` : ''}
+          ${totalCatatanKeaktifan > 0 ? `<span class="shrink-0 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700">${overallTierKeaktifan.predikat} · ${overallTotalPoinKeaktifan} poin</span>` : ''}
         </div>
         ${keaktifanMapelList.length ? `
         <div id="dash-keaktifan-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
           ${keaktifanMapelList.map((m, i) => keaktifanChipHtml(m, i)).join('')}
         </div>
-        <p class="mt-1 text-[11px] text-slate-400">Predikat: A (rata ≥3,5), B (≥2,5), C (&lt;2,5). Data dihitung dari catatan keaktifan guru.</p>
+        <p class="mt-1 text-[11px] text-slate-400">Kategori: 0 · 1–5 · 6–10 · 11–15 · 16–20 · &gt;20 poin.</p>
+        ${totalCatatanKeaktifan > 0 ? `<p class="mt-1.5 text-[11px] italic text-slate-500">${escapeHtml(overallTierKeaktifan.motivasi)}</p>` : ''}
         ` : `
         <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
           <p class="text-sm font-semibold text-slate-600">Keaktifan belum tercatat</p>

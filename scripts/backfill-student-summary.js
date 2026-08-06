@@ -90,11 +90,17 @@ function recordPoints(record) {
   return Math.max(1, Math.min(4, raw));
 }
 
-function activityPredikat(avgPoin) {
-  const value = Number(avgPoin || 0);
-  if (value >= 3.5) return 'A';
-  if (value >= 2.5) return 'B';
-  return 'C';
+function activityPredikat(totalPoin) {
+  const total = Math.max(0, Math.floor(Number(totalPoin || 0)));
+  const tiers = [
+    { min: 0, max: 0, predikat: 'Belum Mulai', motivasi: 'Ayo mulai berpartisipasi di kelas hari ini!' },
+    { min: 1, max: 5, predikat: 'Pemula', motivasi: 'Langkah awal yang baik. Terus berusaha!' },
+    { min: 6, max: 10, predikat: 'Berkembang', motivasi: 'Kamu mulai aktif. Pertahankan!' },
+    { min: 11, max: 15, predikat: 'Aktif', motivasi: 'Partisipasi kamu bagus. Lanjutkan!' },
+    { min: 16, max: 20, predikat: 'Sangat Aktif', motivasi: 'Luar biasa, semangatmu membanggakan!' },
+    { min: 21, max: Infinity, predikat: 'Hebat', motivasi: 'Kamu teladan partisipasi kelas!' },
+  ];
+  return tiers.find((t) => total >= t.min && total <= t.max) || tiers[tiers.length - 1];
 }
 
 function computeActivitySummary(records = []) {
@@ -110,11 +116,13 @@ function computeActivitySummary(records = []) {
     });
   });
   const rata = jumlah > 0 ? poin / jumlah : 0;
+  const tier = activityPredikat(poin);
   return {
     jumlah_catatan: jumlah,
     total_poin: poin,
     rata_poin: Math.round(rata * 100) / 100,
-    predikat: activityPredikat(rata),
+    predikat: tier.predikat,
+    motivasi: tier.motivasi,
     indikator,
   };
 }

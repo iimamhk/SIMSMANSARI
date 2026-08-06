@@ -105,18 +105,27 @@ export function recordPoints(record) {
   return Math.max(1, Math.min(4, raw));
 }
 
-/** Predikat rata-rata poin: A>=3.5, B>=2.5, sisanya C. */
-export function activityPredikat(avgPoin) {
-  const value = Number(avgPoin || 0);
-  if (value >= 3.5) return 'A';
-  if (value >= 2.5) return 'B';
-  return 'C';
+// Kategori keaktifan berbasis TOTAL poin (akumulasi sepanjang periode).
+// Tiap kategori punya predikat + motivasi singkat yang ditampilkan ke siswa.
+export const ACTIVITY_TIERS = [
+  { min: 0, max: 0, predikat: 'Belum Mulai', motivasi: 'Ayo mulai berpartisipasi di kelas hari ini!', style: 'kosong' },
+  { min: 1, max: 5, predikat: 'Pemula', motivasi: 'Langkah awal yang baik. Terus berusaha!', style: 'kurang' },
+  { min: 6, max: 10, predikat: 'Berkembang', motivasi: 'Kamu mulai aktif. Pertahankan!', style: 'waspada' },
+  { min: 11, max: 15, predikat: 'Aktif', motivasi: 'Partisipasi kamu bagus. Lanjutkan!', style: 'aman' },
+  { min: 16, max: 20, predikat: 'Sangat Aktif', motivasi: 'Luar biasa, semangatmu membanggakan!', style: 'aman' },
+  { min: 21, max: Infinity, predikat: 'Hebat', motivasi: 'Kamu teladan partisipasi kelas!', style: 'hebat' },
+];
+
+/** Tentukan kategori keaktifan dari total poin. */
+export function activityTier(totalPoin) {
+  const total = Math.max(0, Math.floor(Number(totalPoin || 0)));
+  return ACTIVITY_TIERS.find((t) => total >= t.min && total <= t.max) || ACTIVITY_TIERS[ACTIVITY_TIERS.length - 1];
 }
 
 /**
  * Rekap keaktifan satu siswa dari daftar catatannya.
  * @param {Array} records dokumen keaktifan_siswa milik siswa tsb.
- * @returns {{ jumlah_catatan:number, total_poin:number, rata_poin:number, predikat:string, indikator:Object }}
+ * @returns {{ jumlah_catatan:number, total_poin:number, rata_poin:number, predikat:string, motivasi:string, indikator:Object }}
  */
 export function computeActivitySummary(records = []) {
   let jumlah = 0;
@@ -131,11 +140,13 @@ export function computeActivitySummary(records = []) {
     });
   });
   const rata = jumlah > 0 ? poin / jumlah : 0;
+  const tier = activityTier(poin);
   return {
     jumlah_catatan: jumlah,
     total_poin: poin,
     rata_poin: Math.round(rata * 100) / 100,
-    predikat: activityPredikat(rata),
+    predikat: tier.predikat,
+    motivasi: tier.motivasi,
     indikator,
   };
 }
