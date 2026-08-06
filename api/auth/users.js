@@ -1,5 +1,5 @@
 const { getAuth } = require('../_lib/firebase-admin');
-const { listUsers, saveUser, normalizeUsername } = require('../_lib/auth');
+const { listUsers, saveUser, normalizeUsername, deleteUser } = require('../_lib/auth');
 
 async function requireAdmin(req) {
   const header = String(req.headers.authorization || '');
@@ -37,8 +37,9 @@ module.exports = async (req, res) => {
     if (req.method === 'DELETE') {
       const username = normalizeUsername(req.query?.username);
       if (!username) return res.status(400).json({ error: 'Username wajib diisi.' });
-      const { getFirestore } = require('../_lib/firebase-admin');
-      await getFirestore().collection('users').doc(username).delete();
+      // Hapus akun + pemetaan login + keanggotaan kelas (anggota_kelas). Tanpa
+      // menghapus anggota_kelas, siswa tetap tampil di daftar kelas guru.
+      await deleteUser(username);
       return res.status(204).end();
     }
     return res.status(405).json({ error: 'Method tidak diizinkan.' });

@@ -167,4 +167,71 @@ async function saveUser(input, existingUsername) {
   return safeUser(payload, accountId);
 }
 
-module.exports = { login, listUsers, saveUser, safeUser, normalizeUsername };
+async function commitInChunks(db, refs, mutate) {
+  for (let index = 0; index < refs.length; index += 400) {
+    const batch = db.batch();
+    refs.slice(index, index + 400).forEach((ref) => mutate(batch, ref));
+    await batch.commit();
+  }
+}
+
+/**
+ * Hapus akun user beserta jejak yang membuatnya masih "hidup" di aplikasi:
+ * - dokumen users/{username}
+ * - pemetaan login usernames/{username} (termasuk username lama)
+ * - keanggotaan kelas anggota_kelas (siswa_id == username) — INI yang membuat
+ *   siswa terhapus tetap muncul di daftar kelas guru (absensi/nilai/keaktifan),
+ *   karena halaman guru membaca daftar siswa dari anggota_kelas, bukan users.
+ *
+ * Data historis bernilai arsip (nilai_tugas, nilai_ujian, absensi, keaktifan_siswa)
+ * sengaja TIDAK dihapus agar rekap lampau tetap utuh.
+ * @returns {Promise<{ users:number, usernames:number, anggota_kelas:number }>}
+ */
+async function deleteUser(usernameInput) {
+  const username = normalizeUsername(usernameInput);
+  if (!username) throw new Error('Username wajib diisi.');
+  const db = getFirestore();
+
+  const userRef = db.collection('users').doc(username);
+  const snapshot = await userRef.get();
+  const data = snapshot.exists ? snapshot.data() || {} : {};
+
+  // Semua varian username (utama + sebelumnya) agar dokumen turunan ikut bersih.
+  const usernameVariants = Array.from(new Set([
+    username,
+    normalizeUsername(data.username),
+    ...(Array.isArray(data.previous_usernames) ? data.previous_usernames : []),
+  ].map(normalizeUsername).filter(Boolean)));
+
+  // Kumpulkan keanggotaan kelas berdasar siswa_id (operator "in" maks 10 nilai).
+  const membershipRefs = [];
+  const seenMembershipIds = new Set();
+  for (let index = 0; index < usernameVariants.length; index += 10) {
+    const chunk = usernameVariants.slice(index, index + 10);
+    // eslint-disable-next-line no-await-in-loop
+    const membershipSnapshot = await db.collection('anggota_kelas')
+      .where('siswa_id', 'in', chunk)
+      .get();
+    membershipSnapshot.docs.forEach((doc) => {
+      if (seenMembershipIds.has(doc.id)) return;
+      seenMembershipIds.add(doc.id);
+      membershipRefs.push(doc.ref);
+    });
+  }
+
+  await commitInChunks(db, membershipRefs, (batch, ref) => batch.delete(ref));
+
+  const identityRefs = [
+    userRef,
+    ...usernameVariants.map((value) => db.collection('usernames').doc(value)),
+  ];
+  await commitInChunks(db, identityRefs, (batch, ref) => batch.delete(ref));
+
+  return {
+    users: 1,
+    usernames: usernameVariants.length,
+    anggota_kelas: membershipRefs.length,
+  };
+}
+
+module.exports = { login, listUsers, saveUser, safeUser, normalizeUsername, deleteUser };

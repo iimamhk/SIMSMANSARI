@@ -2,6 +2,8 @@
   "scripts": {
     "snapshot": "node scripts/backup-snapshot.js",
     "snapshot:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; process.env.BACKUP_SKIP_DRIVE='1'; require('./scripts/backup-snapshot.js')\"",
+    "cleanup:orphan-members": "node scripts/cleanup-orphan-memberships.js",
+    "cleanup:orphan-members:local": "node -e \"require('dotenv').config({path:'server/.env'}) || true; require('./scripts/cleanup-orphan-memberships.js')\"",
     "android:sync": "cap sync android",
     "android:open": "cap open android",
     "android:run": "cap run android"
