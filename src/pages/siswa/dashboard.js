@@ -404,12 +404,9 @@ export async function renderSiswaDashboardPage(container) {
         <div id="dash-keaktifan-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
           ${keaktifanMapelList.map((m, i) => keaktifanChipHtml(m, i)).join('')}
         </div>
-        <p class="mt-1 text-[11px] text-slate-400">Kategori: 0 · 1–5 · 6–10 · 11–15 · 16–20 · &gt;20 poin.</p>
-        ${totalCatatanKeaktifan > 0 ? `<p class="mt-1.5 text-[11px] italic text-slate-500">${escapeHtml(overallTierKeaktifan.motivasi)}</p>` : ''}
         ` : `
         <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
           <p class="text-sm font-semibold text-slate-600">Keaktifan belum tercatat</p>
-          <p class="mx-auto mt-1 max-w-xs text-xs text-slate-400">Guru akan mencatat partisipasi belajarmu saat mengajar. Data muncul otomatis di sini.</p>
         </div>
         `}
       </section>
