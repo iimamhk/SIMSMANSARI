@@ -203,11 +203,21 @@ async function deleteUser(usernameInput) {
     ...(Array.isArray(data.previous_usernames) ? data.previous_usernames : []),
   ].map(normalizeUsername).filter(Boolean)));
 
+  // Nilai yang mungkin dipakai sebagai siswa_id pada anggota_kelas. Sebagian
+  // dokumen lama di-key dengan NIS/NISN (bukan username), jadi kita cocokkan
+  // keduanya agar keanggotaan tetap terhapus. Tidak dinormalisasi lowercase
+  // karena NIS/NISN berupa angka dan disimpan apa adanya.
+  const membershipKeys = Array.from(new Set([
+    ...usernameVariants,
+    String(data.nis || '').trim(),
+    String(data.nisn || '').trim(),
+  ].filter(Boolean)));
+
   // Kumpulkan keanggotaan kelas berdasar siswa_id (operator "in" maks 10 nilai).
   const membershipRefs = [];
   const seenMembershipIds = new Set();
-  for (let index = 0; index < usernameVariants.length; index += 10) {
-    const chunk = usernameVariants.slice(index, index + 10);
+  for (let index = 0; index < membershipKeys.length; index += 10) {
+    const chunk = membershipKeys.slice(index, index + 10);
     // eslint-disable-next-line no-await-in-loop
     const membershipSnapshot = await db.collection('anggota_kelas')
       .where('siswa_id', 'in', chunk)

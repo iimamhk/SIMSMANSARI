@@ -18,37 +18,52 @@
  *
  * MENJALANKAN
  * -----------
- *   # dry-run (lihat apa yang akan dihapus):
- *   FIREBASE_SERVICE_ACCOUNT_JSON='{...}' node scripts/cleanup-orphan-memberships.js
- *   # atau memakai server/.env:
+ *   # dry-run (lihat apa yang akan dihapus, TIDAK menghapus):
  *   npm run cleanup:orphan-members
  *
  *   # benar-benar hapus:
  *   npm run cleanup:orphan-members -- --apply
  *
- * Variabel lingkungan:
- *   FIREBASE_SERVICE_ACCOUNT_JSON  (wajib) kredensial service account
+ * KREDENSIAL
+ * ----------
+ * Skrip otomatis membaca kredensial dari `server/.env` (mendukung
+ * FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY, atau
+ * FIREBASE_SERVICE_ACCOUNT_JSON). Bila variabel sudah ada di environment,
+ * nilai environment yang dipakai.
  */
 
-const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
 
 function normalizeUsername(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '');
 }
 
+/** Muat server/.env tanpa dependensi (parser KEY=VALUE sederhana). */
+function loadServerEnv() {
+  const envPath = path.join(__dirname, '..', 'server', '.env');
+  if (!fs.existsSync(envPath)) return;
+  const text = fs.readFileSync(envPath, 'utf8');
+  text.split(/\r?\n/).forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) return;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (key && !(key in process.env)) process.env[key] = value;
+  });
+}
+
 function initFirebase() {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON belum diset.');
-  let credentials;
-  try {
-    credentials = JSON.parse(raw);
-  } catch {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON bukan JSON yang valid.');
-  }
-  if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert(credentials) });
-  }
-  return admin.firestore();
+  loadServerEnv();
+  // Pakai loader kredensial proyek yang sudah mendukung service-account JSON
+  // maupun trio PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY.
+  const { getFirestore } = require('../api/_lib/firebase-admin');
+  return getFirestore();
 }
 
 /** Kumpulan semua identitas user yang masih hidup (doc id + field username). */
