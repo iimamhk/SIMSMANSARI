@@ -8,6 +8,7 @@ import {
   getDocumentsWhere,
   deleteDocument,
   deleteDocumentsBatch,
+  rebuildGradeSummariesForPengajaran,
 } from '../../firebase/data-service.js';
 
 function getSession() {
@@ -3764,6 +3765,13 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
     if (results.some(Boolean)) {
       syncLocalScoreCache(assignment, cacheKey, getFromCache(cacheKey));
       showNotification('✓ Semua nilai tersimpan. Tampilan diperbarui tanpa reload.', 'success');
+    }
+    // Perbarui ringkasan nilai per siswa (dipakai dashboard siswa, hemat read).
+    // Non-fatal: kegagalan di sini tidak mengganggu penyimpanan nilai.
+    try {
+      await rebuildGradeSummariesForPengajaran(context, assignment, members);
+    } catch (error) {
+      console.warn('Gagal memperbarui ringkasan nilai siswa:', error);
     }
     
     btn.disabled = false;

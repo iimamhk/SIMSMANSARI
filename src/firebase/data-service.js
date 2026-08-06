@@ -1,5 +1,6 @@
 import { db } from './firebase-config.js';
 import { getChatDirectory, getManagedUsers } from './auth-service.js';
+import { computeMapelSummary } from '../utils/nilai-summary.js';
 
 const MATERIAL_PUBLISHED_KEY = 'simguru_material_html_published';
 const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
@@ -1084,6 +1085,137 @@ export async function getAttendanceSummary(context, siswaId, aliases = []) {
     if (error?.code !== 'permission-denied') throw error;
   }
   return summary;
+}
+
+/* =========================================================================
+   RINGKASAN NILAI SISWA (untuk dashboard, hemat read)
+   Satu dokumen per siswa: ringkasan_siswa/{tahun}_{semester}_{siswa_id},
+   berisi nilai_per_mapel { [mapel_id]: {mapel_nama, tugas, uh, pts, pas,
+   nilai_akhir, tugas_belum, ...} }. Dashboard cukup MEMBACA 1 dokumen ini.
+   Ditulis ulang saat guru menyimpan penilaian (rebuild per pengajaran) dan/atau
+   saat siswa membuka halaman Nilai (data sudah dimuat di sana). Merge per mapel
+   sehingga tiap guru mapel hanya memperbarui bagiannya.
+   ========================================================================= */
+const STUDENT_GRADE_SUMMARY_COLLECTION = 'ringkasan_siswa';
+
+function buildStudentGradeSummaryId(year, semester, siswaId) {
+  return `${year}_${semester}_${normalizeUserKey(siswaId)}`;
+}
+
+export async function getStudentGradeSummary(context, siswaId) {
+  if (!db || !siswaId) return null;
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) return null;
+  const id = buildStudentGradeSummaryId(year, semester, siswaId);
+  try {
+    return await withQueryCache(`ringkasan-siswa:${id}`, async () => {
+      const snap = await db.collection(STUDENT_GRADE_SUMMARY_COLLECTION).doc(id).get();
+      return snap.exists ? { id: snap.id, ...snap.data() } : null;
+    }, 300000);
+  } catch (error) {
+    console.warn('Gagal membaca ringkasan nilai siswa:', error);
+    return null;
+  }
+}
+
+/**
+ * Simpan/merge ringkasan nilai satu siswa. `perMapel` = objek dikunci mapel_id.
+ * Firestore set(merge:true) menggabungkan map, jadi mapel lain tidak terhapus.
+ */
+export async function saveStudentGradeSummary(context, siswa, perMapel = {}) {
+  if (!db) return;
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) return;
+  const siswaId = normalizeUserKey(
+    (siswa && (siswa.siswa_id || siswa.username || siswa.id)) || siswa
+  );
+  if (!siswaId) return;
+  const id = buildStudentGradeSummaryId(year, semester, siswaId);
+  await db.collection(STUDENT_GRADE_SUMMARY_COLLECTION).doc(id).set({
+    id,
+    tahun_ajaran_id: year,
+    semester_id: semester,
+    siswa_id: siswaId,
+    siswa_nama: (siswa && (siswa.siswa_nama || siswa.nama)) || '',
+    nilai_per_mapel: perMapel || {},
+    nilai_updated_at: new Date().toISOString(),
+  }, { merge: true });
+  invalidateQueryCache('ringkasan-siswa');
+}
+
+function normalizeGradeId(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+/**
+ * Susun ulang ringkasan nilai SEMUA siswa pada satu pengajaran (satu mapel).
+ * Dipanggil dari sisi guru setelah menyimpan nilai — data kelas sudah dimuat,
+ * jadi biaya baca ditanggung guru (sedikit), bukan tiap siswa.
+ */
+export async function rebuildGradeSummariesForPengajaran(context, assignment, members = []) {
+  if (!db || !assignment?.id) return { updated: 0 };
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) return { updated: 0 };
+  const list = Array.isArray(members) ? members.filter(Boolean) : [];
+  if (!list.length) return { updated: 0 };
+
+  const base = [
+    { field: 'tahun_ajaran_id', value: year },
+    { field: 'semester_id', value: semester },
+    { field: 'pengajaran_id', value: assignment.id },
+  ];
+  const [babDocs, tugasDocs, nilaiTugasDocs, nilaiUjianDocs] = await Promise.all([
+    getDocumentsWhere('bab', base, { cacheMs: 120000 }),
+    getDocumentsWhere('tugas_bab', base, { cacheMs: 120000 }),
+    getDocumentsWhere('nilai_tugas', base, { cacheMs: 120000 }),
+    getDocumentsWhere('nilai_ujian', base, { cacheMs: 120000 }),
+  ]);
+
+  // Tugas aktif = tugas yang bab-nya masih ada.
+  const activeBab = new Set(babDocs.map((d) => normalizeGradeId(d.bab_id || d.id)));
+  const activeTugasIds = new Set(
+    tugasDocs
+      .filter((t) => activeBab.has(normalizeGradeId(t.bab_id)))
+      .map((t) => normalizeGradeId(t.tugas_id || t.id))
+  );
+  const tugasTotal = activeTugasIds.size;
+
+  const mapelId = String(assignment.mapel_id || '').trim() || '-';
+  const mapelNama = String(assignment.mapel_nama || assignment.mapel_id || 'Mapel').trim();
+
+  let updated = 0;
+  for (const member of list) {
+    const siswaKey = normalizeUserKey(member.siswa_id || member.id || member.username);
+    if (!siswaKey) continue;
+
+    const myTugas = nilaiTugasDocs.filter((d) =>
+      normalizeUserKey(d.siswa_id) === siswaKey
+      && activeTugasIds.has(normalizeGradeId(d.tugas_id))
+    );
+    const tugasScores = myTugas.map((d) => Number(d.nilai || 0));
+    const tugasTerisi = new Set(myTugas.map((d) => normalizeGradeId(d.tugas_id))).size;
+
+    const myUjian = nilaiUjianDocs.filter((d) => normalizeUserKey(d.siswa_id) === siswaKey);
+    const uhScores = myUjian.filter((d) => String(d.jenis_nilai).toLowerCase() === 'ulangan_harian').map((d) => Number(d.nilai || 0));
+    const ptsScores = myUjian.filter((d) => String(d.jenis_nilai).toLowerCase() === 'pts').map((d) => Number(d.nilai || 0));
+    const pasScores = myUjian.filter((d) => String(d.jenis_nilai).toLowerCase() === 'pas').map((d) => Number(d.nilai || 0));
+
+    // Lewati siswa tanpa data apa pun agar tidak menulis dokumen kosong.
+    if (!tugasScores.length && !uhScores.length && !ptsScores.length && !pasScores.length && !tugasTotal) {
+      continue;
+    }
+
+    const summary = computeMapelSummary({ tugasScores, uhScores, ptsScores, pasScores, tugasTotal, tugasTerisi });
+    const perMapel = { [mapelId]: { mapel_nama: mapelNama, ...summary } };
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await saveStudentGradeSummary(context, { siswa_id: siswaKey, siswa_nama: member.siswa_nama || member.nama || '' }, perMapel);
+      updated += 1;
+    } catch (error) {
+      console.warn('Gagal menyimpan ringkasan nilai siswa', siswaKey, error);
+    }
+  }
+  return { updated };
 }
 
 export function subscribeCollection(collectionName, filters = [], callback, options = {}) {

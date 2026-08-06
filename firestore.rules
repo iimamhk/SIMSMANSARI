@@ -337,6 +337,7 @@ service cloud.firestore {
         'anggota_kelas',
          'absensi',
          'absensi_ringkasan_siswa',
+         'ringkasan_siswa',
         'catatan_khusus',
         'jurnal_guru',
         'nilai_tugas',

@@ -5,7 +5,9 @@ import {
   getPengumumanForSiswa,
   recordPengumumanRead,
   getPengumumanReadMap,
+  getStudentGradeSummary,
 } from '../../firebase/data-service.js';
+import { scoreStatus, KKM_DEFAULT } from '../../utils/nilai-summary.js';
 
 const ALPA_ALERT_THRESHOLD = 3;
 
@@ -63,6 +65,65 @@ const quickCard = (href, title, desc, icon, tone = 'blue', options = {}) => {
           </a>`;
 };
 
+const NILAI_STATUS_STYLE = {
+  aman: { score: 'text-emerald-600', ring: 'ring-emerald-100', chip: 'bg-emerald-50' },
+  waspada: { score: 'text-amber-600', ring: 'ring-amber-100', chip: 'bg-amber-50' },
+  kurang: { score: 'text-rose-600', ring: 'ring-rose-100', chip: 'bg-rose-50' },
+  kosong: { score: 'text-slate-400', ring: 'ring-slate-100', chip: 'bg-slate-50' },
+};
+
+function formatNilai(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num) || num <= 0) return '–';
+  return Number.isInteger(num) ? String(num) : num.toFixed(1);
+}
+
+// Chip mapel: ringkas, mobile-first, bisa digeser horizontal. Angka besar =
+// nilai akhir (warna mengikuti KKM). Titik amber = ada tugas belum dikerjakan.
+function nilaiChipHtml(m, index, kkm) {
+  const status = scoreStatus(m.nilai_akhir, kkm);
+  const style = NILAI_STATUS_STYLE[status] || NILAI_STATUS_STYLE.kosong;
+  const belum = Number(m.tugas_belum || 0);
+  const belumDot = belum > 0
+    ? `<span class="absolute right-2 top-2 inline-flex h-2 w-2 rounded-full bg-amber-500" aria-hidden="true"></span>`
+    : '';
+  const belumLine = belum > 0
+    ? `<span class="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600">${belum} tugas belum</span>`
+    : `<span class="mt-0.5 text-[10px] font-medium text-slate-400">Lengkap</span>`;
+  return `
+    <button type="button" data-nilai-chip="${index}"
+      class="relative flex min-w-[132px] snap-start flex-col rounded-2xl border border-slate-100 ${style.chip} px-4 py-3 text-left shadow-sm ring-1 ${style.ring} transition active:scale-[0.98]">
+      ${belumDot}
+      <span class="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
+      <span class="mt-1 text-2xl font-bold leading-none ${style.score}">${formatNilai(m.nilai_akhir)}</span>
+      ${belumLine}
+    </button>`;
+}
+
+// Panel detail komponen (tugas/UH/PTS/PAS) untuk satu mapel — muncul saat chip diketuk.
+function nilaiDetailHtml(m) {
+  const cell = (label, value) => `
+    <div class="rounded-xl bg-white px-3 py-2 text-center ring-1 ring-slate-100">
+      <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">${label}</p>
+      <p class="mt-0.5 text-sm font-bold text-slate-700">${formatNilai(value)}</p>
+    </div>`;
+  const belum = Number(m.tugas_belum || 0);
+  const note = belum > 0
+    ? `<p class="mt-2 text-[11px] font-medium text-amber-600">Ada ${belum} tugas yang belum dikerjakan/dinilai dari ${Number(m.tugas_total || 0)} tugas.</p>`
+    : (Number(m.tugas_total || 0) > 0 ? `<p class="mt-2 text-[11px] font-medium text-emerald-600">Semua tugas sudah dikerjakan. Mantap!</p>` : '');
+  return `
+    <div class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-3">
+      <div class="mb-2 flex items-center justify-between">
+        <p class="text-sm font-semibold text-slate-900">${escapeHtml(m.mapel_nama || 'Mapel')}</p>
+        <span class="rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-bold text-indigo-700">Akhir ${formatNilai(m.nilai_akhir)}</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2">
+        ${cell('Tugas', m.tugas)}${cell('UH', m.uh)}${cell('PTS', m.pts)}${cell('PAS', m.pas)}
+      </div>
+      ${note}
+    </div>`;
+}
+
 export async function renderSiswaDashboardPage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -77,6 +138,21 @@ export async function renderSiswaDashboardPage(container) {
   const attendanceSummary = await getAttendanceSummary(context, siswaId, siswaKeys);
   const totalAlpa = Number(attendanceSummary?.total_alpa || 0);
   const hasAlpaWarning = totalAlpa >= ALPA_ALERT_THRESHOLD;
+
+  // Ringkasan nilai per mapel (1 dokumen). Aman bila belum ada → tampil placeholder.
+  const KKM = KKM_DEFAULT; // 70
+  let gradeSummary = null;
+  try {
+    gradeSummary = await getStudentGradeSummary(context, siswaId);
+  } catch {
+    gradeSummary = null;
+  }
+  const nilaiMapelList = gradeSummary && gradeSummary.nilai_per_mapel
+    ? Object.entries(gradeSummary.nilai_per_mapel)
+        .map(([id, value]) => ({ mapel_id: id, ...value }))
+        .sort((a, b) => String(a.mapel_nama || '').localeCompare(String(b.mapel_nama || ''), 'id'))
+    : [];
+  const totalTugasBelum = nilaiMapelList.reduce((sum, m) => sum + Number(m.tugas_belum || 0), 0);
 
   let semuaPengumuman = [];
   let readMap = new Map();
@@ -254,6 +330,37 @@ export async function renderSiswaDashboardPage(container) {
 
       <section>
         <div class="mb-3 flex items-center justify-between">
+          <div>
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-indigo-600">Rapor ringkas</p>
+            <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Nilai per mata pelajaran</h2>
+          </div>
+          <a href="#siswa/nilai" class="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:underline">
+            Detail
+            <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        ${totalTugasBelum > 0 ? `
+        <div class="mb-3 inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+          <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+          ${totalTugasBelum} tugas belum dikerjakan
+        </div>` : ''}
+        ${nilaiMapelList.length ? `
+        <div id="dash-nilai-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
+          ${nilaiMapelList.map((m, i) => nilaiChipHtml(m, i, KKM)).join('')}
+        </div>
+        <p class="mt-1 text-[11px] text-slate-400">Ketuk mata pelajaran untuk melihat rincian tugas, UH, PTS, dan PAS.</p>
+        <div id="dash-nilai-detail"></div>
+        ` : `
+        <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+          <p class="text-sm font-semibold text-slate-600">Ringkasan nilai belum tersedia</p>
+          <p class="mx-auto mt-1 max-w-xs text-xs text-slate-400">Nilai akan muncul di sini setelah guru menyimpan penilaian. Kamu juga bisa membukanya langsung di halaman Nilai.</p>
+          <a href="#siswa/nilai" class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white">Buka Nilai</a>
+        </div>
+        `}
+      </section>
+
+      <section>
+        <div class="mb-3 flex items-center justify-between">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Woro-woro</h2>
           <a href="#siswa/pengumuman" class="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:underline">
             Lihat semua
@@ -272,6 +379,31 @@ export async function renderSiswaDashboardPage(container) {
   container.innerHTML = html;
 
   renderDashboardTimeline();
+
+  // Interaksi chip nilai: ketuk untuk membuka/menutup rincian komponen mapel.
+  const nilaiChipsWrap = container.querySelector('#dash-nilai-chips');
+  const nilaiDetailWrap = container.querySelector('#dash-nilai-detail');
+  if (nilaiChipsWrap && nilaiDetailWrap) {
+    let activeNilaiChip = -1;
+    const chips = Array.from(nilaiChipsWrap.querySelectorAll('[data-nilai-chip]'));
+    const clearActive = () => chips.forEach((el) => el.classList.remove('ring-2', 'ring-indigo-300'));
+    chips.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-nilai-chip'));
+        if (activeNilaiChip === idx) {
+          activeNilaiChip = -1;
+          nilaiDetailWrap.innerHTML = '';
+          clearActive();
+          return;
+        }
+        activeNilaiChip = idx;
+        const mapel = nilaiMapelList[idx];
+        nilaiDetailWrap.innerHTML = mapel ? nilaiDetailHtml(mapel) : '';
+        clearActive();
+        btn.classList.add('ring-2', 'ring-indigo-300');
+      });
+    });
+  }
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

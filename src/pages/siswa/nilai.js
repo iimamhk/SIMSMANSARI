@@ -1,6 +1,7 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
-import { getDocumentsWhere } from '../../firebase/data-service.js';
+import { getDocumentsWhere, saveStudentGradeSummary } from '../../firebase/data-service.js';
+import { computeFinalScore } from '../../utils/nilai-summary.js';
 
 function chunkArray(items = [], size = 10) {
   const chunks = [];
@@ -315,7 +316,7 @@ export async function renderSiswaNilaiPage(container) {
       const uhAvg = average(nilai.uh);
       const ptsAvg = average(nilai.pts);
       const pasAvg = average(nilai.pas);
-      const finalAvg = average([tugasAvg, uhAvg, ptsAvg, pasAvg]);
+      const finalAvg = computeFinalScore(tugasAvg, uhAvg, ptsAvg, pasAvg);
 
       return {
         mapelId,
@@ -340,6 +341,62 @@ export async function renderSiswaNilaiPage(container) {
     pas: average(rows.map((item) => item.pasAvg).filter((item) => item > 0)),
   };
   const overallFinal = average([overall.tugas, overall.uh, overall.pts, overall.pas]);
+
+  // Simpan ringkasan nilai per mapel ke dokumen ringkasan_siswa agar dashboard
+  // cukup MEMBACA 1 dokumen (hemat read). Memakai data yang SUDAH dimuat di sini,
+  // jadi tidak menambah pembacaan. Angka identik dengan tabel di halaman ini.
+  try {
+    const pengajaranMapelMap = new Map();
+    assignmentDocs.forEach((a) => {
+      const pid = normalizeId(a.id || a.pengajaran_id);
+      if (pid) pengajaranMapelMap.set(pid, String(a.mapel_id || '').trim());
+    });
+    const tugasTotalByMapel = {};
+    activeTugasKeys.forEach((key) => {
+      const pid = String(key).split('::')[0];
+      const mapelId = pengajaranMapelMap.get(pid);
+      if (!mapelId) return;
+      tugasTotalByMapel[mapelId] = (tugasTotalByMapel[mapelId] || 0) + 1;
+    });
+    const tugasFilledByMapel = {};
+    const seenFilledTugas = new Set();
+    filteredNilaiTugasDocs.forEach((doc) => {
+      const mapelId = String(doc.mapel_id || '').trim();
+      if (!mapelId) return;
+      const key = `${mapelId}::${normalizeId(doc.tugas_id)}`;
+      if (seenFilledTugas.has(key)) return;
+      seenFilledTugas.add(key);
+      tugasFilledByMapel[mapelId] = (tugasFilledByMapel[mapelId] || 0) + 1;
+    });
+    const round1 = (v) => (Number.isFinite(v) && v > 0 ? Math.round(v * 10) / 10 : 0);
+    const perMapel = {};
+    rows.forEach((row) => {
+      const mapelId = String(row.mapelId || '').trim();
+      if (!mapelId || mapelId === '-') return;
+      const total = tugasTotalByMapel[mapelId] || 0;
+      const terisi = tugasFilledByMapel[mapelId] || 0;
+      perMapel[mapelId] = {
+        mapel_nama: row.mapelNama,
+        tugas: round1(row.tugasAvg),
+        uh: round1(row.uhAvg),
+        pts: round1(row.ptsAvg),
+        pas: round1(row.pasAvg),
+        nilai_akhir: round1(row.finalAvg),
+        tugas_total: total,
+        tugas_terisi: terisi,
+        tugas_belum: Math.max(0, total - terisi),
+      };
+    });
+    if (Object.keys(perMapel).length) {
+      const siswaId = session?.user?.username || session?.user?.id || siswaKeys[0] || '';
+      const siswaNama = session?.user?.nama || '';
+      // Fire-and-forget: tidak menghambat render.
+      saveStudentGradeSummary(context, { siswa_id: siswaId, siswa_nama: siswaNama }, perMapel)
+        .catch((error) => console.warn('Gagal menyimpan ringkasan nilai:', error));
+    }
+  } catch (error) {
+    console.warn('Lewati penyusunan ringkasan nilai:', error);
+  }
 
   const html = renderLayout('Nilai Siswa', `
     <div class="space-y-6">
