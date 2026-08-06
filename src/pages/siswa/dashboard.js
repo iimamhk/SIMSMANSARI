@@ -7,7 +7,7 @@ import {
   getPengumumanReadMap,
   getStudentGradeSummary,
 } from '../../firebase/data-service.js';
-import { scoreStatus, KKM_DEFAULT } from '../../utils/nilai-summary.js';
+import { scoreStatus, KKM_DEFAULT, activityPredikat } from '../../utils/nilai-summary.js';
 
 const ALPA_ALERT_THRESHOLD = 3;
 
@@ -124,6 +124,28 @@ function nilaiDetailHtml(m) {
     </div>`;
 }
 
+const PREDIKAT_STYLE = {
+  A: { ring: 'ring-emerald-100', chip: 'bg-emerald-50', text: 'text-emerald-700' },
+  B: { ring: 'ring-amber-100', chip: 'bg-amber-50', text: 'text-amber-700' },
+  C: { ring: 'ring-rose-100', chip: 'bg-rose-50', text: 'text-rose-700' },
+};
+
+// Chip keaktifan per mapel: predikat (A/B/C) + rata poin + jumlah catatan.
+function keaktifanChipHtml(m, index) {
+  const jumlah = Number(m.jumlah_catatan || 0);
+  const rata = Number(m.rata_poin || 0);
+  const predikat = jumlah > 0 ? (m.predikat || activityPredikat(rata)) : '-';
+  const style = jumlah > 0 ? (PREDIKAT_STYLE[predikat] || PREDIKAT_STYLE.B) : PREDIKAT_STYLE.B;
+  const predikatText = jumlah > 0 ? predikat : '–';
+  return `
+    <button type="button" data-keaktifan-chip="${index}"
+      class="relative flex min-w-[132px] snap-start flex-col rounded-2xl border border-slate-100 ${style.chip} px-4 py-3 text-left shadow-sm ring-1 ${style.ring} transition active:scale-[0.98]">
+      <span class="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(m.mapel_nama || m.mapel_id || 'Mapel')}</span>
+      <span class="mt-1 text-2xl font-bold leading-none ${style.text}">${predikatText}</span>
+      <span class="mt-0.5 text-[10px] font-medium text-slate-400">${jumlah > 0 ? `Rata ${rata.toFixed(2)} · ${jumlah} catatan` : 'Belum ada'}</span>
+    </button>`;
+}
+
 export async function renderSiswaDashboardPage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -153,6 +175,19 @@ export async function renderSiswaDashboardPage(container) {
         .sort((a, b) => String(a.mapel_nama || '').localeCompare(String(b.mapel_nama || ''), 'id'))
     : [];
   const totalTugasBelum = nilaiMapelList.reduce((sum, m) => sum + Number(m.tugas_belum || 0), 0);
+
+  // Ringkasan keaktifan per mapel (dari dokumen ringkasan_siswa yang sama).
+  const keaktifanMapelList = gradeSummary && gradeSummary.keaktifan_per_mapel
+    ? Object.entries(gradeSummary.keaktifan_per_mapel)
+        .map(([id, value]) => ({ mapel_id: id, ...value }))
+        .sort((a, b) => String(a.mapel_nama || '').localeCompare(String(b.mapel_nama || ''), 'id'))
+    : [];
+  const totalCatatanKeaktifan = keaktifanMapelList.reduce((sum, m) => sum + Number(m.jumlah_catatan || 0), 0);
+  const overallRataKeaktifan = (() => {
+    const withData = keaktifanMapelList.filter((m) => Number(m.jumlah_catatan || 0) > 0);
+    if (!withData.length) return 0;
+    return withData.reduce((sum, m) => sum + Number(m.rata_poin || 0), 0) / withData.length;
+  })();
 
   let semuaPengumuman = [];
   let readMap = new Map();
@@ -355,6 +390,27 @@ export async function renderSiswaDashboardPage(container) {
           <p class="text-sm font-semibold text-slate-600">Ringkasan nilai belum tersedia</p>
           <p class="mx-auto mt-1 max-w-xs text-xs text-slate-400">Nilai akan muncul di sini setelah guru menyimpan penilaian. Kamu juga bisa membukanya langsung di halaman Nilai.</p>
           <a href="#siswa/nilai" class="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white">Buka Nilai</a>
+        </div>
+        `}
+      </section>
+
+      <section>
+        <div class="mb-3 flex items-center justify-between">
+          <div>
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-600">Keaktifan belajar</p>
+            <h2 class="mt-1 text-xl font-bold tracking-tight text-slate-900">Partisipasi per mapel</h2>
+          </div>
+          ${totalCatatanKeaktifan > 0 ? `<span class="shrink-0 rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-semibold text-cyan-700">Rata ${overallRataKeaktifan.toFixed(2)} · ${totalCatatanKeaktifan} catatan</span>` : ''}
+        </div>
+        ${keaktifanMapelList.length ? `
+        <div id="dash-keaktifan-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
+          ${keaktifanMapelList.map((m, i) => keaktifanChipHtml(m, i)).join('')}
+        </div>
+        <p class="mt-1 text-[11px] text-slate-400">Predikat: A (rata ≥3,5), B (≥2,5), C (&lt;2,5). Data dihitung dari catatan keaktifan guru.</p>
+        ` : `
+        <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+          <p class="text-sm font-semibold text-slate-600">Keaktifan belum tercatat</p>
+          <p class="mx-auto mt-1 max-w-xs text-xs text-slate-400">Guru akan mencatat partisipasi belajarmu saat mengajar. Data muncul otomatis di sini.</p>
         </div>
         `}
       </section>

@@ -9,6 +9,7 @@ import {
   deleteDocument,
   deleteDocumentsBatch,
   rebuildGradeSummariesForPengajaran,
+  rebuildActivitySummariesForPengajaran,
 } from '../../firebase/data-service.js';
 
 function getSession() {
@@ -3769,9 +3770,12 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
     // Perbarui ringkasan nilai per siswa (dipakai dashboard siswa, hemat read).
     // Non-fatal: kegagalan di sini tidak mengganggu penyimpanan nilai.
     try {
-      await rebuildGradeSummariesForPengajaran(context, assignment, members);
+      await Promise.all([
+        rebuildGradeSummariesForPengajaran(context, assignment, members),
+        rebuildActivitySummariesForPengajaran(context, assignment, members),
+      ]);
     } catch (error) {
-      console.warn('Gagal memperbarui ringkasan nilai siswa:', error);
+      console.warn('Gagal memperbarui ringkasan siswa:', error);
     }
     
     btn.disabled = false;

@@ -1,6 +1,6 @@
 import { db } from './firebase-config.js';
 import { getChatDirectory, getManagedUsers } from './auth-service.js';
-import { computeMapelSummary } from '../utils/nilai-summary.js';
+import { computeMapelSummary, computeActivitySummary } from '../utils/nilai-summary.js';
 
 const MATERIAL_PUBLISHED_KEY = 'simguru_material_html_published';
 const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
@@ -1213,6 +1213,77 @@ export async function rebuildGradeSummariesForPengajaran(context, assignment, me
       updated += 1;
     } catch (error) {
       console.warn('Gagal menyimpan ringkasan nilai siswa', siswaKey, error);
+    }
+  }
+  return { updated };
+}
+
+/* =========================================================================
+   RINGKASAN KEAKTIFAN SISWA (untuk dashboard, hemat read)
+   Disimpan dalam DOKUMEN ringkasan_siswa yang SAMA dengan nilai (field
+   keaktifan_per_mapel), sehingga dashboard tetap membaca 1 dokumen per siswa.
+   Rekap: jumlah catatan, total poin, rata poin, predikat (A/B/C), per indikator.
+   ========================================================================= */
+
+/**
+ * Simpan/merge ringkasan keaktifan satu siswa untuk satu mapel.
+ * `perMapel` = { [mapel_id]: { mapel_nama, ...computeActivitySummary } }.
+ */
+export async function saveStudentActivitySummary(context, siswa, perMapel = {}) {
+  if (!db) return;
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) return;
+  const siswaId = normalizeUserKey(
+    (siswa && (siswa.siswa_id || siswa.username || siswa.id)) || siswa
+  );
+  if (!siswaId) return;
+  const id = buildStudentGradeSummaryId(year, semester, siswaId);
+  await db.collection(STUDENT_GRADE_SUMMARY_COLLECTION).doc(id).set({
+    id,
+    tahun_ajaran_id: year,
+    semester_id: semester,
+    siswa_id: siswaId,
+    siswa_nama: (siswa && (siswa.siswa_nama || siswa.nama)) || '',
+    keaktifan_per_mapel: perMapel || {},
+    keaktifan_updated_at: new Date().toISOString(),
+  }, { merge: true });
+  invalidateQueryCache('ringkasan-siswa');
+}
+
+/**
+ * Susun ulang ringkasan keaktifan SEMUA siswa pada satu pengajaran.
+ * Baca catatan keaktifan kelas tsb sekali, hitung per siswa, tulis ringkasan.
+ */
+export async function rebuildActivitySummariesForPengajaran(context, assignment, members = []) {
+  if (!db || !assignment?.id) return { updated: 0 };
+  const { year, semester } = getActivePeriod(context);
+  if (!year || !semester) return { updated: 0 };
+  const list = Array.isArray(members) ? members.filter(Boolean) : [];
+  if (!list.length) return { updated: 0 };
+
+  const docs = await getDocumentsWhere('keaktifan_siswa', [
+    { field: 'tahun_ajaran_id', value: year },
+    { field: 'semester_id', value: semester },
+    { field: 'pengajaran_id', value: assignment.id },
+  ], { cacheMs: 120000 });
+
+  const mapelId = String(assignment.mapel_id || '').trim() || '-';
+  const mapelNama = String(assignment.mapel_nama || assignment.mapel_id || 'Mapel').trim();
+
+  let updated = 0;
+  for (const member of list) {
+    const siswaKey = normalizeUserKey(member.siswa_id || member.id || member.username);
+    if (!siswaKey) continue;
+    const myRecords = docs.filter((d) => normalizeUserKey(d.siswa_id) === siswaKey);
+    if (!myRecords.length) continue;
+    const summary = computeActivitySummary(myRecords);
+    const perMapel = { [mapelId]: { mapel_nama: mapelNama, ...summary } };
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await saveStudentActivitySummary(context, { siswa_id: siswaKey, siswa_nama: member.siswa_nama || member.nama || '' }, perMapel);
+      updated += 1;
+    } catch (error) {
+      console.warn('Gagal menyimpan ringkasan keaktifan siswa', siswaKey, error);
     }
   }
   return { updated };

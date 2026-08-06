@@ -77,3 +77,66 @@ export function scoreStatus(score, kkm = KKM_DEFAULT) {
   if (value >= kkm - 10) return 'waspada';
   return 'kurang';
 }
+
+// ---------------------------------------------------------------------------
+// KEAKTIFAN
+// Lima indikator (diselaraskan dengan excel-sheets.js / guru/keaktifan.js).
+// ---------------------------------------------------------------------------
+export const ACTIVITY_INDICATORS = [
+  { key: 'bertanya', label: 'Bertanya' },
+  { key: 'menjawab', label: 'Menjawab' },
+  { key: 'diskusi', label: 'Diskusi' },
+  { key: 'presentasi', label: 'Presentasi' },
+  { key: 'tugas_kelas', legacyKey: 'membantu', label: 'Tugas Kelas' },
+];
+
+export function isIndicatorActive(indicators, item) {
+  const map = indicators && typeof indicators === 'object' ? indicators : {};
+  if (Object.prototype.hasOwnProperty.call(map, item.key)) return Boolean(map[item.key]);
+  if (item.legacyKey && Object.prototype.hasOwnProperty.call(map, item.legacyKey)) {
+    return Boolean(map[item.legacyKey]);
+  }
+  return false;
+}
+
+/** Poin satu catatan, dibatasi 1-4 (sama seperti halaman keaktifan). */
+export function recordPoints(record) {
+  const raw = Number(record?.poin_indikator ?? record?.skor ?? 1) || 1;
+  return Math.max(1, Math.min(4, raw));
+}
+
+/** Predikat rata-rata poin: A>=3.5, B>=2.5, sisanya C. */
+export function activityPredikat(avgPoin) {
+  const value = Number(avgPoin || 0);
+  if (value >= 3.5) return 'A';
+  if (value >= 2.5) return 'B';
+  return 'C';
+}
+
+/**
+ * Rekap keaktifan satu siswa dari daftar catatannya.
+ * @param {Array} records dokumen keaktifan_siswa milik siswa tsb.
+ * @returns {{ jumlah_catatan:number, total_poin:number, rata_poin:number, predikat:string, indikator:Object }}
+ */
+export function computeActivitySummary(records = []) {
+  let jumlah = 0;
+  let poin = 0;
+  const indikator = {};
+  ACTIVITY_INDICATORS.forEach((item) => { indikator[item.key] = 0; });
+  (Array.isArray(records) ? records : []).forEach((rec) => {
+    jumlah += 1;
+    poin += recordPoints(rec);
+    ACTIVITY_INDICATORS.forEach((item) => {
+      if (isIndicatorActive(rec.indikator, item)) indikator[item.key] += 1;
+    });
+  });
+  const rata = jumlah > 0 ? poin / jumlah : 0;
+  return {
+    jumlah_catatan: jumlah,
+    total_poin: poin,
+    rata_poin: Math.round(rata * 100) / 100,
+    predikat: activityPredikat(rata),
+    indikator,
+  };
+}
+
