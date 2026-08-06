@@ -212,6 +212,7 @@ export async function renderGuruKeaktifanPage(container) {
   let activeTab = 'input';
   let selectedStudentId = '';
   let editingTransactionId = '';
+  let recapSort = 'poin';
   let members = [];
   let records = [];
   const draftByStudent = new Map();
@@ -288,7 +289,7 @@ export async function renderGuruKeaktifanPage(container) {
         <div id="activity-recap-summary" class="grid grid-cols-2 gap-2 lg:grid-cols-4"></div>
         <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><h2 class="font-bold text-slate-900">Statistik Jenis Aktivitas</h2><p class="mt-1 text-xs text-slate-500">Jumlah transaksi yang memuat setiap jenis keaktifan.</p></div><p id="activity-rarest-type" class="text-xs font-semibold text-amber-700"></p></div><div id="activity-type-stats" class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5"></div></div>
         <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div class="border-b border-slate-100 p-4"><h2 class="font-bold text-slate-900">Rekap per Siswa</h2><p class="mt-1 text-xs text-slate-500">Perbandingan memakai rata-rata agar adil untuk jumlah observasi berbeda.</p></div>
+          <div class="border-b border-slate-100 p-4"><div class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="font-bold text-slate-900">Rekap per Siswa</h2><p class="mt-1 text-xs text-slate-500">Perbandingan memakai rata-rata agar adil untuk jumlah observasi berbeda.</p></div><label class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">Urutkan<select id="activity-recap-sort" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"><option value="poin">Poin terbesar</option><option value="abjad">Abjad (A–Z)</option></select></label></div></div>
           <div class="overflow-x-auto"><table class="min-w-[920px] w-full text-xs"><thead class="bg-slate-50 text-slate-600"><tr><th class="px-3 py-3 text-left">No</th><th class="px-3 py-3 text-left">Siswa</th><th class="px-3 py-3 text-center">Aktivitas</th><th class="px-3 py-3 text-center">Total Poin</th><th class="px-3 py-3 text-center">Rata Poin</th><th class="px-3 py-3 text-center">Pertemuan Aktif</th><th class="px-3 py-3 text-center">Variasi</th><th class="px-3 py-3 text-center">Poin/Pertemuan</th><th class="px-3 py-3 text-center">Predikat</th></tr></thead><tbody id="activity-recap-body"></tbody></table></div>
         </div>
       </section>
@@ -373,7 +374,7 @@ export async function renderGuruKeaktifanPage(container) {
         <label class="mt-3 block text-[11px] font-semibold text-slate-500">Catatan singkat <span class="font-normal">(opsional)</span>
           <input data-activity-note type="text" maxlength="180" value="${escapeHtml(draft.note)}" placeholder="Contoh: aktif membantu diskusi kelompok" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100" />
         </label>
-        <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><p data-row-status class="text-[11px] text-slate-400">${isEditing ? 'Perubahan belum disimpan' : 'Pilih poin dan jenis keaktifan'}</p><div class="flex gap-2">${isEditing ? '<button type="button" data-cancel-edit class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Batal</button>' : ''}<button type="button" data-save-observation class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">${isEditing ? 'Simpan Perubahan' : 'Simpan Transaksi'}</button></div></div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><p data-row-status class="text-[11px] text-slate-400">${isEditing ? 'Perubahan belum disimpan' : 'Pilih poin dan jenis keaktifan'}</p><div class="flex gap-2">${isEditing ? '<button type="button" data-cancel-edit class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Batal</button>' : ''}<button type="button" data-save-observation class="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60">${isEditing ? 'Simpan Perubahan' : 'Simpan'}</button></div></div>
       </article>
     `;
   };
@@ -417,7 +418,9 @@ export async function renderGuruKeaktifanPage(container) {
   const renderRecap = () => {
     const classMeetingCount = new Set(records.map((record) => record.tanggal).filter(Boolean)).size;
     const aggregates = aggregateStudents(members, records, classMeetingCount)
-      .sort((a, b) => b.pointsPerClassMeeting - a.pointsPerClassMeeting || b.totalPoints - a.totalPoints);
+      .sort((a, b) => recapSort === 'abjad'
+        ? a.studentName.localeCompare(b.studentName, 'id')
+        : (b.totalPoints - a.totalPoints || b.pointsPerClassMeeting - a.pointsPerClassMeeting));
     const observed = aggregates.filter((item) => item.activityCount > 0);
     const average = observed.length ? observed.reduce((sum, item) => sum + item.averagePoints, 0) / observed.length : 0;
     const totalActivities = records.length;
@@ -689,6 +692,11 @@ export async function renderGuruKeaktifanPage(container) {
     }
   });
   historySearch.addEventListener('input', renderHistory);
+
+  container.querySelector('#activity-recap-sort')?.addEventListener('change', (event) => {
+    recapSort = event.target.value === 'abjad' ? 'abjad' : 'poin';
+    renderRecap();
+  });
 
   container.routeCleanup = () => {
     disposed = true;

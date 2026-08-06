@@ -404,6 +404,7 @@ export async function renderSiswaDashboardPage(container) {
         <div id="dash-keaktifan-chips" class="flex gap-3 overflow-x-auto pb-2 snap-x [-webkit-overflow-scrolling:touch]">
           ${keaktifanMapelList.map((m, i) => keaktifanChipHtml(m, i)).join('')}
         </div>
+        ${totalCatatanKeaktifan > 0 ? `<p class="mt-1.5 text-[11px] italic text-slate-500">${escapeHtml(overallTierKeaktifan.motivasi)}</p>` : ''}
         ` : `
         <div class="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
           <p class="text-sm font-semibold text-slate-600">Keaktifan belum tercatat</p>
