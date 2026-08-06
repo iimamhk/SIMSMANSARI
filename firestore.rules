@@ -364,6 +364,7 @@ service cloud.firestore {
         'materi_ai',
 'pengumuman',
         'pengumuman_reads',
+        'pengumuman_ringkasan',
         'rpm_drafts'
       ];
     }

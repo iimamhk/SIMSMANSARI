@@ -8,6 +8,15 @@ const MATERIAL_READS_KEY = 'simguru_material_reads';
 const MATERIAL_READS_COLLECTION = 'materi_reads';
 const QUERY_CACHE_TTL_MS = 60000;
 const COLLECTION_CACHE_TTL_MS = 300000;
+// Roster kelas (anggota_kelas) nyaris tidak berubah dalam satu sesi kerja guru.
+// Cache di memori dinaikkan menjadi 3 jam (dalam rentang 2-6 jam) untuk memangkas
+// pembacaan berulang roster (~satu kelas = puluhan dokumen) saat guru berpindah
+// antar halaman absensi/nilai/keaktifan untuk kelas yang sama. Sengaja HANYA di
+// memori (bukan localStorage) agar setiap refresh halaman tetap menampilkan
+// data terbaru — penting agar penambahan/penghapusan siswa langsung terlihat.
+// Perubahan anggota pada perangkat yang sama tetap membersihkan cache seketika
+// (lihat invalidateQueryCache untuk 'anggota_kelas').
+const CLASS_MEMBERS_CACHE_TTL_MS = 10800000; // 3 jam
 // Optimasi #2: koleksi statis (settings, mata_pelajaran, kelas, tahun_ajaran,
 // pengajaran, pembelajaran, wali_kelas) nyaris tak berubah harian dan setiap
 // penulisan sudah meng-invalidasi cache-nya, jadi TTL dinaikkan dari 30 menit
@@ -154,6 +163,15 @@ function invalidateQueryCache(collectionName = '') {
     const isScopedCollectionKey = key.startsWith(`${target}:`);
     if (isStandardKey || isScopedCollectionKey) {
       queryCache.delete(key);
+    }
+  }
+  // Perbaikan: cache daftar siswa memakai kunci `class-members:*` yang TIDAK
+  // tertangkap pola di atas, sehingga perubahan pada `anggota_kelas` dulu tidak
+  // ikut membersihkannya (siswa yang baru dihapus/ditambah bisa tertinggal di
+  // layar sampai TTL habis). Kaitkan keduanya di sini.
+  if (target === 'anggota_kelas') {
+    for (const key of queryCache.keys()) {
+      if (key.startsWith('class-members:')) queryCache.delete(key);
     }
   }
 }
@@ -1946,7 +1964,7 @@ export async function getClassMembers(context, kelasId) {
       if (classMemberDocs.length) return classMemberDocs;
 
       return [];
-    });
+    }, CLASS_MEMBERS_CACHE_TTL_MS);
   } catch (error) {
     console.warn('Gagal mengambil anggota kelas dari Firestore:', error);
     return [];
@@ -1968,6 +1986,65 @@ const PENGUMUMAN_KEY = 'simguru_pengumuman';
 const PENGUMUMAN_COLLECTION = 'pengumuman';
 const PENGUMUMAN_READS_KEY = 'simguru_pengumuman_reads';
 const PENGUMUMAN_READS_COLLECTION = 'pengumuman_reads';
+// Ringkasan pengumuman per kelas: SATU dokumen berisi daftar pengumuman terbaru
+// (maks 20) untuk satu kelas+periode. Dashboard/halaman siswa cukup membaca 1
+// dokumen ini alih-alih meng-query belasan dokumen pengumuman satu per satu —
+// penghematan read besar karena dibaca oleh ratusan siswa. Ditulis ulang oleh
+// guru saat menyimpan/menghapus pengumuman (jumlah guru sedikit & jarang).
+const PENGUMUMAN_SUMMARY_COLLECTION = 'pengumuman_ringkasan';
+
+function buildPengumumanSummaryId(year, semester, kelasId) {
+  return `${year}_${semester}_${normalizeClassKey(kelasId)}`;
+}
+
+/**
+ * Susun ulang dokumen ringkasan pengumuman untuk satu kelas+periode dengan
+ * membaca 20 pengumuman terbaru kelas tsb, lalu menyimpannya sebagai satu
+ * dokumen. Dipanggil dari sisi guru (saat simpan/hapus pengumuman), sehingga
+ * biaya query ~20 dokumen ditanggung guru sekali, bukan tiap siswa tiap sesi.
+ */
+async function rebuildPengumumanSummary(year, semester, kelasId) {
+  if (!db || !year || !semester || !kelasId) return;
+  const normalizedKelas = normalizeClassKey(kelasId);
+  if (!normalizedKelas) return;
+  const queryOptions = { orderBy: 'created_at', orderDirection: 'desc', limit: 20 };
+  let items = await getDocumentsWhere(PENGUMUMAN_COLLECTION, [
+    { field: 'kelas_ids', operator: 'array-contains', value: normalizedKelas },
+    { field: 'tahun_ajaran_id', value: year },
+    { field: 'semester_id', value: semester },
+  ], queryOptions);
+  if (!items.length) {
+    items = await getDocumentsWhere(PENGUMUMAN_COLLECTION, [
+      { field: 'kelas_id', value: kelasId },
+      { field: 'tahun_ajaran_id', value: year },
+      { field: 'semester_id', value: semester },
+    ], queryOptions);
+  }
+  const summaryId = buildPengumumanSummaryId(year, semester, normalizedKelas);
+  await db.collection(PENGUMUMAN_SUMMARY_COLLECTION).doc(summaryId).set({
+    id: summaryId,
+    tahun_ajaran_id: year,
+    semester_id: semester,
+    kelas_id: normalizedKelas,
+    items: items.slice(0, 20),
+    updated_at: new Date().toISOString(),
+  }, { merge: true });
+  // Segarkan cache pembaca agar siswa langsung memakai ringkasan terbaru.
+  invalidateQueryCache('pengumuman');
+}
+
+/** Susun ulang ringkasan untuk beberapa kelas sekaligus (mis. pengumuman multi-kelas). */
+async function rebuildPengumumanSummaryForClasses(year, semester, kelasIds = []) {
+  const unique = Array.from(new Set((kelasIds || []).map(normalizeClassKey).filter(Boolean)));
+  for (const kelasId of unique) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await rebuildPengumumanSummary(year, semester, kelasId);
+    } catch (error) {
+      console.warn('Gagal menyusun ringkasan pengumuman kelas', kelasId, error);
+    }
+  }
+}
 
 function readLocalPengumuman() {
   try {
@@ -2078,6 +2155,22 @@ export async function getPengumumanForSiswa(context, kelasId) {
         orderDirection: 'desc',
         limit: 20,
       };
+      // Jalur hemat: baca SATU dokumen ringkasan kelas (dibuat oleh guru saat
+      // menyimpan pengumuman). Bila ada, cukup 1 read untuk seluruh daftar.
+      try {
+        const summaryId = buildPengumumanSummaryId(year, semester, normalizedKelas);
+        const summarySnap = await db.collection(PENGUMUMAN_SUMMARY_COLLECTION).doc(summaryId).get();
+        if (summarySnap.exists) {
+          const items = Array.isArray(summarySnap.data()?.items) ? summarySnap.data().items : [];
+          // Walau ringkasan kosong, tetap dipakai (kelas ini memang belum ada
+          // pengumuman) — menghindari query ~20 dokumen yang sia-sia.
+          return filterCurrentPeriod(items);
+        }
+      } catch (error) {
+        // Ringkasan belum ada / ditolak Rules → jatuh ke query lama di bawah.
+        console.warn('Ringkasan pengumuman tidak tersedia, memakai query langsung:', error?.message || error);
+      }
+      // Fallback: query langsung (dokumen ringkasan belum terbentuk).
       // Prefer array-contains for multi-class announcements.
       let items = await getDocumentsWhere(PENGUMUMAN_COLLECTION, [
         { field: 'kelas_ids', operator: 'array-contains', value: normalizedKelas },
@@ -2147,6 +2240,13 @@ export async function savePengumuman(payload, id = null) {
     localItems.push(fullPayload);
   }
   writeLocalPengumuman(localItems);
+  // Susun ulang ringkasan per kelas agar siswa cukup membaca 1 dokumen.
+  // Non-fatal: kegagalan di sini tidak membatalkan penyimpanan pengumuman.
+  try {
+    await rebuildPengumumanSummaryForClasses(cleaned.tahun_ajaran_id, cleaned.semester_id, cleaned.kelas_ids);
+  } catch (error) {
+    console.warn('Gagal memperbarui ringkasan pengumuman:', error);
+  }
   return fullPayload;
 }
 
@@ -2157,6 +2257,20 @@ export async function deletePengumuman(id) {
   }
 
   if (db) {
+    // Ambil dulu kelas & periode pengumuman agar ringkasan kelas bisa disusun ulang.
+    let affectedKelas = [];
+    let affYear = '';
+    let affSemester = '';
+    try {
+      const snap = await db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId).get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        affectedKelas = getPengumumanKelasIds({ ...data });
+        affYear = String(data.tahun_ajaran_id || '');
+        affSemester = String(data.semester_id || '');
+      }
+    } catch { /* abaikan; ringkasan akan dilewati */ }
+
     const readsSnapshot = await db.collection(PENGUMUMAN_READS_COLLECTION)
       .where('pengumuman_id', '==', pengumumanId)
       .get();
@@ -2167,6 +2281,14 @@ export async function deletePengumuman(id) {
       await batch.commit();
     }
     await db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId).delete();
+    // Susun ulang ringkasan kelas terdampak (non-fatal).
+    if (affYear && affSemester && affectedKelas.length) {
+      try {
+        await rebuildPengumumanSummaryForClasses(affYear, affSemester, affectedKelas);
+      } catch (error) {
+        console.warn('Gagal memperbarui ringkasan pengumuman setelah hapus:', error);
+      }
+    }
   }
 
   writeLocalPengumuman(readLocalPengumuman().filter((item) => item.id !== pengumumanId));
