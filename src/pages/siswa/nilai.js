@@ -11,6 +11,33 @@ function chunkArray(items = [], size = 10) {
   return chunks;
 }
 
+// ============================================================================
+// KEBIJAKAN CACHE READ (Optimasi #A — hemat kuota Firestore di jalur siswa)
+// ----------------------------------------------------------------------------
+// Halaman ini dibuka oleh RATUSAN siswa, sehingga tiap dokumen yang dibaca
+// dikali jumlah siswa. Query di sini dibagi dua kategori:
+//
+//   1. STRUKTUR/METADATA (pengajaran, pembelajaran, bab, tugas_bab,
+//      ulangan_harian_kolom) — identik untuk semua siswa sekelas dan nyaris
+//      tidak berubah saat semester berjalan. Aman di-cache lama + persist
+//      (bertahan melintasi cold start), sehingga membuka ulang halaman tidak
+//      membaca ulang dari server. Penulisan guru ke koleksi ini otomatis
+//      meng-invalidasi cache (invalidateQueryCache + invalidatePersistentQueryCache
+//      di data-service.js), jadi perubahan struktur tetap tercermin.
+//
+//   2. NILAI (nilai_tugas, nilai_ujian) — data per-siswa yang harus tetap
+//      segar; TTL sengaja pendek dan TIDAK diperpanjang.
+//
+// Catatan skew: nilai difilter berdasar struktur (activeTugasKeys). Agar tugas
+// baru + nilainya tidak tersembunyi terlalu lama, TTL struktur bab/tugas dijaga
+// MODERAT (30 mnt), sementara metadata mapel (pengajaran/pembelajaran) yang tidak
+// memfilter apa pun boleh panjang (6 jam).
+const METADATA_CACHE_MS = 21600000;      // 6 jam — pengajaran & pembelajaran (nama mapel)
+const METADATA_PERSIST_TTL_MS = 21600000;
+const STRUCTURE_CACHE_MS = 1800000;      // 30 menit — bab, tugas_bab, ulangan_harian_kolom
+const STRUCTURE_PERSIST_TTL_MS = 1800000;
+const GRADE_CACHE_MS = 180000;           // 3 menit — nilai (harus segar), tidak diperpanjang
+
 async function getDocsByPengajaranIds(collectionName, filtersBase, pengajaranIds = []) {
   const normalizedIds = Array.from(new Set((pengajaranIds || []).map((id) => String(id || '').trim()).filter(Boolean)));
   if (!normalizedIds.length) return [];
@@ -23,7 +50,7 @@ async function getDocsByPengajaranIds(collectionName, filtersBase, pengajaranIds
       operator: ids.length === 1 ? '==' : 'in',
       value: ids.length === 1 ? ids[0] : ids,
     },
-  ], { cacheMs: 120000 })));
+  ], { cacheMs: STRUCTURE_CACHE_MS, persist: true, persistTtlMs: STRUCTURE_PERSIST_TTL_MS })));
 
   const merged = result.flat();
   const deduped = new Map();
@@ -47,7 +74,7 @@ async function getAssignmentDocsByIds(filtersBase, pengajaranIds = []) {
         operator: ids.length === 1 ? '==' : 'in',
         value: ids.length === 1 ? ids[0] : ids,
       },
-    ], { cacheMs: 120000 }))),
+    ], { cacheMs: METADATA_CACHE_MS, persist: true, persistTtlMs: METADATA_PERSIST_TTL_MS }))),
     Promise.all(chunks.map((ids) => getDocumentsWhere('pembelajaran', [
       ...filtersBase,
       {
@@ -55,7 +82,7 @@ async function getAssignmentDocsByIds(filtersBase, pengajaranIds = []) {
         operator: ids.length === 1 ? '==' : 'in',
         value: ids.length === 1 ? ids[0] : ids,
       },
-    ], { cacheMs: 120000 }))),
+    ], { cacheMs: METADATA_CACHE_MS, persist: true, persistTtlMs: METADATA_PERSIST_TTL_MS }))),
   ]);
 
   const merged = [...pengajaranChunks.flat(), ...pembelajaranChunks.flat()];
@@ -164,8 +191,8 @@ export async function renderSiswaNilaiPage(container) {
     : null;
 
   const [nilaiTugasDocs, nilaiUjianDocs] = await Promise.all([
-    studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters, { cacheMs: 180000 }) : Promise.resolve([]),
-    studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters, { cacheMs: 180000 }) : Promise.resolve([]),
+    studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters, { cacheMs: GRADE_CACHE_MS }) : Promise.resolve([]),
+    studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters, { cacheMs: GRADE_CACHE_MS }) : Promise.resolve([]),
   ]);
 
   const relevantPengajaranIds = Array.from(new Set([
