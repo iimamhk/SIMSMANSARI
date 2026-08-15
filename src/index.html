@@ -5,6 +5,14 @@
     <meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#F8FAFC" />
     <title>SIM SMANSARI</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="./assets/icons/icon-512.png" />
+    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="SIMSMANSARI" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -927,13 +935,53 @@
           storedBase = '';
         }
 
-        // Live Server tidak menjalankan Vercel Functions. Gunakan API production
-        // sebagai fallback agar login tetap bekerja tanpa server lokal :3000.
-        const defaultBase = window.location.port === '5500' ? 'https://simsmansari.vercel.app' : '';
+        // Live Server (VS Code) menyajikan file statis saja — tidak ada /api/*.
+        // Deteksi akses via localhost/127.0.0.1 pada port SELAIN backend (3000),
+        // lalu arahkan ke server Express lokal agar login & AI tetap bekerja.
+        const host = window.location.hostname;
+        const port = window.location.port;
+        const isLoopback = host === 'localhost' || host === '127.0.0.1';
+        const isLiveServerLike = isLoopback && port && port !== '3000';
+        const defaultBase = isLiveServerLike ? 'http://localhost:3000' : '';
         window.__SIM_BACKEND_URL__ = (storedBase || defaultBase).replace(/\/+$/, '');
       })();
     </script>
     <script type="module" src="./firebase/firebase-config.js"></script>
     <script type="module" src="./utils/router.js"></script>
+    <script>
+      // Registrasi Service Worker (PWA). Hanya di konteks aman (HTTPS/localhost).
+      // Live Server di port 5500 memakai API production, tapi SW tetap di-skip di sana
+      // agar caching lokal tidak mengganggu pengembangan.
+      (function registerServiceWorker() {
+        if (!('serviceWorker' in navigator)) return;
+        const isDevLiveServer = window.location.port === '5500';
+        if (isDevLiveServer) return;
+
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((registration) => {
+              // Saat versi baru siap, aktifkan segera lalu reload sekali.
+              registration.addEventListener('updatefound', () => {
+                const installing = registration.installing;
+                if (!installing) return;
+                installing.addEventListener('statechange', () => {
+                  if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                    registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              });
+            })
+            .catch((error) => console.warn('SW registration gagal:', error));
+
+          let reloadedForUpdate = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (reloadedForUpdate) return;
+            reloadedForUpdate = true;
+            window.location.reload();
+          });
+        });
+      })();
+    </script>
   </body>
 </html>
