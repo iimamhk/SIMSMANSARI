@@ -68,6 +68,215 @@
       html {
         color-scheme: light;
       }
+
+      /* ===== Premium Splash Screen ===== */
+      #sim-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background:
+          radial-gradient(120% 120% at 15% 0%, #0f2d4a 0%, transparent 55%),
+          radial-gradient(120% 120% at 100% 100%, #04121f 0%, transparent 55%),
+          linear-gradient(150deg, #071a2c 0%, #0b2740 48%, #061421 100%);
+        color: #e6f0fb;
+        opacity: 1;
+        transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: opacity;
+      }
+      #sim-splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .sim-splash-aura {
+        position: absolute;
+        border-radius: 9999px;
+        filter: blur(60px);
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .sim-splash-aura--one {
+        top: -18%; left: -12%;
+        width: 52vw; height: 52vw;
+        background: radial-gradient(circle, #0ea5e9 0%, transparent 70%);
+        animation: simSplashFloat 9s ease-in-out infinite;
+      }
+      .sim-splash-aura--two {
+        bottom: -20%; right: -14%;
+        width: 58vw; height: 58vw;
+        background: radial-gradient(circle, #22d3ee 0%, transparent 70%);
+        animation: simSplashFloat 12s ease-in-out infinite reverse;
+      }
+      .sim-splash-aura--three {
+        top: 40%; left: 55%;
+        width: 34vw; height: 34vw;
+        background: radial-gradient(circle, #6366f1 0%, transparent 70%);
+        animation: simSplashFloat 15s ease-in-out infinite;
+      }
+      .sim-splash-grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(148, 197, 240, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 197, 240, 0.06) 1px, transparent 1px);
+        background-size: 46px 46px;
+        mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 72%);
+        -webkit-mask-image: radial-gradient(circle at 50% 45%, #000 0%, transparent 72%);
+        pointer-events: none;
+      }
+      .sim-splash-core {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 2rem;
+      }
+      .sim-splash-logo-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 132px;
+        height: 132px;
+        animation: simSplashLogoIn 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .sim-splash-halo {
+        position: absolute;
+        inset: -22%;
+        border-radius: 9999px;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.55) 0%, transparent 66%);
+        filter: blur(14px);
+        animation: simSplashHalo 2.6s ease-in-out infinite;
+      }
+      .sim-splash-ring {
+        position: absolute;
+        inset: -10%;
+        border-radius: 9999px;
+        border: 2px solid transparent;
+        border-top-color: rgba(125, 211, 252, 0.95);
+        border-right-color: rgba(125, 211, 252, 0.35);
+        animation: simSplashSpin 1.15s linear infinite;
+      }
+      .sim-splash-logo {
+        position: relative;
+        z-index: 2;
+        width: 120px;
+        height: 120px;
+        border-radius: 30px;
+        background: #ffffff;
+        box-shadow: 0 22px 50px -18px rgba(2, 20, 40, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        animation: simSplashBreathe 3.2s ease-in-out infinite;
+      }
+      .sim-splash-shimmer {
+        position: absolute;
+        z-index: 3;
+        inset: 0;
+        border-radius: 30px;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      .sim-splash-shimmer::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: -140%;
+        width: 60%;
+        height: 100%;
+        background: linear-gradient(115deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%);
+        transform: skewX(-18deg);
+        animation: simSplashShimmer 2.8s ease-in-out infinite;
+      }
+      .sim-splash-wordmark {
+        margin-top: 1.6rem;
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        background: linear-gradient(90deg, #e0f2fe, #ffffff 45%, #a5e4ff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: simSplashRise 0.7s ease-out 0.15s both;
+      }
+      .sim-splash-tagline {
+        margin-top: 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        color: rgba(203, 230, 250, 0.72);
+        animation: simSplashRise 0.7s ease-out 0.28s both;
+      }
+      .sim-splash-progress {
+        margin-top: 1.5rem;
+        width: 140px;
+        height: 3px;
+        border-radius: 9999px;
+        background: rgba(148, 197, 240, 0.18);
+        overflow: hidden;
+        animation: simSplashRise 0.7s ease-out 0.4s both;
+      }
+      .sim-splash-progress span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #38bdf8, #22d3ee, #818cf8);
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+        animation: simSplashProgress 1.4s ease-in-out infinite;
+      }
+      @keyframes simSplashLogoIn {
+        from { opacity: 0; transform: scale(0.82) translateY(8px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      @keyframes simSplashBreathe {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.045); }
+      }
+      @keyframes simSplashHalo {
+        0%, 100% { opacity: 0.45; transform: scale(0.96); }
+        50% { opacity: 0.85; transform: scale(1.08); }
+      }
+      @keyframes simSplashSpin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes simSplashShimmer {
+        0% { left: -140%; }
+        60%, 100% { left: 140%; }
+      }
+      @keyframes simSplashRise {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes simSplashProgress {
+        0% { transform: translateX(-120%); }
+        100% { transform: translateX(360%); }
+      }
+      @keyframes simSplashFloat {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        50% { transform: translate(20px, -24px) scale(1.08); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .sim-splash-aura,
+        .sim-splash-halo,
+        .sim-splash-ring,
+        .sim-splash-logo,
+        .sim-splash-shimmer::before,
+        .sim-splash-progress span {
+          animation: none !important;
+        }
+        .sim-splash-logo-wrap,
+        .sim-splash-wordmark,
+        .sim-splash-tagline,
+        .sim-splash-progress {
+          animation: none !important;
+        }
+        .sim-splash-ring { border-top-color: rgba(125, 211, 252, 0.5); }
+      }
+
       :root {
         --mobile-bottom-nav-scale: 1;
         --quiz-math-display-font: 0.98rem;
@@ -898,6 +1107,62 @@
   </head>
   <body class="min-h-screen antialiased">
     <div id="app" class="min-h-screen"></div>
+    <div id="sim-splash" role="status" aria-label="Memuat SIM SMANSARI" aria-live="polite">
+      <div class="sim-splash-aura sim-splash-aura--one"></div>
+      <div class="sim-splash-aura sim-splash-aura--two"></div>
+      <div class="sim-splash-aura sim-splash-aura--three"></div>
+      <div class="sim-splash-grid"></div>
+      <div class="sim-splash-core">
+        <div class="sim-splash-logo-wrap">
+          <span class="sim-splash-halo"></span>
+          <span class="sim-splash-ring"></span>
+          <img class="sim-splash-logo" src="./assets/icons/icon-512.png" alt="" width="120" height="120" decoding="async" fetchpriority="high" />
+          <span class="sim-splash-shimmer"></span>
+        </div>
+        <div class="sim-splash-wordmark">SIM SMANSARI</div>
+        <div class="sim-splash-tagline">Sistem Informasi Manajemen Sekolah</div>
+        <div class="sim-splash-progress"><span></span></div>
+      </div>
+    </div>
+    <script>
+      (function initSplash() {
+        var splash = document.getElementById('sim-splash');
+        if (!splash) return;
+        var hidden = false;
+        var start = Date.now();
+        var MIN_VISIBLE = 650;   // hindari "kedip" saat load sangat cepat
+        var MAX_VISIBLE = 6000;  // fallback: jangan pernah menutup layar selamanya
+
+        function removeSplash() {
+          if (!splash) return;
+          splash.removeEventListener('transitionend', removeSplash);
+          if (splash.parentNode) splash.parentNode.removeChild(splash);
+          splash = null;
+        }
+        function hideSplash() {
+          if (hidden || !splash) return;
+          hidden = true;
+          splash.classList.add('is-hidden');
+          splash.addEventListener('transitionend', removeSplash);
+          setTimeout(removeSplash, 700); // jaring pengaman jika transitionend tak terpicu
+        }
+        function requestHide() {
+          var elapsed = Date.now() - start;
+          if (elapsed >= MIN_VISIBLE) hideSplash();
+          else setTimeout(hideSplash, MIN_VISIBLE - elapsed);
+        }
+
+        // Sembunyikan tepat saat aplikasi siap (router menandai __SIM_APP_READY__).
+        var poll = setInterval(function () {
+          if (window.__SIM_APP_READY__ === true) {
+            clearInterval(poll);
+            requestHide();
+          }
+        }, 80);
+        // Fallback keras: apa pun yang terjadi, splash hilang.
+        setTimeout(function () { clearInterval(poll); hideSplash(); }, MAX_VISIBLE);
+      })();
+    </script>
     <script>
       (function installBootstrapErrorHandler() {
         const escapeHtml = (value) => String(value || '').replace(/[<>&]/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[character]));
