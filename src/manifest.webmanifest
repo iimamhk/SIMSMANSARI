@@ -4,7 +4,7 @@
   "description": "Sistem Informasi Manajemen SMA Negeri Sari — absensi, nilai, materi, dan administrasi sekolah.",
   "lang": "id",
   "dir": "ltr",
-  "start_url": "/index.html",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

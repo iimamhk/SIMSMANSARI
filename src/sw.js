@@ -8,13 +8,15 @@
  *
  * Bump CACHE_VERSION setiap kali app shell berubah agar klien mengambil versi baru.
  */
-const CACHE_VERSION = 'sim-v1';
+const CACHE_VERSION = 'sim-v2';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 // Berkas inti yang di-precache saat install.
+// Gunakan '/' (bukan '/index.html') karena hosting me-rewrite '/' ke index.html;
+// path '/index.html' langsung dapat mengembalikan 404 di sebagian hosting (Vercel).
 const SHELL_ASSETS = [
-  '/index.html',
+  '/',
   '/manifest.webmanifest',
   '/styles/design-tokens.css',
   '/assets/icons/icon-192.png',
@@ -133,7 +135,7 @@ self.addEventListener('fetch', (event) => {
           return await fetch(request);
         } catch {
           const cache = await caches.open(SHELL_CACHE);
-          const shell = await cache.match('/index.html');
+          const shell = await cache.match('/');
           return shell || Response.error();
         }
       })()
