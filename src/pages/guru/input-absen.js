@@ -611,6 +611,68 @@ export async function renderGuruInputAbsenPage(container) {
   let currentAttendance = attendanceRecords;
   let currentRecapAttendance = [];
   const recapAttendanceCache = new Map();
+  // Cache rekap absensi yang BERTAHAN lintas buka-tutup halaman (localStorage),
+  // bukan hanya di memori. Rekap rentang tanggal menarik ribuan dokumen absensi
+  // (30 siswa x puluhan hari); tanpa persist, setiap kali guru membuka kembali
+  // halaman rekap periode yang sama = ribuan read ulang. TTL 5 menit menjaga
+  // data tetap segar, dan cache di-invalidasi seketika saat absensi disimpan.
+  const RECAP_CACHE_LS_PREFIX = 'simguru_recap_absensi_';
+  const RECAP_CACHE_TTL_MS = 300000; // 5 menit (selaras dengan cacheMs server getAttendanceRecordsByDateRange)
+
+  function recapCacheStorageKey(cacheKey) {
+    return `${RECAP_CACHE_LS_PREFIX}${cacheKey}`;
+  }
+
+  function readPersistentRecap(cacheKey) {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      const raw = localStorage.getItem(recapCacheStorageKey(cacheKey));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.records)) return null;
+      if (!Number.isFinite(parsed.ts) || Date.now() - parsed.ts >= RECAP_CACHE_TTL_MS) {
+        localStorage.removeItem(recapCacheStorageKey(cacheKey));
+        return null;
+      }
+      return parsed.records;
+    } catch {
+      return null;
+    }
+  }
+
+  function writePersistentRecap(cacheKey, records) {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      localStorage.setItem(recapCacheStorageKey(cacheKey), JSON.stringify({
+        ts: Date.now(),
+        records: Array.isArray(records) ? records : [],
+      }));
+    } catch {
+      // localStorage penuh/diblokir: abaikan, jalur baca tetap berfungsi tanpa persist.
+    }
+  }
+
+  // Hapus SEMUA entri persist rekap milik pengajaran tertentu (semua periode).
+  // Dipakai saat absensi disimpan: satu tanggal yang berubah bisa termasuk dalam
+  // periode bulan/semester mana pun yang sedang tersimpan, jadi paling aman
+  // membuang semua entri pengajaran itu agar rekap berikutnya membaca data segar.
+  function purgePersistentRecap(assignmentId = '') {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const prefix = assignmentId
+        ? `${RECAP_CACHE_LS_PREFIX}${assignmentId}|`
+        : RECAP_CACHE_LS_PREFIX;
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) toRemove.push(key);
+      }
+      toRemove.forEach((key) => localStorage.removeItem(key));
+    } catch {
+      // Abaikan.
+    }
+  }
+
   let currentSpecialNotes = [];
   let activeAbsensiSubtab = 'absensi';
   let activeRekapSubtab = 'rekap-absensi';
@@ -646,8 +708,18 @@ export async function renderGuruInputAbsenPage(container) {
       return currentRecapAttendance;
     }
 
+    // Lapis kedua: cache localStorage yang bertahan lintas buka-tutup halaman.
+    // Bila periode ini pernah dimuat < 10 menit lalu, pakai tanpa membaca server.
+    const persisted = readPersistentRecap(cacheKey);
+    if (persisted) {
+      recapAttendanceCache.set(cacheKey, persisted);
+      currentRecapAttendance = persisted;
+      return currentRecapAttendance;
+    }
+
     const records = await getAttendanceRecordsByDateRange(context, assignment.id, period.start, period.end);
     recapAttendanceCache.set(cacheKey, records);
+    writePersistentRecap(cacheKey, records);
     currentRecapAttendance = records;
     return records;
   }
@@ -1374,6 +1446,7 @@ export async function renderGuruInputAbsenPage(container) {
 
       specialNoteText.value = '';
       setSpecialNoteMessage('Catatan khusus berhasil disimpan dan absensi diberi kode K.');
+      purgePersistentRecap(assignment.id);
       await refreshCurrentData();
       setAbsensiSubtab('keluar-kelas');
     } catch (error) {
@@ -1489,6 +1562,7 @@ export async function renderGuruInputAbsenPage(container) {
         }
       }));
 
+      purgePersistentRecap(assignment.id);
       await refreshCurrentData();
       setAbsensiSubtab('keluar-kelas');
       setBulkKNoteMessage(`${rowsPayload.length} catatan status K berhasil disimpan.`);
@@ -1543,6 +1617,10 @@ export async function renderGuruInputAbsenPage(container) {
     });
 
     await saveAttendanceRecordsBatch(payloads);
+
+    // Absensi berubah: buang cache rekap persist untuk pengajaran ini agar rekap
+    // berikutnya membaca data segar (bukan angka lama dari localStorage).
+    purgePersistentRecap(assignment.id);
 
     alert(`Absensi tanggal ${formatAttendanceDate(selectedDate)} berhasil disimpan.`);
     await refreshCurrentData();

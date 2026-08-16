@@ -32,6 +32,100 @@ function getFirestoreReadStatusKey() {
   } catch { return 'simguru_firestore_read_status'; }
 }
 const queryCache = new Map();
+
+// ============================================================================
+// PENGHITUNG READ (instrumentation) — alat ukur, bukan optimasi.
+// Menghitung HANYA dokumen yang benar-benar dibaca dari SERVER Firestore.
+// Permintaan yang dilayani cache TIDAK dihitung, sehingga angka ini
+// mencerminkan pemakaian kuota baca yang sesungguhnya. Disimpan per HARI di
+// localStorage (reset otomatis saat ganti tanggal) plus rincian per koleksi.
+// Tidak menyentuh alur data mana pun; aman dimatikan kapan saja.
+// ============================================================================
+const READ_METER_KEY = 'simguru_read_meter';
+
+function readMeterToday() {
+  // Kuota baca Firestore reset pada tengah malam waktu Pasifik (America/Los_Angeles),
+  // yang di WIB jatuh sekitar pukul 14.00–15.00 siang. Penghitung ini SENGAJA
+  // memakai tanggal waktu Pasifik agar siklus reset-nya SAMA dengan Firebase,
+  // sehingga angka harian bisa dibandingkan pada rentang waktu yang setara.
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Los_Angeles',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date()); // hasil: YYYY-MM-DD
+  } catch {
+    // Bila Intl/timezone tidak tersedia, mundur ke UTC (tetap konsisten meski tak selaras).
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+function loadReadMeter() {
+  const empty = { date: readMeterToday(), total: 0, byCollection: {}, sessionTotal: 0, updatedAt: '' };
+  if (typeof window === 'undefined' || !window.localStorage) return empty;
+  try {
+    const raw = localStorage.getItem(READ_METER_KEY);
+    if (!raw) return empty;
+    const data = JSON.parse(raw);
+    if (!data || data.date !== readMeterToday()) {
+      // Hari berganti: mulai hitungan harian dari nol (sessionTotal juga direset).
+      return empty;
+    }
+    return {
+      date: data.date,
+      total: Number(data.total) || 0,
+      byCollection: (data.byCollection && typeof data.byCollection === 'object') ? data.byCollection : {},
+      sessionTotal: Number(data.sessionTotal) || 0,
+      updatedAt: String(data.updatedAt || ''),
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function recordRead(collectionName, count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return;
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const meter = loadReadMeter();
+    meter.total += n;
+    meter.sessionTotal += n;
+    const key = String(collectionName || 'unknown');
+    meter.byCollection[key] = (Number(meter.byCollection[key]) || 0) + n;
+    meter.updatedAt = new Date().toISOString();
+    localStorage.setItem(READ_METER_KEY, JSON.stringify(meter));
+  } catch {
+    // Instrumentation tidak boleh pernah mengganggu alur utama.
+  }
+}
+
+/** Ambil ringkasan penghitung read hari ini (dipakai UI & console). */
+export function getReadMeter() {
+  const meter = loadReadMeter();
+  const byCollection = Object.entries(meter.byCollection)
+    .sort((a, b) => b[1] - a[1])
+    .reduce((acc, [k, v]) => { acc[k] = v; return acc; }, {});
+  return { ...meter, byCollection };
+}
+
+/** Reset penghitung read (mis. sebelum mulai satu sesi pembelajaran). */
+export function resetReadMeter() {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    localStorage.setItem(READ_METER_KEY, JSON.stringify({
+      date: readMeterToday(), total: 0, byCollection: {}, sessionTotal: 0, updatedAt: new Date().toISOString(),
+    }));
+  } catch {
+    // Abaikan.
+  }
+}
+
+// Ekspos ke console browser untuk pengecekan cepat: `simReadMeter()`, `simReadReset()`.
+if (typeof window !== 'undefined') {
+  window.simReadMeter = () => getReadMeter();
+  window.simReadReset = () => resetReadMeter();
+}
+
 const PERSISTENT_CACHE_PREFIX = 'simguru_pcache_';
 const PERSISTENT_CACHE_TTL_MS = 7200000;
 // Optimasi #1: TTL default cache localStorage untuk HASIL QUERY (getDocumentsWhere
@@ -460,6 +554,7 @@ async function getDocsFromCollection(collectionName) {
 
   try {
     const snapshot = await db.collection(collectionName).get();
+    recordRead(collectionName, snapshot.size);
     clearFirestoreReadQuotaStatus();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -573,6 +668,7 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
       query = query.limit(resultLimit);
     }
     const snapshot = await query.get();
+    recordRead(collectionName, snapshot.size);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   };
 
@@ -812,12 +908,12 @@ export async function getAttendanceRecordsByDateRange(context, pengajaranId = ''
       { field: 'tanggal', operator: '<=', value: end },
     ];
     if (pengajaranId) filters.push({ field: 'pengajaran_id', value: pengajaranId });
-    return await getDocumentsWhere('absensi', filters, { cacheMs: 30000, throwOnError: true });
+    return await getDocumentsWhere('absensi', filters, { cacheMs: 300000, throwOnError: true });
   } catch (error) {
     if (isFirestoreIndexError(error) && pengajaranId) {
       try {
         // Fallback tanpa composite index: query 1 field lalu filter di client.
-        const docs = await getDocumentsWhere('absensi', [{ field: 'pengajaran_id', value: pengajaranId }], { cacheMs: 20000 });
+        const docs = await getDocumentsWhere('absensi', [{ field: 'pengajaran_id', value: pengajaranId }], { cacheMs: 300000 });
         return docs.filter((item) => {
           const tanggal = String(item.tanggal || '');
           return String(item.tahun_ajaran_id || '') === String(year)
@@ -1326,6 +1422,7 @@ export function subscribeCollection(collectionName, filters = [], callback, opti
      if (limit > 0) query = query.limit(limit);
      const unsubscribe = query.onSnapshot(
        (snapshot) => {
+         recordRead(collectionName, snapshot.size);
          const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
          callback(data);
        },

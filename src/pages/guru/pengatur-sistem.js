@@ -1,5 +1,54 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { changePassword, normalizePassword } from '../../firebase/auth-service.js';
+import { getReadMeter, resetReadMeter } from '../../firebase/data-service.js';
+
+const FIRESTORE_DAILY_READ_LIMIT = 50000; // Kuota baca harian paket gratis Firestore.
+
+function readMeterBarTone(total) {
+  const ratio = total / FIRESTORE_DAILY_READ_LIMIT;
+  if (ratio >= 0.8) return { bar: 'bg-rose-500', text: 'text-rose-600' };
+  if (ratio >= 0.5) return { bar: 'bg-amber-500', text: 'text-amber-600' };
+  return { bar: 'bg-emerald-500', text: 'text-emerald-600' };
+}
+
+function renderReadMeterBody() {
+  const meter = getReadMeter();
+  const total = Number(meter.total) || 0;
+  const percent = Math.min(100, Math.round((total / FIRESTORE_DAILY_READ_LIMIT) * 100));
+  const tone = readMeterBarTone(total);
+  const entries = Object.entries(meter.byCollection || {});
+  const topRows = entries.slice(0, 10).map(([name, count]) => `
+    <div class="flex items-center justify-between gap-3 py-1 text-sm">
+      <span class="truncate font-mono text-slate-600">${name}</span>
+      <span class="shrink-0 font-semibold text-slate-900">${Number(count).toLocaleString('id-ID')}</span>
+    </div>`).join('');
+  const updated = meter.updatedAt ? new Date(meter.updatedAt).toLocaleTimeString('id-ID') : '-';
+
+  return `
+    <div class="flex items-baseline justify-between">
+      <span class="text-sm text-slate-500">Read hari ini</span>
+      <span class="text-2xl font-bold ${tone.text}">${total.toLocaleString('id-ID')}</span>
+    </div>
+    <div class="mt-1 text-xs text-slate-400">dari kuota ${FIRESTORE_DAILY_READ_LIMIT.toLocaleString('id-ID')}/hari · ${percent}%</div>
+    <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+      <div class="h-full ${tone.bar} transition-all" style="width:${percent}%"></div>
+    </div>
+    <div class="mt-3 grid grid-cols-2 gap-3">
+      <div class="rounded-xl bg-slate-50 p-3">
+        <div class="text-xs text-slate-500">Sesi ini</div>
+        <div class="text-lg font-semibold text-slate-900">${(Number(meter.sessionTotal) || 0).toLocaleString('id-ID')}</div>
+      </div>
+      <div class="rounded-xl bg-slate-50 p-3">
+        <div class="text-xs text-slate-500">Diperbarui</div>
+        <div class="text-lg font-semibold text-slate-900">${updated}</div>
+      </div>
+    </div>
+    ${topRows ? `
+      <div class="mt-3 border-t border-slate-100 pt-2">
+        <div class="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Per koleksi (terbanyak)</div>
+        ${topRows}
+      </div>` : '<p class="mt-3 text-sm text-slate-400">Belum ada pembacaan tercatat pada sesi ini.</p>'}`;
+}
 
 export async function renderGuruSystemSettingsPage(container) {
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
@@ -41,6 +90,20 @@ export async function renderGuruSystemSettingsPage(container) {
           <p id="account-message" class="text-sm text-slate-500"></p>
         </div>
       </form>
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-slate-900">Pemantau Baca Database</h3>
+            <p class="mt-1 text-xs text-slate-500">Diagnostik kuota baca Firestore. Angka hanya menghitung pembacaan dari server (bukan dari cache).</p>
+          </div>
+          <div class="flex shrink-0 gap-2">
+            <button type="button" id="read-meter-refresh" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Segarkan</button>
+            <button type="button" id="read-meter-reset" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50">Reset sesi</button>
+          </div>
+        </div>
+        <div id="read-meter-body" class="mt-3">${renderReadMeterBody()}</div>
+      </div>
     </div>
   `);
 
@@ -115,4 +178,23 @@ export async function renderGuruSystemSettingsPage(container) {
     localStorage.removeItem('simguru_session');
     window.location.hash = '#login';
   });
+
+  // ── Pemantau baca database ────────────────────────────────────────────────
+  const readMeterBody = container.querySelector('#read-meter-body');
+  const refreshReadMeter = () => {
+    if (readMeterBody) readMeterBody.innerHTML = renderReadMeterBody();
+  };
+  container.querySelector('#read-meter-refresh')?.addEventListener('click', refreshReadMeter);
+  container.querySelector('#read-meter-reset')?.addEventListener('click', () => {
+    resetReadMeter();
+    refreshReadMeter();
+  });
+  // Segarkan berkala selama halaman terbuka; hentikan saat elemen tak lagi ada.
+  const readMeterTimer = setInterval(() => {
+    if (!document.body.contains(readMeterBody)) {
+      clearInterval(readMeterTimer);
+      return;
+    }
+    if (!document.hidden) refreshReadMeter();
+  }, 5000);
 }

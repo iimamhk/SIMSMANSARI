@@ -2340,11 +2340,19 @@ export async function renderGuruGamePage(container) {
       .where('room_id', '==', room.id)
       .onSnapshot((snapshot) => {
         if (!activeBattleRoom) return;
-        const participants = {};
-        snapshot.docs.forEach((doc) => {
-          const data = doc.data() || {};
-          const id = data.participant_id || doc.id;
-          participants[id] = { id, ...data };
+        // Hemat read: proses HANYA dokumen yang berubah (added/modified/removed),
+        // bukan membangun ulang seluruh peta peserta dari snapshot.docs. Saat 30
+        // siswa aktif menjawab, ini memangkas beban dari kuadratik (~N x N) menjadi
+        // linear (~N). Peserta yang keluar (removed) ikut dibersihkan.
+        const participants = { ...(activeBattleRoom.participants || {}) };
+        snapshot.docChanges().forEach((change) => {
+          const data = change.doc.data() || {};
+          const id = data.participant_id || change.doc.id;
+          if (change.type === 'removed') {
+            delete participants[id];
+          } else {
+            participants[id] = { id, ...data };
+          }
         });
         activeBattleRoom = { ...activeBattleRoom, participants };
         upsertLocalById(BATTLE_ROOM_LOCAL_KEY, activeBattleRoom);

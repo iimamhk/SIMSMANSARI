@@ -420,7 +420,7 @@ async function loadBabsFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     return docs.map(doc => {
       return { 
         ...doc, 
@@ -445,7 +445,7 @@ async function loadTugasFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     
     const tugasMap = {};
     docs.forEach(doc => {
@@ -479,7 +479,7 @@ async function loadNilaiTugasFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     
     const nilaiMap = {};
     docs.forEach(doc => {
@@ -501,7 +501,7 @@ async function loadNilaiUHFromFirestore(context, assignment) {
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'jenis_nilai', operator: '==', value: 'ulangan_harian' },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     
     const nilaiMap = {};
     docs.forEach(doc => {
@@ -523,7 +523,7 @@ async function loadUlanganHarianColumnsFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
 
     return docs
       .map((doc, index) => ({
@@ -549,7 +549,7 @@ async function loadNilaiPTSFromFirestore(context, assignment) {
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'jenis_nilai', operator: '==', value: 'pts' },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     
     const nilaiMap = {};
     docs.forEach(doc => {
@@ -572,7 +572,7 @@ async function loadNilaiPASFromFirestore(context, assignment) {
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'jenis_nilai', operator: '==', value: 'pas' },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     
     const nilaiMap = {};
     docs.forEach(doc => {
@@ -598,7 +598,7 @@ async function deleteBabWithCascade(context, assignment, firestoreBabDocId, logi
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId || doc.bab_id === logicalBabId);
     const babId = babDoc?.bab_id || logicalBabId || firestoreBabDocId;
 
@@ -633,7 +633,7 @@ async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, fi
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     const babDoc = babDocs.find(doc => doc.id === firestoreBabDocId || doc.bab_id === logicalBabId);
     const babId = babDoc?.bab_id || logicalBabId;
     if (!babId) throw new Error('BAB ID tidak tersedia');
@@ -643,7 +643,7 @@ async function deleteTugasWithCascade(context, assignment, firestoreBabDocId, fi
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'bab_id', operator: '==', value: babId },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     const tugasDoc = tugasDocs.find(doc => doc.id === firestoreTugasDocId || doc.tugas_id === logicalTugasId);
     const tugasId = tugasDoc?.tugas_id || logicalTugasId;
     if (!tugasId) throw new Error('TUGAS ID tidak tersedia');
@@ -671,7 +671,7 @@ async function deleteUlanganHarianColumnWithCascade(context, assignment, uhColum
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
       { field: 'jenis_nilai', operator: '==', value: 'ulangan_harian' },
-    ], { cacheMs: 60000 });
+    ], { cacheMs: 300000 });
     const toDelete = nilaiDocs
       .filter((doc) => {
         const tipe = String(doc.tipe || '');
@@ -1863,7 +1863,7 @@ async function renderTabPTSPAS(context, assignment, members, container) {
           { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
           { field: 'semester_id', operator: '==', value: context.semester_aktif },
           { field: 'pengajaran_id', operator: '==', value: assignment.id },
-        ], { cacheMs: 60000 });
+        ], { cacheMs: 300000 });
         currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
       } catch (error) {
         console.error('Gagal memuat data keaktifan:', error);
@@ -2501,7 +2501,7 @@ async function renderTabKeaktifanWorkspace(context, assignment, members, contain
         { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
         { field: 'semester_id', operator: '==', value: context.semester_aktif },
         { field: 'pengajaran_id', operator: '==', value: assignment.id },
-      ], { cacheMs: 60000 });
+      ], { cacheMs: 300000 });
       currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
     } catch (error) {
       console.error('Gagal memuat data keaktifan:', error);
@@ -2876,7 +2876,7 @@ async function renderTabNilaiAkhir(context, assignment, members, container) {
           { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
           { field: 'semester_id', operator: '==', value: context.semester_aktif },
           { field: 'pengajaran_id', operator: '==', value: assignment.id },
-        ], { cacheMs: 60000 });
+        ], { cacheMs: 300000 });
         currentActivityRecords = [...docs].sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
       } catch (error) {
         console.error('Gagal memuat data keaktifan:', error);
