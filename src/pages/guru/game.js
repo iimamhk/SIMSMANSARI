@@ -1880,35 +1880,50 @@ export async function renderGuruGamePage(container) {
     setEnglishMessage('Belum ada konfigurasi. Silakan simpan draft baru.');
   }
 
-  async function getSessionsForAssignment(assignmentId, gameType = 'math') {
-    let docs = [];
-    try {
-      docs = await getDocumentsWhere('game_sessions', [
-        { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
-        { field: 'semester_id', operator: '==', value: context.semester_aktif },
-        { field: 'pengajaran_id', operator: '==', value: assignmentId },
-        { field: 'game_type', operator: '==', value: gameType },
-      ]);
-    } catch {
-      docs = [];
-    }
+  // ==========================================================================
+  // OPTIMASI READ (Fase 1): monitoring & rekap game membaca `game_sessions`
+  // /`game_session_rekap` untuk SATU game_type seluruh semester. Sebelumnya
+  // TANPA cache dan dipanggil ulang oleh renderMonitoring + renderRekapTable
+  // serta setiap perubahan filter kelas/rentang (yang sebenarnya hanya
+  // memfilter di sisi klien). Kini:
+  //   1) hasil server di-cache 60 dtk di data-service (cacheMs) → panggilan
+  //      berulang dalam jendela itu = 0 read;
+  //   2) ditambah cache per-halaman agar filter/tab tidak memicu await ulang.
+  // Data sesi ditulis oleh SISWA (bukan halaman ini), jadi staleness 60 dtk
+  // pada dashboard pemantauan tidak berdampak pada kebenaran input guru.
+  const GAME_SESSION_CACHE_TTL_MS = 60000;
+  const gameSessionCache = new Map(); // key: `${collection}:${gameType}` → { at, data }
 
-    const local = readLocalList(LOCAL_SESSION_KEY).filter((item) => item.pengajaran_id === assignmentId && item.game_type === gameType);
-    const map = new Map();
-    [...docs, ...local].forEach((item) => {
-      map.set(item.id, item);
-    });
-    return [...map.values()];
+  function readGameCache(key) {
+    const entry = gameSessionCache.get(key);
+    if (entry && Date.now() - entry.at < GAME_SESSION_CACHE_TTL_MS) return entry.data;
+    return null;
+  }
+
+  function writeGameCache(key, data) {
+    gameSessionCache.set(key, { at: Date.now(), data });
+    return data;
+  }
+
+  async function getSessionsForAssignment(assignmentId, gameType = 'math') {
+    // Pakai daftar sesi game_type yang sudah dimuat (dan ter-cache), lalu
+    // saring per pengajaran di klien — menghindari query terpisah per relasi.
+    const all = await getSessionsForGameType(gameType);
+    return all.filter((item) => item.pengajaran_id === assignmentId);
   }
 
   async function getSessionsForGameType(gameType = 'math') {
+    const cacheKey = `game_sessions:${gameType}`;
+    const cached = readGameCache(cacheKey);
+    if (cached) return cached;
+
     let docs = [];
     try {
       docs = await getDocumentsWhere('game_sessions', [
         { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
         { field: 'semester_id', operator: '==', value: context.semester_aktif },
         { field: 'game_type', operator: '==', value: gameType },
-      ]);
+      ], { cacheMs: GAME_SESSION_CACHE_TTL_MS });
     } catch {
       docs = [];
     }
@@ -1921,23 +1936,27 @@ export async function renderGuruGamePage(container) {
       .forEach((item) => {
         map.set(item.id, item);
       });
-    return [...map.values()];
+    return writeGameCache(cacheKey, [...map.values()]);
   }
 
   async function getRekapForGameType(gameType = 'math') {
+    const cacheKey = `game_session_rekap:${gameType}`;
+    const cached = readGameCache(cacheKey);
+    if (cached) return cached;
+
     let docs = [];
     try {
       docs = await getDocumentsWhere('game_session_rekap', [
         { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
         { field: 'semester_id', operator: '==', value: context.semester_aktif },
         { field: 'game_type', operator: '==', value: gameType },
-      ]);
+      ], { cacheMs: GAME_SESSION_CACHE_TTL_MS });
     } catch {
       docs = [];
     }
 
     const assignmentIds = new Set(assignments.map((item) => item.id));
-    return docs.filter((item) => assignmentIds.has(item.pengajaran_id));
+    return writeGameCache(cacheKey, docs.filter((item) => assignmentIds.has(item.pengajaran_id)));
   }
 
   function renderTopStudentsList(sessions, targetEl) {

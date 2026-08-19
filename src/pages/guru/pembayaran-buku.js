@@ -71,9 +71,14 @@ async function loadCollection(collection, userId) {
   let remote = [];
   if (db) {
     try {
+      // Optimasi read (Fase 1): item & pembayaran milik guru ini di-cache 2 menit
+      // di memori data-service. Setiap simpan/hapus (persist/removeRecord) memanggil
+      // saveDocument/deleteDocument yang otomatis meng-invalidasi cache koleksi ini,
+      // sehingga data tetap segar setelah perubahan namun buka-tutup halaman tidak
+      // membaca ulang seluruh koleksi dari server.
       remote = await getDocumentsWhere(COLLECTION[collection], [
         { field: 'guru_id', operator: '==', value: userId },
-      ]);
+      ], { cacheMs: 120000 });
     } catch (error) {
       console.warn('Gagal membaca Firestore:', error);
     }

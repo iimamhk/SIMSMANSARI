@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
-import { getDocumentsWhere, saveStudentGradeSummary } from '../../firebase/data-service.js';
+import { getDocumentsWhere, saveStudentGradeSummary, getStudentGradeSummary } from '../../firebase/data-service.js';
 import { computeFinalScore } from '../../utils/nilai-summary.js';
 
 function chunkArray(items = [], size = 10) {
@@ -190,26 +190,48 @@ export async function renderSiswaNilaiPage(container) {
       ]
     : null;
 
-  const [nilaiTugasDocs, nilaiUjianDocs] = await Promise.all([
-    studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters, { cacheMs: GRADE_CACHE_MS }) : Promise.resolve([]),
-    studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters, { cacheMs: GRADE_CACHE_MS }) : Promise.resolve([]),
-  ]);
+  // ==========================================================================
+  // OPTIMASI READ (Fase 2): ringkasan-first + detail on-demand.
+  // ----------------------------------------------------------------------------
+  // Halaman ini dibuka ratusan siswa. Sebelumnya SELALU membaca nilai_tugas,
+  // nilai_ujian, pengajaran, pembelajaran, bab, tugas_bab, ulangan_harian_kolom
+  // hanya untuk menampilkan tabel ringkas — padahal dokumen `ringkasan_siswa`
+  // sudah menyimpan nilai_per_mapel (tugas/uh/pts/pas/nilai_akhir/tugas_belum).
+  //
+  // Strategi baru:
+  //   1) Tampilan ringkas (kartu rata-rata + tabel per mapel) diambil dari 1
+  //      dokumen ringkasan_siswa → 1 read untuk mayoritas kunjungan.
+  //   2) Rincian per-komponen (daftar nilai tiap tugas/UH/PTS/PAS) baru dibaca
+  //      dari koleksi mentah SAAT siswa menekan "Muat rincian" → read hanya bila
+  //      benar-benar dibutuhkan.
+  //   3) Bila ringkasan belum ada (mis. guru belum pernah menyimpan / siswa baru),
+  //      halaman otomatis jatuh ke pemuatan penuh sekali agar tetap informatif
+  //      sekaligus menuliskan ulang dokumen ringkasan untuk kunjungan berikutnya.
+  // ==========================================================================
 
-  const relevantPengajaranIds = Array.from(new Set([
-    ...nilaiTugasDocs.map((doc) => String(doc.pengajaran_id || '').trim()),
-    ...nilaiUjianDocs.map((doc) => String(doc.pengajaran_id || '').trim()),
-  ].filter(Boolean)));
+  // Muat penuh dari koleksi mentah: menghasilkan baris lengkap BESERTA rincian
+  // komponen, menghitung rata-rata keseluruhan, dan memperbarui dokumen ringkasan.
+  async function loadDetailFromRaw() {
+    const [nilaiTugasDocs, nilaiUjianDocs] = await Promise.all([
+      studentGradeFilters ? getDocumentsWhere('nilai_tugas', studentGradeFilters, { cacheMs: GRADE_CACHE_MS }) : Promise.resolve([]),
+      studentGradeFilters ? getDocumentsWhere('nilai_ujian', studentGradeFilters, { cacheMs: GRADE_CACHE_MS }) : Promise.resolve([]),
+    ]);
 
-  const [assignmentDocs, babDocs, tugasDocs, uhColumnsDocs] = await Promise.all([
-    getAssignmentDocsByIds(filtersBase, relevantPengajaranIds),
-    getDocsByPengajaranIds('bab', filtersBase, relevantPengajaranIds),
-    getDocsByPengajaranIds('tugas_bab', filtersBase, relevantPengajaranIds),
-    getDocsByPengajaranIds('ulangan_harian_kolom', filtersBase, relevantPengajaranIds),
-  ]);
+    const relevantPengajaranIds = Array.from(new Set([
+      ...nilaiTugasDocs.map((doc) => String(doc.pengajaran_id || '').trim()),
+      ...nilaiUjianDocs.map((doc) => String(doc.pengajaran_id || '').trim()),
+    ].filter(Boolean)));
 
-  const activeBabKeys = new Set(
-    babDocs.map((doc) => `${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id || doc.id)}`)
-  );
+    const [assignmentDocs, babDocs, tugasDocs, uhColumnsDocs] = await Promise.all([
+      getAssignmentDocsByIds(filtersBase, relevantPengajaranIds),
+      getDocsByPengajaranIds('bab', filtersBase, relevantPengajaranIds),
+      getDocsByPengajaranIds('tugas_bab', filtersBase, relevantPengajaranIds),
+      getDocsByPengajaranIds('ulangan_harian_kolom', filtersBase, relevantPengajaranIds),
+    ]);
+
+    const activeBabKeys = new Set(
+      babDocs.map((doc) => `${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id || doc.id)}`)
+    );
   const activeTugasKeys = new Set(
     tugasDocs
       .filter((doc) => activeBabKeys.has(`${normalizeId(doc.pengajaran_id)}::${normalizeId(doc.bab_id)}`))
@@ -425,6 +447,55 @@ export async function renderSiswaNilaiPage(container) {
     console.warn('Lewati penyusunan ringkasan nilai:', error);
   }
 
+    return { rows, overall, overallFinal, hasDetails: true };
+  }
+
+  // Bangun baris ringkas dari dokumen ringkasan_siswa (nilai_per_mapel) — tanpa
+  // rincian per-komponen. Dipakai untuk render awal hemat-read.
+  function buildRowsFromSummary(summary) {
+    const perMapel = summary?.nilai_per_mapel || {};
+    const rows = Object.entries(perMapel)
+      .map(([mapelId, value]) => ({
+        mapelId,
+        mapelNama: value.mapel_nama || mapelId,
+        tugasAvg: Number(value.tugas || 0),
+        uhAvg: Number(value.uh || 0),
+        ptsAvg: Number(value.pts || 0),
+        pasAvg: Number(value.pas || 0),
+        finalAvg: Number(value.nilai_akhir || 0),
+        // Rincian belum dimuat; diisi saat siswa menekan "Muat rincian".
+        tugasDetails: [],
+        uhDetails: [],
+        ptsDetails: [],
+        pasDetails: [],
+      }))
+      .sort((a, b) => a.mapelNama.localeCompare(b.mapelNama, 'id'));
+
+    const overall = {
+      tugas: average(rows.map((item) => item.tugasAvg).filter((item) => item > 0)),
+      uh: average(rows.map((item) => item.uhAvg).filter((item) => item > 0)),
+      pts: average(rows.map((item) => item.ptsAvg).filter((item) => item > 0)),
+      pas: average(rows.map((item) => item.pasAvg).filter((item) => item > 0)),
+    };
+    const overallFinal = average([overall.tugas, overall.uh, overall.pts, overall.pas]);
+    return { rows, overall, overallFinal, hasDetails: false };
+  }
+
+  // ---- Muat data awal: ringkasan-first, fallback ke koleksi mentah ----
+  let summaryDoc = null;
+  try {
+    const siswaId = session?.user?.username || session?.user?.id || siswaKeys[0] || '';
+    summaryDoc = siswaId ? await getStudentGradeSummary(context, siswaId) : null;
+  } catch {
+    summaryDoc = null;
+  }
+
+  let view = (summaryDoc && summaryDoc.nilai_per_mapel && Object.keys(summaryDoc.nilai_per_mapel).length)
+    ? buildRowsFromSummary(summaryDoc)
+    : await loadDetailFromRaw();
+
+  let { rows, overall, overallFinal } = view;
+
   const html = renderLayout('Nilai Siswa', `
     <div class="space-y-6">
       <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -489,9 +560,17 @@ export async function renderSiswaNilaiPage(container) {
       </section>
 
       <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="mb-4">
-          <h2 class="text-xl font-semibold text-slate-900">Detail Komponen Nilai</h2>
-          <p class="mt-1 text-sm text-slate-500">Daftar nilai tugas, UH, PTS, dan PAS per mapel.</p>
+        <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 class="text-xl font-semibold text-slate-900">Detail Komponen Nilai</h2>
+            <p class="mt-1 text-sm text-slate-500">Daftar nilai tugas, UH, PTS, dan PAS per mapel.</p>
+          </div>
+          ${view.hasDetails ? '' : `
+            <button id="nilai-detail-load" type="button" class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+              <span>Muat rincian</span>
+            </button>
+          `}
         </div>
 
         <div class="mb-4 grid gap-3 md:grid-cols-2">
@@ -524,10 +603,19 @@ export async function renderSiswaNilaiPage(container) {
   const mapelFilterEl = container.querySelector('#nilai-detail-mapel-filter');
   const komponenFilterEl = container.querySelector('#nilai-detail-komponen-filter');
   const detailListEl = container.querySelector('#nilai-detail-list');
+  const loadDetailBtn = container.querySelector('#nilai-detail-load');
 
   function renderFilteredDetails() {
     const selectedMapel = mapelFilterEl?.value || 'all';
     const selectedKomponen = komponenFilterEl?.value || 'all';
+
+    // Rincian belum dimuat (render dari ringkasan). Tampilkan ajakan memuat
+    // rincian alih-alih membaca koleksi mentah tanpa diminta.
+    if (!view.hasDetails) {
+      detailListEl.innerHTML = '<div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">Rincian per komponen belum dimuat. Tekan <b>Muat rincian</b> untuk menampilkannya (menghemat pembacaan data bila tidak dibutuhkan).</div>';
+      return;
+    }
+
     const targetRows = rows.filter((row) => selectedMapel === 'all' || row.mapelId === selectedMapel);
 
     if (!targetRows.length) {
@@ -583,6 +671,29 @@ export async function renderSiswaNilaiPage(container) {
       })
       .join('');
   }
+
+  // Muat rincian on-demand: baru di sinilah koleksi mentah (nilai_tugas,
+  // nilai_ujian, bab, tugas_bab, dst) dibaca. Untuk mayoritas siswa yang hanya
+  // melihat ringkasan, pembacaan ini tidak pernah terjadi.
+  loadDetailBtn?.addEventListener('click', async () => {
+    if (loadDetailBtn.dataset.loading === 'true') return;
+    loadDetailBtn.dataset.loading = 'true';
+    loadDetailBtn.disabled = true;
+    const label = loadDetailBtn.querySelector('span');
+    const original = label ? label.textContent : '';
+    if (label) label.textContent = 'Memuat...';
+    try {
+      view = await loadDetailFromRaw();
+      ({ rows, overall, overallFinal } = view);
+      loadDetailBtn.remove();
+      renderFilteredDetails();
+    } catch (error) {
+      console.warn('Gagal memuat rincian nilai:', error);
+      if (label) label.textContent = original || 'Muat rincian';
+      loadDetailBtn.dataset.loading = 'false';
+      loadDetailBtn.disabled = false;
+    }
+  });
 
   mapelFilterEl?.addEventListener('change', renderFilteredDetails);
   komponenFilterEl?.addEventListener('change', renderFilteredDetails);

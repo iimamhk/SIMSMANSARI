@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
-import { getDocumentsWhere } from '../../firebase/data-service.js';
+import { getDocumentsWhere, getAttendanceSummary } from '../../firebase/data-service.js';
 
 const statusStyles = {
   H: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -26,23 +26,49 @@ export async function renderSiswaAbsensiPage(container) {
   const context = getStoredContext();
   const session = JSON.parse(localStorage.getItem('simguru_session') || '{}');
   const siswaKeys = getSessionUserKeys(session, context);
+  const siswaId = session?.user?.username || session?.user?.id || siswaKeys[0] || '';
 
-  const docs = siswaKeys.length
-    ? await getDocumentsWhere('absensi', [{ field: 'siswa_id', operator: 'in', value: siswaKeys.slice(0, 10) }], { cacheMs: 60000 })
-    : [];
+  // ==========================================================================
+  // OPTIMASI READ (Fase 2): counter H/S/I/A dari dokumen ringkasan (1 read).
+  // ----------------------------------------------------------------------------
+  // Kartu ringkasan kehadiran cukup memakai `absensi_ringkasan_siswa` melalui
+  // getAttendanceSummary (1 dokumen). Riwayat per-tanggal — yang butuh baris
+  // mentah `absensi` — baru dibaca saat siswa menekan "Muat riwayat", sehingga
+  // mayoritas kunjungan (yang hanya melihat rekap) tidak lagi membaca seluruh
+  // baris absensi siswa.
+  // ==========================================================================
+  let summary = { H: 0, S: 0, I: 0, A: 0 };
+  try {
+    const summaryDoc = siswaId ? await getAttendanceSummary(context, siswaId, siswaKeys) : null;
+    if (summaryDoc) {
+      summary = {
+        H: Number(summaryDoc.total_hadir || 0),
+        S: Number(summaryDoc.total_sakit || 0),
+        I: Number(summaryDoc.total_izin || 0),
+        A: Number(summaryDoc.total_alpa || 0),
+      };
+    }
+  } catch (error) {
+    console.warn('Gagal memuat ringkasan absensi:', error);
+  }
 
-  const records = docs
-    .filter((item) => item.tahun_ajaran_id === context.tahun_ajaran_aktif && item.semester_id === context.semester_aktif && siswaKeys.includes(normalizeUserKey(item.siswa_id)))
-    .sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
-  const summary = {
-    H: records.filter((item) => item.status === 'H').length,
-    S: records.filter((item) => item.status === 'S').length,
-    I: records.filter((item) => item.status === 'I').length,
-    A: records.filter((item) => item.status === 'A').length,
-  };
+  // Riwayat per-tanggal dimuat on-demand.
+  let records = [];
+  let recordsLoaded = false;
+
+  async function loadRecords() {
+    const docs = siswaKeys.length
+      ? await getDocumentsWhere('absensi', [{ field: 'siswa_id', operator: 'in', value: siswaKeys.slice(0, 10) }], { cacheMs: 60000 })
+      : [];
+    records = docs
+      .filter((item) => item.tahun_ajaran_id === context.tahun_ajaran_aktif && item.semester_id === context.semester_aktif && siswaKeys.includes(normalizeUserKey(item.siswa_id)))
+      .sort((a, b) => String(b.tanggal || '').localeCompare(String(a.tanggal || '')));
+    recordsLoaded = true;
+    return records;
+  }
+
   const hasAlpaWarning = summary.A >= ALPA_ALERT_THRESHOLD;
 
-  const subjects = [...new Set(records.map((r) => r.mapel_nama || r.mapel_id).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const renderRows = (list) => list.length
     ? list.map((item) => `
                 <tr class="border-t border-slate-100">
@@ -57,7 +83,7 @@ export async function renderSiswaAbsensiPage(container) {
               `).join('')
     : `
                 <tr>
-                  <td colspan="5" class="px-3 py-10 text-center text-slate-500">Belum ada data absensi${list === records ? ' untuk periode aktif' : ' pada filter ini'}.</td>
+                  <td colspan="5" class="px-3 py-10 text-center text-slate-500">Belum ada data absensi pada filter ini.</td>
                 </tr>
               `;
 
@@ -101,18 +127,25 @@ export async function renderSiswaAbsensiPage(container) {
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="text-xl font-semibold text-slate-900">Riwayat Kehadiran</h2>
-            <p class="mt-1 text-sm text-slate-500">Data absensi periode aktif ditampilkan dari yang terbaru.</p>
+            <p class="mt-1 text-sm text-slate-500">Rincian per tanggal dimuat saat dibutuhkan untuk menghemat pembacaan data.</p>
           </div>
           <div class="flex items-center gap-2">
             <label for="filter-mapel" class="text-sm font-medium text-slate-600">Mapel</label>
-            <select id="filter-mapel" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+            <select id="filter-mapel" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" disabled>
               <option value="">Semua</option>
-              ${subjects.map((s) => `<option value="${s}">${s}</option>`).join('')}
             </select>
           </div>
         </div>
 
-        <div class="overflow-x-auto rounded-2xl border border-slate-100">
+        <div id="absensi-history-cta" class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center">
+          <p class="text-sm text-slate-500">Tekan tombol di bawah untuk menampilkan riwayat kehadiran per tanggal.</p>
+          <button id="absensi-load-history" type="button" class="mt-3 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path></svg>
+            <span>Muat riwayat</span>
+          </button>
+        </div>
+
+        <div id="absensi-history-table" class="overflow-x-auto rounded-2xl border border-slate-100" hidden>
           <table class="min-w-full text-sm text-slate-700">
             <thead class="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
               <tr>
@@ -123,9 +156,7 @@ export async function renderSiswaAbsensiPage(container) {
                 <th class="px-3 py-3 text-center">Status</th>
               </tr>
             </thead>
-            <tbody id="absensi-tbody">
-              ${renderRows(records)}
-            </tbody>
+            <tbody id="absensi-tbody"></tbody>
           </table>
         </div>
       </section>
@@ -136,13 +167,45 @@ export async function renderSiswaAbsensiPage(container) {
 
   const filterSelect = container.querySelector('#filter-mapel');
   const tbody = container.querySelector('#absensi-tbody');
-  if (filterSelect && tbody) {
-    filterSelect.addEventListener('change', () => {
-      const val = filterSelect.value;
-      const filtered = val ? records.filter((r) => (r.mapel_nama || r.mapel_id) === val) : records;
-      tbody.innerHTML = renderRows(filtered);
-    });
-  }
+  const historyCta = container.querySelector('#absensi-history-cta');
+  const historyTable = container.querySelector('#absensi-history-table');
+  const loadHistoryBtn = container.querySelector('#absensi-load-history');
+
+  const applyFilter = () => {
+    if (!tbody) return;
+    const val = filterSelect?.value || '';
+    const filtered = val ? records.filter((r) => (r.mapel_nama || r.mapel_id) === val) : records;
+    tbody.innerHTML = renderRows(filtered);
+  };
+
+  // Muat riwayat on-demand: hanya di sinilah baris mentah `absensi` dibaca.
+  loadHistoryBtn?.addEventListener('click', async () => {
+    if (loadHistoryBtn.dataset.loading === 'true') return;
+    loadHistoryBtn.dataset.loading = 'true';
+    loadHistoryBtn.disabled = true;
+    const label = loadHistoryBtn.querySelector('span');
+    const original = label ? label.textContent : '';
+    if (label) label.textContent = 'Memuat...';
+    try {
+      if (!recordsLoaded) await loadRecords();
+      // Isi opsi filter mapel dari data yang baru dimuat.
+      if (filterSelect) {
+        const subjects = [...new Set(records.map((r) => r.mapel_nama || r.mapel_id).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        filterSelect.innerHTML = `<option value="">Semua</option>${subjects.map((s) => `<option value="${s}">${s}</option>`).join('')}`;
+        filterSelect.disabled = false;
+      }
+      historyCta?.setAttribute('hidden', '');
+      historyTable?.removeAttribute('hidden');
+      applyFilter();
+    } catch (error) {
+      console.warn('Gagal memuat riwayat absensi:', error);
+      if (label) label.textContent = original || 'Muat riwayat';
+      loadHistoryBtn.dataset.loading = 'false';
+      loadHistoryBtn.disabled = false;
+    }
+  });
+
+  filterSelect?.addEventListener('change', applyFilter);
 
   container.querySelector('#logout-btn')?.addEventListener('click', () => {
     localStorage.removeItem('simguru_session');

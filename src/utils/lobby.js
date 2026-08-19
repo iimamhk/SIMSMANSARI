@@ -133,12 +133,19 @@ export function getDefaultLobbyData() {
   };
 }
 
+// Optimasi read (Fase 1): konten lobi (settings/sections/links) bersifat publik
+// dan nyaris tidak berubah. Halaman #home dibuka pengunjung anonim, jadi tiap
+// kunjungan dulu = 3 query koleksi. TTL panjang (30 menit) memangkas pembacaan
+// berulang; setiap penyimpanan admin memanggil saveDocument yang otomatis
+// meng-invalidasi cache koleksi terkait sehingga perubahan tetap cepat tampak.
+const LOBBY_CACHE_MS = 1800000;
+
 export async function getLobbySettings() {
   const defaults = getDefaultLobbyData().settings;
   const local = readLocal(LOBBY_SETTINGS_KEY, defaults);
 
   try {
-    const docs = await getCollectionDocs('lobby_settings');
+    const docs = await getCollectionDocs('lobby_settings', { cacheMs: LOBBY_CACHE_MS });
     const record = docs.find((item) => item.id === 'public_home') || docs[0];
     const payload = record ? { ...defaults, ...record } : local;
     writeLocal(LOBBY_SETTINGS_KEY, payload);
@@ -153,7 +160,7 @@ export async function getLobbySections() {
   const local = readLocal(LOBBY_SECTIONS_KEY, defaults);
 
   try {
-    const docs = await getCollectionDocs('lobby_sections');
+    const docs = await getCollectionDocs('lobby_sections', { cacheMs: LOBBY_CACHE_MS });
     const source = docs.length ? docs : local;
     writeLocal(LOBBY_SECTIONS_KEY, source);
     return sortByOrder(source);
@@ -167,7 +174,7 @@ export async function getLobbyLinks() {
   const local = readLocal(LOBBY_LINKS_KEY, defaults);
 
   try {
-    const docs = await getCollectionDocs('lobby_links');
+    const docs = await getCollectionDocs('lobby_links', { cacheMs: LOBBY_CACHE_MS });
     const source = docs.length ? docs : local;
     writeLocal(LOBBY_LINKS_KEY, source);
     return sortByOrder(source);
