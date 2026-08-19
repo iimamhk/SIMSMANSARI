@@ -363,6 +363,7 @@ service cloud.firestore {
         'kas_kelas',
         'kas_transaksi',
         'materi_ai',
+        'materi_ringkasan',
 'pengumuman',
         'pengumuman_reads',
         'pengumuman_ringkasan',

@@ -1,7 +1,7 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getCoverDesign, renderCoverHtml, coverStyles } from '../../utils/materi-cover.js';
 import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../utils/helpers.js';
-import { getPublishedMaterials, recordMaterialRead, getActiveTeachingAssignments } from '../../firebase/data-service.js';
+import { getPublishedMaterials, recordMaterialRead, getActiveTeachingAssignments, getPublishedMaterialById } from '../../firebase/data-service.js';
 
 const MATERIAL_READS_KEY = 'simguru_material_reads';
 
@@ -431,10 +431,33 @@ export async function renderSiswaMateriPage(container, options = {}) {
   }
 
   function openMaterial(material) {
-    readerFrameEl.srcdoc = material.html_source || '';
     readerTitleEl.textContent = material.title || 'Tanpa judul';
     overlayEl.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
+
+    // Optimasi #C: daftar materi berasal dari dokumen ringkasan yang TIDAK memuat
+    // html_source (agar ringan). Bila HTML belum ada di objek materi, ambil isi
+    // materi lengkap on-demand berdasarkan ID — hanya saat siswa benar-benar
+    // membuka materi, bukan saat memuat daftar.
+    if (typeof material.html_source === 'string' && material.html_source.length) {
+      readerFrameEl.srcdoc = material.html_source;
+    } else {
+      readerFrameEl.srcdoc = '<!doctype html><html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#64748b">Memuat materi…</body></html>';
+      getPublishedMaterialById(material.id)
+        .then((full) => {
+          if (full && typeof full.html_source === 'string') {
+            // Simpan ke objek materi agar buka berikutnya tidak membaca ulang.
+            material.html_source = full.html_source;
+            readerFrameEl.srcdoc = full.html_source || '';
+          } else {
+            readerFrameEl.srcdoc = '<!doctype html><html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#ef4444">Materi tidak dapat dimuat.</body></html>';
+          }
+        })
+        .catch((error) => {
+          console.warn('Gagal memuat isi materi:', error);
+          readerFrameEl.srcdoc = '<!doctype html><html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#ef4444">Gagal memuat materi. Coba lagi.</body></html>';
+        });
+    }
 
     const studentId = getCurrentStudentId();
     if (studentId) {

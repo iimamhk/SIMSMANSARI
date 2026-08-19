@@ -7,6 +7,14 @@ const MATERIAL_PUBLISHED_COLLECTION = 'materi_publish';
 const MATERIAL_WORKSPACE_DRAFTS_COLLECTION = 'materi_workspace_drafts';
 const MATERIAL_READS_KEY = 'simguru_material_reads';
 const MATERIAL_READS_COLLECTION = 'materi_reads';
+// Optimasi #C: ringkasan materi per kelas+periode. SATU dokumen berisi METADATA
+// materi (tanpa html_source yang berat) untuk satu kelas. Halaman siswa cukup
+// membaca 1 dokumen ini alih-alih meng-query koleksi materi_publish (2 query
+// array-contains + legacy) tiap siswa tiap buka. HTML materi baru diambil
+// on-demand (getPublishedMaterialById) saat siswa membuka materi. Ditulis ulang
+// oleh guru saat publish/hapus (jumlah guru sedikit & jarang) — pola sama dengan
+// pengumuman_ringkasan.
+const MATERIAL_SUMMARY_COLLECTION = 'materi_ringkasan';
 const QUERY_CACHE_TTL_MS = 60000;
 const COLLECTION_CACHE_TTL_MS = 300000;
 // Roster kelas (anggota_kelas) nyaris tidak berubah dalam satu sesi kerja guru.
@@ -1851,6 +1859,7 @@ export async function getPublishedMaterials(options = {}) {
   if (options.forceRefresh) {
     invalidateQueryCache(MATERIAL_PUBLISHED_COLLECTION);
     invalidatePersistentQueryCache(MATERIAL_PUBLISHED_COLLECTION);
+    invalidateQueryCache('materi_ringkasan');
   }
 
   const kelasId = String(options.kelasId || '').trim();
@@ -1874,6 +1883,37 @@ export async function getPublishedMaterials(options = {}) {
         normalizeMaterialClassToken(kelasId),
         normalizeMaterialClassToken(kelasNama),
       ].filter(Boolean))];
+
+      // Optimasi #C — jalur hemat: bila kelas & periode diketahui, baca 1 dokumen
+      // ringkasan per kelas (dibuat guru saat publish). Metadata materi (tanpa
+      // html_source) sudah cukup untuk menampilkan daftar; HTML diambil on-demand
+      // lewat getPublishedMaterialById saat siswa membuka materi.
+      if (year && semester && tokens.length) {
+        try {
+          const summarySnaps = await Promise.all(tokens.map((token) =>
+            db.collection(MATERIAL_SUMMARY_COLLECTION)
+              .doc(buildMaterialSummaryId(year, semester, token))
+              .get()
+              .catch(() => null)
+          ));
+          const found = summarySnaps.filter((snap) => snap && snap.exists);
+          if (found.length) {
+            recordRead(MATERIAL_SUMMARY_COLLECTION, found.length);
+            const merged = mergeMaterialsById(
+              found.flatMap((snap) => (Array.isArray(snap.data()?.items) ? snap.data().items : [])),
+              []
+            );
+            const materials = merged
+              .sort((a, b) => String(b.updated_at || b.published_at || '').localeCompare(String(a.updated_at || a.published_at || '')))
+              .slice(0, 300);
+            writeLocalPublishedMaterials(materials);
+            return materials;
+          }
+        } catch (error) {
+          // Ringkasan belum tersedia / ditolak Rules → jatuh ke query langsung.
+          console.warn('Ringkasan materi tidak tersedia, memakai query langsung:', error?.message || error);
+        }
+      }
 
       const requests = [];
       // 1) Struktur baru: satu dokumen per materi, banyak kelas di kelas_ids.
@@ -1966,6 +2006,13 @@ export async function savePublishedMaterial(material) {
     localMaterials.push(payload);
   }
   writeLocalPublishedMaterials(localMaterials);
+  // Optimasi #C: susun ulang ringkasan materi kelas terdampak agar siswa cukup
+  // membaca 1 dokumen. Non-fatal: kegagalan tidak membatalkan penyimpanan materi.
+  try {
+    await rebuildMaterialSummaryForMaterial(payload);
+  } catch (error) {
+    console.warn('Gagal memperbarui ringkasan materi:', error);
+  }
   return payload;
 }
 
@@ -2021,6 +2068,116 @@ export async function savePublishedMaterialForClasses(material, targets = []) {
     mapel_id: String(material?.mapel_id || first.mapel_id || '').trim(),
     mapel_nama: String(material?.mapel_nama || first.mapel_nama || 'Mata Pelajaran').trim(),
   });
+}
+
+/* =========================================================================
+   RINGKASAN MATERI PER KELAS (Optimasi #C — hemat read di jalur siswa)
+   Dokumen materi_ringkasan/{tahun}_{semester}_{kelasToken} berisi array METADATA
+   materi (tanpa html_source) untuk satu kelas+periode. Halaman siswa membaca 1
+   dokumen ini, lalu mengambil HTML materi secara on-demand saat dibuka.
+   ========================================================================= */
+
+function buildMaterialSummaryId(year, semester, kelasToken) {
+  return `${year}_${semester}_${normalizeMaterialClassToken(kelasToken)}`;
+}
+
+// Buang field berat (html_source, markdown_source, document_json) dari metadata
+// materi agar dokumen ringkasan tetap ringan dan jauh di bawah batas 1 MB.
+function stripMaterialHeavyFields(material = {}) {
+  const {
+    html_source, markdown_source, document_json, ...meta
+  } = material || {};
+  return meta;
+}
+
+/**
+ * Susun ulang dokumen ringkasan materi untuk satu kelas+periode dengan membaca
+ * materi terbit kelas tsb (via getPublishedMaterials), menyimpan METADATA-nya
+ * (tanpa HTML) sebagai satu dokumen. Dipanggil dari sisi guru (saat publish /
+ * hapus / ubah visibilitas materi), sehingga biaya query ditanggung guru sekali,
+ * bukan tiap siswa tiap sesi.
+ */
+async function rebuildMaterialSummary(kelasToken, year, semester) {
+  if (!db) return;
+  const token = normalizeMaterialClassToken(kelasToken);
+  if (!token || !year || !semester) return;
+  // Ambil materi kelas ini langsung dari server (lewati cache & ringkasan) agar
+  // dokumen ringkasan mencerminkan kondisi terkini setelah perubahan guru.
+  const items = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
+    { field: 'kelas_ids', operator: 'array-contains', value: token },
+  ], { cacheMs: 0 }).catch(() => []);
+  let legacyItems = [];
+  // Dokumen lama memakai kelas_id tunggal; sertakan juga bila ada.
+  legacyItems = await getDocumentsWhere(MATERIAL_PUBLISHED_COLLECTION, [
+    { field: 'kelas_token', value: token },
+  ], { cacheMs: 0 }).catch(() => []);
+  const merged = mergeMaterialsById([...items, ...legacyItems], []);
+  const scoped = merged
+    .filter((item) => !item.tahun_ajaran_id || item.tahun_ajaran_id === year)
+    .filter((item) => !item.semester_id || item.semester_id === semester)
+    .map(stripMaterialHeavyFields)
+    .sort((a, b) => String(b.updated_at || b.published_at || '').localeCompare(String(a.updated_at || a.published_at || '')))
+    .slice(0, 300);
+
+  const summaryId = buildMaterialSummaryId(year, semester, token);
+  await db.collection(MATERIAL_SUMMARY_COLLECTION).doc(summaryId).set({
+    id: summaryId,
+    tahun_ajaran_id: year,
+    semester_id: semester,
+    kelas_token: token,
+    items: scoped,
+    updated_at: new Date().toISOString(),
+  }, { merge: true });
+  // Segarkan cache pembaca agar siswa langsung memakai ringkasan terbaru.
+  invalidateQueryCache('materi_ringkasan');
+}
+
+/** Susun ulang ringkasan untuk beberapa kelas+periode sekaligus. Non-fatal. */
+async function rebuildMaterialSummaryForMaterial(material = {}) {
+  if (!db) return;
+  const year = String(material.tahun_ajaran_id || '').trim();
+  const semester = String(material.semester_id || '').trim();
+  if (!year || !semester) return;
+  const tokens = new Set();
+  (Array.isArray(material.kelas_ids) ? material.kelas_ids : []).forEach((value) => {
+    const token = normalizeMaterialClassToken(value);
+    if (token) tokens.add(token);
+  });
+  [material.kelas_token, material.kelas_id, material.kelas_nama].forEach((value) => {
+    const token = normalizeMaterialClassToken(value);
+    if (token) tokens.add(token);
+  });
+  for (const token of tokens) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await rebuildMaterialSummary(token, year, semester);
+    } catch (error) {
+      console.warn('Gagal menyusun ringkasan materi kelas', token, error);
+    }
+  }
+}
+
+/**
+ * Ambil SATU materi lengkap (termasuk html_source) berdasarkan ID dokumen.
+ * Dipakai halaman siswa untuk memuat isi materi on-demand saat dibuka, sehingga
+ * daftar materi (ringkasan) tidak perlu mengangkut HTML yang berat.
+ */
+export async function getPublishedMaterialById(materialId) {
+  const id = String(materialId || '').trim();
+  if (!id) return null;
+  if (!db) {
+    return readLocalPublishedMaterials().find((item) => String(item.id || '') === id) || null;
+  }
+  try {
+    return await withQueryCache(`materi_publish:doc:${id}`, async () => {
+      const snap = await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(id).get();
+      recordRead(MATERIAL_PUBLISHED_COLLECTION, snap.exists ? 1 : 0);
+      return snap.exists ? { id: snap.id, ...snap.data() } : null;
+    }, MATERIAL_QUERY_PERSIST_TTL_MS);
+  } catch (error) {
+    console.warn('Gagal mengambil materi berdasarkan ID:', error);
+    return readLocalPublishedMaterials().find((item) => String(item.id || '') === id) || null;
+  }
 }
 
 /**
@@ -2097,7 +2254,15 @@ export async function deletePublishedMaterial(id) {
     return false;
   }
 
+  let deletedMaterial = null;
   if (db) {
+    // Ambil dulu metadata materi (kelas & periode) agar ringkasan kelas terdampak
+    // bisa disusun ulang setelah dokumen dihapus.
+    try {
+      const snap = await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(materialId).get();
+      if (snap.exists) deletedMaterial = { id: snap.id, ...snap.data() };
+    } catch { /* abaikan; ringkasan akan dilewati bila metadata tak tersedia */ }
+
     await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(materialId).delete();
 
     // Bersihkan jejak baca yang terkait materi agar penghapusan benar-benar bersih.
@@ -2125,6 +2290,14 @@ export async function deletePublishedMaterial(id) {
   writeLocalMaterialReads(localReads);
   invalidateQueryCache(MATERIAL_PUBLISHED_COLLECTION);
   invalidatePersistentQueryCache(MATERIAL_PUBLISHED_COLLECTION);
+  // Optimasi #C: susun ulang ringkasan materi kelas terdampak (non-fatal).
+  if (deletedMaterial) {
+    try {
+      await rebuildMaterialSummaryForMaterial(deletedMaterial);
+    } catch (error) {
+      console.warn('Gagal memperbarui ringkasan materi setelah hapus:', error);
+    }
+  }
   return true;
 }
 
