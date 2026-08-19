@@ -1530,7 +1530,15 @@ export async function getTeachingAssignmentsForUser(context, userId) {
 }
 
 export async function createPembelajaranFromPlotting(payload, context) {
-  const siswaList = await getManagedUsers('siswa', payload.kelas_id || '');
+  // Optimasi read (B): daftar siswa DIBATASI per kelas. getManagedUsers meneruskan
+  // kelas_id ke API yang memfilter `where('kelas_id','==',kelasId)` — bukan
+  // memindai seluruh koleksi users. Guard di bawah mencegah kasus kelas_id kosong
+  // yang (tanpa filter) akan menarik SELURUH siswa sekolah secara tidak sengaja.
+  const kelasIdForQuery = String(payload.kelas_id || '').trim();
+  if (!kelasIdForQuery) {
+    throw new Error('kelas_id wajib diisi untuk membuat pembelajaran (mencegah pembacaan seluruh siswa).');
+  }
+  const siswaList = await getManagedUsers('siswa', kelasIdForQuery);
   const siswaUntukKelas = siswaList
     .filter((item) => {
       const kelasNama = String(item.kelas_nama || item.kelas_id || '').toLowerCase();

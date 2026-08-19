@@ -415,6 +415,24 @@ export function renderGuruDashboard(container) {
   const refreshWali = async () => {
     const userId = session?.user?.username || '';
     if (!userId) return;
+
+    // Optimasi read (D): status wali kelas nyaris tak berubah dalam satu hari.
+    // Lewati query verifikasi bila pengecekan terakhir masih segar (< 6 jam),
+    // sehingga membuka dashboard berulang tidak memicu read wali_kelas tiap kali.
+    // Stempel disimpan per-user + periode agar ganti akun/semester tetap memicu
+    // pengecekan ulang. Perubahan wali oleh admin akan terverifikasi setelah TTL
+    // atau saat localStorage 'simguru_wali' dibersihkan (mis. login ulang).
+    const WALI_CHECK_TTL_MS = 21600000; // 6 jam
+    const checkStampKey = `simguru_wali_checked_${userId}_${context.tahun_ajaran_aktif || ''}_${context.semester_aktif || ''}`;
+    try {
+      const lastChecked = Number(localStorage.getItem(checkStampKey) || 0);
+      if (Number.isFinite(lastChecked) && Date.now() - lastChecked < WALI_CHECK_TTL_MS) {
+        return;
+      }
+    } catch {
+      // Abaikan kegagalan localStorage; lanjut verifikasi normal.
+    }
+
     const waliRels = await getDocumentsWhere('wali_kelas', [
       { field: 'guru_id', value: userId },
       { field: 'tahun_ajaran_id', value: context.tahun_ajaran_aktif },
@@ -427,6 +445,9 @@ export function renderGuruDashboard(container) {
     } catch {
       cached = null;
     }
+    try {
+      localStorage.setItem(checkStampKey, String(Date.now()));
+    } catch {}
     const changed = (wali?.kelas_id || null) !== (cached?.kelas_id || null);
     if (changed) {
       try {

@@ -31,6 +31,22 @@ function generateId(prefix = '') {
 
 const routeAssignmentCache = new Map();
 
+// ============================================================================
+// OPTIMASI READ (A): persist STRUKTUR penilaian (bab, tugas_bab,
+// ulangan_harian_kolom) ke cache localStorage data-service.
+// ----------------------------------------------------------------------------
+// Struktur ini jarang berubah selama semester berjalan, tetapi sebelumnya
+// dibaca ulang dari server SETIAP kali guru membuka halaman penilaian (cache
+// lama hanya bertahan di memori 5 menit dan hilang saat cold start). Dengan
+// persist localStorage 30 menit, membuka ulang halaman dalam rentang itu = 0
+// read untuk struktur. AMAN karena setiap penyimpanan/penghapusan bab/tugas/UH
+// memanggil saveDocument/deleteDocument(sBatch) yang otomatis meng-invalidasi
+// cache persist koleksi terkait (invalidatePersistentQueryCache di
+// data-service.js), sehingga perubahan struktur langsung tercermin.
+// NILAI (nilai_tugas, nilai_ujian) SENGAJA tidak di-persist agar tetap segar.
+const STRUCTURE_CACHE_MS = 1800000;        // 30 menit
+const STRUCTURE_PERSIST_TTL_MS = 1800000;  // 30 menit
+
 function getOrCreateCacheKey(context, assignment) {
   return `penilaian_${context.tahun_ajaran_aktif}_${context.semester_aktif}_${assignment.id}`;
 }
@@ -420,7 +436,7 @@ async function loadBabsFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 300000 });
+    ], { cacheMs: STRUCTURE_CACHE_MS, persist: true, persistTtlMs: STRUCTURE_PERSIST_TTL_MS });
     return docs.map(doc => {
       return { 
         ...doc, 
@@ -445,7 +461,7 @@ async function loadTugasFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 300000 });
+    ], { cacheMs: STRUCTURE_CACHE_MS, persist: true, persistTtlMs: STRUCTURE_PERSIST_TTL_MS });
     
     const tugasMap = {};
     docs.forEach(doc => {
@@ -523,7 +539,7 @@ async function loadUlanganHarianColumnsFromFirestore(context, assignment) {
       { field: 'tahun_ajaran_id', operator: '==', value: context.tahun_ajaran_aktif },
       { field: 'semester_id', operator: '==', value: context.semester_aktif },
       { field: 'pengajaran_id', operator: '==', value: assignment.id },
-    ], { cacheMs: 300000 });
+    ], { cacheMs: STRUCTURE_CACHE_MS, persist: true, persistTtlMs: STRUCTURE_PERSIST_TTL_MS });
 
     return docs
       .map((doc, index) => ({
