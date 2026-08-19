@@ -1,6 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ---- Helper peran & identitas ----
+    // Login memakai custom token (api/_lib/auth.js) yang membawa klaim `role`
+    // ('admin'|'guru'|'siswa') dan `username`. Helper ini dipakai untuk
+    // menegakkan otorisasi berbasis peran, bukan sekadar "sudah login".
+    function isSignedIn() { return request.auth != null; }
+    function role() { return request.auth.token.role; }
+    function isAdmin() { return isSignedIn() && role() == 'admin'; }
+    function isStaff() { return isSignedIn() && (role() == 'guru' || role() == 'admin'); }
+
     match /dashboard_counts/{periodId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.token.role == 'admin';
@@ -117,8 +126,8 @@ service cloud.firestore {
     }
 
     match /materi_reads/{readId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.resource.data.keys().hasOnly([
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.resource.data.keys().hasOnly([
         'id',
         'material_id',
         'siswa_id',
@@ -170,7 +179,7 @@ service cloud.firestore {
 
     match /game_sessions/{sessionId} {
       allow read: if request.auth != null;
-      allow create: if request.resource.data.keys().hasOnly([
+      allow create: if isSignedIn() && request.resource.data.keys().hasOnly([
         'id', 'config_id', 'game_type', 'tahun_ajaran_id', 'semester_id',
         'pengajaran_id', 'guru_id', 'kelas_id', 'siswa_id', 'siswa_nama',
         'started_at', 'finished_at', 'duration_used_sec', 'quiz_type', 'timeout',
@@ -190,7 +199,7 @@ service cloud.firestore {
 
     match /game_session_rekap/{rekapId} {
       allow read: if request.auth != null;
-      allow create: if request.resource.data.keys().hasOnly([
+      allow create: if isSignedIn() && request.resource.data.keys().hasOnly([
         'id', 'game_type', 'pengajaran_id', 'kelas_id', 'kelas_nama',
         'siswa_id', 'siswa_nama', 'tahun_ajaran_id', 'semester_id',
         'session_id', 'started_at', 'finished_at',
@@ -217,7 +226,15 @@ service cloud.firestore {
     // sehingga rules mengikuti pola koleksi game lama dan memvalidasi bentuk payload.
     match /battle_rooms/{roomId} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.resource.data.keys().hasOnly([
+      // Membuat/menyunting struktur room adalah wewenang GURU pemilik. Sebelumnya
+      // setiap pengguna login dapat membuat room dengan guru_id siapa pun
+      // (impersonasi). Kini create/update bentuk-penuh wajib guru & guru_id ==
+      // username sendiri. Siswa TIDAK menulis battle_rooms secara langsung
+      // (mereka bergabung lewat koleksi battle_participants).
+      allow create, update: if isSignedIn()
+        && role() == 'guru'
+        && request.resource.data.guru_id == request.auth.token.username
+        && request.resource.data.keys().hasOnly([
         'id', 'code', 'title', 'game_type', 'battle_game_type', 'subject_label', 'battle_settings', 'mode', 'status', 'current_question',
         'time_per_question', 'questions', 'participants', 'guru_id', 'guru_nama',
         'kelas_id', 'kelas_nama', 'pengajaran_id', 'tahun_ajaran_id', 'semester_id',
@@ -293,20 +310,21 @@ service cloud.firestore {
     }
 
     // Public lobby content is rendered before authentication on the home page.
-    // Keep reads public while retaining authenticated writes.
+    // Reads tetap publik; menulis konten lobi (yang tampil publik) dibatasi admin
+    // agar tidak bisa ditimpa/di-deface oleh guru/siswa mana pun.
     match /lobby_settings/{documentId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /lobby_sections/{documentId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /lobby_links/{documentId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // Koleksi `settings` menyimpan dua jenis dokumen dengan sensitivitas berbeda:
@@ -327,17 +345,23 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.token.role == 'admin';
     }
 
+    // ========================================================================
+    // KOLEKSI AKADEMIK — dibaca semua pengguna login, DITULIS hanya guru/admin.
+    // Sebelumnya seluruh koleksi di sini bisa ditulis siswa mana pun (celah
+    // integritas: siswa dapat mengubah nilai/absensi/keaktifan/kas/wali sendiri
+    // atau milik orang lain). Kini siswa hanya boleh MEMBACA; penulisan (input
+    // nilai, absensi, keaktifan, jurnal, pembayaran, plotting, wali, materi,
+    // pengumuman, konfigurasi game/kuis) dibatasi peran guru/admin.
+    // ========================================================================
     match /{collectionName}/{documentId} {
-       allow read, write: if request.auth != null && collectionName in [
+      allow read: if isSignedIn() && collectionName in [
         'mata_pelajaran',
         'kelas',
         'tahun_ajaran',
         'pengajaran',
         'pembelajaran',
         'anggota_kelas',
-         'absensi',
-         'absensi_ringkasan_siswa',
-         'ringkasan_siswa',
+        'absensi',
         'catatan_khusus',
         'jurnal_guru',
         'nilai_tugas',
@@ -346,35 +370,91 @@ service cloud.firestore {
         'tugas_bab',
         'ulangan_harian_kolom',
         'keaktifan_siswa',
-        'game_configs',
-        'game_sessions',
-        'game_session_rekap',
-        'game_tokens',
-        'kuiz_paket',
-        'kuiz_sesi',
-        'kuiz_jawaban',
-        'kuiz_nilai_final',
-        'lobby_settings',
-        'lobby_sections',
-        'lobby_links',
         'item_pembayaran_buku',
         'pembayaran_buku',
         'wali_kelas',
-        'kas_kelas',
-        'kas_transaksi',
         'materi_ai',
         'materi_ringkasan',
-'pengumuman',
-        'pengumuman_reads',
+        'pengumuman',
         'pengumuman_ringkasan',
+        'game_configs',
+        'kuiz_paket',
+        'kuiz_sesi',
+        'kuiz_nilai_final',
+        'rpm_drafts'
+      ];
+      allow write: if isStaff() && collectionName in [
+        'mata_pelajaran',
+        'kelas',
+        'tahun_ajaran',
+        'pengajaran',
+        'pembelajaran',
+        'anggota_kelas',
+        'absensi',
+        'catatan_khusus',
+        'jurnal_guru',
+        'nilai_tugas',
+        'nilai_ujian',
+        'bab',
+        'tugas_bab',
+        'ulangan_harian_kolom',
+        'keaktifan_siswa',
+        'item_pembayaran_buku',
+        'pembayaran_buku',
+        'wali_kelas',
+        'materi_ai',
+        'materi_ringkasan',
+        'pengumuman',
+        'pengumuman_ringkasan',
+        'game_configs',
+        'kuiz_paket',
+        'kuiz_sesi',
+        'kuiz_nilai_final',
         'rpm_drafts'
       ];
     }
 
+    // ========================================================================
+    // KOLEKSI MILIK/PARTISIPASI SISWA — dibaca & ditulis semua pengguna login.
+    // Ini koleksi yang MEMANG ditulis siswa dari aplikasi:
+    //  - ringkasan_siswa, absensi_ringkasan_siswa : ringkasan ditulis siswa saat
+    //    membuka dashboard/nilai (dan juga oleh guru saat rebuild).
+    //  - kas_kelas, kas_transaksi                 : bendahara siswa & wali kelas.
+    //  - game_tokens                              : kuota main game per siswa.
+    //  - kuiz_jawaban                             : jawaban ujian siswa.
+    //  - pengumuman_reads                         : tanda baca pengumuman siswa.
+    // Catatan: game_sessions, game_session_rekap, battle_*, materi_reads punya
+    // blok khusus di atas dengan validasi bentuk payload — sengaja TIDAK diulang
+    // di sini agar validasinya tetap berlaku (aturan bersifat OR).
+    // ========================================================================
+    match /{collectionName}/{documentId} {
+      allow read, write: if isSignedIn() && collectionName in [
+        'ringkasan_siswa',
+        'absensi_ringkasan_siswa',
+        'kas_kelas',
+        'kas_transaksi',
+        'game_tokens',
+        'kuiz_jawaban',
+        'pengumuman_reads'
+      ];
+    }
+
     match /chat_rooms/{roomId} {
-      allow read, write: if request.auth != null;
+      // Hanya peserta ruang yang boleh membaca/menulis. Membuat ruang baru wajib
+      // menyertakan diri sendiri sebagai peserta. Ini menutup celah lama di mana
+      // setiap pengguna login bisa membaca percakapan privat siapa pun.
+      allow read: if isSignedIn() && request.auth.token.username in resource.data.participants;
+      allow create: if isSignedIn()
+        && request.resource.data.participants is list
+        && request.auth.token.username in request.resource.data.participants;
+      allow update: if isSignedIn()
+        && request.auth.token.username in resource.data.participants;
+      allow delete: if isSignedIn()
+        && request.auth.token.username in resource.data.participants;
       match /messages/{msgId} {
-        allow read, write: if request.auth != null;
+        // Akses pesan mengikuti keanggotaan ruang induk.
+        allow read, write: if isSignedIn()
+          && request.auth.token.username in get(/databases/$(database)/documents/chat_rooms/$(roomId)).data.participants;
       }
     }
 
