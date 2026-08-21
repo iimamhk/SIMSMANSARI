@@ -7,6 +7,8 @@ import {
   saveDocument,
   getDocumentsWhere,
   deleteDocument,
+  recordDocumentRead,
+  recordSnapshotRead,
 } from '../../firebase/data-service.js';
 import {
   generateId, generateAccessCode, formatDateTime, formatDateTimeInput,
@@ -418,6 +420,7 @@ async function fsGet(collection, id) {
   if (!db()) return null;
   try {
     const snap = await db().collection(collection).doc(id).get();
+    recordDocumentRead(collection, snap);
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
   } catch { return null; }
 }
@@ -430,6 +433,7 @@ async function fsQuery(collection, filters = [], options = {}) {
     if (options.orderBy) q = q.orderBy(options.orderBy, options.orderDirection || 'desc');
     if (Number(options.limit) > 0) q = q.limit(Number(options.limit));
     const snap = await q.get();
+    recordSnapshotRead(collection, snap);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch { return []; }
 }

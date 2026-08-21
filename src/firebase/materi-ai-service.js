@@ -1,5 +1,5 @@
 import { db } from './firebase-config.js';
-import { saveDocument, deleteDocument, getDocumentsWhere } from './data-service.js';
+import { saveDocument, deleteDocument, getDocumentsWhere, recordDocumentRead } from './data-service.js';
 
 const MATERI_AI_COLLECTION = 'materi_ai';
 const MATERI_AI_LOCAL_KEY = 'simguru_materi_ai';
@@ -72,6 +72,7 @@ export async function getMateriAi(id) {
   if (db) {
     try {
       const snapshot = await db.collection(MATERI_AI_COLLECTION).doc(id).get();
+      recordDocumentRead(MATERI_AI_COLLECTION, snapshot);
       if (snapshot.exists) return { id: snapshot.id, ...snapshot.data(), ...local };
     } catch (error) {
       console.warn('Gagal memuat Materi AI dari Firestore:', error);

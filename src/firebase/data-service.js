@@ -90,7 +90,7 @@ function loadReadMeter() {
   }
 }
 
-function recordRead(collectionName, count) {
+export function recordRead(collectionName, count) {
   const n = Number(count) || 0;
   if (n <= 0) return;
   if (typeof window === 'undefined' || !window.localStorage) return;
@@ -105,6 +105,19 @@ function recordRead(collectionName, count) {
   } catch {
     // Instrumentation tidak boleh pernah mengganggu alur utama.
   }
+}
+
+export function recordDocumentRead(collectionName, snapshot) {
+  if (snapshot?.metadata?.fromCache) return;
+  recordRead(collectionName, 1);
+}
+
+export function recordSnapshotRead(collectionName, snapshot, options = {}) {
+  if (snapshot?.metadata?.fromCache) return;
+  const count = options.realtime && typeof snapshot?.docChanges === 'function'
+    ? snapshot.docChanges().length
+    : Number(snapshot?.size || 0);
+  recordRead(collectionName, count);
 }
 
 /** Ambil ringkasan penghitung read hari ini (dipakai UI & console). */
@@ -152,6 +165,16 @@ const STATIC_COLLECTIONS = new Set([
   'pengajaran',
   'pembelajaran',
   'wali_kelas',
+]);
+
+const FULL_COLLECTION_READ_ALLOWLIST = new Set([
+  'settings',
+  'mata_pelajaran',
+  'kelas',
+  'tahun_ajaran',
+  'lobby_settings',
+  'lobby_sections',
+  'lobby_links',
 ]);
 
 function isFirestoreReadQuotaError(error) {
@@ -562,7 +585,7 @@ async function getDocsFromCollection(collectionName) {
 
   try {
     const snapshot = await db.collection(collectionName).get();
-    recordRead(collectionName, snapshot.size);
+    recordSnapshotRead(collectionName, snapshot);
     clearFirestoreReadQuotaStatus();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
@@ -575,6 +598,11 @@ async function getDocsFromCollection(collectionName) {
 }
 
 export async function getCollectionDocs(collectionName, options = {}) {
+  if (!FULL_COLLECTION_READ_ALLOWLIST.has(collectionName)) {
+    console.warn(`Pembacaan seluruh koleksi ${collectionName} diblokir. Gunakan query terfilter untuk koleksi besar.`);
+    return [];
+  }
+
   const defaultCacheMs = STATIC_COLLECTIONS.has(collectionName)
     ? STATIC_COLLECTION_CACHE_TTL_MS
     : COLLECTION_CACHE_TTL_MS;
@@ -676,7 +704,7 @@ export async function getDocumentsWhere(collectionName, filters = [], options = 
       query = query.limit(resultLimit);
     }
     const snapshot = await query.get();
-    recordRead(collectionName, snapshot.size);
+    recordSnapshotRead(collectionName, snapshot);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   };
 
@@ -730,11 +758,12 @@ export async function getDashboardCounts(context) {
   const { year, semester } = getActivePeriod(context);
   if (!year || !semester || !db) return null;
   try {
-    const doc = await db.collection('dashboard_counts').doc(`${year}_${semester}`).get();
-    if (doc.exists) {
-      const data = doc.data();
+    const snapshot = await db.collection('dashboard_counts').doc(`${year}_${semester}`).get();
+    recordDocumentRead('dashboard_counts', snapshot);
+    if (snapshot.exists) {
+      const data = snapshot.data();
       if (Date.now() - new Date(data.updated_at || 0).getTime() < 300000) {
-        return { id: doc.id, ...data };
+        return { id: snapshot.id, ...data };
       }
     }
   } catch { /* fallback ke perhitungan manual */ }
@@ -745,22 +774,24 @@ export async function recalculateDashboardCounts(context) {
   const { year, semester } = getActivePeriod(context);
   if (!year || !semester || !db) return null;
   try {
-    const countQuery = async (query) => {
+    const countQuery = async (query, collectionName) => {
       if (typeof query.count === 'function') {
         const snapshot = await query.count().get();
+        recordRead(collectionName, 1);
         return Number(snapshot.data()?.count || 0);
       }
       const snapshot = await query.get();
+      recordSnapshotRead(collectionName, snapshot);
       return snapshot.size;
     };
     const [jumlahMapel, jumlahKelas, jumlahPengajaran, jumlahGuru, jumlahSiswa] = await Promise.all([
-      countQuery(db.collection('mata_pelajaran')),
-      countQuery(db.collection('kelas')),
+      countQuery(db.collection('mata_pelajaran'), 'mata_pelajaran'),
+      countQuery(db.collection('kelas'), 'kelas'),
       countQuery(db.collection('pengajaran')
         .where('tahun_ajaran_id', '==', year)
-        .where('semester_id', '==', semester)),
-      countQuery(db.collection('users').where('role', '==', 'guru')),
-      countQuery(db.collection('users').where('role', '==', 'siswa')),
+        .where('semester_id', '==', semester), 'pengajaran'),
+      countQuery(db.collection('users').where('role', '==', 'guru'), 'users'),
+      countQuery(db.collection('users').where('role', '==', 'siswa'), 'users'),
     ]);
     const counts = {
       jumlah_guru: jumlahGuru,
@@ -817,6 +848,7 @@ export async function getAppConfig() {
     }
 
     const snapshot = await db.collection('settings').doc('app_config').get();
+    recordDocumentRead('settings', snapshot);
     return snapshot.exists ? { id: snapshot.id, ...snapshot.data() } : JSON.parse(localStorage.getItem('simguru_settings') || '{}');
   } catch (error) {
     console.warn('Gagal membaca konfigurasi aplikasi:', error);
@@ -988,6 +1020,8 @@ export async function saveAttendanceRecord(payload) {
         transaction.get(attendanceRef),
         transaction.get(summaryRef),
       ]);
+      recordDocumentRead('absensi', previousSnapshot);
+      recordDocumentRead('absensi_ringkasan_siswa', summarySnapshot);
     const previous = previousSnapshot.exists ? previousSnapshot.data() : null;
     const summary = summarySnapshot.exists ? summarySnapshot.data() : {};
     const counts = {
@@ -1052,6 +1086,8 @@ export async function saveAttendanceRecordsBatch(payloads = []) {
       Promise.all(attendanceRefs.map((ref) => ref.get())),
       Promise.all(summaryRefs.map((ref) => ref.get())),
     ]);
+    attendanceSnaps.forEach((snap) => recordDocumentRead('absensi', snap));
+    summarySnaps.forEach((snap) => recordDocumentRead('absensi_ringkasan_siswa', snap));
 
     const previousById = new Map();
     attendanceSnaps.forEach((snap) => {
@@ -1153,6 +1189,7 @@ export async function getAttendanceSummary(context, siswaId, aliases = []) {
   let snapshot = null;
   try {
     snapshot = await summaryRef.get();
+    recordDocumentRead('absensi_ringkasan_siswa', snapshot);
     if (snapshot.exists && snapshot.data()?.complete === true) return { id: snapshot.id, ...snapshot.data() };
   } catch (error) {
     if (error?.code !== 'permission-denied') throw error;
@@ -1214,6 +1251,7 @@ export async function getStudentGradeSummary(context, siswaId) {
   try {
     return await withQueryCache(`ringkasan-siswa:${id}`, async () => {
       const snap = await db.collection(STUDENT_GRADE_SUMMARY_COLLECTION).doc(id).get();
+      recordDocumentRead(STUDENT_GRADE_SUMMARY_COLLECTION, snap);
       return snap.exists ? { id: snap.id, ...snap.data() } : null;
     }, 300000);
   } catch (error) {
@@ -1428,11 +1466,11 @@ export function subscribeCollection(collectionName, filters = [], callback, opti
      });
      if (orderByField) query = query.orderBy(orderByField, orderDirection);
      if (limit > 0) query = query.limit(limit);
-     const unsubscribe = query.onSnapshot(
-       (snapshot) => {
-         recordRead(collectionName, snapshot.size);
-         const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-         callback(data);
+      const unsubscribe = query.onSnapshot(
+        (snapshot) => {
+          recordSnapshotRead(collectionName, snapshot, { realtime: true });
+          const data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          callback(data);
        },
        (error) => {
          console.warn(`Gagal memantau koleksi ${collectionName}:`, error);
@@ -1627,6 +1665,7 @@ export async function synchronizeCurrentClassMemberships(context, students = [])
     const snapshot = await db.collection('anggota_kelas')
       .where('siswa_id', 'in', keys)
       .get();
+    recordSnapshotRead('anggota_kelas', snapshot);
     snapshot.docs.forEach((doc) => membershipDocs.push({ id: doc.id, ...doc.data() }));
   }
   const currentMemberships = membershipDocs.filter((item) => item.semester_id === semester);
@@ -1733,6 +1772,7 @@ export async function synchronizeRenamedUserReferences(context, role, oldUsernam
       .where('semester_id', '==', semester)
       .where('siswa_id', 'in', allIds)
       .get();
+    recordSnapshotRead('anggota_kelas', snapshot);
     const oldMembershipIds = snapshot.docs.map((doc) => doc.id);
     await synchronizeCurrentClassMemberships(context, [user]);
     await deleteDocumentsBatch('anggota_kelas', oldMembershipIds);
@@ -1746,6 +1786,7 @@ export async function synchronizeRenamedUserReferences(context, role, oldUsernam
       const snapshot = await db.collection(collectionName)
         .where('guru_id', '==', oldUsername)
         .get();
+      recordSnapshotRead(collectionName, snapshot);
       snapshot.docs.forEach((doc) => {
         const data = doc.data() || {};
         const samePeriod = collectionName === 'wali_kelas'
@@ -1896,9 +1937,9 @@ export async function getPublishedMaterials(options = {}) {
               .get()
               .catch(() => null)
           ));
+          summarySnaps.forEach((snap) => recordDocumentRead(MATERIAL_SUMMARY_COLLECTION, snap));
           const found = summarySnaps.filter((snap) => snap && snap.exists);
           if (found.length) {
-            recordRead(MATERIAL_SUMMARY_COLLECTION, found.length);
             const merged = mergeMaterialsById(
               found.flatMap((snap) => (Array.isArray(snap.data()?.items) ? snap.data().items : [])),
               []
@@ -2171,7 +2212,7 @@ export async function getPublishedMaterialById(materialId) {
   try {
     return await withQueryCache(`materi_publish:doc:${id}`, async () => {
       const snap = await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(id).get();
-      recordRead(MATERIAL_PUBLISHED_COLLECTION, snap.exists ? 1 : 0);
+      recordDocumentRead(MATERIAL_PUBLISHED_COLLECTION, snap);
       return snap.exists ? { id: snap.id, ...snap.data() } : null;
     }, MATERIAL_QUERY_PERSIST_TTL_MS);
   } catch (error) {
@@ -2260,6 +2301,7 @@ export async function deletePublishedMaterial(id) {
     // bisa disusun ulang setelah dokumen dihapus.
     try {
       const snap = await db.collection(MATERIAL_PUBLISHED_COLLECTION).doc(materialId).get();
+      recordDocumentRead(MATERIAL_PUBLISHED_COLLECTION, snap);
       if (snap.exists) deletedMaterial = { id: snap.id, ...snap.data() };
     } catch { /* abaikan; ringkasan akan dilewati bila metadata tak tersedia */ }
 
@@ -2641,6 +2683,7 @@ export async function getPengumumanForSiswa(context, kelasId) {
       try {
         const summaryId = buildPengumumanSummaryId(year, semester, normalizedKelas);
         const summarySnap = await db.collection(PENGUMUMAN_SUMMARY_COLLECTION).doc(summaryId).get();
+        recordDocumentRead(PENGUMUMAN_SUMMARY_COLLECTION, summarySnap);
         if (summarySnap.exists) {
           const items = Array.isArray(summarySnap.data()?.items) ? summarySnap.data().items : [];
           // Walau ringkasan kosong, tetap dipakai (kelas ini memang belum ada
@@ -2744,6 +2787,7 @@ export async function deletePengumuman(id) {
     let affSemester = '';
     try {
       const snap = await db.collection(PENGUMUMAN_COLLECTION).doc(pengumumanId).get();
+      recordDocumentRead(PENGUMUMAN_COLLECTION, snap);
       if (snap.exists) {
         const data = snap.data() || {};
         affectedKelas = getPengumumanKelasIds({ ...data });
@@ -2755,6 +2799,7 @@ export async function deletePengumuman(id) {
     const readsSnapshot = await db.collection(PENGUMUMAN_READS_COLLECTION)
       .where('pengumuman_id', '==', pengumumanId)
       .get();
+    recordSnapshotRead(PENGUMUMAN_READS_COLLECTION, readsSnapshot);
     const refs = readsSnapshot.docs.map((doc) => doc.ref);
     for (let i = 0; i < refs.length; i += 400) {
       const batch = db.batch();
@@ -2866,6 +2911,7 @@ export async function getChatRoomsForUser(uid) {
       .orderBy('last_at', 'desc')
       .limit(30)
       .get();
+    recordSnapshotRead('chat_rooms', snapshot);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.warn('Gagal memuat daftar chat:', error);
@@ -2895,7 +2941,10 @@ export function subscribeChatRooms(uid, callback) {
       .orderBy('last_at', 'desc')
       .limit(30)
       .onSnapshot(
-        (snapshot) => callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))),
+        (snapshot) => {
+          recordSnapshotRead('chat_rooms', snapshot, { realtime: true });
+          callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+        },
         (error) => console.warn('Gagal memantau daftar chat:', error)
       );
     return unsubscribe;
@@ -2964,6 +3013,7 @@ export async function sendChatMessage(roomId, senderId, senderNama, text) {
 
   try {
     const roomSnap = await db.collection('chat_rooms').doc(roomId).get();
+    recordDocumentRead('chat_rooms', roomSnap);
     const room = roomSnap.exists ? roomSnap.data() : {};
     const participants = Array.isArray(room.participants) ? room.participants : [];
     const unread = room.unread && typeof room.unread === 'object' ? { ...room.unread } : {};
@@ -3004,7 +3054,10 @@ export function subscribeChatMessages(roomId, callback) {
       .orderBy(fieldPath, 'desc')
       .limit(30);
     const unsubscribe = q.onSnapshot(
-      (snapshot) => callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))),
+      (snapshot) => {
+        recordSnapshotRead('chat_rooms/messages', snapshot, { realtime: true });
+        callback(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      },
       (error) => console.warn('Gagal memantau pesan:', error)
     );
     return unsubscribe;
@@ -3024,6 +3077,7 @@ export async function loadOlderChatMessages(roomId, oldestDoc, limit = 30) {
       .startAfter(oldestDoc.created_at, oldestDoc.id)
       .limit(limit);
     const snapshot = await q.get();
+    recordSnapshotRead('chat_rooms/messages', snapshot);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.warn('Gagal memuat pesan lama:', error);
@@ -3044,6 +3098,7 @@ export async function getChatRoom(roomId) {
   if (!db) return null;
   try {
     const snap = await db.collection('chat_rooms').doc(roomId).get();
+    recordDocumentRead('chat_rooms', snap);
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
   } catch (error) {
     console.warn('Gagal memuat ruang chat:', error);
@@ -3084,6 +3139,7 @@ export async function getRpmDrafts(uid, limit = 20) {
       .orderBy('updatedAt', 'desc')
       .limit(limit)
       .get();
+    recordSnapshotRead('rpm_drafts', snapshot);
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   } catch (error) {
     console.warn('Gagal mengambil draft RPM:', error);
@@ -3095,6 +3151,7 @@ export async function getRpmDraftById(id) {
   if (!db) return null;
   try {
     const snap = await db.collection('rpm_drafts').doc(id).get();
+    recordDocumentRead('rpm_drafts', snap);
     return snap.exists ? { id: snap.id, ...snap.data() } : null;
   } catch (error) {
     console.warn('Gagal mengambil draft RPM oleh ID:', error);

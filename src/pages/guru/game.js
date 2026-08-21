@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getDocumentsWhere, saveDocument } from '../../firebase/data-service.js';
+import { getTeachingAssignmentsForUser, getActiveTeachingAssignments, getDocumentsWhere, saveDocument, recordDocumentRead, recordSnapshotRead } from '../../firebase/data-service.js';
 import { getOperationCatalog, quizTypes, normalizeGameSettings, generateMathQuestions } from '../../utils/math-game.js';
 import { getVocabularyThemeCatalog, getVocabularyThemeLabel, getVocabularyThemeOptions, vocabularyQuizTypes, normalizeVocabularySettings, getVocabularyWordList, generateVocabularyQuestions } from '../../utils/vocab-game.js';
 
@@ -1191,6 +1191,7 @@ export async function renderGuruGamePage(container) {
       let roomDoc = null;
       if (window.firebaseDb && activeBattleRoom.id) {
         const snap = await window.firebaseDb.collection('battle_rooms').doc(activeBattleRoom.id).get();
+        recordDocumentRead('battle_rooms', snap);
         if (snap.exists) roomDoc = { id: snap.id, ...snap.data() };
       }
       if (!roomDoc) {
@@ -2338,6 +2339,7 @@ export async function renderGuruGamePage(container) {
     stopBattlePolling();
     battleUnsubscribe = window.firebaseDb?.collection('battle_rooms').doc(room.id)
       .onSnapshot((snapshot) => {
+        recordDocumentRead('battle_rooms', snapshot);
         if (!snapshot.exists) return;
         const roomData = snapshot.data() || {};
         const nextRoom = {
@@ -2358,6 +2360,7 @@ export async function renderGuruGamePage(container) {
     battleParticipantsUnsubscribe = window.firebaseDb?.collection('battle_participants')
       .where('room_id', '==', room.id)
       .onSnapshot((snapshot) => {
+        recordSnapshotRead('battle_participants', snapshot, { realtime: true });
         if (!activeBattleRoom) return;
         // Hemat read: proses HANYA dokumen yang berubah (added/modified/removed),
         // bukan membangun ulang seluruh peta peserta dari snapshot.docs. Saat 30

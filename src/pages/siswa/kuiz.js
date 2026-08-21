@@ -3,6 +3,8 @@ import { getStoredContext, getSessionUserKeys, normalizeUserKey } from '../../ut
 import {
   getActiveTeachingAssignments,
   getDocumentsWhere,
+  recordDocumentRead,
+  recordSnapshotRead,
   saveDocument,
 } from '../../firebase/data-service.js';
 import {
@@ -83,6 +85,7 @@ async function fsQuery(collection, filters = [], options = {}) {
     if (options.orderBy) q = q.orderBy(options.orderBy, options.orderDirection || 'desc');
     if (Number(options.limit) > 0) q = q.limit(Number(options.limit));
     const snap = await q.get();
+    recordSnapshotRead(collection, snap);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch { return []; }
 }
@@ -209,6 +212,7 @@ async function loadPaket(paketId) {
   if (!db()) { state.paketCache[paketId] = localPaket || null; return localPaket || null; }
   try {
     const snap = await db().collection(COLLECTION_PAKET).doc(paketId).get();
+    recordDocumentRead(COLLECTION_PAKET, snap);
     const data = snap.exists ? { id: snap.id, ...snap.data() } : localPaket || null;
     if (data) state.paketCache[paketId] = data;
     return data;

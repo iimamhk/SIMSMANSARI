@@ -1,6 +1,6 @@
 import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
-import { getActiveTeachingAssignments, getDocumentsWhere, saveDocument } from '../../firebase/data-service.js';
+import { getActiveTeachingAssignments, getDocumentsWhere, saveDocument, recordDocumentRead } from '../../firebase/data-service.js';
 import { quizTypes, generateMathQuestions, evaluateMathSession, normalizeGameSettings, getOperationCatalog } from '../../utils/math-game.js';
 import { vocabularyQuizTypes, generateVocabularyQuestions, evaluateVocabularySession, normalizeVocabularySettings, getVocabularyThemeLabel } from '../../utils/vocab-game.js';
 
@@ -761,6 +761,7 @@ export async function renderSiswaGamePage(container) {
       // Prefer direct document read when room id is known (1 read vs query).
       if (battleRoom.id && window.firebaseDb) {
         const roomSnap = await window.firebaseDb.collection('battle_rooms').doc(battleRoom.id).get();
+        recordDocumentRead('battle_rooms', roomSnap);
         if (roomSnap.exists) {
           const remote = { id: roomSnap.id, ...roomSnap.data() };
           const remoteUpdatedAt = new Date(remote.updated_at || 0).getTime();
@@ -780,6 +781,7 @@ export async function renderSiswaGamePage(container) {
       const studentId = getBattleStudentId();
       if (battleRoom.id && window.firebaseDb) {
         const participantSnap = await window.firebaseDb.collection('battle_participants').doc(`${battleRoom.id}_${studentId}`).get();
+        recordDocumentRead('battle_participants', participantSnap);
         if (participantSnap.exists) {
           const participant = { id: studentId, ...participantSnap.data() };
           battleRoom = { ...battleRoom, participants: { ...(battleRoom.participants || {}), [studentId]: participant } };
@@ -1728,6 +1730,7 @@ export async function renderSiswaGamePage(container) {
     battlePollId = null;
     battleUnsubscribe = window.firebaseDb?.collection('battle_rooms').doc(battleRoom.id)
       .onSnapshot((snapshot) => {
+        recordDocumentRead('battle_rooms', snapshot);
         if (!snapshot.exists) return;
         const roomData = snapshot.data() || {};
         const currentParticipant = battleRoom?.participants?.[getBattleStudentId()];
@@ -1749,6 +1752,7 @@ export async function renderSiswaGamePage(container) {
       });
     battleParticipantUnsubscribe = window.firebaseDb?.collection('battle_participants').doc(`${battleRoom.id}_${studentId}`)
       .onSnapshot((snapshot) => {
+        recordDocumentRead('battle_participants', snapshot);
         if (!battleRoom) return;
         if (!snapshot.exists) {
           const participants = { ...(battleRoom.participants || {}) };
