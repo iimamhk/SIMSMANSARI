@@ -49,7 +49,37 @@ function escapeHtml(value) {
 //    getTeachingAssignmentsForUser dan diverifikasi ulang sebelum ekspor jalan.
 // ---------------------------------------------------------------------------
 
-function renderHistoryCard(h) {
+const MODE_ACTIVE_CLASS = 'ring-2 ring-offset-2 ring-offset-white shadow-xl';
+
+const DEST_ACTIVE_CLASS = 'ring-2 ring-offset-2 ring-offset-white shadow-xl';
+
+const HISTORY_LIGHTS = [
+  {
+    card: 'border-cyan-200 bg-gradient-to-br from-cyan-50 via-sky-50 to-blue-50 shadow-cyan-100/80 hover:border-cyan-300 hover:shadow-cyan-200/80',
+    icon: 'bg-cyan-100 text-cyan-700',
+  },
+  {
+    card: 'border-violet-200 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50 shadow-violet-100/80 hover:border-violet-300 hover:shadow-violet-200/80',
+    icon: 'bg-violet-100 text-violet-700',
+  },
+  {
+    card: 'border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 shadow-amber-100/80 hover:border-amber-300 hover:shadow-amber-200/80',
+    icon: 'bg-amber-100 text-amber-700',
+  },
+  {
+    card: 'border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-lime-50 shadow-emerald-100/80 hover:border-emerald-300 hover:shadow-emerald-200/80',
+    icon: 'bg-emerald-100 text-emerald-700',
+  },
+];
+
+function toggleClassString(element, classes, enabled) {
+  String(classes || '').split(/\s+/).filter(Boolean).forEach((className) => {
+    element.classList.toggle(className, enabled);
+  });
+}
+
+function renderHistoryCard(h, index = 0) {
+  const light = HISTORY_LIGHTS[index % HISTORY_LIGHTS.length];
   const dest = getDestinationMeta(h.destination || 'local', h.driveUploaded);
   const typeLabel = getBackupTypeLabel(h.backupType);
   const typeBadge = getBackupTypeBadgeClass(h.backupType);
@@ -60,20 +90,20 @@ function renderHistoryCard(h) {
   if (h.durationMs) meta.push(formatDuration(h.durationMs));
 
   const driveBtn = h.driveUploaded && (h.driveWebViewLink || h.driveFolderLink)
-    ? `<a href="${escapeHtml(h.driveWebViewLink || h.driveFolderLink)}" target="_blank" rel="noopener" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Drive</a>`
+    ? `<a href="${escapeHtml(h.driveWebViewLink || h.driveFolderLink)}" target="_blank" rel="noopener" class="rounded-lg border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-2.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm shadow-sky-100 transition hover:-translate-y-0.5 hover:from-sky-100 hover:to-cyan-100 hover:shadow-sky-200">Drive</a>`
     : '';
 
   return `
-    <div class="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300" data-id="${h.id}">
+    <div class="group relative flex flex-col gap-3 overflow-hidden rounded-2xl border p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${light.card}" data-id="${h.id}">
       <div class="flex items-start gap-3">
-        <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+        <div class="flex h-10 w-10 flex-none items-center justify-center rounded-xl shadow-inner ${light.icon}">
           ${getFormatIcon(h.format)}
         </div>
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-semibold text-slate-900" title="${escapeHtml(h.fileName)}">${escapeHtml(h.fileName)}</p>
           <p class="mt-0.5 text-xs text-slate-500">${formatDateShort(h.timestamp)}</p>
         </div>
-        <button class="btn-delete flex-none rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 sm:opacity-0 sm:group-hover:opacity-100" title="Hapus riwayat" aria-label="Hapus riwayat" data-id="${h.id}">
+        <button class="btn-delete flex-none rounded-lg bg-gradient-to-br from-rose-50 to-red-100 p-1.5 text-rose-500 shadow-sm shadow-rose-100 transition hover:-translate-y-0.5 hover:from-rose-100 hover:to-red-200 hover:text-rose-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 sm:opacity-0 sm:group-hover:opacity-100" title="Hapus riwayat" aria-label="Hapus riwayat" data-id="${h.id}">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
@@ -87,7 +117,7 @@ function renderHistoryCard(h) {
         <p class="text-xs text-slate-500">${meta.join(' • ')}</p>
         <div class="flex items-center gap-1.5">
           ${driveBtn}
-          <button class="btn-preview inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50" data-id="${h.id}">
+          <button class="btn-preview inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 shadow-sm shadow-violet-100 transition hover:-translate-y-0.5 hover:from-violet-100 hover:to-fuchsia-100 hover:shadow-violet-200" data-id="${h.id}">
             Detail
           </button>
         </div>
@@ -155,7 +185,7 @@ export async function renderGuruBackupPage(container) {
     </section>`;
 
   const historyCards = history.length > 0
-    ? history.slice(0, 20).map((h) => renderHistoryCard(h)).join('')
+    ? history.slice(0, 20).map((h, index) => renderHistoryCard(h, index)).join('')
     : EMPTY_HISTORY_HTML;
 
   const pageHtml = `
@@ -164,9 +194,9 @@ export async function renderGuruBackupPage(container) {
 
       <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <nav class="flex gap-5 overflow-x-auto border-b border-slate-100 px-4 sm:px-5" id="backup-tabs" role="tablist">
-          <button data-tab="backup" role="tab" aria-selected="true" aria-controls="tab-backup" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-slate-900 px-1 py-3 text-sm font-semibold text-slate-900 transition">Ekspor</button>
-          <button data-tab="history" role="tab" aria-selected="false" aria-controls="tab-history" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-sm font-semibold text-slate-500 transition hover:text-slate-900">Riwayat</button>
-          <button data-tab="settings" role="tab" aria-selected="false" aria-controls="tab-settings" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-sm font-semibold text-slate-500 transition hover:text-slate-900">Pengaturan</button>
+          <button data-tab="backup" data-active-class="border-emerald-500 text-emerald-700" data-inactive-class="border-transparent text-slate-500 hover:text-emerald-700" role="tab" aria-selected="true" aria-controls="tab-backup" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-emerald-500 px-1 py-3 text-sm font-semibold text-emerald-700 transition">Ekspor</button>
+          <button data-tab="history" data-active-class="border-violet-500 text-violet-700" data-inactive-class="border-transparent text-slate-500 hover:text-violet-700" role="tab" aria-selected="false" aria-controls="tab-history" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-sm font-semibold text-slate-500 transition hover:text-violet-700">Riwayat</button>
+          <button data-tab="settings" data-active-class="border-amber-500 text-amber-700" data-inactive-class="border-transparent text-slate-500 hover:text-amber-700" role="tab" aria-selected="false" aria-controls="tab-settings" class="tab-btn -mb-px whitespace-nowrap border-b-2 border-transparent px-1 py-3 text-sm font-semibold text-slate-500 transition hover:text-amber-700">Pengaturan</button>
         </nav>
 
         <!-- TAB: EKSPOR -->
@@ -174,12 +204,12 @@ export async function renderGuruBackupPage(container) {
           <section>
             <h3 class="text-sm font-semibold text-slate-900">Cakupan data</h3>
             <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label id="mode-full" class="mode-btn cursor-pointer rounded-xl border border-emerald-300 bg-emerald-50 p-3.5 transition">
+              <label id="mode-full" data-active-class="${MODE_ACTIVE_CLASS} ring-emerald-300" class="mode-btn cursor-pointer rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-3.5 shadow-sm shadow-emerald-100/80 transition duration-200 hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-lg hover:shadow-emerald-200/80 ${MODE_ACTIVE_CLASS} ring-emerald-300">
                 <input type="radio" name="backupMode" value="full" class="sr-only" checked>
                 <p class="text-sm font-semibold text-slate-900">Semua kelas</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Seluruh kelas yang Anda ampu, dengan semua jenis data.</p>
               </label>
-              <label id="mode-selective" class="mode-btn cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-slate-300">
+              <label id="mode-selective" data-active-class="${MODE_ACTIVE_CLASS} ring-violet-300" class="mode-btn cursor-pointer rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-fuchsia-50 to-pink-50 p-3.5 shadow-sm shadow-violet-100/80 transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-lg hover:shadow-violet-200/80">
                 <input type="radio" name="backupMode" value="selective" class="sr-only">
                 <p class="text-sm font-semibold text-slate-900">Pilih sendiri</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Tentukan kelas dan jenis data yang diperlukan saja.</p>
@@ -191,7 +221,7 @@ export async function renderGuruBackupPage(container) {
             <div class="rounded-xl border border-slate-200 p-3.5">
               <div class="flex items-center justify-between gap-2">
                 <h4 class="text-sm font-semibold text-slate-900">Kelas</h4>
-                <button id="btn-refresh-classes" type="button" class="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-slate-900">Muat ulang</button>
+                <button id="btn-refresh-classes" type="button" class="rounded-lg border border-cyan-200 bg-gradient-to-r from-cyan-50 to-sky-50 px-2 py-1 text-xs font-semibold text-cyan-700 shadow-sm shadow-cyan-100 transition hover:-translate-y-0.5 hover:from-cyan-100 hover:to-sky-100 hover:shadow-cyan-200">Muat ulang</button>
               </div>
               <div id="class-checkboxes" class="mt-3 grid max-h-60 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
                 <p class="col-span-full py-4 text-center text-sm text-slate-500">Memuat daftar kelas...</p>
@@ -201,7 +231,7 @@ export async function renderGuruBackupPage(container) {
               <h4 class="text-sm font-semibold text-slate-900">Jenis data</h4>
               <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2" id="data-type-checkboxes">
                 ${Object.values(BACKUP_DATA_TYPES).map((dt) => `
-                  <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-slate-200 bg-white p-3 transition hover:bg-slate-50">
+                  <label class="flex cursor-pointer items-start gap-2.5 rounded-lg border border-blue-100 bg-gradient-to-br from-white via-blue-50/70 to-indigo-50 p-3 shadow-sm shadow-blue-100/70 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-blue-200/80">
                     <input type="checkbox" name="dataType" value="${dt.key}" class="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
                     <span class="min-w-0">
                       <span class="block text-sm font-medium text-slate-900">${escapeHtml(dt.label)}</span>
@@ -216,20 +246,20 @@ export async function renderGuruBackupPage(container) {
           <section class="mt-5">
             <h3 class="text-sm font-semibold text-slate-900">Tujuan berkas</h3>
             <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3" id="destination-options">
-              <label class="dest-opt relative cursor-pointer rounded-xl border border-emerald-300 bg-emerald-50 p-3.5 transition">
-                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <label data-active-class="${DEST_ACTIVE_CLASS} ring-amber-300" class="dest-opt relative cursor-pointer rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-3.5 shadow-sm shadow-amber-100/80 transition duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-lg hover:shadow-amber-200/80 ${DEST_ACTIVE_CLASS} ring-amber-300">
+                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm shadow-amber-200 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="local" class="sr-only" checked>
                 <p class="pr-6 text-sm font-semibold text-slate-900">Perangkat ini</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Berkas Excel langsung diunduh.</p>
               </label>
-              <label class="dest-opt relative cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-slate-300">
-                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <label data-active-class="${DEST_ACTIVE_CLASS} ring-sky-300" class="dest-opt relative cursor-pointer rounded-xl border border-sky-200 bg-gradient-to-br from-sky-50 via-cyan-50 to-blue-50 p-3.5 shadow-sm shadow-sky-100/80 transition duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-lg hover:shadow-sky-200/80">
+                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white opacity-0 shadow-sm shadow-sky-200 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="drive" class="sr-only">
                 <p class="pr-6 text-sm font-semibold text-slate-900">Google Drive</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Diunggah ke Drive sekolah.</p>
               </label>
-              <label class="dest-opt relative cursor-pointer rounded-xl border border-slate-200 bg-white p-3.5 transition hover:border-slate-300">
-                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white opacity-0 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <label data-active-class="${DEST_ACTIVE_CLASS} ring-fuchsia-300" class="dest-opt relative cursor-pointer rounded-xl border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 via-pink-50 to-rose-50 p-3.5 shadow-sm shadow-fuchsia-100/80 transition duration-200 hover:-translate-y-0.5 hover:border-fuchsia-300 hover:shadow-lg hover:shadow-fuchsia-200/80">
+                <span class="dest-check absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-fuchsia-500 text-white opacity-0 shadow-sm shadow-fuchsia-200 transition"><svg viewBox="0 0 24 24" class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
                 <input type="radio" name="backupDestination" value="both" class="sr-only">
                 <p class="pr-6 text-sm font-semibold text-slate-900">Keduanya</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500">Diunduh sekaligus diunggah.</p>
@@ -245,7 +275,7 @@ export async function renderGuruBackupPage(container) {
                 <p class="text-sm font-semibold text-slate-900" id="backup-action-title">Siap diekspor</p>
                 <p class="mt-1 text-xs leading-5 text-slate-500" id="backup-action-desc">Tersedia ${policy.limit} ekspor per minggu.</p>
               </div>
-              <button id="btn-start-backup" type="button" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-emerald-200">
+              <button id="btn-start-backup" type="button" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-200/80 transition hover:-translate-y-0.5 hover:from-emerald-600 hover:via-teal-600 hover:to-cyan-600 hover:shadow-cyan-300/80 focus:outline-none focus-visible:ring-4 focus-visible:ring-cyan-200">
                 <span id="btn-start-backup-label">Ekspor Sekarang</span>
               </button>
             </div>
@@ -263,7 +293,7 @@ export async function renderGuruBackupPage(container) {
             <div id="backup-success-box" class="mt-4 hidden rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <p class="text-sm font-semibold text-emerald-900">Ekspor selesai</p>
               <p id="backup-success-text" class="mt-1 text-xs leading-5 text-emerald-800"></p>
-              <a id="backup-success-drive" href="#" target="_blank" rel="noopener" class="mt-3 hidden inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100">
+              <a id="backup-success-drive" href="#" target="_blank" rel="noopener" class="mt-3 hidden inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-gradient-to-r from-white to-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm shadow-emerald-100 transition hover:-translate-y-0.5 hover:from-emerald-50 hover:to-teal-100 hover:shadow-emerald-200">
                 Buka folder Google Drive
               </a>
             </div>
@@ -278,8 +308,8 @@ export async function renderGuruBackupPage(container) {
               <p class="mt-1 text-xs text-slate-500">${history.length} dari maksimal 50 entri, tersimpan di perangkat ini.</p>
             </div>
             <div class="flex items-center gap-2">
-              <button id="btn-open-drive-folder" type="button" class="hidden rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">Folder Drive</button>
-              <button id="btn-clear-history" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50">Hapus semua</button>
+              <button id="btn-open-drive-folder" type="button" class="hidden rounded-lg border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm shadow-sky-100 transition hover:-translate-y-0.5 hover:from-sky-100 hover:to-cyan-100 hover:shadow-sky-200">Folder Drive</button>
+              <button id="btn-clear-history" type="button" class="rounded-lg border border-rose-200 bg-gradient-to-r from-rose-50 to-red-50 px-3 py-2 text-xs font-semibold text-rose-700 shadow-sm shadow-rose-100 transition hover:-translate-y-0.5 hover:from-rose-100 hover:to-red-100 hover:shadow-rose-200">Hapus semua</button>
             </div>
           </div>
           <div id="history-grid" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -287,7 +317,7 @@ export async function renderGuruBackupPage(container) {
           </div>
           ${history.length > 20 ? `
             <div class="mt-4 text-center">
-              <button id="btn-load-more-history" type="button" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">Tampilkan ${history.length - 20} lainnya</button>
+              <button id="btn-load-more-history" type="button" class="rounded-lg border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 px-4 py-2 text-sm font-semibold text-amber-700 shadow-sm shadow-amber-100 transition hover:-translate-y-0.5 hover:from-amber-100 hover:to-orange-100 hover:shadow-amber-200">Tampilkan ${history.length - 20} lainnya</button>
             </div>
           ` : ''}
         </div>
@@ -308,7 +338,7 @@ export async function renderGuruBackupPage(container) {
                 <input type="checkbox" id="drive-upload-toggle" class="mt-0.5 h-5 w-5 flex-none rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
               </label>
               <p id="drive-state-detail" class="border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500">Memeriksa koneksi Google Drive...</p>
-              <a id="drive-open-folder" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
+              <a id="drive-open-folder" href="#" target="_blank" rel="noopener" class="hidden inline-flex items-center rounded-lg border border-sky-200 bg-gradient-to-r from-sky-50 to-cyan-50 px-3 py-2 text-xs font-semibold text-sky-700 shadow-sm shadow-sky-100 transition hover:-translate-y-0.5 hover:from-sky-100 hover:to-cyan-100 hover:shadow-sky-200">
                 Buka folder Drive
               </a>
             </div>
@@ -320,15 +350,15 @@ export async function renderGuruBackupPage(container) {
           <section>
             <h3 class="text-sm font-semibold text-slate-900">Data lokal</h3>
             <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <button id="btn-export-history" type="button" class="rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:bg-slate-50">
-                <p class="text-sm font-medium text-slate-900">Ekspor riwayat</p>
+              <button id="btn-export-history" type="button" class="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-blue-50 to-sky-50 p-3.5 text-left shadow-sm shadow-indigo-100 transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-200/80">
+                <p class="text-sm font-medium text-indigo-900">Ekspor riwayat</p>
                 <p class="mt-1 text-xs text-slate-500">Unduh sebagai JSON</p>
               </button>
-              <button id="btn-import-history" type="button" class="rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:bg-slate-50">
-                <p class="text-sm font-medium text-slate-900">Impor riwayat</p>
+              <button id="btn-import-history" type="button" class="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 via-emerald-50 to-lime-50 p-3.5 text-left shadow-sm shadow-teal-100 transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-lg hover:shadow-teal-200/80">
+                <p class="text-sm font-medium text-teal-900">Impor riwayat</p>
                 <p class="mt-1 text-xs text-slate-500">Pulihkan dari JSON</p>
               </button>
-              <button id="btn-clear-all-data" type="button" class="rounded-xl border border-slate-200 bg-white p-3.5 text-left transition hover:bg-rose-50">
+              <button id="btn-clear-all-data" type="button" class="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 via-red-50 to-orange-50 p-3.5 text-left shadow-sm shadow-rose-100 transition hover:-translate-y-0.5 hover:border-rose-300 hover:shadow-lg hover:shadow-rose-200/80">
                 <p class="text-sm font-medium text-rose-700">Hapus data lokal</p>
                 <p class="mt-1 text-xs text-slate-500">Riwayat & penanda ekspor</p>
               </button>
@@ -398,7 +428,7 @@ function renderClassCheckboxes(container) {
   }
 
   checkboxesContainer.innerHTML = assignmentsCache.map((a) => `
-    <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white p-3 transition hover:bg-slate-50">
+    <label class="flex cursor-pointer items-center gap-2 rounded-lg border border-teal-100 bg-gradient-to-br from-white via-teal-50/70 to-emerald-50 p-3 shadow-sm shadow-teal-100/70 transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-teal-200/80">
       <input type="checkbox" name="assignment" value="${escapeHtml(a.id)}" class="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked>
       <span class="min-w-0 flex-1">
         <span class="block truncate text-sm font-medium text-slate-900">${escapeHtml(a.kelas_nama || a.kelas_id)}</span>
@@ -417,10 +447,8 @@ function initTabNavigation(container) {
       const tabName = tab.dataset.tab;
       tabs.forEach((t) => {
         const active = t === tab;
-        t.classList.toggle('border-slate-900', active);
-        t.classList.toggle('text-slate-900', active);
-        t.classList.toggle('border-transparent', !active);
-        t.classList.toggle('text-slate-500', !active);
+        toggleClassString(t, t.dataset.activeClass, active);
+        toggleClassString(t, t.dataset.inactiveClass, !active);
         t.setAttribute('aria-selected', active ? 'true' : 'false');
       });
 
@@ -442,12 +470,10 @@ function initBackupModeToggle(container) {
   modeBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
       modeBtns.forEach((b) => {
-        b.classList.remove('border-emerald-300', 'bg-emerald-50');
-        b.classList.add('border-slate-200', 'bg-white');
+        toggleClassString(b, b.dataset.activeClass, false);
         b.querySelector('input').checked = false;
       });
-      btn.classList.add('border-emerald-300', 'bg-emerald-50');
-      btn.classList.remove('border-slate-200', 'bg-white');
+      toggleClassString(btn, btn.dataset.activeClass, true);
       btn.querySelector('input').checked = true;
 
       const mode = btn.querySelector('input').value;
@@ -502,10 +528,7 @@ function initDestinationToggle(container) {
       const input = opt.querySelector('input');
       const isActive = input.value === value;
       input.checked = isActive;
-      opt.classList.toggle('border-emerald-300', isActive);
-      opt.classList.toggle('bg-emerald-50', isActive);
-      opt.classList.toggle('border-slate-200', !isActive);
-      opt.classList.toggle('bg-white', !isActive);
+      toggleClassString(opt, opt.dataset.activeClass, isActive);
       const check = opt.querySelector('.dest-check');
       if (check) check.classList.toggle('opacity-0', !isActive);
     });
@@ -560,7 +583,7 @@ function initBackupActions(container) {
 
   if (!policy.allowed && startBtn) {
     startBtn.disabled = true;
-    startBtn.classList.remove('bg-emerald-600', 'text-white', 'hover:bg-emerald-700');
+    startBtn.classList.remove('bg-gradient-to-r', 'from-emerald-500', 'via-teal-500', 'to-cyan-500', 'text-white', 'shadow-lg', 'shadow-emerald-200/80', 'hover:-translate-y-0.5', 'hover:from-emerald-600', 'hover:via-teal-600', 'hover:to-cyan-600', 'hover:shadow-cyan-300/80');
     startBtn.classList.add('bg-slate-100', 'text-slate-400', 'cursor-not-allowed');
     if (labelEl) labelEl.textContent = 'Kuota penuh';
     startBtn.title = `Kuota terisi kembali pada ${policy.nextAvailableText}.`;
@@ -763,7 +786,7 @@ function initHistoryActions(container) {
 
   loadMoreBtn?.addEventListener('click', () => {
     const history = getBackupHistory();
-    const cards = history.slice(20).map((h) => renderHistoryCard(h)).join('');
+    const cards = history.slice(20).map((h, index) => renderHistoryCard(h, index + 20)).join('');
     grid.insertAdjacentHTML('beforeend', cards);
     loadMoreBtn.remove();
   });
