@@ -100,7 +100,6 @@ export async function renderGuruMateriAiPage(container, params = {}) {
     </style>
     <nav class="mwnav-bar" aria-label="Workspace materi">
       <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">▤</span><span class="mwnav-label">Materi Saya</span></a>
-      <a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">＋</span><span class="mwnav-label">Buat Materi</span></a>
       <a class="mwnav-btn active" href="#guru/materi-ai"><span class="mwnav-ico">✦</span><span class="mwnav-label">Materi AI</span></a>
       <a class="mwnav-btn" href="#guru/materi-import"><span class="mwnav-ico">📥</span><span class="mwnav-label">Import Materi</span></a>
       <a class="mwnav-btn" href="#guru/ppt-ai"><span class="mwnav-ico">📊</span><span class="mwnav-label">Materi PPT</span></a>
