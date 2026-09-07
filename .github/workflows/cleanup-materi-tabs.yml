@@ -1,0 +1,57 @@
+name: Cleanup materi tabs
+
+on:
+  push:
+    paths:
+      - '.github/workflows/cleanup-materi-tabs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Remove Buat Materi from all materi tabs
+        shell: python
+        run: |
+          from pathlib import Path
+
+          targets = [
+              Path('src/pages/guru/materi-ai.js'),
+              Path('src/pages/guru/materi-import.js'),
+          ]
+          button = '<a class="mwnav-btn" href="#guru/materi"><span class="mwnav-ico">＋</span><span class="mwnav-label">Buat Materi</span></a>\n      '
+
+          changed = []
+          for path in targets:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(button)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly 1 Buat Materi nav button, found {count}')
+              text = text.replace(button, '', 1)
+              path.write_text(text, encoding='utf-8')
+              changed.append(str(path))
+
+          # Pastikan semua tab materi utama bersih dari label navigasi Buat Materi.
+          patterns = ['mwnav-label">Buat Materi', 'mw-nav-label">Buat Materi']
+          leftovers = []
+          for path in Path('src/pages/guru').glob('*.js'):
+              text = path.read_text(encoding='utf-8')
+              if any(pattern in text for pattern in patterns):
+                  leftovers.append(str(path))
+          if leftovers:
+              raise SystemExit('Buat Materi masih ditemukan di: ' + ', '.join(leftovers))
+
+          print('Updated:', ', '.join(changed))
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/guru/materi-ai.js src/pages/guru/materi-import.js
+          git diff --cached --check
+          git commit -m "refactor: remove manual materi tab everywhere"
+          git push origin main
