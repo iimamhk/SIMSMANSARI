@@ -90,19 +90,8 @@ function pageStyles() {
     .mi-status { min-height:20px; margin-top:8px; color:var(--mi-muted); font-size:11.5px; }
     .mi-toast { position:fixed; right:18px; bottom:18px; z-index:60; padding:11px 16px; border-radius:12px; background:#0f172a; color:#fff; font-size:12px; box-shadow:0 14px 30px -12px rgba(15,23,42,.4); opacity:0; transform:translateY(8px); transition:opacity .25s, transform .25s; pointer-events:none; }
     .mi-toast.show { opacity:1; transform:translateY(0); }
-    .mi-guide { margin-top:12px; padding:14px; border:1px solid #e2e8f0; border-radius:18px; background:linear-gradient(135deg,#ffffff,#f8fafc); box-shadow:0 12px 30px -26px rgba(15,23,42,.35); }
-    .mi-guide-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-    .mi-guide-title { margin:0; font-size:12px; font-weight:800; color:#0f172a; letter-spacing:.01em; }
-    .mi-guide-note { font-size:10.5px; font-weight:650; color:#94a3b8; white-space:nowrap; }
-    .mi-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
-    .mi-step { position:relative; min-width:0; padding:12px 11px 11px; border:1px solid #e2e8f0; border-radius:14px; background:#fff; }
-    .mi-step::after { content:'›'; position:absolute; top:50%; right:-8px; z-index:2; width:16px; height:16px; display:flex; align-items:center; justify-content:center; border:1px solid #dbeafe; border-radius:999px; background:#eff6ff; color:#2563eb; font-size:13px; font-weight:900; transform:translateY(-50%); }
-    .mi-step:last-child::after { display:none; }
-    .mi-step-no { width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:8px; border-radius:9px; background:linear-gradient(135deg,#2563eb,#0d9488); color:#fff; font-size:11px; font-weight:850; box-shadow:0 8px 16px -10px rgba(37,99,235,.6); }
-    .mi-step strong { display:block; margin-bottom:3px; color:#0f172a; font-size:11.5px; font-weight:800; }
-    .mi-step span { display:block; color:#64748b; font-size:10.5px; line-height:1.4; }
-    @media (max-width:768px) { .mi-steps { grid-template-columns:repeat(2,minmax(0,1fr)); } .mi-step:nth-child(2)::after { display:none; } }
-    @media (max-width:480px) { .mi-guide { padding:12px; } .mi-guide-head { align-items:flex-start; } .mi-guide-note { white-space:normal; text-align:right; } .mi-steps { grid-template-columns:1fr; } .mi-step::after { display:none; } }
+    .mi-guide-banner { display:block; width:100%; height:auto; margin-top:12px; border-radius:18px; box-shadow:0 14px 34px -26px rgba(15,23,42,.35); }
+    @media (max-width:640px) { .mi-guide-banner { border-radius:12px; margin-top:10px; } }
     .mi-chars { font-size:11px; color:var(--mi-muted); font-weight:600; }
     .mi-modal { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; }
     .mi-modal[hidden] { display:none !important; }
@@ -191,18 +180,7 @@ export async function renderGuruMateriImportPage(container, options = {}) {
     <div class="mi">
     ${editMode ? '<section class="mi-hero"><div class="mi-hero-copy"><p class="mi-kicker"><span>✏️</span> <span id="mi-hero-kicker">Edit Materi</span></p><h1 id="mi-hero-title">Perbarui materi.</h1><p class="mi-sub" id="mi-hero-sub">Edit HTML, cek pratinjau, lalu simpan perubahan.</p></div></section>' : ''}
 
-    <section class="mi-guide" aria-label="Cara import materi">
-      <div class="mi-guide-head">
-        <h2 class="mi-guide-title">Cara import materi</h2>
-        <span class="mi-guide-note">4 langkah cepat</span>
-      </div>
-      <div class="mi-steps">
-        <div class="mi-step"><span class="mi-step-no">1</span><strong>Salin HTML</strong><span>Dari AI atau sumber Anda.</span></div>
-        <div class="mi-step"><span class="mi-step-no">2</span><strong>Tempel</strong><span>Masukkan ke kolom HTML.</span></div>
-        <div class="mi-step"><span class="mi-step-no">3</span><strong>Cek pratinjau</strong><span>Pastikan tampilan sudah benar.</span></div>
-        <div class="mi-step"><span class="mi-step-no">4</span><strong>Simpan / Publish</strong><span>Simpan draft atau kirim ke kelas.</span></div>
-      </div>
-    </section>
+    ${editMode ? '' : '<img class="mi-guide-banner" src="/assets/import-materi-guide.svg" alt="Petunjuk Import Materi: Salin HTML, Tempel, Cek pratinjau, lalu Simpan atau Publish ke kelas." loading="eager">'}
 
     <div class="mi-meta">
       <input id="mi-title" placeholder="Judul materi (otomatis dari H1)" aria-label="Judul">
