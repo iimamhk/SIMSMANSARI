@@ -1,0 +1,41 @@
+name: Remove manual materi menu
+
+on:
+  push:
+    paths:
+      - '.github/workflows/remove-manual-materi-menu.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Remove manual material entry point
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('src/pages/guru/materi-workspace.js')
+          text = path.read_text(encoding='utf-8')
+          manual_button = '<button class="mw-nav-btn" data-mode="editor"><span class="mw-nav-ico">＋</span><span class="mw-nav-label">Buat Materi</span></button>'
+          if text.count(manual_button) != 1:
+              raise SystemExit(f'Expected one Buat Materi nav button, found {text.count(manual_button)}')
+          text = text.replace(manual_button, '', 1)
+          old_empty = 'Mulai dari Buat Materi, Materi AI, atau Import Materi.'
+          new_empty = 'Mulai dari Materi AI atau Import Materi.'
+          if text.count(old_empty) != 1:
+              raise SystemExit(f'Expected one empty-state text, found {text.count(old_empty)}')
+          text = text.replace(old_empty, new_empty, 1)
+          path.write_text(text, encoding='utf-8')
+      - name: Commit change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/guru/materi-workspace.js
+          git diff --cached --check
+          git commit -m "refactor: remove manual materi menu"
+          git push origin main
