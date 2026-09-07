@@ -1,0 +1,59 @@
+name: Fix penilaian task average
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-penilaian-average.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Fix task average calculation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/pages/guru/penilaian.js')
+          text = path.read_text(encoding='utf-8-sig')
+
+          replacements = [
+              (
+                  """          const scores = tugasBab.map(t => {\n            const val = nilai[`${selectedBab.id}_${t.id}_${studentId}`];\n            return val !== undefined && val !== '' ? Number(val) : 0;\n          });\n          const average = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';""",
+                  """          const scores = tugasBab\n            .map(t => {\n              const val = nilai[`${selectedBab.id}_${t.id}_${studentId}`];\n              return val !== undefined && val !== '' ? Number(val) : null;\n            })\n            .filter(score => score !== null);\n          const average = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';"""
+              ),
+              (
+                  """        if (val !== undefined && val !== '') {\n          studentScores.push(Number(val));\n        } else {\n          studentScores.push(0);\n        }""",
+                  """        if (val !== undefined && val !== '') {\n          studentScores.push(Number(val));\n        }"""
+              ),
+              (
+                  """        if (val !== undefined && val !== '') {\n          studentAllScores.push(Number(val));\n        } else {\n          studentAllScores.push(0);\n        }""",
+                  """        if (val !== undefined && val !== '') {\n          studentAllScores.push(Number(val));\n        }"""
+              ),
+              (
+                  '<p class="text-xs text-white font-medium">Rata-rata Keseluruhan</p>\n      <p class="text-2xl font-bold text-white">${avgAll}</p>',
+                  '<p class="text-xs text-white font-medium">Rata-rata Semua Tugas</p>\n      <p class="text-2xl font-bold text-white">${avgAll}</p>\n      <p class="mt-1 text-[10px] font-medium text-white/80">Berdasarkan nilai yang sudah diisi</p>'
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly 1 match, found {count}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/guru/penilaian.js
+          git diff --cached --check
+          git commit -m "fix: ignore empty task scores in averages"
+          git push origin main
