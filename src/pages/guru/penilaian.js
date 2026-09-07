@@ -1,4 +1,4 @@
-﻿import { renderLayout } from '../../layouts/dashboard-layout.js';
+import { renderLayout } from '../../layouts/dashboard-layout.js';
 import { getStoredContext } from '../../utils/helpers.js';
 import { activityTier } from '../../utils/nilai-summary.js';
 import {
@@ -1034,10 +1034,12 @@ function renderTabelNilaiTugasRebuild(selectedBab, tugasBab, nilai, members) {
       <tbody>
         ${members.map((member, idx) => {
           const studentId = member.siswa_id || member.id;
-          const scores = tugasBab.map(t => {
-            const val = nilai[`${selectedBab.id}_${t.id}_${studentId}`];
-            return val !== undefined && val !== '' ? Number(val) : 0;
-          });
+          const scores = tugasBab
+            .map(t => {
+              const val = nilai[`${selectedBab.id}_${t.id}_${studentId}`];
+              return val !== undefined && val !== '' ? Number(val) : null;
+            })
+            .filter(score => score !== null);
           const average = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '-';
 
           return `
@@ -1091,8 +1093,6 @@ function renderSummaryNilaiTugasRebuild(babs, tugas, nilai, members) {
         const val = nilai[`${bab.id}_${t.id}_${studentId}`];
         if (val !== undefined && val !== '') {
           studentScores.push(Number(val));
-        } else {
-          studentScores.push(0);
         }
       });
 
@@ -1126,8 +1126,6 @@ function renderSummaryNilaiTugasRebuild(babs, tugas, nilai, members) {
         const val = nilai[`${bab.id}_${t.id}_${studentId}`];
         if (val !== undefined && val !== '') {
           studentAllScores.push(Number(val));
-        } else {
-          studentAllScores.push(0);
         }
       });
     });
@@ -1142,8 +1140,9 @@ function renderSummaryNilaiTugasRebuild(babs, tugas, nilai, members) {
   const avgAll = countAll > 0 ? (totalAll / countAll).toFixed(1) : '-';
   summary += `
     <div class="rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 p-3 shadow-md col-span-2 md:col-span-2">
-      <p class="text-xs text-white font-medium">Rata-rata Keseluruhan</p>
+      <p class="text-xs text-white font-medium">Rata-rata Semua Tugas</p>
       <p class="text-2xl font-bold text-white">${avgAll}</p>
+      <p class="mt-1 text-[10px] font-medium text-white/80">Berdasarkan nilai yang sudah diisi</p>
     </div>
   `;
 
