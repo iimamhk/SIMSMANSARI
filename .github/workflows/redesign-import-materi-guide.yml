@@ -3,7 +3,7 @@ name: Redesign import materi guide
 on:
   push:
     paths:
-      - '.github/workflows/redesign-import-materi-guide.yml'
+      - .github/workflows/redesign-import-materi-guide.yml
 
 permissions:
   contents: write
@@ -15,19 +15,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Redesign import materi instructions
-        shell: python
+      - name: Apply clean import guide
         run: |
+          python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('src/pages/guru/materi-import.js')
           text = path.read_text(encoding='utf-8')
 
-          old_css = '''    .mi-info-card { margin-top:12px; padding:14px 16px; border:1px solid #dbeafe; border-radius:14px; background:linear-gradient(135deg,rgba(239,246,255,.9),rgba(240,253,250,.6)); font-size:12px; line-height:1.6; color:#1e3a5f; }
-    .mi-info-card strong { color:#0f172a; }
-    .mi-info-card ul { margin:6px 0 0; padding-left:16px; }
-    .mi-info-card li { margin:2px 0; }'''
-          new_css = '''    .mi-guide { margin-top:12px; padding:14px; border:1px solid #e2e8f0; border-radius:18px; background:linear-gradient(135deg,#ffffff,#f8fafc); box-shadow:0 12px 30px -26px rgba(15,23,42,.35); }
+          css_pattern = re.compile(r"    \.mi-info-card \{.*?    \.mi-info-card li \{ margin:2px 0; \}", re.S)
+          css_new = """    .mi-guide { margin-top:12px; padding:14px; border:1px solid #e2e8f0; border-radius:18px; background:linear-gradient(135deg,#ffffff,#f8fafc); box-shadow:0 12px 30px -26px rgba(15,23,42,.35); }
     .mi-guide-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
     .mi-guide-title { margin:0; font-size:12px; font-weight:800; color:#0f172a; letter-spacing:.01em; }
     .mi-guide-note { font-size:10.5px; font-weight:650; color:#94a3b8; white-space:nowrap; }
@@ -39,25 +37,18 @@ jobs:
     .mi-step strong { display:block; margin-bottom:3px; color:#0f172a; font-size:11.5px; font-weight:800; }
     .mi-step span { display:block; color:#64748b; font-size:10.5px; line-height:1.4; }
     @media (max-width:768px) { .mi-steps { grid-template-columns:repeat(2,minmax(0,1fr)); } .mi-step:nth-child(2)::after { display:none; } }
-    @media (max-width:480px) { .mi-guide { padding:12px; } .mi-guide-head { align-items:flex-start; } .mi-guide-note { white-space:normal; text-align:right; } .mi-steps { grid-template-columns:1fr; } .mi-step::after { display:none; } }'''
-          if text.count(old_css) != 1:
-              raise SystemExit(f'Expected 1 old info-card CSS block, found {text.count(old_css)}')
-          text = text.replace(old_css, new_css, 1)
+    @media (max-width:480px) { .mi-guide { padding:12px; } .mi-guide-head { align-items:flex-start; } .mi-guide-note { white-space:normal; text-align:right; } .mi-steps { grid-template-columns:1fr; } .mi-step::after { display:none; } }"""
+          text, css_count = css_pattern.subn(css_new, text, count=1)
+          if css_count != 1:
+              raise SystemExit(f'CSS block replacement failed: {css_count}')
 
-          old_html = '''    <div class="mi">
-    <section class="mi-hero"><div class="mi-hero-copy"><p class="mi-kicker"><span>${editMode ? '✏️' : '📥'}</span> <span id="mi-hero-kicker">${editMode ? 'Edit Materi' : 'Import Materi'}</span></p><h1 id="mi-hero-title">${editMode ? 'Edit kode HTML materi terbit.' : 'Tempel HTML dari AI eksternal.'}</h1><p class="mi-sub" id="mi-hero-sub">${editMode ? 'Ubah HTML langsung atau tempel hasil revisi dari Kilo/Cline. Simpan untuk memperbarui materi yang sudah dilihat siswa.' : 'Salin hasil dari ChatGPT, Claude, atau penyedia lain — tempel di sini, lihat pratinjau, lalu simpan atau publikasikan ke kelas.'}</p></div></section>
+          start = text.find('    <div class=\"mi\">\n    <section class=\"mi-hero\">')
+          end_marker = '    <div class=\"mi-meta\">'
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Import intro block not found')
 
-    <div class="mi-info-card">
-      <strong>Cara pakai:</strong>
-      <ul>
-        <li>Salin HTML dari penyedia AI (klik "Copy HTML" atau "Export").</li>
-        <li>Tempel ke kolom di kiri — pratinjau muncul otomatis di kanan.</li>
-        <li>Tailwind, MathJax, font, dan interaktivitas (drag-drop, kuis) tetap berfungsi.</li>
-        <li>Tombol <strong>Sanitasi</strong> opsional: hapus script & event handler untuk versi statis.</li>
-        <li>Isi judul/mapel/kelas, lalu Simpan (draft) atau Publish (distribusi ke kelas).</li>
-      </ul>
-    </div>'''
-          new_html = '''    <div class="mi">
+          new_intro = '''    <div class="mi">
     ${editMode ? '<section class="mi-hero"><div class="mi-hero-copy"><p class="mi-kicker"><span>✏️</span> <span id="mi-hero-kicker">Edit Materi</span></p><h1 id="mi-hero-title">Perbarui materi.</h1><p class="mi-sub" id="mi-hero-sub">Edit HTML, cek pratinjau, lalu simpan perubahan.</p></div></section>' : ''}
 
     <section class="mi-guide" aria-label="Cara import materi">
@@ -71,23 +62,23 @@ jobs:
         <div class="mi-step"><span class="mi-step-no">3</span><strong>Cek pratinjau</strong><span>Pastikan tampilan sudah benar.</span></div>
         <div class="mi-step"><span class="mi-step-no">4</span><strong>Simpan / Publish</strong><span>Simpan draft atau kirim ke kelas.</span></div>
       </div>
-    </section>'''
-          if text.count(old_html) != 1:
-              raise SystemExit(f'Expected 1 old import intro block, found {text.count(old_html)}')
-          text = text.replace(old_html, new_html, 1)
+    </section>
 
-          # Pastikan kalimat lama benar-benar hilang.
+'''
+          text = text[:start] + new_intro + text[end:]
+
           forbidden = [
               'Tempel HTML dari AI eksternal.',
               'Salin hasil dari ChatGPT, Claude, atau penyedia lain — tempel di sini, lihat pratinjau, lalu simpan atau publikasikan ke kelas.',
               'Salin HTML dari penyedia AI (klik "Copy HTML" atau "Export").',
-              'Tailwind, MathJax, font, dan interaktivitas (drag-drop, kuis) tetap berfungsi.',
+              'Tailwind, MathJax, font, dan interaktivitas (drag-drop, kuis) tetap berfungsi.'
           ]
-          leftovers = [s for s in forbidden if s in text]
+          leftovers = [item for item in forbidden if item in text]
           if leftovers:
-              raise SystemExit('Old copy still present: ' + repr(leftovers))
+              raise SystemExit('Old copy still present')
 
           path.write_text(text, encoding='utf-8')
+          PY
       - name: Commit redesign
         run: |
           git config user.name "github-actions[bot]"
